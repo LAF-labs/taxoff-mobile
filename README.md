@@ -25,6 +25,7 @@
 | 승인 시트: 되읽은 값 전체, 해시 재계산이 맞을 때만 [승인하고 발급](유일한 파랑 채움), 0.8초 무장 지연, 120초, 멈춤 상태 | P-03 | `src/screens/ApprovalSheet.tsx`, `src/approval.ts`, `src/approvalKey.ts` |
 | 진행·결과 카드: 단계 줄(준비 → 홈택스 로그인 → 값 확인 → 승인 → 발급 → 확인), 내 차례(간편인증·인증서 PC 전용), 중지(08 §11 문구), 확인 중·확인 필요(다시 발급 단추 없음), 결과(승인번호 길게 눌러 복사) | P-04 | `src/screens/RunCard.tsx`, `RunScreen.tsx`, `src/run.ts` |
 | 서류 보기: 파일 이름·발급일, 첫 쪽 미리보기, [공유] [파일에 저장], 여는 중·받는 중·PC 꺼짐·백업·열 수 없음 | P-05 | `src/screens/DocScreen.tsx`, `src/doc.ts`, `assets/sample/` |
+| 사업자등록증 찍기: 앱 안 카메라(A4 세로 틀) → 기기 안 OCR → 상호·사업자번호(검증식)·대표자·주소·업태·종목 확인, 받을 이메일 → 거래처로 저장 → 발급 작성(휴·폐업 확인 줄, 처음 거래처 안내). 이미 있는 번호면 그 거래처로 | 기획 v2 PR 7 | `src/screens/BizRegScreen.tsx`, `src/capture/bizreg.ts` |
 | 발급 작성 + 거래처 고르기: 최근 다섯 곳 · 찾기, 지난번 값, 부가세 별도/포함, 세액 10% 버림, PC 상태에 따른 단추 | P-10 · P-11 | `src/screens/IssueScreen.tsx`, `src/issue.ts` |
 | 폰 연결(QR 스캔 → 24시간 경고 → 6자리 + "PC 화면에만 입력" 경고) | S-03 | `src/screens/PairScreen.tsx` |
 | 연결 상태(켜짐·꺼짐, 마지막 접속, 보낼 것 건수, 연결 해제, SP-1 보호 상태) | P-06 | `src/screens/ConnectionScreen.tsx` |

@@ -8,8 +8,10 @@ import { T } from './kit';
 export { masked, type Mask } from './mask.ts';
 import { masked, type Mask } from './mask.ts';
 
-const KB: Record<Mask, KeyboardTypeOptions> = { won: 'number-pad', bizNo: 'number-pad', day: 'number-pad', text: 'default' };
-const MAXLEN: Record<Mask, number> = { won: 16, bizNo: 12, day: 10, text: 80 };
+const KB: Record<Mask, KeyboardTypeOptions> = { won: 'number-pad', bizNo: 'number-pad', day: 'number-pad', text: 'default', email: 'email-address' };
+/** 여러 줄 칸도 낱말 단위로 줄을 바꾼다(웹 textarea는 기본이 글자 단위) */
+const KEEP_ALL = { wordBreak: 'keep-all', overflowWrap: 'anywhere' };
+const MAXLEN: Record<Mask, number> = { won: 16, bizNo: 12, day: 10, text: 80, email: 120 };
 
 /**
  * 한 줄 칸(묶음 안 줄): 왼쪽 라벨(15 ink2), 오른쪽 값(17, 오른쪽 맞춤) + 단위.
@@ -17,8 +19,10 @@ const MAXLEN: Record<Mask, number> = { won: 16, bizNo: 12, day: 10, text: 80 };
  * 확신이 낮은 값은 라벨 아래 '확인해 주세요'(attention). 오류는 줄 아래에 남긴다.
  */
 export function Field({
-  label, value, onChange, mask = 'text', placeholder, unsure, error, testID, unit, maxLength, fix, tag,
+  label, value, onChange, mask = 'text', placeholder, unsure, error, testID, unit, maxLength, fix, tag, multiline,
 }: {
+  /** 긴 글(주소): 줄을 바꿔 다 보인다 */
+  multiline?: boolean;
   /** 라벨 아래 회색 꼬리표(예: "지난번 값"). 확인 필요가 있으면 그것이 먼저다. */
   tag?: string;
   label: string; value: string; onChange: (v: string) => void; mask?: Mask; placeholder?: string;
@@ -62,15 +66,20 @@ export function Field({
             onFocus={() => setFocus(true)}
             onBlur={() => setFocus(false)}
             keyboardType={KB[mask]}
-            maxLength={maxLength ?? MAXLEN[mask]}
+            maxLength={maxLength ?? (multiline ? 200 : MAXLEN[mask])}
+            multiline={multiline}
+            scrollEnabled={!multiline}
+            // iOS·Android 여러 줄 칸은 스스로 늘어난다. 웹(갤러리)은 줄 수를 어림해 높이를 준다.
+            numberOfLines={multiline ? Math.max(1, Math.ceil(value.length / 20)) : undefined}
             placeholder={placeholder}
             placeholderTextColor={p.ink4}
             maxFontSizeMultiplier={MAX_FONT_SCALE}
             returnKeyType="done"
             autoCorrect={false}
             autoCapitalize="none"
-            selectTextOnFocus={mask !== 'text'}
-            style={[mask === 'text' ? type.body : type.value, textScale.web !== 1 && { fontSize: 17 * textScale.web, lineHeight: 24 * textScale.web }, s.input, { color: p.ink }]}
+            autoComplete={mask === 'email' ? 'email' : undefined}
+            selectTextOnFocus={mask !== 'text' && mask !== 'email'}
+            style={[mask === 'text' ? type.body : type.value, multiline && (KEEP_ALL as object), textScale.web !== 1 && { fontSize: 17 * textScale.web, lineHeight: 24 * textScale.web }, s.input, { color: p.ink }]}
           />
           {unit && (
             <T v="value" c={empty ? 'ink4' : 'ink'}>

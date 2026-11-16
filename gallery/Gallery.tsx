@@ -16,6 +16,7 @@ import { buildGate, type GateField, type PhoneGate } from '../src/approval';
 import { useEffect } from 'react';
 import { useQueue } from '../src/queueStore';
 import { RunScreen } from '../src/screens/RunScreen';
+import { BizRegScreen, type BizRegPreview } from '../src/screens/BizRegScreen';
 import { DocScreen, type DocState } from '../src/screens/DocScreen';
 import type { IssueResult, RunView } from '../src/run';
 import type { DoneJob, Job } from '../src/queue';
@@ -183,6 +184,20 @@ const docCase = (state: DocState, result = RES) => ({
   session: fake(paired(), state.kind === 'pcOff' ? 'offline' : 'online'), jobs: [runJob({ kind: 'done', result, startedAt: T0 })], focus: 'r1', node: <DocScreen onDone={noop} state={state} />,
 });
 
+// ---- 사업자등록증 찍기(PR 7) 견본: public/sample-bizreg.jpg(가짜 사업자) ----
+const BIZ_SHOT = { uri: '/sample-bizreg.jpg', width: 1140, height: 1608 };
+const BIZ_VALUES = { name: '동네마트 성수점', bizNo: '220-81-12341', ceo: '김견본', address: '서울특별시 성동구 성수이로 00, 1층', bizType: '도매 및 소매업', item: '생활용품', email: '' };
+const HIGH = { name: 0.9, bizNo: 0.95, ceo: 0.9, address: 0.85, bizType: 0.85, item: 0.85 };
+const biz = (pv: Partial<BizRegPreview>, existing: Counterparty[] = CPS) => ({
+  session: fake(paired(), 'online'),
+  node: <BizRegScreen existing={existing} onDone={noop} onSaved={noop} onUseExisting={noop} preview={{ phase: 'confirm', shot: BIZ_SHOT, values: BIZ_VALUES, conf: HIGH, ...pv }} />,
+});
+const NEW_CP: Counterparty = { id: 'new', name: '동네마트 성수점', bizNo: '220-81-12341', issued: 0, email: 'tax@dongne.example' };
+const issueNew = (status: Counterparty['status'], pc: PcStatus = 'online') => ({
+  session: fake(pc === 'online' ? paired() : { ...paired(), lastSeenPc: now - 3 * H }, pc),
+  node: issue({ phase: 'form', cpId: 'new', amount: '320,000' }, [...CPS, { ...NEW_CP, status }]),
+});
+
 /** 시연: 켜진 PC에 발급을 맡긴 순간부터(대화 홈 + 승인 시트가 스스로 뜬다) */
 function Demo() {
   const q = useQueue();
@@ -206,6 +221,19 @@ const SCREENS: Record<
     sheetPreview?: { now: number; openedAt: number; acked?: string[] }; focus?: string; simulate?: boolean | 'inDoubt';
   }
 > = {
+  'bizreg-camera': () => ({ session: fake(paired(), 'online'), node: <BizRegScreen existing={CPS} onDone={noop} onSaved={noop} onUseExisting={noop} /> }),
+  'bizreg-confirm': () => biz({ values: { ...BIZ_VALUES, email: 'tax@dongne.example' } }),
+  'bizreg-email-empty': () => biz({}),
+  'bizreg-low-conf': () => biz({ conf: { ...HIGH, ceo: 0.4, address: 0.5 } }),
+  'bizreg-checksum': () => biz({ values: { ...BIZ_VALUES, bizNo: '220-81-12345' }, conf: { ...HIGH, bizNo: 0.4 } }),
+  'bizreg-blurry': () => biz({ poor: true, values: { ...BIZ_VALUES, name: '', ceo: '', address: '', bizType: '', item: '', bizNo: '220-81-1' }, conf: {} }),
+  'bizreg-existing': () => biz({}, [...CPS, { id: 'dm2', name: '동네마트 성수점', bizNo: '220-81-12341', issued: 4, lastAt: now - 3 * DAY }]),
+  'bizreg-long': () => biz({
+    values: { name: '주식회사 새봄꽃과 정원 관리 서비스 성수동 본점', bizNo: '105-22-12346', ceo: '이견본', address: '서울특별시 성동구 왕십리로 000, 새봄빌딩 3층 301호(성수동2가, 새봄꽃과정원관리서비스)', bizType: '서비스업', item: '조경관리 및 실내 식물 관리', email: 'very.long.address.for.invoices@flower-garden-service.example' },
+  }),
+  'issue-new-checking': () => issueNew({ kind: 'checking' }),
+  'issue-new-pc-off': () => issueNew({ kind: 'waitPc' }, 'offline'),
+  'issue-new-closed': () => issueNew({ kind: 'closed', what: '폐업', on: '2026-09-30' }),
   'run-prepare': () => runCase({ kind: 'running', step: 'prepare', startedAt: now - 12_000 }),
   'run-login': () => runCase({ kind: 'running', step: 'login', startedAt: now - 35_000 }),
   'run-readback': () => runCase({ kind: 'running', step: 'readback', startedAt: T0 }),

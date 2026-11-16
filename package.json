@@ -50,7 +50,7 @@
     "lint": "eslint .",
     "sync:remote": "node scripts/sync-remote.mjs",
     "check": "pnpm typecheck && pnpm lint && pnpm test",
-    "gallery": "expo export -p web --output-dir dist-gallery && cp public/sample-invoice.jpg dist-gallery/"
+    "gallery": "expo export -p web --output-dir dist-gallery && cp public/sample-invoice.jpg public/sample-bizreg.jpg dist-gallery/"
   },
   "private": true
 }

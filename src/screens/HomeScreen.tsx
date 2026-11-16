@@ -18,7 +18,7 @@ import type { PcStatus } from '../net/pc';
 import { MAX_FONT_SCALE, radius, size, space, textScale, type, usePalette } from '../theme';
 import { Button, Check, Chevron, Notice, StatusDot, T, ago, tap, type Tone } from '../ui/kit';
 
-export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'issue' | 'queue' | 'run' | 'doc';
+export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'issue' | 'queue' | 'run' | 'doc' | 'bizreg';
 
 /** 연결 상태 한 줄. 파랑은 "켜져 있어 바로 받는다"에만 쓴다. */
 export function pcLine(pc: PcStatus, lastSeen: number | null): { tone: Tone; label: string; busy?: boolean } {

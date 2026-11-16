@@ -366,6 +366,8 @@ export function ago(ts: number | null, now = Date.now()): string {
   return `${Math.floor(h / 24)}일 전`;
 }
 
+export { josa } from './josa';
+
 export const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
 export const st = StyleSheet.create({
   header: { height: size.header, flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.s2 },

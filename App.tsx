@@ -22,6 +22,7 @@ import { QueueScreen } from './src/screens/QueueScreen';
 import { QueueProvider } from './src/queueStore';
 import { ApprovalHost } from './src/screens/ApprovalHost';
 import { DocScreen } from './src/screens/DocScreen';
+import { BizRegScreen } from './src/screens/BizRegScreen';
 import { RunScreen } from './src/screens/RunScreen';
 import { SessionProvider } from './src/session';
 import { emptyData, loadData, type AppData } from './src/storage/state';
@@ -125,7 +126,8 @@ export default function App() {
           />
         )}
         {route === 'doc' && <DocScreen onDone={back} />}
-        {route === 'issue' && <IssueScreen counterparties={[]} onDone={back} onCapture={() => go('capture')} onSubmitted={home} />}
+        {route === 'issue' && <IssueScreen onDone={back} onCapture={() => go('bizreg')} onSubmitted={home} />}
+        {route === 'bizreg' && <BizRegScreen onDone={back} onSaved={back} onUseExisting={back} />}
         {route === 'connection' && (
           <ConnectionScreen
             onDone={back}
