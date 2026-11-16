@@ -139,13 +139,19 @@ export function IssueScreen({
             { key: 'incl', label: '부가세 포함' },
           ]}
           value={vat}
-          onChange={setVat}
+          onChange={(v) => {
+            setVat(v);
+            setDupOk(false);
+          }}
         />
         <Group>
           <Field
             label={vat === 'excl' ? '공급가액' : '합계'}
             value={amount}
-            onChange={setAmount}
+            onChange={(v) => {
+              setAmount(v);
+              setDupOk(false);
+            }}
             mask="won"
             unit="원"
             placeholder="0"
