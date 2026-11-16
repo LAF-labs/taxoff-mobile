@@ -38,6 +38,16 @@ export interface CashRecord {
   state: 'pending' | 'queued' | 'sent';
 }
 
+/** 홈의 "최근 보낸 것" 한 줄(사진은 없다. 봉인된 상태 파일 안에만 있다). */
+export interface RecentRecord {
+  msgId: string;
+  kind: 'receipt' | 'tax_invoice' | 'invoice';
+  title: string;
+  amount: number | null;
+  at: number;
+  state: 'pending' | 'queued' | 'sent';
+}
+
 export interface AppData {
   v: 1;
   pair: PairState | null;
@@ -46,13 +56,15 @@ export interface AppData {
   ikTs: number;
   lastSeenPc: number | null;
   cash: CashRecord[];
+  /** 최근 보낸 종이 증빙(최대 30) */
+  recent: RecentRecord[];
   /** 큐 봉투 seq(xfer.seq) 최고값. 봉인 전에 먼저 올려 둔다(재사용하면 PC가 재생으로 버린다). */
   queueSeq: number;
   /** 본 우편함 번들 seq 최고값(이보다 낮은 번들로는 봉인하지 않는다). */
   qbundleSeq: number;
 }
 
-export const emptyData = (): AppData => ({ v: 1, pair: null, deviceList: null, seenListVersion: 0, ikTs: 0, lastSeenPc: null, cash: [], queueSeq: 0, qbundleSeq: 0 });
+export const emptyData = (): AppData => ({ v: 1, pair: null, deviceList: null, seenListVersion: 0, ikTs: 0, lastSeenPc: null, cash: [], recent: [], queueSeq: 0, qbundleSeq: 0 });
 
 export async function loadData(fileKey: Uint8Array): Promise<AppData> {
   if (!FILE.exists) return emptyData();

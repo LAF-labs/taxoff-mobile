@@ -95,7 +95,11 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | null> {
     const flushed = await flushOutbox(s.channel, d.outbox);
     if (flushed.sent.length) {
       const sent = new Set(flushed.sent);
-      await d.update((x) => ({ ...x, cash: x.cash.map((c) => (sent.has(c.msgId) ? { ...c, state: 'sent' as const } : c)) }));
+      await d.update((x) => ({
+        ...x,
+        cash: x.cash.map((c) => (sent.has(c.msgId) ? { ...c, state: 'sent' as const } : c)),
+        recent: x.recent.map((r) => (sent.has(r.msgId) ? { ...r, state: 'sent' as const } : r)),
+      }));
     }
     s.channel.close();
     return { status: 'online', flushed };
@@ -136,6 +140,7 @@ async function viaQueue(d: SyncDeps, pair: Pair): Promise<SyncResult> {
       await d.update((x) => ({
         ...x,
         cash: x.cash.map((c) => (done.has(c.msgId) && c.state === 'pending' ? { ...c, state: 'queued' as const } : c)),
+        recent: x.recent.map((r) => (done.has(r.msgId) && r.state === 'pending' ? { ...r, state: 'queued' as const } : r)),
       }));
     }
     return { status: queued.queued.length || !queued.waiting.length ? 'queued' : 'offline', queued };

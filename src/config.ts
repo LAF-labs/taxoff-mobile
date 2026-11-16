@@ -43,3 +43,6 @@ export const RECONNECT_MS = 60_000;
 /** 사진 긴 변 상한(4 MiB 상한 안에 들도록). */
 export const PHOTO_MAX_EDGE = 2400;
 export const PHOTO_QUALITY = 0.85;
+
+/** 사장님에게 보이는 앱 이름(가칭, 출시 이름이 정해지면 여기 한 곳만 바꾼다). PC 앱 이름과 같아야 한다. */
+export const BRAND = '택스오프';

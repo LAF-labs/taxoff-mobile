@@ -17,13 +17,24 @@
 | 화면 | 08 ID | 파일 |
 |---|---|---|
 | 잠금(생체, 백그라운드 30초 뒤 재잠금, 앱 전환기 가림) | P-01 | `src/screens/LockScreen.tsx`, `App.tsx` |
-| 첫 화면: [영수증 찍기] [오늘 현금 매출] + PC 연결 상태 줄 | 08 §10 | `src/screens/HomeScreen.tsx` |
+| 첫 화면: [종이 증빙 찍기] [현금 매출 적기] + PC 연결 상태 + 최근 보낸 것 | 08 §10 | `src/screens/HomeScreen.tsx` |
 | 폰 연결(QR 스캔 → 24시간 경고 → 6자리 + "PC 화면에만 입력" 경고) | S-03 | `src/screens/PairScreen.tsx` |
 | 연결 상태(켜짐·꺼짐, 마지막 접속, 보낼 것 건수, 연결 해제, SP-1 보호 상태) | P-06 | `src/screens/ConnectionScreen.tsx` |
-| 종이 증빙 촬영(앱 안 카메라 → 자르기 → 기기 안 OCR → 확인 → 보관함 → PC) | P-08 | `src/screens/CaptureScreen.tsx`, `src/capture/*` |
+| 종이 증빙 촬영: 영수증 · 종이 세금계산서·계산서(앱 안 카메라 → 자르기 → 기기 안 OCR 글자 상자 → 칸 판독·검산 → 확인 → 보관함 → PC) | P-08 | `src/screens/CaptureScreen.tsx`, `src/capture/*` |
 | 현금매출(하루 숫자 하나, 날짜별) | P-09 | `src/screens/CashScreen.tsx` |
 
 폰 승인(P-03, M7-7)은 제안 상태라 넣지 않았다.
+
+디자인 기준은 [docs/design.md](docs/design.md)(tex design-system v2.0을 폰 크기로).
+
+## 종이 세금계산서
+
+찍기 전에 [영수증 | 세금계산서·계산서]를 고른다(틀 비율이 다르다). 찍은 뒤 서식 이름을 보고 바로잡는다. `src/capture/invoice.ts`가 iOS Vision 글자 상자(위치 포함)를 줄·열로 다시 짜서 공급자·공급받는자(등록번호·상호·성명), 작성일자, 공급가액·세액·합계, 품목, 영수/청구, 책번호·일련번호를 읽는다.
+
+- 숫자는 검산으로 고른다: 세액 ≈ 공급가액 × 10%, 합계 = 공급가액 + 세액, 등록번호 검증 숫자. 자리마다 한 칸인 옛 서식의 숫자도 이어 붙인다.
+- '공급받는자 보관용'이면 매입, '공급자 보관용'이면 매출을 미리 고른다. 승인번호가 있으면 홈택스 출력물이라고 알린다(PC가 승인번호로 중복을 맞춘다).
+- 확신이 낮은 칸에는 "확인해 주세요"가 붙고, 합계가 안 맞으면 그 칸 아래에 [○○원으로 맞추기]가 뜬다.
+- 보내는 것: 원본 JPEG + 확인한 값. 지금은 receipt.v1 후보 4칸(합계·작성일자·상대 상호·상대 등록번호)으로 보낸다. 전체 칸(`paperInvoice`, cap `receipt.v2`)은 tex의 스키마·PC 수신·꾸러미 반영이 머지되면 @sax/remote를 다시 맞추고 함께 보낸다(릴레이 스레드와 합의한 모양은 `PaperInvoice` 타입).
 
 ## 지키는 것
 
@@ -37,7 +48,8 @@
 
 ```bash
 pnpm install
-pnpm check                      # 타입·린트·시험(파서·자르기·SP-1 설정, node --test)
+pnpm check                      # 타입·린트·시험(영수증·세금계산서 파서, 자르기, SP-1 설정, node --test)
+pnpm gallery                    # 화면 갤러리(웹, dist-gallery/). docs/design.md "점검"
 pnpm dummy-pc                   # 더미 PC + 개발 릴레이(localhost:8787)
 pnpm smoke                      # Node 폰으로 더미 PC와 페어링·전송 스모크
 npx expo prebuild -p ios && npx expo run:ios   # 시뮬레이터

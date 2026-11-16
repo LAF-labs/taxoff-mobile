@@ -42,3 +42,4 @@ yarn-error.*
 
 # 더미 PC 출력
 dev/out/
+dist-gallery/

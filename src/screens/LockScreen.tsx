@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { KeyringError, createDevice, resetDevice, unlock, type DeviceKeys, type KeyringErrorCode } from '../keyring';
-import { space } from '../theme';
+import { BRAND } from '../config';
+import { space, usePalette } from '../theme';
 import { Button, Notice, Screen, T } from '../ui/kit';
 
 const MESSAGES: Record<KeyringErrorCode, string> = {
@@ -18,6 +19,7 @@ export function LockScreen({ firstRun, onUnlocked, onReset }: { firstRun: boolea
   // 개발 빌드만 원인 문구를 함께 보인다(값·키는 들어 있지 않다)
   const [detail, setDetail] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const p = usePalette();
 
   const open = async () => {
     setBusy(true);
@@ -39,28 +41,21 @@ export function LockScreen({ firstRun, onUnlocked, onReset }: { firstRun: boolea
   }, []);
 
   return (
-    <Screen>
-      <View style={st.wrap} testID="lock-screen">
-        <View style={{ gap: space.s2 }}>
-          <T v="title">tex</T>
-          {firstRun ? (
-            <>
-              <T c="ink2">이 폰에만 있는 열쇠를 만들어요.</T>
-              <T v="caption" c="ink3">
-                열쇠는 이 폰 밖으로 나가지 않고 백업되지 않아요. 서버도 열쇠를 갖지 않아요. 앱을 열 때마다 얼굴·지문으로 확인해요.
-              </T>
-            </>
-          ) : (
-            <T c="ink2">얼굴·지문으로 열어요.</T>
+    <Screen
+      scroll={false}
+      testID="lock-screen"
+      footer={
+        <>
+          {err && <Notice>{MESSAGES[err]}</Notice>}
+          {err && detail && (
+            <T v="meta" c="ink3">
+              {detail}
+            </T>
           )}
-        </View>
-        {err && <Notice>{MESSAGES[err]}</Notice>}
-        {err && detail && <T v="caption" c="ink3">{detail}</T>}
-        <View style={{ gap: space.s2 }}>
-          <Button testID="unlock" label={firstRun ? '시작하기' : '열기'} onPress={open} busy={busy} />
+          <Button testID="unlock" label={firstRun ? '시작하기' : '얼굴·지문으로 열기'} onPress={open} busy={busy} />
           {err === 'corrupt' && (
             <Button
-              kind="danger"
+              kind="quiet"
               label="이 폰 초기화"
               onPress={async () => {
                 try {
@@ -76,6 +71,24 @@ export function LockScreen({ firstRun, onUnlocked, onReset }: { firstRun: boolea
               }}
             />
           )}
+        </>
+      }
+    >
+      <View style={st.wrap}>
+        <View style={[st.mark, { backgroundColor: p.ink }]}>
+          <View style={[st.markInner, { borderColor: p.onInk }]} />
+        </View>
+        <View style={{ gap: space.s2, alignItems: 'center' }}>
+          <T v="title">{BRAND}</T>
+          {firstRun ? (
+            <T v="sub" c="ink2" center>
+              이 폰에만 있는 열쇠를 만들어요.{'\n'}열쇠는 폰 밖으로 나가지 않고 백업되지 않아요.
+            </T>
+          ) : (
+            <T v="sub" c="ink2" center>
+              잠겨 있어요
+            </T>
+          )}
         </View>
       </View>
     </Screen>
@@ -83,5 +96,7 @@ export function LockScreen({ firstRun, onUnlocked, onReset }: { firstRun: boolea
 }
 
 const st = StyleSheet.create({
-  wrap: { flex: 1, padding: space.s5, justifyContent: 'space-between' },
+  wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.s5, paddingBottom: space.s7 },
+  mark: { width: 64, height: 64, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  markInner: { width: 26, height: 32, borderWidth: 2.5, borderRadius: 4 },
 });
