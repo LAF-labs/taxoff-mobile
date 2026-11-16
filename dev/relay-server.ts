@@ -14,6 +14,7 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { DevAuth } from './dev-auth.ts';
+import { RELAY_PING } from '../vendor/sax-remote/src/index.ts';
 
 const ROOM_TTL_MS = 120_000;
 const FRAME_MAX = 65_535;
@@ -23,6 +24,8 @@ const Q_BYTES = 6 * 1024 * 1024;
 const Q_TTL_MS = 24 * 3_600_000;
 const CT_MAX = 65_536;
 const BUNDLE_MAX = 2048;
+const PING = Buffer.from(RELAY_PING);
+const PONG = '{"t":"pong"}';
 const sha = (b64url: string) => createHash('sha256').update(Buffer.from(b64url, 'base64url')).digest('hex');
 
 function outerOk(d: Buffer): boolean {
@@ -180,6 +183,8 @@ export class DevRelay {
     const t = setTimeout(() => ws.close(4001), Math.max(0, exp - Date.now()));
     let fails = 0;
     ws.on('message', (d: Buffer, bin) => {
+      // 앱 수준 keepalive(ws-link RELAY_PING): 상대에게 넘기지 않고 이 연결에만 pong(tex services/relay와 같음)
+      if (!bin && d.length === PING.length && d.equals(PING)) return void ws.send(PONG);
       if (!bin || !outerOk(d)) {
         if (++fails >= FAILS_MAX) ws.close(1008);
         return;

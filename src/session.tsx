@@ -75,7 +75,14 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
     const t = setInterval(() => {
       if (AppState.currentState === 'active') void sync();
     }, RECONNECT_MS);
-    return () => clearInterval(t);
+    // 앱이 다시 앞으로 오면 주기를 기다리지 않고 바로 붙는다(잠자기·망 전환 뒤 반쯤 열린 연결 대신 새 연결)
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st === 'active') void sync();
+    });
+    return () => {
+      clearInterval(t);
+      sub.remove();
+    };
   }, [sync, refreshPending]);
 
   const value = useMemo<Session>(() => ({ keys, data, outbox, pending, pc, syncing, update, sync, refreshPending }), [keys, data, outbox, pending, pc, syncing, update, sync, refreshPending]);
