@@ -171,6 +171,8 @@ const SCREENS: Record<
   'approval-urgent': () => sheetCase(gate({ left: 14_000 })),
   'approval-expired': () => sheetCase(gate({ left: -1 })),
   'approval-dup': () => sheetCase(gate({ reserved: [...NO_FIRST, { key: '$dup.businessKey', value: 'committed' }] })),
+  /** 값이 승인번호 끝·시각을 실어 올 때(모양은 엔진과 맞출 것) */
+  'approval-dup-detail': () => sheetCase(gate({ reserved: [...NO_FIRST, { key: '$dup.businessKey', value: 'committed;4821;10:20' }] })),
   'approval-dup-acked': () => sheetCase(gate({ reserved: [...NO_FIRST, { key: '$dup.businessKey', value: 'committed' }] }), { acked: ['$dup.businessKey'] }),
   'approval-unknown': () => sheetCase(gate({ reserved: [...NO_FIRST, { key: '$bank.account', value: '1234' }] })),
   'approval-first': () => sheetCase(gate({ rb: LONG, reserved: [{ key: '$first.bizNo', value: 'true' }, { key: '$first.email', value: 'true' }] })),

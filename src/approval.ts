@@ -98,7 +98,7 @@ export const FIELD_LABELS: Readonly<Record<string, string>> = {
 /** 예약 키(엔진만 만든다). $first.*는 멈춤, $dup.*는 확인해야 하는 경고 한 줄. */
 export const RESERVED_KEYS = ['$first.bizNo', '$first.email', '$dup.businessKey', '$dup.priorNotCommitted', '$dup.otherDevice'] as const;
 const DUP_LINE: Readonly<Record<string, string>> = {
-  '$dup.businessKey': '같은 건을 이미 발급했어요(승인번호 있음)',
+  '$dup.businessKey': '같은 건을 이미 발급했어요',
   '$dup.priorNotCommitted': '같은 건을 전에 시도했는데 발급되지 않았어요',
   '$dup.otherDevice': '다른 기기에서 같은 건을 작성하고 있어요',
 };
@@ -115,14 +115,31 @@ export const SHEET_GROUPS: ReadonlyArray<{ title: string; keys: readonly string[
 
 const isTrue = (v: string | undefined) => v !== undefined && v !== 'false' && v !== '';
 
+/**
+ * $dup.* 값에서 둘째 줄을 뽑는다. 엔진은 지금 'committed'처럼 상태만 넣으므로 보통 없다.
+ * 값이 "committed;1234;10:20"처럼 승인번호 끝 4자리·시각을 함께 실어 오면 "승인번호 끝 1234 · 오전 10:20"으로 보인다
+ * (값은 cardHash에 들어간 글자 그대로에서만 뽑는다. 이 모양은 엔진과 맞춰야 한다).
+ */
+export function dupDetail(v: string): string | undefined {
+  const m = /^[a-z_]+;(\d{4})?;(\d{1,2}):(\d{2})$/.exec(v) ?? /^[a-z_]+;(\d{4})$/.exec(v);
+  if (!m) return undefined;
+  const parts: string[] = [];
+  if (m[1]) parts.push(`승인번호 끝 ${m[1]}`);
+  if (m[2] && m[3]) {
+    const h = Number(m[2]);
+    parts.push(`${h < 12 ? '오전' : '오후'} ${h % 12 === 0 ? 12 : h % 12}:${m[3]}`);
+  }
+  return parts.length ? parts.join(' · ') : undefined;
+}
+
 export interface GateReading {
   /** 사전에 없는 키 */
   unknown: string[];
   values: Record<string, string>;
   /** 처음 거래하는 곳(사업자번호) 또는 처음 보내는 이메일 */
   first: boolean;
-  /** 확인해야 하는 같은 건 경고(키, 한 줄) */
-  dups: Array<{ key: string; line: string }>;
+  /** 확인해야 하는 같은 건 경고(키, 한 줄, 둘째 줄 = 승인번호 끝 4자리 · 시각, 값이 알려 줄 때만) */
+  dups: Array<{ key: string; line: string; detail?: string }>;
 }
 
 export function readGate(g: Pick<PhoneGate, 'fields'>): GateReading {
@@ -135,7 +152,7 @@ export function readGate(g: Pick<PhoneGate, 'fields'>): GateReading {
   }
   const dups = Object.keys(DUP_LINE)
     .filter((k) => isTrue(values[k]))
-    .map((k) => ({ key: k, line: DUP_LINE[k]! }));
+    .map((k) => ({ key: k, line: DUP_LINE[k]!, detail: dupDetail(values[k]!) }));
   return { unknown, values, first: isTrue(values['$first.bizNo']) || isTrue(values['$first.email']), dups };
 }
 

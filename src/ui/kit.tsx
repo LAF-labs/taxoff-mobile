@@ -230,13 +230,18 @@ export function StatusDot({ tone = 'quiet', label, busy, testID, v = 'subStrong'
 }
 
 /** 확인이 필요한 한 줄(attention-soft 면). 사라지는 토스트 대신 그 자리에 남긴다. */
-export function Notice({ children, tone = 'attention', testID }: { children: ReactNode; tone?: 'attention' | 'quiet'; testID?: string }) {
+export function Notice({ children, tone = 'attention', testID, sub }: { children: ReactNode; tone?: 'attention' | 'quiet'; testID?: string; /** 둘째 줄(작은 회색): 다음에 할 일·안심 문구 */ sub?: string }) {
   const p = usePalette();
   return (
-    <View style={[st.notice, { backgroundColor: tone === 'attention' ? p.attentionSoft : p.tint }]} testID={testID} accessibilityRole="alert">
+    <View style={[st.notice, { backgroundColor: tone === 'attention' ? p.attentionSoft : p.tint, gap: space.s1 }]} testID={testID} accessibilityRole="alert">
       <T v="sub" c={tone === 'attention' ? 'attention' : 'ink2'}>
         {children}
       </T>
+      {sub && (
+        <T v="meta" c="ink2" testID={testID ? `${testID}-sub` : undefined}>
+          {sub}
+        </T>
+      )}
     </View>
   );
 }
