@@ -68,6 +68,8 @@ export function HomeScreen({ go, chat, todo, draft = '' }: { go: (to: HomeRoute)
   const list = useRef<ComponentRef<typeof ScrollView>>(null);
   const items = [...(chat ?? chatFromData(s.data)), ...mine];
   const off = s.pc === 'offline' || s.pc === 'queued';
+  /** PC가 꺼져 있으면 폰이 대화를 이어 받는다(기획 v2). */
+  const pcOff = off || s.pc === 'stale';
 
   const send = () => {
     const v = text.trim();
@@ -121,6 +123,7 @@ export function HomeScreen({ go, chat, todo, draft = '' }: { go: (to: HomeRoute)
           {paired && <TodoLine todo={t} onPress={() => go('todo')} />}
         </View>
 
+        <View style={st.fill}>
         <ScrollView
           ref={list}
           style={st.fill}
@@ -142,6 +145,8 @@ export function HomeScreen({ go, chat, todo, draft = '' }: { go: (to: HomeRoute)
           {paired && off && <Notice tone="quiet" testID="pc-off-note">PC가 꺼져 있어요. 시키신 일은 PC를 켜면 시작해요</Notice>}
           {paired && s.pc === 'stale' && <Notice testID="pc-stale-note">PC가 일주일 넘게 꺼져 있어요. PC를 켜 두거나 다시 연결해 주세요</Notice>}
         </ScrollView>
+        <TopFade />
+        </View>
 
         {paired && (
           <View style={[st.bottom, { borderTopColor: p.line, backgroundColor: p.canvas }]}>
@@ -155,9 +160,9 @@ export function HomeScreen({ go, chat, todo, draft = '' }: { go: (to: HomeRoute)
                 testID="chat-input"
                 value={text}
                 onChangeText={setText}
-                placeholder="PC에 시킬 일"
+                placeholder={pcOff ? '폰에서 이어서 말하기' : 'PC에 시킬 일'}
                 placeholderTextColor={p.ink3}
-                accessibilityLabel="PC에 시킬 일 적기"
+                accessibilityLabel={pcOff ? '폰에서 이어서 말하기' : 'PC에 시킬 일 적기'}
                 maxFontSizeMultiplier={MAX_FONT_SCALE}
                 multiline
                 numberOfLines={1}
@@ -175,6 +180,22 @@ export function HomeScreen({ go, chat, todo, draft = '' }: { go: (to: HomeRoute)
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+/**
+ * 대화 위 끝의 흐림(20pt): 위로 올라간 줄이 칼로 자른 듯 잘리지 않고 바탕색으로 녹아든다.
+ * 그라데이션 묶음 없이 바탕색 띠 열 장(2pt씩)을 겹친다. 선은 긋지 않는다(머리카락 선은 바닥 줄에만).
+ */
+const FADE = Array.from({ length: 10 }, (_, i) => Number(((1 - i / 10) ** 1.6).toFixed(2)));
+function TopFade() {
+  const p = usePalette();
+  return (
+    <View pointerEvents="none" style={st.fade}>
+      {FADE.map((o, i) => (
+        <View key={i} style={{ height: 2, backgroundColor: p.canvas, opacity: o }} />
+      ))}
+    </View>
   );
 }
 
@@ -237,7 +258,7 @@ function Item({ it }: { it: ChatItem }) {
     );
   }
   const me = it.from === 'me';
-  const meta = `${me ? '' : 'PC · '}${clock(it.at)}${it.state === 'waiting' ? ' · 아직 안 보냄' : ''}`;
+  const meta = `${me ? '' : 'PC · '}${clock(it.at)}${it.state === 'waiting' ? ' · PC 켜지면 보냄' : ''}`;
   return (
     <View style={[st.msg, me ? st.mine : st.theirs]} testID={`chat-${it.from}`}>
       {it.text !== undefined &&
@@ -305,6 +326,7 @@ const st = StyleSheet.create({
   lines: { paddingHorizontal: space.s5, gap: space.s2, paddingBottom: space.s2 },
   pcLine: { minHeight: size.hit, flexDirection: 'row', alignItems: 'center', gap: space.s3, marginHorizontal: -space.s2, paddingHorizontal: space.s2, borderRadius: radius.md },
   todo: { minHeight: size.row, flexDirection: 'row', alignItems: 'center', gap: space.s3, paddingHorizontal: space.s4, paddingVertical: space.s2, borderRadius: radius.lg },
+  fade: { position: 'absolute', top: 0, left: 0, right: 0 },
   chat: { paddingHorizontal: space.s5, paddingTop: space.s3, paddingBottom: space.s4, gap: space.s4, flexGrow: 1, justifyContent: 'flex-end' },
   msg: { gap: space.s1 },
   mine: { alignSelf: 'flex-end', alignItems: 'flex-end', maxWidth: '85%' },
