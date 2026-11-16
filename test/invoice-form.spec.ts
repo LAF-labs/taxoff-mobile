@@ -32,7 +32,7 @@ describe('세금계산서 확인 칸', () => {
     assert.equal(v.fieldConfidence.total, 1);
   });
   it('계산서는 세액 칸 값과 관계없이 0', () => {
-    const f = { ...emptyInvoiceForm('invoice'), supply: '50,000', vat: '5,000', total: '50,000', direction: 'purchase' as const, writtenOn: '2026-11-05', supplierBiz: '123-45-67891', supplierName: '가나', buyerBiz: '220-81-12341', buyerName: '율무' };
+    const f = { ...emptyInvoiceForm('invoice'), supply: '50,000', vat: '5,000', total: '50,000', direction: 'purchase' as const, writtenOn: '2026-11-05', supplierBiz: '111-11-11119', supplierName: '가나', buyerBiz: '999-99-99997', buyerName: '시험' };
     const v = invoiceOf(f, {}, new Set());
     assert.equal(v.vatAmount, 0);
     assert.deepEqual(checkInvoice(v, TODAY), []);
