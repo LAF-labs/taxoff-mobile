@@ -12,12 +12,13 @@ import { useOfflineChat } from '../offline/useOfflineChat';
 import { BRAND } from '../config';
 import { queueCounts } from '../queue';
 import { useQueue } from '../queueStore';
+import { RunCard } from './RunCard';
 import { useSession } from '../session';
 import type { PcStatus } from '../net/pc';
 import { MAX_FONT_SCALE, radius, size, space, textScale, type, usePalette } from '../theme';
 import { Button, Check, Chevron, Notice, StatusDot, T, ago, tap, type Tone } from '../ui/kit';
 
-export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'issue' | 'queue';
+export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'issue' | 'queue' | 'run' | 'doc';
 
 /** 연결 상태 한 줄. 파랑은 "켜져 있어 바로 받는다"에만 쓴다. */
 export function pcLine(pc: PcStatus, lastSeen: number | null): { tone: Tone; label: string; busy?: boolean } {
@@ -152,7 +153,13 @@ export function HomeScreen({ go, chat, todo, draft = '' }: { go: (to: HomeRoute)
               PC에 시킬 일을 적거나, 아래에서 골라 주세요.
             </T>
           ) : (
-            items.map((it) => <Item key={it.id} it={it} />)
+            items.map((it) =>
+              it.kind === 'run' ? (
+                <RunItem key={it.id} jobId={it.jobId} go={go} />
+              ) : (
+                <Item key={it.id} it={it} />
+              ),
+            )
           )}
           {paired && off && <Notice tone="quiet" testID="pc-off-note">PC가 꺼져 있어요. 시키신 일은 PC를 켜면 시작해요</Notice>}
           {paired && s.pc === 'stale' && <Notice testID="pc-stale-note">PC가 일주일 넘게 꺼져 있어요. PC를 켜 두거나 다시 연결해 주세요</Notice>}
@@ -258,7 +265,28 @@ function Intro() {
   );
 }
 
-function Item({ it }: { it: ChatItem }) {
+/** 대화 안 진행·결과 카드. 누르면 진행 화면, 결과면 [서류 보기]로 서류 보기. */
+function RunItem({ jobId, go }: { jobId: string; go: (to: HomeRoute) => void }) {
+  const q = useQueue();
+  const job = q.jobs.find((j) => j.id === jobId);
+  if (!job?.run) return null;
+  const open = (to: 'run' | 'doc') => {
+    q.setFocus(job.id);
+    go(to);
+  };
+  return (
+    <RunCard
+      job={job}
+      compact
+      onOpen={() => open('run')}
+      onAction={(a) => q.runAction(job.id, a)}
+      onDoc={() => open('doc')}
+      onShare={() => open('doc')}
+    />
+  );
+}
+
+function Item({ it }: { it: Exclude<ChatItem, { kind: 'run' }> }) {
   const p = usePalette();
   if (it.kind === 'merged') {
     return (

@@ -2,6 +2,7 @@
 // 시작 확인이 있으면 바닥 주요 단추 [모두 시작]. 비었으면 "밀린 일이 없어요" + 마지막으로 끝난 일 한 줄.
 import { StyleSheet, View } from 'react-native';
 import { clock } from '../chat';
+import { STEP_LABEL } from '../run';
 import { REASON_LINE, STATE_ACTION, STATE_LINE, STATE_NAME, groupJobs, type Job, type JobAction, type JobState } from '../queue';
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
@@ -38,7 +39,12 @@ export function QueueScreen({ onDone, onConnection, onOpen, now = Date.now() }: 
           {groups.map((g) => (
             <Group key={g.state} title={`${STATE_NAME[g.state]} · ${g.jobs.length}건`} testID={`queue-${g.state}`}>
               {g.jobs.map((j) => (
-                <JobRow key={j.id} job={j} state={g.state} onAction={(a) => (a === 'cancel' || a === 'retry' ? q.act(j.id, a) : a === 'approve' && j.gate ? q.openSheet(j.id) : onOpen(j, a))} />
+                <JobRow key={j.id} job={j} state={g.state} onAction={(a) => {
+                    if (a === 'cancel' || a === 'retry') return q.act(j.id, a);
+                    if (a === 'approve' && j.gate) return q.openSheet(j.id);
+                    q.setFocus(j.id);
+                    onOpen(j, a);
+                  }} />
               ))}
             </Group>
           ))}
@@ -57,7 +63,19 @@ export function QueueScreen({ onDone, onConnection, onOpen, now = Date.now() }: 
 
 function JobRow({ job, state, onAction }: { job: Job; state: JobState; onAction: (a: JobAction) => void }) {
   const action = STATE_ACTION[state];
-  const line = state === 'needPc' && job.reason ? `${REASON_LINE[job.reason]} · PC에서 해 주세요` : STATE_LINE[state];
+  const r = job.run;
+  const line =
+    state === 'needPc' && job.reason
+      ? `${REASON_LINE[job.reason]} · PC에서 해 주세요`
+      : r?.kind === 'inDoubt'
+        ? `확인 중 · 발급목록 조회 ${r.tries}회째`
+        : r?.kind === 'myTurn'
+          ? '내 차례 · 폰이나 PC에서 확인해 주세요'
+          : r?.kind === 'stopped'
+            ? '중지됨 · 아무것도 발급하지 않았어요'
+            : state === 'running' && r?.kind === 'running'
+              ? `${STATE_LINE[state]} · ${STEP_LABEL[r.step]}`
+              : STATE_LINE[state];
   const tone = TONE[state];
   return (
     <View style={st.row} testID={`job-${job.id}`}>

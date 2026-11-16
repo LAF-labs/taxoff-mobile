@@ -21,6 +21,8 @@ import { SettingsScreen } from './src/screens/SettingsScreen';
 import { QueueScreen } from './src/screens/QueueScreen';
 import { QueueProvider } from './src/queueStore';
 import { ApprovalHost } from './src/screens/ApprovalHost';
+import { DocScreen } from './src/screens/DocScreen';
+import { RunScreen } from './src/screens/RunScreen';
 import { SessionProvider } from './src/session';
 import { emptyData, loadData, type AppData } from './src/storage/state';
 import { usePalette } from './src/theme';
@@ -111,7 +113,18 @@ export default function App() {
         {route === 'capture' && <CaptureScreen onDone={back} />}
         {route === 'cash' && <CashScreen onDone={back} />}
         {route === 'settings' && <SettingsScreen onDone={back} onConnection={() => go('connection')} onPair={() => go('pair')} />}
-        {route === 'queue' && <QueueScreen onDone={back} onConnection={() => go('connection')} onOpen={home} />}
+        {route === 'queue' && <QueueScreen onDone={back} onConnection={() => go('connection')} onOpen={(j) => (j.run ? go('run') : home())} />}
+        {route === 'run' && (
+          <RunScreen
+            onDone={back}
+            onDoc={() => go('doc')}
+            onRecords={() => {
+              setTab('records');
+              setStack(['tabs']);
+            }}
+          />
+        )}
+        {route === 'doc' && <DocScreen onDone={back} />}
         {route === 'issue' && <IssueScreen counterparties={[]} onDone={back} onCapture={() => go('capture')} onSubmitted={home} />}
         {route === 'connection' && (
           <ConnectionScreen

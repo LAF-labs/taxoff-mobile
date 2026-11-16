@@ -13,6 +13,11 @@ import { IssueScreen, type IssuePreview } from '../src/screens/IssueScreen';
 import { QueueProvider, type ApprovalSettings } from '../src/queueStore';
 import { ApprovalHost } from '../src/screens/ApprovalHost';
 import { buildGate, type GateField, type PhoneGate } from '../src/approval';
+import { useEffect } from 'react';
+import { useQueue } from '../src/queueStore';
+import { RunScreen } from '../src/screens/RunScreen';
+import { DocScreen, type DocState } from '../src/screens/DocScreen';
+import type { IssueResult, RunView } from '../src/run';
 import type { DoneJob, Job } from '../src/queue';
 import type { Counterparty, IssuedToday } from '../src/issue';
 import { CashScreen } from '../src/screens/CashScreen';
@@ -158,14 +163,93 @@ const sheetCase = (g: PhoneGate, o: { settings?: ApprovalSettings; openedAt?: nu
   node: <QueueScreen onDone={noop} onConnection={noop} onOpen={noop} now={now} />,
 });
 
+// ---- 진행·결과·서류(P-04·P-05) 견본 ----
+const RES: IssueResult = {
+  approvalNo: '20261116-41000000-12345678', counterpart: '가나식자재', total: 1_353_000, email: 'tax@gana.example', emailSent: true, issuedAt: now - 60_000,
+  doc: { name: '세금계산서_가나식자재_20261116.pdf', issuedOn: iso(today), uri: '' },
+};
+const RES_LONG: IssueResult = {
+  ...RES, counterpart: '주식회사 새봄꽃과 정원 관리 서비스 성수동 본점', total: 13_530_000, email: 'very.long.address.for.invoices@flower-garden-service.example',
+  doc: { name: '세금계산서_주식회사새봄꽃과정원관리서비스성수동본점_20261116.pdf', issuedOn: iso(today), uri: '' },
+};
+const runJob = (run: RunView, o: { title?: string; amount?: number; state?: Job['state'] } = {}): Job => ({
+  id: 'r1', title: o.title ?? '가나식자재 세금계산서', amount: o.amount ?? 1_353_000, createdAt: now - 3 * 60_000, state: o.state ?? (run.kind === 'done' ? 'done' : run.kind === 'inDoubt' || run.kind === 'verify' ? 'verify' : 'running'), run,
+});
+const T0 = now - 80_000;
+const runCase = (run: RunView, o: { title?: string; amount?: number } = {}) => ({
+  session: fake(paired(), 'online'), jobs: [runJob(run, o)], focus: 'r1', node: <RunScreen onDone={noop} onDoc={noop} onRecords={noop} now={now} />,
+});
+const docCase = (state: DocState, result = RES) => ({
+  session: fake(paired(), state.kind === 'pcOff' ? 'offline' : 'online'), jobs: [runJob({ kind: 'done', result, startedAt: T0 })], focus: 'r1', node: <DocScreen onDone={noop} state={state} />,
+});
+
+/** 시연: 켜진 PC에 발급을 맡긴 순간부터(대화 홈 + 승인 시트가 스스로 뜬다) */
+function Demo() {
+  const q = useQueue();
+  useEffect(() => {
+    q.add({ id: 'demo', title: '가나식자재 세금계산서', amount: 1_353_000, createdAt: Date.now(), state: 'running' }, '', {
+      supplierBizNo: '', supplierName: '', counterpartBizNo: '123-45-67891', counterpartName: '가나식자재', counterpartEmail: 'tax@gana.example', itemName: '식자재', itemCount: '1',
+      supplyAmount: '1230000', taxAmount: '123000', totalAmount: '1353000', issueDate: iso(today), remark: '', receiptType: '청구',
+    });
+  }, []);
+  return <Main chat={CHAT} live />;
+}
+
 const issue = (preview: IssuePreview, cps = CPS, today: IssuedToday[] = [], left = 5) => (
   <IssueScreen counterparties={cps} issuedToday={today} approvalsLeft={left} onDone={noop} onCapture={noop} onSubmitted={noop} preview={preview} />
 );
 
 const SCREENS: Record<
   string,
-  () => { session: Session; node: React.ReactNode; jobs?: Job[]; last?: DoneJob; notes?: ChatItem[]; sheet?: string; approval?: ApprovalSettings; sheetPreview?: { now: number; openedAt: number; acked?: string[] } }
+  () => {
+    session: Session; node: React.ReactNode; jobs?: Job[]; last?: DoneJob; notes?: ChatItem[]; sheet?: string; approval?: ApprovalSettings;
+    sheetPreview?: { now: number; openedAt: number; acked?: string[] }; focus?: string; simulate?: boolean | 'inDoubt';
+  }
 > = {
+  'run-prepare': () => runCase({ kind: 'running', step: 'prepare', startedAt: now - 12_000 }),
+  'run-login': () => runCase({ kind: 'running', step: 'login', startedAt: now - 35_000 }),
+  'run-readback': () => runCase({ kind: 'running', step: 'readback', startedAt: T0 }),
+  'run-issue': () => runCase({ kind: 'running', step: 'issue', startedAt: now - 140_000 }),
+  'run-verify-step': () => runCase({ kind: 'running', step: 'verify', startedAt: now - 150_000 }),
+  'run-simple-auth': () => runCase({ kind: 'myTurn', step: 'login', auth: { method: 'simple', app: '카카오뱅크' }, startedAt: now - 50_000 }),
+  'run-simple-auth-left': () => runCase({ kind: 'myTurn', step: 'login', auth: { method: 'simple', app: '카카오뱅크', deadline: now + 130_000 }, startedAt: now - 50_000 }),
+  'run-simple-auth-timeout': () => runCase({ kind: 'myTurn', step: 'login', auth: { method: 'simple', app: '카카오뱅크', deadline: now - 1_000 }, startedAt: now - 200_000 }),
+  'records-list': () => ({ session: fake(paired(), 'online'), jobs: [runJob({ kind: 'done', result: RES, startedAt: T0 }), { ...runJob({ kind: 'done', result: { ...RES_LONG, approvalNo: '20261115-41000000-87654321', doc: { ...RES_LONG.doc, issuedOn: iso(new Date(now - DAY)) } }, startedAt: T0 - DAY }), id: 'r2', createdAt: now - DAY }], node: <Main start="records" /> }),
+  'run-simple-auth-unknown': () => runCase({ kind: 'myTurn', step: 'login', auth: { method: 'simple', app: '○○은행' }, startedAt: now - 50_000 }),
+  'run-cert': () => runCase({ kind: 'myTurn', step: 'login', auth: { method: 'cert' }, startedAt: now - 40_000 }),
+  'run-stop-blocked': () => runCase({ kind: 'stopped', step: 'login', reason: 'blocked', startedAt: T0 }),
+  'run-stop-blocked-reserved': () => runCase({ kind: 'stopped', step: 'login', reason: 'blocked', startedAt: T0, reserved: true }),
+  'run-stop-unknown-screen': () => runCase({ kind: 'stopped', step: 'readback', reason: 'unknownScreen', startedAt: T0 }),
+  'run-stop-date': () => runCase({ kind: 'stopped', step: 'readback', reason: 'dateMismatch', startedAt: T0 }),
+  'run-stop-input': () => runCase({ kind: 'stopped', step: 'readback', reason: 'inputMismatch', startedAt: T0 }),
+  'run-in-doubt': () => runCase({ kind: 'inDoubt', tries: 3, startedAt: now - 200_000 }),
+  'run-verify-needed': () => runCase({ kind: 'verify', startedAt: now - 600_000 }),
+  'result-email': () => runCase({ kind: 'done', result: RES, startedAt: T0 }),
+  'result-no-email': () => runCase({ kind: 'done', result: { ...RES, email: null, emailSent: false }, startedAt: T0 }),
+  'result-long': () => runCase({ kind: 'done', result: RES_LONG, startedAt: T0 }, { title: '주식회사 새봄꽃과 정원 관리 서비스 성수동 본점 세금계산서', amount: 13_530_000 }),
+  'home-chat-run': () => ({
+    session: fake(paired(), 'online'),
+    jobs: [runJob({ kind: 'myTurn', step: 'login', auth: { method: 'simple', app: '카카오뱅크' }, startedAt: now - 50_000 })],
+    notes: [{ kind: 'run', id: 'run-r1', at: at(11, 50), jobId: 'r1' }],
+    node: <Main chat={CHAT} live />,
+  }),
+  'home-chat-result': () => ({
+    session: fake(paired(), 'online'),
+    jobs: [runJob({ kind: 'done', result: RES, startedAt: T0 })],
+    notes: [{ kind: 'run', id: 'run-r1', at: at(11, 50), jobId: 'r1' }],
+    node: <Main chat={CHAT} live />,
+  }),
+  'queue-with-done': () => ({ session: fake(paired(), 'online'), jobs: [runJob({ kind: 'inDoubt', tries: 2, startedAt: T0 }, { title: '서울청과 세금계산서', amount: 880_000 }), { ...runJob({ kind: 'done', result: RES, startedAt: T0 }), id: 'r2' }], node: <QueueScreen onDone={noop} onConnection={noop} onOpen={noop} now={now} /> }),
+  'doc-loading': () => docCase({ kind: 'loading' }),
+  'doc-receiving': () => docCase({ kind: 'receiving', pct: 62 }),
+  'doc-pc-off': () => docCase({ kind: 'pcOff' }),
+  'doc-pc-off-asked': () => docCase({ kind: 'pcOff', asked: true }),
+  'doc-backup': () => docCase({ kind: 'ready', backup: true }),
+  'doc-error': () => docCase({ kind: 'error' }),
+  'doc-ready': () => docCase({ kind: 'ready' }),
+  'doc-long': () => docCase({ kind: 'ready' }, RES_LONG),
+  demo: () => ({ session: fake(paired(), 'online'), approval: HW, simulate: true, node: <Demo /> }),
+  'demo-in-doubt': () => ({ session: fake(paired(), 'online'), approval: HW, simulate: 'inDoubt', node: <Demo /> }),
   'approval-default': () => sheetCase(gate()),
   'approval-arming': () => sheetCase(gate({ left: 119_700 }), { openedAt: now - 300 }),
   'approval-urgent': () => sheetCase(gate({ left: 14_000 })),
@@ -242,14 +326,14 @@ export default function Gallery() {
   const name = q.get('s') || 'home-chat-online';
   textScale.web = Math.min(Number(q.get('fs')) || 1, MAX_FONT_SCALE);
   const make = SCREENS[name] ?? SCREENS['home-chat-online']!;
-  const { session, node, jobs, last, notes, sheet, approval, sheetPreview } = make();
+  const { session, node, jobs, last, notes, sheet, approval, sheetPreview, focus, simulate } = make();
   const w = Number(q.get('w')) || 393;
   const h = Number(q.get('h')) || 852;
   return (
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: w, height: h }, insets: h < 700 ? { top: 20, left: 0, right: 0, bottom: 0 } : { top: 59, left: 0, right: 0, bottom: 34 } }}>
       <View style={{ flex: 1, backgroundColor: p.canvas }}>
         <SessionContext.Provider value={session}>
-          <QueueProvider initial={jobs} last={last} notes={notes} sheet={sheet} approval={approval} simulate>
+          <QueueProvider initial={jobs} last={last} notes={notes} sheet={sheet} approval={approval} simulate={simulate ?? true} focus={focus}>
             {node}
             <ApprovalHost preview={sheetPreview} />
           </QueueProvider>
