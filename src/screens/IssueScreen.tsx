@@ -91,6 +91,12 @@ export function IssueScreen({
   else if (approvalsLeft <= 1)
     notice = <Notice testID="issue-limit">{approvalsLeft === 0 ? '오늘 폰 승인을 다 썼어요. 발급 승인은 PC에서 해요' : `오늘 폰 승인은 ${approvalsLeft}건 남았어요`}</Notice>;
 
+  // 부가세 포함 합계를 세액 규칙(10% 버림)으로 정확히 못 만드는 값이면 아래로 맞추고 알린다.
+  const entered = Number(amount.replace(/\D/g, ''));
+  const inexactLine = a.inexact && a.total > 0 ? `합계 ${won(entered)}은 정확히 맞출 수 없어 ${won(a.total)}으로 했어요` : null;
+  const inexactAsNotice = !!inexactLine && !notice;
+  if (inexactAsNotice) notice = <Notice testID="issue-inexact">{inexactLine}</Notice>;
+
   const submit = () => {
     const job: Job = { id: `job-${Date.now()}`, title: `${who} 세금계산서`, amount: a.total, createdAt: Date.now(), state: online ? 'running' : 'entrusted' };
     queue.add(job, online ? `${job.title} ${won(a.total)}을 홈택스에서 준비하고 있어요` : `${job.title} ${won(a.total)}을 맡겼어요. PC 켜지면 준비해요`);
@@ -155,6 +161,11 @@ export function IssueScreen({
               <T v="sub" c="ink2">합계</T>
               <T v="figure" style={st.sumValue}>{won(a.total)}</T>
             </View>
+            {inexactLine && !inexactAsNotice && (
+              <T v="meta" c="attention" style={{ textAlign: 'right' }} testID="issue-inexact">
+                {inexactLine}
+              </T>
+            )}
           </View>
         </Group>
       </View>

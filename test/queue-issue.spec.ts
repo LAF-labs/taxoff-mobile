@@ -12,6 +12,8 @@ describe('밀린 일(P-13)', () => {
     assert.equal(stateAt(job('a', 'entrusted', 72), now), 'expired');
     assert.equal(stateAt(job('a', 'phoneWaiting', 80), now), 'expired');
     assert.equal(stateAt(job('a', 'running', 80), now), 'running');
+    // PC가 가져가 시작 답을 기다리는 일은 만료되지 않는다
+    assert.equal(stateAt(job('a', 'confirmStart', 100), now), 'confirmStart');
     assert.equal(EXPIRE_MS, 259_200_000);
   });
   it('사장님이 할 일부터 묶는다', () => {
@@ -42,6 +44,17 @@ describe('발급 작성(P-10)', () => {
       assert.equal(a.supply + a.tax, n);
     }
     assert.deepEqual(splitAmount(0, 'incl'), { supply: 0, tax: 0, total: 0 });
+  });
+  it('부가세 포함: 정확히 못 맞추는 합계는 세액 규칙을 지키고 아래로 맞춘다', () => {
+    for (const n of [10, 21, 32, 43]) {
+      const a = splitAmount(n, 'incl');
+      assert.equal(a.inexact, true, `n=${n}`);
+      assert.equal(a.tax, Math.floor(a.supply / 10), `n=${n}`);
+      assert.equal(a.total, a.supply + a.tax, `n=${n}`);
+      assert.equal(a.total, n - 1, `n=${n}`);
+    }
+    assert.deepEqual(splitAmount(10, 'incl'), { supply: 9, tax: 0, total: 9, inexact: true });
+    assert.equal(splitAmount(1_353_000, 'incl').inexact, undefined);
   });
   const cps: Counterparty[] = [
     { id: '1', name: '가나식자재', bizNo: '123-45-67890', lastAt: 5, issued: 3 },

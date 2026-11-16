@@ -27,6 +27,8 @@ export interface Amounts {
   supply: number;
   tax: number;
   total: number;
+  /** 부가세 포함으로 적은 합계를 세액 규칙(10% 버림)으로 정확히 만들 수 없어 가장 가까운 아래 값으로 맞췄다 */
+  inexact?: boolean;
 }
 
 export const taxOf = (supply: number) => Math.floor(supply / 10);
@@ -36,10 +38,15 @@ export function splitAmount(amount: number, mode: VatMode): Amounts {
   if (!Number.isFinite(amount) || amount <= 0) return { supply: 0, tax: 0, total: 0 };
   const n = Math.floor(amount);
   if (mode === 'excl') return { supply: n, tax: taxOf(n), total: n + taxOf(n) };
-  // s + floor(s/10) = n 인 s. 그런 s가 없으면(예: 11의 배수 사이 빈 값) 가까운 s를 쓰고 세액으로 맞춘다.
+  // s + floor(s/10) = n 인 s. s + floor(s/10)은 s가 10의 배수를 지날 때 2씩 뛰므로 그런 s가 없는 n이 있다(10, 21, 32, …).
+  // 그때도 세액 규칙은 지킨다: s + floor(s/10) <= n 인 가장 큰 s를 쓰고, 합계가 n보다 1 작다고 알린다.
   const s0 = Math.floor((n * 10) / 11);
-  for (const s of [s0, s0 + 1, s0 - 1]) if (s > 0 && s + taxOf(s) === n) return { supply: s, tax: taxOf(s), total: n };
-  return { supply: s0, tax: n - s0, total: n };
+  for (let s = s0 + 1; s >= Math.max(0, s0 - 1); s--) {
+    const total = s + taxOf(s);
+    if (total === n) return { supply: s, tax: taxOf(s), total };
+    if (total < n) return { supply: s, tax: taxOf(s), total, inexact: true };
+  }
+  return { supply: 0, tax: 0, total: 0, inexact: true };
 }
 
 /** 최근 거래처 다섯 곳(마지막 발급이 최근인 순). */

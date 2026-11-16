@@ -157,6 +157,8 @@ const SCREENS: Record<string, () => { session: Session; node: React.ReactNode; j
   'issue-stale': () => ({ session: fake({ ...paired(), lastSeenPc: now - 9 * DAY }, 'stale'), node: issue({ phase: 'form', cpId: 'ga' }) }),
   'issue-first-counterparty': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'form', cpId: 'sb', amount: '300,000' }) }),
   'issue-duplicate': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'form', cpId: 'ga' }, CPS, DUP) }),
+  /** 부가세 포함 합계 21원: 세액 규칙으로 정확히 못 맞춰 20원으로 */
+  'issue-inexact': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'form', cpId: 'ga', amount: '21', vat: 'incl' }) }),
   'issue-limit': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'form', cpId: 'sc' }, CPS, [], 1) }),
   cash: () => ({ session: fake(paired(), 'online'), node: <CashScreen onDone={noop} /> }),
   connection: () => ({ session: fake(paired(), 'queued', { receipts: 2, cash: 1 }), node: <ConnectionScreen onDone={noop} onReset={noop} onRepair={noop} /> }),

@@ -81,9 +81,12 @@ export const STATE_ACTION: Record<JobState, { key: JobAction; label: string } | 
   expired: { key: 'retry', label: '다시 맡기기' },
 };
 
-/** 아직 시작하지 못한 일이 72시간을 넘기면 만료. */
+/**
+ * 아직 PC가 가져가지 않은 일(맡김·폰에 대기)이 72시간을 넘기면 만료.
+ * 시작 확인은 PC가 이미 가져가 사장님 답을 기다리는 중이라 createdAt으로 만료시키지 않는다.
+ */
 export function stateAt(job: Job, now: number): JobState {
-  const waiting = job.state === 'entrusted' || job.state === 'phoneWaiting' || job.state === 'confirmStart';
+  const waiting = job.state === 'entrusted' || job.state === 'phoneWaiting';
   return waiting && now - job.createdAt >= EXPIRE_MS ? 'expired' : job.state;
 }
 
