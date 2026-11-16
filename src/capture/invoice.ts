@@ -486,11 +486,17 @@ export type InvoiceIssue =
   | { field: 'buyer.bizNo'; code: 'same_party' }
   | { field: 'writtenOn'; code: 'day_invalid' }
   | { field: 'direction'; code: 'direction_required' }
-  | { field: 'supplyAmount' | 'total'; code: 'amount_required' };
+  | { field: 'supplyAmount' | 'total'; code: 'amount_required' }
+  | { field: 'writtenOn' | 'supplier.bizNo' | 'buyer.bizNo' | 'supplier.name' | 'buyer.name'; code: 'required' };
 
 export function checkInvoice(inv: PaperInvoice, today = new Date()): InvoiceIssue[] {
   const out: InvoiceIssue[] = [];
   if (!inv.direction) out.push({ field: 'direction', code: 'direction_required' });
+  if (!inv.writtenOn) out.push({ field: 'writtenOn', code: 'required' });
+  for (const side of ['supplier', 'buyer'] as const) {
+    if (!inv[side].bizNo) out.push({ field: `${side}.bizNo`, code: 'required' });
+    if (!inv[side].name) out.push({ field: `${side}.name`, code: 'required' });
+  }
   if (inv.supplyAmount === null) out.push({ field: 'supplyAmount', code: 'amount_required' });
   if (inv.total === null) out.push({ field: 'total', code: 'amount_required' });
   if (inv.supplyAmount !== null && inv.total !== null) {
@@ -527,6 +533,8 @@ export function issueText(i: InvoiceIssue): string {
       return '받은 것인지 발급한 것인지 골라 주세요.';
     case 'amount_required':
       return '금액을 적어 주세요.';
+    case 'required':
+      return '종이에 적힌 대로 적어 주세요.';
   }
 }
 

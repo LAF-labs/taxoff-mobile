@@ -114,7 +114,7 @@ async function serveMailbox(rec: PairRecord, mbxId: Uint8Array, tok: { read: Uin
     }
     while (!link.closed) {
       const sess = await acceptDesktopSession(link, {
-        noise: keys.noise, pair: rec, hello: { appVersion: 'dummy-pc', deviceListVersion: deviceList.listVersion, capabilities: [CAP.receipt, CAP.cash] },
+        noise: keys.noise, pair: rec, hello: { appVersion: 'dummy-pc', deviceListVersion: deviceList.listVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash] },
         persistTs: async () => {},
       });
       if (!sess) continue;

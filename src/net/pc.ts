@@ -85,7 +85,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | null> {
       pairId: pair.pairId,
       noise,
       desktopStatic: fromB64(pair.desktopStatic),
-      hello: { appVersion: APP_VERSION, deviceListVersion: d.data().seenListVersion, capabilities: [CAP.receipt, CAP.cash] },
+      hello: { appVersion: APP_VERSION, deviceListVersion: d.data().seenListVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash] },
       nextTimestamp: () => (used = clock()),
       responseTimeoutMs: 8000,
     });

@@ -32,14 +32,14 @@ describe('세금계산서 확인 칸', () => {
     assert.equal(v.fieldConfidence.total, 1);
   });
   it('계산서는 세액 칸 값과 관계없이 0', () => {
-    const f = { ...emptyInvoiceForm('invoice'), supply: '50,000', vat: '5,000', total: '50,000', direction: 'purchase' as const };
+    const f = { ...emptyInvoiceForm('invoice'), supply: '50,000', vat: '5,000', total: '50,000', direction: 'purchase' as const, writtenOn: '2026-11-05', supplierBiz: '111-11-11119', supplierName: '가나', buyerBiz: '999-99-99997', buyerName: '시험' };
     const v = invoiceOf(f, {}, new Set());
     assert.equal(v.vatAmount, 0);
     assert.deepEqual(checkInvoice(v, TODAY), []);
   });
-  it('빈 양식은 방향·금액이 필요하다', () => {
+  it('빈 양식은 방향·작성일자·양쪽 번호·상호·금액이 필요하다', () => {
     const codes = checkInvoice(invoiceOf(emptyInvoiceForm(), {}, new Set()), TODAY).map((i) => i.code);
-    assert.deepEqual(codes, ['direction_required', 'amount_required', 'amount_required']);
+    assert.deepEqual(codes, ['direction_required', 'required', 'required', 'required', 'required', 'required', 'amount_required', 'amount_required']);
   });
 });
 
