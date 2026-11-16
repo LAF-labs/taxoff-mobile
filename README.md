@@ -3,7 +3,7 @@
 택스오프 PC 앱과 짝을 이루는 폰 앱(iOS·Android, Expo SDK 58 · React Native 0.88). 사장님이 폰으로 종이 증빙을 찍고 현금매출을 적으면, 릴레이를 거쳐 종단간 암호화로 내 PC에 보낸다. PC는 받은 원본과 데이터를 세무사 꾸러미에 넣는다.
 
 - 출발점: `LAF-labs/tex`의 `poc/apps/mobile`(실기기 페어링·전송 통과본). 그 이력과 설계 근거(D08, ADR-029·034)는 tex에 있다.
-- 프로토콜: `vendor/sax-remote/`는 tex `poc/packages/remote`(@sax/remote, D08 정본)의 **고정 사본**이다. 여기서 고치지 않는다. tex에서 고친 뒤 `pnpm sync:remote <tex 체크아웃>`으로 맞추고, 커밋은 `vendor/sax-remote/VENDORED_FROM`에 남는다. CI의 `vendor` 작업이 사본과 커밋이 같은지 본다(`TEX_READ_TOKEN` 비밀값이 있을 때).
+- 프로토콜과 대화 코어: `vendor/sax-remote/`(@sax/remote, D08 정본), `vendor/sax-redaction/`(@sax/redaction, 가림 계층), `vendor/sax-chat-core/`(@sax/chat-core, PC가 꺼졌을 때 폰 대화, ADR-047)는 tex `poc/packages/`의 **고정 사본**이다. 여기서 고치지 않는다. tex에서 고친 뒤 `pnpm sync:remote <tex 체크아웃> [remote|redaction|chat-core]`으로 맞추고, 커밋은 사본마다 `vendor/<폴더>/VENDORED_FROM`에 남는다. CI의 `vendor` 작업이 사본마다 그 커밋과 같은지 본다(`TEX_READ_TOKEN` 비밀값이 있을 때).
 - 릴레이 서버·계정 서비스는 tex `poc/services/*`에 있다. 이 레포의 `dev/`에는 Node 개발 대역(더미 PC·개발 릴레이·개발 계정)만 있다. 실제 계정·릴레이까지 붙는 개발 스택은 tex의 `poc/apps/mobile/dev/stack.ts`로 돌린다.
 
 ### paseo와의 관계
