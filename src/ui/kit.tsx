@@ -16,6 +16,10 @@ import { MAX_FONT_SCALE, motion, radius, size, space, textScale, type, useReduce
 /** 한글은 낱말 단위로 줄을 바꾼다(숫자와 단위, 낱말이 쪼개지지 않게). iOS는 hangul-word, 웹(갤러리)은 keep-all. */
 const keepAll = { wordBreak: 'keep-all', overflowWrap: 'break-word' } as unknown as TextStyle;
 
+/** 가운뎃점(·)이 줄 끝에 홀로 남지 않게: 점 뒤 칸을 붙은 칸으로 바꿔 점이 다음 낱말과 함께 넘어가게 한다. */
+export const glueDots = (t: string) => t.replace(/ · /g, ' ·\u00A0');
+const glue = (c: ReactNode): ReactNode => (typeof c === 'string' ? glueDots(c) : Array.isArray(c) ? c.map(glue) : c);
+
 /** 누를 때 가벼운 진동. 실패해도 조용히 넘긴다(진동이 없는 기기·설정). */
 export const tap = () => void Haptics.selectionAsync().catch(() => {});
 export const success = () => void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -37,7 +41,7 @@ export function T({
       lineBreakStrategyIOS="hangul-word"
       style={[base, k !== 1 && { fontSize: base.fontSize * k, lineHeight: base.lineHeight * k }, { color: p[c] }, keepAll, center && { textAlign: 'center' }, style]}
     >
-      {children}
+      {glue(children)}
     </Text>
   );
 }
@@ -306,7 +310,7 @@ export function Seg<K extends string>({ options, value, onChange, testID }: { op
 const shadowCard = { shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 };
 
 /** 묶음(tint) 안 줄에 붙는 작은 동작: 바탕색 알약 36, 누름 영역 44. */
-export function Pill({ label, onPress, testID }: { label: string; onPress: () => void; testID?: string }) {
+export function Pill({ label, onPress, testID, quiet }: { label: string; onPress: () => void; testID?: string; /** 글자만(덜 중요한 동작, 예: 건별 빼기) */ quiet?: boolean }) {
   const p = usePalette();
   return (
     <Pressable
@@ -315,9 +319,9 @@ export function Pill({ label, onPress, testID }: { label: string; onPress: () =>
       accessibilityLabel={label}
       hitSlop={4}
       onPress={onPress}
-      style={({ pressed }) => [st.pill, { backgroundColor: pressed ? p.sunken : p.canvas }]}
+      style={({ pressed }) => [st.pill, { backgroundColor: pressed ? p.sunken : quiet ? 'transparent' : p.canvas }]}
     >
-      <T v="label" lines={1}>
+      <T v="label" c={quiet ? 'ink2' : 'ink'} lines={1}>
         {label}
       </T>
     </Pressable>

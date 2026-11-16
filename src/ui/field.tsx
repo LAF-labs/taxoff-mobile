@@ -103,7 +103,7 @@ const s = StyleSheet.create({
   row: { paddingHorizontal: space.s4, paddingVertical: space.s2, gap: space.s1, minHeight: 56, justifyContent: 'center' },
   line: { flexDirection: 'row', alignItems: 'center', gap: space.s3 },
   label: { minWidth: 76, gap: 1 },
-  box: { flex: 1, minHeight: 40, borderWidth: 1, borderRadius: radius.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2 },
-  input: { flex: 1, textAlign: 'right', paddingVertical: space.s1 },
+  box: { flex: 1, minHeight: 40, borderWidth: 1, borderRadius: radius.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
+  input: { flex: 1, textAlign: 'right', paddingVertical: space.s1, paddingRight: 0 },
   fix: { alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center', paddingHorizontal: space.s3, borderRadius: radius.full, marginTop: space.s1 },
 });

@@ -68,12 +68,12 @@ export const REASON_LINE: Record<NeedPcReason, string> = {
   notApprover: '이 폰은 승인 기기가 아님',
 };
 
-/** 줄마다 하나뿐인 동작. 시작 확인은 줄이 아니라 바닥 [모두 시작]이 맡는다. */
+/** 줄마다 하나뿐인 동작. 시작 확인은 바닥 [모두 시작]이 주요 동작이고, 줄에는 건별 [빼기](글자만)만 있다. */
 export type JobAction = 'cancel' | 'progress' | 'approve' | 'retry';
 export const STATE_ACTION: Record<JobState, { key: JobAction; label: string } | null> = {
   entrusted: { key: 'cancel', label: '취소' },
   phoneWaiting: { key: 'cancel', label: '취소' },
-  confirmStart: null,
+  confirmStart: { key: 'cancel', label: '빼기' },
   running: { key: 'progress', label: '진행 보기' },
   approval: { key: 'approve', label: '승인 열기' },
   needPc: null,

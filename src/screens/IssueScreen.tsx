@@ -146,11 +146,17 @@ export function IssueScreen({
             tag={lastAmount && amount === lastAmount && vat === 'excl' ? LAST : undefined}
             testID="issue-amount"
           />
+          <View style={st.sums} testID="issue-sum">
+            <View style={st.sum}>
+              <T v="sub" c="ink2">세액</T>
+              <T v="value" c="ink2" style={st.sumValue}>{won(a.tax)}</T>
+            </View>
+            <View style={st.sum}>
+              <T v="sub" c="ink2">합계</T>
+              <T v="figure" style={st.sumValue}>{won(a.total)}</T>
+            </View>
+          </View>
         </Group>
-        <T v="sub" c="ink2" style={{ paddingHorizontal: space.s1 }} testID="issue-sum">
-          {`공급가액${NB}${won(a.supply)} · 세액${NB}${won(a.tax)} · 합계${NB}`}
-          <T v="subStrong">{won(a.total)}</T>
-        </T>
       </View>
     </Screen>
   );
@@ -231,5 +237,8 @@ function lastLine(c: Counterparty): string {
 }
 
 const st = StyleSheet.create({
+  sums: { paddingHorizontal: space.s4, paddingTop: space.s1, paddingBottom: space.s3, gap: space.s1 },
+  sum: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'baseline', gap: space.s3 },
+  sumValue: { minWidth: 120, textAlign: 'right' },
   search: { minHeight: size.hit + 4, borderRadius: radius.full, paddingHorizontal: space.s4 },
 });

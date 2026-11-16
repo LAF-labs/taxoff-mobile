@@ -64,7 +64,12 @@ function JobRow({ job, state, onAction }: { job: Job; state: JobState; onAction:
       <View style={st.line}>
         <T style={{ flex: 1 }}>{job.title}</T>
         {job.amount !== null && (
-          <T v="value" c={state === 'expired' ? 'ink3' : 'ink'} style={{ flexShrink: 0 }}>
+          <T
+            v="value"
+            c={state === 'expired' ? 'ink3' : 'ink'}
+            // 만료는 색만으로 말하지 않는다: 취소선 + 읽기 도구에는 "취소됨"
+            style={[{ flexShrink: 0 }, state === 'expired' && { textDecorationLine: 'line-through' }]}
+          >
             {won(job.amount)}
           </T>
         )}
@@ -73,7 +78,7 @@ function JobRow({ job, state, onAction }: { job: Job; state: JobState; onAction:
         <T v="sub" c={tone ?? (state === 'expired' ? 'ink3' : 'ink2')} style={{ flex: 1 }}>
           {line}
         </T>
-        {action && <Pill testID={`job-${job.id}-${action.key}`} label={action.label} onPress={() => onAction(action.key)} />}
+        {action && <Pill quiet={state === 'confirmStart'} testID={`job-${job.id}-${action.key}`} label={action.label} onPress={() => onAction(action.key)} />}
       </View>
     </View>
   );
