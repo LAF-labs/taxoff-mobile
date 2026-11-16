@@ -10,7 +10,8 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, StyleSheet, View, type LayoutRectangle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { makeReceiptOffer, type ReceiptCandidates } from '@sax/remote';
+import { makeReceiptOffer, type PaperInvoice as WireInvoice, type ReceiptCandidates } from '@sax/remote';
+import { toWire } from '../capture/invoice-wire';
 import { DEV_LOCAL, PHOTO_MAX_EDGE, PHOTO_QUALITY } from '../config';
 import { GUIDE_RATIO, fitEdge, guideCrop, guideRect } from '../capture/crop';
 import { blocking, checkInvoice, issueText, looksLikeInvoice, parsePaperInvoice, toRows, toV1Candidates } from '../capture/invoice';
@@ -190,20 +191,29 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
     const i = issues.find((x) => x.field === field);
     // 합계 불일치·세액 10%는 바로, 빈 칸 문제는 [보내기]를 눌러 본 뒤에 보인다
     if (!i) return null;
-    if (!tried && (i.code === 'amount_required' || i.code === 'direction_required')) return null;
+    if (!tried && (i.code === 'amount_required' || i.code === 'direction_required' || i.code === 'required')) return null;
     return issueText(i);
   };
 
-  async function save() {
+  /** photoOnly: 세금계산서 칸을 다 못 채웠을 때 사진과 v1 후보만 보낸다(PC·세무사가 사진에서 읽는다). */
+  async function save(photoOnly = false) {
     if (!shot) return;
     let c: ReceiptCandidates | string;
+    let paper: WireInvoice | undefined;
     if (docMode === 'invoice') {
       setTried(true);
-      if (issues.some(blocking)) {
-        warn();
-        return setErr('표시한 칸을 확인해 주세요.');
+      if (!photoOnly) {
+        if (issues.some(blocking)) {
+          warn();
+          return setErr('표시한 칸을 확인해 주세요. 다 채우기 어려우면 사진만 보낼 수 있어요.');
+        }
+        const w = toWire(invoice);
+        if (!w.ok) {
+          warn();
+          return setErr('표시한 칸을 확인해 주세요. 다 채우기 어려우면 사진만 보낼 수 있어요.');
+        }
+        paper = w.invoice;
       }
-      // receipt.v1 PC는 4칸만 읽는다. receipt.v2(paperInvoice 전체)는 @sax/remote 동기화 뒤 함께 보낸다(릴레이 스레드 합의).
       c = toV1Candidates(invoice);
     } else c = receiptCandidates();
     if (typeof c === 'string') return setErr(c);
@@ -212,7 +222,7 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
     let jpeg: Uint8Array | null = null;
     try {
       jpeg = await new File(shot.uri).bytes();
-      const offer = makeReceiptOffer(jpeg, { capturedAt: shot.capturedAt, width: shot.width, height: shot.height, ocrEngine: engine, ownerConfirmed: true, candidates: c });
+      const offer = makeReceiptOffer(jpeg, { capturedAt: shot.capturedAt, width: shot.width, height: shot.height, ocrEngine: engine, ownerConfirmed: true, candidates: c, paperInvoice: paper });
       await s.outbox.put({ kind: 'receipt', msgId: offer.msgId, offer, createdAt: Date.now(), attempts: 0 }, jpeg);
       cleanup();
       setShot(null);
@@ -223,7 +233,7 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
       await s.refreshPending();
       setSent(
         docMode === 'invoice'
-          ? { title: `${invoice.docKind === 'invoice' ? '계산서' : '세금계산서'} · ${invoice.direction === 'sales' ? '매출' : '매입'}`, value: invoice.total !== null ? won(invoice.total) : '' }
+          ? { title: `${invoice.docKind === 'invoice' ? '계산서' : '세금계산서'} · ${invoice.direction === 'sales' ? '매출' : invoice.direction === 'purchase' ? '매입' : '사진만'}`, value: invoice.total !== null ? won(invoice.total) : '' }
           : { title: c.merchant ?? '영수증', value: c.amount ? won(c.amount) : '' },
       );
       success();
@@ -302,7 +312,10 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
         footer={
           <>
             {err && <Notice testID="capture-error">{err}</Notice>}
-            <Button testID="capture-send" label="PC로 보내기" onPress={save} busy={phase === 'saving'} />
+            <Button testID="capture-send" label="PC로 보내기" onPress={() => void save()} busy={phase === 'saving'} />
+            {isInv && tried && issues.some(blocking) && phase !== 'saving' && (
+              <Button testID="capture-photo-only" kind="quiet" label="사진만 보내기" hint="읽은 칸 없이 원본 사진만 보내요. PC와 세무사가 사진에서 읽어요." onPress={() => void save(true)} />
+            )}
           </>
         }
       >
@@ -505,13 +518,13 @@ function InvoiceFields({
 
       <Group title="공급자">
           <Field testID="inv-supplierBiz" label="등록번호" mask="bizNo" value={inv.supplierBiz} onChange={(v) => setI('supplierBiz', v)} placeholder="000-00-00000" unsure={unsure('supplier.bizNo')} error={issueFor('supplier.bizNo')} />
-          <Field testID="inv-supplierName" label="상호" value={inv.supplierName} onChange={(v) => setI('supplierName', v)} placeholder="상호(법인명)" unsure={unsure('supplier.name')} />
+          <Field testID="inv-supplierName" label="상호" value={inv.supplierName} onChange={(v) => setI('supplierName', v)} placeholder="상호(법인명)" unsure={unsure('supplier.name')} error={issueFor('supplier.name')} />
           <Field testID="inv-supplierCeo" label="성명" value={inv.supplierCeo} onChange={(v) => setI('supplierCeo', v)} placeholder="대표자" unsure={unsure('supplier.ceo')} />
       </Group>
 
       <Group title="공급받는자">
           <Field testID="inv-buyerBiz" label="등록번호" mask="bizNo" value={inv.buyerBiz} onChange={(v) => setI('buyerBiz', v)} placeholder="000-00-00000" unsure={unsure('buyer.bizNo')} error={issueFor('buyer.bizNo')} />
-          <Field testID="inv-buyerName" label="상호" value={inv.buyerName} onChange={(v) => setI('buyerName', v)} placeholder="상호(법인명)" unsure={unsure('buyer.name')} />
+          <Field testID="inv-buyerName" label="상호" value={inv.buyerName} onChange={(v) => setI('buyerName', v)} placeholder="상호(법인명)" unsure={unsure('buyer.name')} error={issueFor('buyer.name')} />
       </Group>
 
       {inv.items.length > 0 && (

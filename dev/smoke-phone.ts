@@ -10,6 +10,10 @@ import {
   type HttpJson, type OutboxItem, type OutboxStore, type SignedCert, type WebSocketLike,
 } from '../vendor/sax-remote/src/index.ts';
 
+import { parsePaperInvoice } from '../src/capture/invoice.ts';
+import { toWire } from '../src/capture/invoice-wire.ts';
+import { paperTaxInvoice } from '../test/fixtures/invoice-boxes.ts';
+
 const HOST = 'localhost:8787';
 const base = `http://${HOST}`;
 const fetchJson: HttpJson = async (r) => {
@@ -55,7 +59,10 @@ const store: OutboxStore = {
 const jpeg = new Uint8Array(RECEIPT_CHUNK * 3 + 77);
 jpeg.set([0xff, 0xd8, 0xff, 0xe0]);
 for (let i = 4; i < jpeg.length; i++) jpeg[i] = (i * 31) & 0xff;
-const offer = makeReceiptOffer(jpeg, { capturedAt: Date.now(), ocrEngine: 'none', ownerConfirmed: true });
+// 종이 세금계산서 견본(가짜 사업자)을 읽어 receipt.v2 paperInvoice로 싣는다(PC 쪽 스키마 검증까지 지나는지)
+const paper = toWire(parsePaperInvoice(paperTaxInvoice())!.invoice);
+if (!paper.ok) throw new Error(`paperInvoice: ${paper.bad.join(',')}`);
+const offer = makeReceiptOffer(jpeg, { capturedAt: Date.now(), ocrEngine: 'ios_vision', ownerConfirmed: true, paperInvoice: paper.invoice });
 await store.put({ kind: 'receipt', msgId: offer.msgId, offer, createdAt: Date.now(), attempts: 0 }, jpeg);
 await enqueueCash(store, makeCashEntry('2026-11-05', 1234));
 
@@ -89,7 +96,7 @@ if (process.argv.includes('--queue')) {
 const mbx = await client.joinMailbox(fromB64(r.mbxId), { read: fromB64(r.tokRead), write: fromB64(r.tokWrite) }, 'mobile');
 const sess = await openMobileSession(mbx, {
   pairId: r.pairId, noise, desktopStatic: r.desktopStatic, nextTimestamp: monotonicClock(0),
-  hello: { appVersion: 'smoke', deviceListVersion: r.deviceList.listVersion, capabilities: [CAP.receipt, CAP.cash] },
+  hello: { appVersion: 'smoke', deviceListVersion: r.deviceList.listVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash] },
 });
 if (!sess) throw new Error('session failed');
 const f = await flushOutbox(sess.channel, store, { pace: async () => {} });
