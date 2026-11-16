@@ -27,13 +27,17 @@ export function fitEdge(w: number, h: number, max: number): { width: number; hei
   return { width: Math.round(w * k), height: Math.round(h * k) };
 }
 
-/** 안내 틀: 미리보기 가운데, 폭 88%, 영수증 비율(세로 1.6배), 높이는 미리보기의 80%를 넘지 않는다. */
-export function guideRect(view: { width: number; height: number }): Rect {
+/**
+ * 안내 틀: 미리보기 가운데, 폭 88%, 높이는 미리보기의 80%를 넘지 않는다.
+ * 비율(세로 ÷ 가로): 영수증 1.6(길쭉), 종이 세금계산서 0.71(별지 서식 반쪽 A4를 세로 폰으로 찍을 때 가로가 긴 틀).
+ */
+export const GUIDE_RATIO = { receipt: 1.6, invoice: 0.71 } as const;
+export function guideRect(view: { width: number; height: number }, ratio: number = GUIDE_RATIO.receipt): Rect {
   let w = view.width * 0.88;
-  let h = w * 1.6;
+  let h = w * ratio;
   if (h > view.height * 0.8) {
     h = view.height * 0.8;
-    w = h / 1.6;
+    w = h / ratio;
   }
   return { x: (view.width - w) / 2, y: (view.height - h) / 2, w, h };
 }

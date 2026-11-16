@@ -52,6 +52,26 @@ public class SaxNativeModule: Module {
       }
       return obs.compactMap { $0.topCandidates(1).first?.string }
     }
+
+    // 같은 OCR에 글자 상자 위치를 붙여 돌려준다(종이 세금계산서처럼 칸으로 나뉜 서식을 줄·열로 다시 짜기 위해).
+    // 좌표는 0~1, 위·왼쪽이 0(Vision은 아래가 0이라 뒤집는다). conf는 Vision 후보 신뢰도. 최대 400개.
+    AsyncFunction("recognizeTextBoxes") { (uri: String) -> [[String: Any]] in
+      guard let url = URL(string: uri), url.isFileURL,
+            let image = UIImage(contentsOfFile: url.path), let cg = image.cgImage else { throw SaxError.badUri }
+      let req = VNRecognizeTextRequest()
+      if #available(iOS 16.0, *) { req.revision = VNRecognizeTextRequestRevision3 }
+      req.recognitionLevel = .accurate
+      req.recognitionLanguages = ["ko-KR", "en-US"]
+      req.usesLanguageCorrection = false
+      req.minimumTextHeight = 0.008
+      let handler = VNImageRequestHandler(cgImage: cg, orientation: cgOrientation(image.imageOrientation), options: [:])
+      try handler.perform([req])
+      return (req.results ?? []).prefix(400).compactMap { o -> [String: Any]? in
+        guard let c = o.topCandidates(1).first else { return nil }
+        let b = o.boundingBox
+        return ["text": String(c.string.prefix(200)), "x": b.minX, "y": 1 - b.maxY, "w": b.width, "h": b.height, "conf": c.confidence]
+      }
+    }
   }
 }
 
