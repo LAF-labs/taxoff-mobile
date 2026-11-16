@@ -11,7 +11,10 @@ import {
   type AccessibilityRole, type StyleProp, type TextStyle, type ViewStyle,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MAX_FONT_SCALE, motion, radius, size, space, type, useReducedMotion, usePalette, type Ink, type TypeName } from '../theme';
+import { MAX_FONT_SCALE, motion, radius, size, space, textScale, type, useReducedMotion, usePalette, type Ink, type TypeName } from '../theme';
+
+/** 한글은 낱말 단위로 줄을 바꾼다(숫자와 단위, 낱말이 쪼개지지 않게). iOS는 hangul-word, 웹(갤러리)은 keep-all. */
+const keepAll = { wordBreak: 'keep-all', overflowWrap: 'break-word' } as unknown as TextStyle;
 
 /** 누를 때 가벼운 진동. 실패해도 조용히 넘긴다(진동이 없는 기기·설정). */
 export const tap = () => void Haptics.selectionAsync().catch(() => {});
@@ -23,13 +26,16 @@ export function T({
   children, v = 'body', c = 'ink', style, testID, lines, center, role,
 }: { children: ReactNode; v?: TypeName; c?: Ink; style?: StyleProp<TextStyle>; testID?: string; lines?: number; center?: boolean; role?: AccessibilityRole }) {
   const p = usePalette();
+  const base = type[v];
+  const k = textScale.web;
   return (
     <Text
       testID={testID}
       accessibilityRole={role}
       numberOfLines={lines}
       maxFontSizeMultiplier={MAX_FONT_SCALE}
-      style={[type[v], { color: p[c] }, center && { textAlign: 'center' }, style]}
+      lineBreakStrategyIOS="hangul-word"
+      style={[base, k !== 1 && { fontSize: base.fontSize * k, lineHeight: base.lineHeight * k }, { color: p[c] }, keepAll, center && { textAlign: 'center' }, style]}
     >
       {children}
     </Text>
@@ -38,9 +44,11 @@ export function T({
 
 // ── 화면 틀 ──
 export function Screen({
-  title, onBack, backLabel = '뒤로', right, children, footer, scroll = true, testID, style,
+  title, onBack, backLabel = '뒤로', right, children, footer, scroll = true, testID, style, tabbed,
 }: {
   title?: string; onBack?: () => void; backLabel?: string; right?: ReactNode; children: ReactNode; footer?: ReactNode; scroll?: boolean; testID?: string; style?: StyleProp<ViewStyle>;
+  /** 아래 탭 줄 위에 놓이는 화면: 안전 영역은 탭 줄이 맡는다. */
+  tabbed?: boolean;
 }) {
   const p = usePalette();
   const inset = useSafeAreaInsets();
@@ -65,8 +73,8 @@ export function Screen({
       ) : (
         <View style={[st.content, { flex: 1 }]}>{children}</View>
       )}
-      {footer && <View style={[st.footer, { paddingBottom: Math.max(inset.bottom, space.s4), backgroundColor: p.canvas, borderTopColor: p.line }]}>{footer}</View>}
-      {!footer && <View style={{ height: inset.bottom }} />}
+      {footer && <View style={[st.footer, { paddingBottom: tabbed ? space.s3 : Math.max(inset.bottom, space.s4), backgroundColor: p.canvas, borderTopColor: p.line }]}>{footer}</View>}
+      {!footer && !tabbed && <View style={{ height: inset.bottom }} />}
     </SafeAreaView>
   );
 }
@@ -108,6 +116,7 @@ export function Button({
       accessibilityHint={hint}
       accessibilityState={{ disabled: !!off, busy: !!busy }}
       disabled={off || busy}
+      hitSlop={small ? (size.hit - size.buttonSm) / 2 + 2 : undefined}
       onPress={() => {
         if (kind === 'primary') tap();
         onPress();
@@ -292,6 +301,25 @@ export function Seg<K extends string>({ options, value, onChange, testID }: { op
 
 const shadowCard = { shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 };
 
+/** 빈 화면: 무엇이 비었는지 한 줄, 왜인지 한 줄, 다음 할 일 하나(막다른 화면을 만들지 않는다). */
+export function Empty({ title, sub, action, testID }: { title: string; sub?: string; action?: ReactNode; testID?: string }) {
+  return (
+    <View style={st.empty} testID={testID}>
+      <View style={{ gap: space.s2, alignItems: 'center' }}>
+        <T v="strong" center>
+          {title}
+        </T>
+        {sub && (
+          <T v="sub" c="ink2" center>
+            {sub}
+          </T>
+        )}
+      </View>
+      {action && <View style={{ alignSelf: 'stretch' }}>{action}</View>}
+    </View>
+  );
+}
+
 // ── 표기 ──
 export function ago(ts: number | null, now = Date.now()): string {
   if (!ts) return '접속 기록 없음';
@@ -318,6 +346,7 @@ export const st = StyleSheet.create({
   row: { minHeight: size.row, flexDirection: 'row', alignItems: 'center', gap: space.s3, paddingHorizontal: space.s4, paddingVertical: space.s3 },
   status: { flexDirection: 'row', alignItems: 'center', gap: space.s2 },
   dot: { width: 8, height: 8, borderRadius: 4 },
+  empty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: space.s5, paddingHorizontal: space.s3, paddingBottom: space.s7 },
   notice: { borderRadius: radius.md, paddingVertical: space.s3, paddingHorizontal: space.s4 },
   reply: { minHeight: size.row, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: space.s4, paddingVertical: space.s3, flexDirection: 'row', alignItems: 'center', gap: space.s3 },
   seg: { flexDirection: 'row', borderRadius: radius.md, padding: 3 },
