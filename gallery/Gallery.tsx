@@ -177,7 +177,7 @@ const runJob = (run: RunView, o: { title?: string; amount?: number; state?: Job[
 });
 const T0 = now - 80_000;
 const runCase = (run: RunView, o: { title?: string; amount?: number } = {}) => ({
-  session: fake(paired(), 'online'), jobs: [runJob(run, o)], focus: 'r1', node: <RunScreen onDone={noop} onDoc={noop} now={now} />,
+  session: fake(paired(), 'online'), jobs: [runJob(run, o)], focus: 'r1', node: <RunScreen onDone={noop} onDoc={noop} onRecords={noop} now={now} />,
 });
 const docCase = (state: DocState, result = RES) => ({
   session: fake(paired(), state.kind === 'pcOff' ? 'offline' : 'online'), jobs: [runJob({ kind: 'done', result, startedAt: T0 })], focus: 'r1', node: <DocScreen onDone={noop} state={state} />,
@@ -212,6 +212,9 @@ const SCREENS: Record<
   'run-issue': () => runCase({ kind: 'running', step: 'issue', startedAt: now - 140_000 }),
   'run-verify-step': () => runCase({ kind: 'running', step: 'verify', startedAt: now - 150_000 }),
   'run-simple-auth': () => runCase({ kind: 'myTurn', step: 'login', auth: { method: 'simple', app: '카카오뱅크' }, startedAt: now - 50_000 }),
+  'run-simple-auth-left': () => runCase({ kind: 'myTurn', step: 'login', auth: { method: 'simple', app: '카카오뱅크', deadline: now + 130_000 }, startedAt: now - 50_000 }),
+  'run-simple-auth-timeout': () => runCase({ kind: 'myTurn', step: 'login', auth: { method: 'simple', app: '카카오뱅크', deadline: now - 1_000 }, startedAt: now - 200_000 }),
+  'records-list': () => ({ session: fake(paired(), 'online'), jobs: [runJob({ kind: 'done', result: RES, startedAt: T0 }), { ...runJob({ kind: 'done', result: { ...RES_LONG, approvalNo: '20261115-41000000-87654321', doc: { ...RES_LONG.doc, issuedOn: iso(new Date(now - DAY)) } }, startedAt: T0 - DAY }), id: 'r2', createdAt: now - DAY }], node: <Main start="records" /> }),
   'run-simple-auth-unknown': () => runCase({ kind: 'myTurn', step: 'login', auth: { method: 'simple', app: '○○은행' }, startedAt: now - 50_000 }),
   'run-cert': () => runCase({ kind: 'myTurn', step: 'login', auth: { method: 'cert' }, startedAt: now - 40_000 }),
   'run-stop-blocked': () => runCase({ kind: 'stopped', step: 'login', reason: 'blocked', startedAt: T0 }),

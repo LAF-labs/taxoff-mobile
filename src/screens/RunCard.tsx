@@ -7,11 +7,10 @@ import * as Clipboard from 'expo-clipboard';
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import type { Job } from '../queue';
-import { ACTION_LABEL, AUTH_APPS, STEPS, STEP_LABEL, STOP_COPY, actionsOf, chipOf, elapsed, groupApprovalNo, stepOf, type IssueResult, type RunAction, type RunView } from '../run';
+import { ACTION_LABEL, AUTH_APPS, STEPS, STEP_LABEL, STOP_COPY, actionsOf, chipOf, elapsed, groupApprovalNo, mmss, stepOf, type IssueResult, type RunAction, type RunView } from '../run';
 import { radius, space, usePalette } from '../theme';
 import { Check, Pill, StatusDot, T, success, won } from '../ui/kit';
 
-const NB = ' ';
 
 export function actionLabel(a: RunAction, r: RunView): string {
   if (a === 'openApp' && r.kind === 'myTurn' && r.auth.method === 'simple') return `${r.auth.app} 열기`;
@@ -74,16 +73,27 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
         ) : (
           <StatusDot tone={chip.tone} label={chip.label} busy={chip.busy} v="label" />
         )}
-        {ticking && (
-          <T v="meta" c="ink3" testID="run-elapsed">
-            · {elapsed(now - r.startedAt)}
-          </T>
-        )}
+        {ticking &&
+          (r.kind === 'myTurn' && r.auth.method === 'simple' && r.auth.deadline !== undefined ? (
+            r.auth.deadline > now ? (
+              <T v="meta" c="attention" testID="run-left" style={{ fontVariant: ['tabular-nums'] }}>
+                · 남은 시간 {mmss(r.auth.deadline - now)}
+              </T>
+            ) : (
+              <T v="meta" c="attention" testID="run-left">
+                · 시간이 지났어요
+              </T>
+            )
+          ) : (
+            <T v="meta" c="ink3" testID="run-elapsed">
+              · {elapsed(now - r.startedAt)}
+            </T>
+          ))}
       </View>
-      {r.kind !== 'done' && <StepLine r={r} />}
+      {r.kind !== 'done' && <StepBar r={r} />}
       <StateLines r={r} />
       {r.kind === 'done' && <ResultRows result={r.result} />}
-      {compact && <CardActions r={r} onAction={onAction} onDoc={onDoc} onShare={onShare} />}
+      {compact && <CardActions r={r} now={now} onAction={onAction} onDoc={onDoc} onShare={onShare} />}
     </View>
   );
   if (!compact || !onOpen) return body;
@@ -94,19 +104,23 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
   );
 }
 
-/** 단계 줄. 화살표는 다음 단계 이름에 붙여 줄 끝에 홀로 남지 않게 한다. */
-function StepLine({ r }: { r: RunView }) {
+/**
+ * 단계: 얇은 6칸 막대(지난 칸 ink3, 지금 칸 ink로 조금 두껍게, 남은 칸 sunken) + 아래 한 줄 "2/6 · 홈택스 로그인".
+ * 파랑은 PC 켜짐·승인 단추에만 쓰므로 지금 칸은 ink와 두께로 강조한다. 어느 폭에서도 한 줄이다.
+ */
+function StepBar({ r }: { r: RunView }) {
+  const p = usePalette();
   const cur = STEPS.indexOf(stepOf(r));
   return (
-    <View style={st.steps} accessible accessibilityLabel={`${cur + 1}단계 ${STEP_LABEL[STEPS[cur]!]}, 전체 ${STEPS.length}단계`} testID="run-steps">
-      {STEPS.map((s, i) => (
-        <T key={s} v="sub" c="ink4">
-          {i > 0 ? `→${NB}` : ''}
-          <T v={i === cur ? 'subStrong' : 'sub'} c={i < cur ? 'ink3' : i === cur ? 'ink' : 'ink4'} style={i === cur ? { fontWeight: '600' } : undefined}>
-            {STEP_LABEL[s].replace(/ /g, NB)}
-          </T>
-        </T>
-      ))}
+    <View style={{ gap: space.s1 }} accessible accessibilityLabel={`${STEPS.length}단계 중 ${cur + 1}단계, ${STEP_LABEL[STEPS[cur]!]}`} testID="run-steps">
+      <View style={st.bar}>
+        {STEPS.map((s, i) => (
+          <View key={s} style={[st.seg, i === cur && st.segCur, { backgroundColor: i < cur ? p.ink3 : i === cur ? p.ink : p.sunken }]} />
+        ))}
+      </View>
+      <T v="sub" c="ink2" lines={1}>
+        {cur + 1}/{STEPS.length} · <T v="subStrong">{STEP_LABEL[STEPS[cur]!]}</T>
+      </T>
     </View>
   );
 }
@@ -241,7 +255,7 @@ export function EmailText({ value }: { value: string }) {
 }
 
 /** 대화 카드 안 단추: 기본 행동은 바탕색 알약(tint 카드 위), 나머지는 글자만. 화면의 주요 단추는 입력 줄 [보내기]다. 닫기는 두지 않는다. */
-function CardActions({ r, onAction, onDoc, onShare }: { r: RunView; onAction?: (a: RunAction) => void; onDoc?: () => void; onShare?: () => void }) {
+function CardActions({ r, now, onAction, onDoc, onShare }: { r: RunView; now: number; onAction?: (a: RunAction) => void; onDoc?: () => void; onShare?: () => void }) {
   if (r.kind === 'done') {
     return (
       <View style={st.actions}>
@@ -250,7 +264,7 @@ function CardActions({ r, onAction, onDoc, onShare }: { r: RunView; onAction?: (
       </View>
     );
   }
-  const acts = actionsOf(r).filter((a) => a !== 'close');
+  const acts = actionsOf(r, now).filter((a) => a !== 'close');
   if (!acts.length) return null;
   return (
     <View style={st.actions}>
@@ -266,7 +280,9 @@ const st = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'baseline', gap: space.s3 },
   chipLine: { flexDirection: 'row', alignItems: 'center', gap: space.s1, flexWrap: 'wrap' },
   doneChip: { flexDirection: 'row', alignItems: 'center', gap: space.s2 },
-  steps: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.s1, rowGap: 2 },
+  bar: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: space.s1 },
+  seg: { flex: 1, height: 4, borderRadius: 2 },
+  segCur: { height: 6, borderRadius: 3 },
   rows: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: space.s1, paddingTop: space.s1 },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: space.s3, paddingVertical: space.s2, minHeight: 44 },
   label: { width: 84, flexShrink: 0, paddingTop: 2 },

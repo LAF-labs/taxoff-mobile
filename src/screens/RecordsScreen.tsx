@@ -1,11 +1,40 @@
-// 기록 탭(기획 v2 PR 1): 발급한 세금계산서가 쌓일 곳. 아직 빈 화면 + [세금계산서 발급].
+// 기록 탭: 이 폰에서 맡겨 발급까지 끝난 세금계산서. 비었으면 [세금계산서 발급].
+// (PC에서 발급한 것까지 모으는 것은 PC가 넘기는 폰 사본, ADR-046 결정 5가 생긴 뒤다.)
+import { useQueue } from '../queueStore';
 import { useSession } from '../session';
-import { Button, Empty, Screen } from '../ui/kit';
+import { Button, Empty, Group, Row, Screen, won } from '../ui/kit';
 import type { HomeRoute } from './HomeScreen';
 
 export function RecordsScreen({ go }: { go: (to: HomeRoute) => void }) {
   const s = useSession();
+  const q = useQueue();
   const paired = !!s.data.pair;
+  const done = q.jobs.filter((j) => j.run?.kind === 'done').sort((a, b) => b.createdAt - a.createdAt);
+  if (paired && done.length > 0) {
+    return (
+      <Screen title="기록" tabbed testID="records">
+        <Group title="발급한 세금계산서" testID="records-list">
+          {done.map((j) => {
+            const r = j.run?.kind === 'done' ? j.run.result : null;
+            return (
+              <Row
+                key={j.id}
+                label={r?.counterpart ?? j.title}
+                sub={r ? `${r.doc.issuedOn} · 승인번호 끝 ${r.approvalNo.replace(/\D/g, '').slice(-4)}` : undefined}
+                value={r ? won(r.total) : undefined}
+                valueInk="ink"
+                onPress={() => {
+                  q.setFocus(j.id);
+                  go('run');
+                }}
+                testID={`record-${j.id}`}
+              />
+            );
+          })}
+        </Group>
+      </Screen>
+    );
+  }
   return (
     <Screen title="기록" tabbed scroll={false} testID="records">
       <Empty

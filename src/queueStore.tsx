@@ -2,7 +2,8 @@
 // 승인 시트(P-03)도 여기서 연다: 승인 대기 일에 PC 승인 요청(gate)이 붙어 있으면 그 일의 시트를 띄운다.
 // simulate(갤러리·시연 전용): PC가 켜져 맡긴 발급이 준비 → 홈택스 로그인 → 값 확인을 지나 "PC가 승인 요청함"이 되고 시트가 뜬다.
 //   승인하면 발급 → 확인 → 결과 카드. simulate='inDoubt'이면 발급 뒤 응답이 끊겨 확인 중(조회 n회째) → 확인 필요로 간다.
-import { createContext, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { jobTimers } from './jobTimers';
 import { GATE_TTL_MS, buildGate, type AttestState, type PhoneGate, type READBACK_KEYS } from './approval';
 import type { ChatItem } from './chat';
 import { applyAction, startAll as startAllJobs, type DoneJob, type Job, type JobAction, type NeedPcReason } from './queue';
@@ -70,13 +71,16 @@ export function QueueProvider({
   const [used, setUsed] = useState(approval.usedToday);
   const [focusId, setFocusId] = useState<string | null>(initialFocus);
   const setRun = (id: string, f: (r: RunView | undefined, j: Job) => RunView, extra: Partial<Job> = {}) => patch(id, (j) => ({ ...j, ...extra, run: f(j.run, j) }));
-  const at = (ms: number, f: () => void) => setTimeout(f, ms);
+  // 일별 타이머: 같은 일의 흐름을 다시 시작하면 앞 흐름을 지운다(겹치지 않게). 저장소가 사라질 때도 지운다.
+  const timers = useRef(jobTimers()).current;
+  useEffect(() => () => timers.clearAll(), [timers]);
   /** 시연: 준비 → 로그인 → 값 확인 → 승인 요청 */
   const drivePrepare = (id: string, readback: Readback, startedAt: number) => {
+    timers.clear(id);
     setRun(id, () => ({ kind: 'running', step: 'prepare', startedAt }));
-    at(700, () => setRun(id, () => ({ kind: 'running', step: 'login', startedAt })));
-    at(1400, () => setRun(id, () => ({ kind: 'running', step: 'readback', startedAt })));
-    at(2100, () => {
+    timers.at(id, 700, () => setRun(id, () => ({ kind: 'running', step: 'login', startedAt })));
+    timers.at(id, 1400, () => setRun(id, () => ({ kind: 'running', step: 'readback', startedAt })));
+    timers.at(id, 2100, () => {
       setRun(id, () => ({ kind: 'running', step: 'approve', startedAt }), { state: 'approval', gate: fakeGate({ ...readback, ...SIM_SUPPLIER }) });
       setSheetId(id);
     });
@@ -103,7 +107,10 @@ export function QueueProvider({
       notes,
       approval: { ...approval, usedToday: used },
       sheetJob: jobs.find((j) => j.id === sheetId && j.gate) ?? null,
-      act: (id, action) => setJobs((js) => applyAction(js, id, action, Date.now())),
+      act: (id, action) => {
+        if (action === 'cancel') timers.clear(id);
+        setJobs((js) => applyAction(js, id, action, Date.now()));
+      },
       startAll: () => setJobs((js) => startAllJobs(js, Date.now())),
       add: (job, text, readback) => {
         const now = Date.now();
@@ -126,23 +133,26 @@ export function QueueProvider({
           setRun(id, () => ({ kind: 'running', step: 'issue', startedAt }), { state: 'running', gate: undefined });
           if (!j?.run) note(id, `${j?.title ?? '세금계산서'}을 승인했어요. PC가 홈택스에서 발급하고 있어요`);
           if (simulate && j?.gate) {
+            timers.clear(id);
             const f = Object.fromEntries(j.gate.fields.map((x) => [x.key, x.value]));
             if (simulate === 'inDoubt') {
-              at(1200, () => setRun(id, () => ({ kind: 'inDoubt', tries: 1, startedAt }), { state: 'verify' }));
-              at(2700, () => setRun(id, () => ({ kind: 'inDoubt', tries: 2, startedAt })));
-              at(4200, () => setRun(id, () => ({ kind: 'inDoubt', tries: 3, startedAt })));
-              at(5700, () => setRun(id, () => ({ kind: 'verify', startedAt })));
+              timers.at(id, 1200, () => setRun(id, () => ({ kind: 'inDoubt', tries: 1, startedAt }), { state: 'verify' }));
+              timers.at(id, 2700, () => setRun(id, () => ({ kind: 'inDoubt', tries: 2, startedAt })));
+              timers.at(id, 4200, () => setRun(id, () => ({ kind: 'inDoubt', tries: 3, startedAt })));
+              timers.at(id, 5700, () => setRun(id, () => ({ kind: 'verify', startedAt })));
             } else {
-              at(1200, () => setRun(id, () => ({ kind: 'running', step: 'verify', startedAt })));
-              at(2200, () => setRun(id, () => ({ kind: 'done', startedAt, result: sampleResult(f) }), { state: 'done' }));
+              timers.at(id, 1200, () => setRun(id, () => ({ kind: 'running', step: 'verify', startedAt })));
+              timers.at(id, 2200, () => setRun(id, () => ({ kind: 'done', startedAt, result: sampleResult(f) }), { state: 'done' }));
             }
           }
         } else {
+          timers.clear(id);
           setJobs((js) => js.filter((x) => x.id !== id));
           note(id, `${j?.title ?? '세금계산서'} 발급을 거절했어요`);
         }
       },
       park: (id, reason) => {
+        timers.clear(id);
         setSheetId(null);
         patch(id, (x) => ({ ...x, state: 'needPc', reason, gate: undefined }));
       },
@@ -151,9 +161,11 @@ export function QueueProvider({
         if (!j?.run) return;
         const startedAt = j.run.startedAt;
         if (a === 'stop') {
+          timers.clear(id);
           setJobs((js) => js.filter((x) => x.id !== id));
           note(id, `${j.title} 발급을 중지했어요. 아무것도 발급하지 않았어요`);
         } else if (a === 'reserveOnPc') {
+          timers.clear(id);
           setRun(id, (r) => (r?.kind === 'stopped' ? { ...r, reserved: true } : { kind: 'stopped', step: 'login', reason: 'unknownScreen', startedAt, reserved: true }));
           note(id, `PC에서 ${j.title}을 먼저 열어 둘게요`);
         } else if (a === 'retryPrepare' || a === 'resendAuth') {

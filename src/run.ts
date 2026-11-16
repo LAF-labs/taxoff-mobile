@@ -19,7 +19,8 @@ export const AUTH_APPS: Readonly<Record<string, string>> = {
   토스: 'supertoss://',
 };
 
-export type Auth = { method: 'simple'; app: string } | { method: 'cert' };
+/** deadline: PC가 알려 준 간편인증 마감(ms). 있으면 경과 대신 남은 시간을 보인다. */
+export type Auth = { method: 'simple'; app: string; deadline?: number } | { method: 'cert' };
 
 export type StopReason = 'blocked' | 'unknownScreen' | 'dateMismatch' | 'inputMismatch' | 'totalMismatch' | 'otherLogin' | 'passwordError';
 
@@ -77,7 +78,8 @@ export type RunView =
 
 export function stepOf(r: RunView): Step {
   if (r.kind === 'running' || r.kind === 'myTurn' || r.kind === 'stopped') return r.step;
-  return r.kind === 'done' ? 'verify' : 'issue';
+  // 결과 모름(발급목록 조회 중)·확인 필요·발급됨은 모두 발급 뒤 "확인" 칸이다. 발급 클릭은 이미 지났다.
+  return 'verify';
 }
 
 /** 상태 칩 한 줄 */
@@ -99,13 +101,15 @@ export function chipOf(r: RunView): { label: string; tone: 'quiet' | 'attention'
 }
 
 /** 이 상태에서 보이는 동작(첫째가 기본 행동). 결과 모름·확인 필요에는 다시 발급하는 동작이 없다. */
-export function actionsOf(r: RunView): RunAction[] {
+export function actionsOf(r: RunView, now = Date.now()): RunAction[] {
   switch (r.kind) {
     case 'running':
       // 승인 뒤(발급·확인 단계)에는 멈추지 않는다: 커밋 구간은 PC가 끝까지 지킨다
       return r.step === 'issue' || r.step === 'verify' || r.step === 'approve' ? ['close'] : ['stop'];
     case 'myTurn':
       if (r.auth.method === 'cert') return ['reserveOnPc', 'stop'];
+      // 간편인증 시간이 지났으면 [다시 요청]이 기본 행동이다
+      if (r.auth.deadline !== undefined && r.auth.deadline <= now) return ['resendAuth', 'stop'];
       return Object.hasOwn(AUTH_APPS, r.auth.app) ? ['openApp', 'resendAuth', 'stop'] : ['resendAuth', 'stop'];
     case 'stopped':
       return r.reserved ? ['close'] : [STOP_COPY[r.reason].action, 'close'];
@@ -114,6 +118,12 @@ export function actionsOf(r: RunView): RunAction[] {
     case 'done':
       return ['close'];
   }
+}
+
+/** 2:10 (남은 시간) */
+export function mmss(ms: number): string {
+  const t = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
 }
 
 /** 1분 20초 · 40초 · 1시간 5분 */

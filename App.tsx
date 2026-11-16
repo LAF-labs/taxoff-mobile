@@ -112,7 +112,16 @@ export default function App() {
         {route === 'cash' && <CashScreen onDone={back} />}
         {route === 'settings' && <SettingsScreen onDone={back} onConnection={() => go('connection')} onPair={() => go('pair')} />}
         {route === 'queue' && <QueueScreen onDone={back} onConnection={() => go('connection')} onOpen={(j) => (j.run ? go('run') : home())} />}
-        {route === 'run' && <RunScreen onDone={back} onDoc={() => go('doc')} />}
+        {route === 'run' && (
+          <RunScreen
+            onDone={back}
+            onDoc={() => go('doc')}
+            onRecords={() => {
+              setTab('records');
+              setStack(['tabs']);
+            }}
+          />
+        )}
         {route === 'doc' && <DocScreen onDone={back} />}
         {route === 'issue' && <IssueScreen counterparties={[]} onDone={back} onCapture={() => go('capture')} onSubmitted={home} />}
         {route === 'connection' && (

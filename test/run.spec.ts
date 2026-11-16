@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { jobTimers } from '../src/jobTimers.ts';
 import { STOP_COPY, actionsOf, chipOf, elapsed, groupApprovalNo, stepOf, type RunView } from '../src/run.ts';
 
 describe('진행·결과(P-04)', () => {
@@ -24,12 +25,70 @@ describe('진행·결과(P-04)', () => {
     assert.deepEqual(actionsOf({ kind: 'myTurn', step: 'login', auth: { method: 'simple', app: '모르는 앱' }, startedAt: 0 }), ['resendAuth', 'stop']);
     assert.deepEqual(actionsOf({ kind: 'myTurn', step: 'login', auth: { method: 'cert' }, startedAt: 0 }), ['reserveOnPc', 'stop']);
   });
+  it('간편인증 시간이 지나면 [다시 요청]이 기본', () => {
+    const r: RunView = { kind: 'myTurn', step: 'login', auth: { method: 'simple', app: '카카오뱅크', deadline: 1000 }, startedAt: 0 };
+    assert.deepEqual(actionsOf(r, 500), ['openApp', 'resendAuth', 'stop']);
+    assert.deepEqual(actionsOf(r, 1000), ['resendAuth', 'stop']);
+  });
   it('단계·칩·경과·승인번호', () => {
-    assert.equal(stepOf({ kind: 'inDoubt', tries: 1, startedAt: 0 }), 'issue');
+    // 결과 모름·확인 필요·발급됨은 발급 뒤 확인 칸
+    assert.equal(stepOf({ kind: 'inDoubt', tries: 1, startedAt: 0 }), 'verify');
+    assert.equal(stepOf({ kind: 'verify', startedAt: 0 }), 'verify');
+    assert.equal(stepOf({ kind: 'running', step: 'issue', startedAt: 0 }), 'issue');
     assert.equal(chipOf({ kind: 'inDoubt', tries: 1, startedAt: 0 }).label, '확인 중');
     assert.equal(elapsed(80_000), '1분 20초');
     assert.equal(elapsed(40_000), '40초');
     assert.equal(elapsed(3_900_000), '1시간 5분');
     assert.equal(groupApprovalNo('20261116-41000000-12345678'), '2026 1116 4100 0000 1234 5678');
+  });
+});
+
+describe('시연 타이머(일별)', () => {
+  // 가짜 시계: 등록 순서대로 ms를 쌓아 두고 run()으로 흘린다
+  const clock = () => {
+    let t = 0;
+    let n = 0;
+    const q = new Map<number, { at: number; f: () => void }>();
+    return {
+      set: (f: () => void, ms: number) => (q.set(++n, { at: t + ms, f }), n) as unknown as ReturnType<typeof setTimeout>,
+      clear: (h: ReturnType<typeof setTimeout>) => void q.delete(h as unknown as number),
+      run(ms: number) {
+        t += ms;
+        for (const [k, v] of [...q].sort((a, b) => a[1].at - b[1].at)) {
+          if (v.at > t) continue;
+          q.delete(k);
+          v.f();
+        }
+      },
+    };
+  };
+  it('같은 일의 흐름을 다시 시작하면 앞 흐름의 남은 단계는 돌지 않는다', () => {
+    const c = clock();
+    const tm = jobTimers(c.set, c.clear);
+    const log: string[] = [];
+    const drive = (tag: string) => {
+      tm.clear('j');
+      for (const [ms, s] of [[700, 'login'], [1400, 'readback'], [2100, 'approve']] as const) tm.at('j', ms, () => log.push(`${tag}:${s}`));
+    };
+    drive('a');
+    c.run(800); // a:login
+    drive('b'); // 다시 준비
+    c.run(3000);
+    assert.deepEqual(log, ['a:login', 'b:login', 'b:readback', 'b:approve']);
+    assert.equal(tm.pending('j'), 0);
+  });
+  it('다른 일의 타이머는 건드리지 않고, 모두 지우기는 남김없이', () => {
+    const c = clock();
+    const tm = jobTimers(c.set, c.clear);
+    const log: string[] = [];
+    tm.at('x', 100, () => log.push('x'));
+    tm.at('y', 100, () => log.push('y'));
+    tm.clear('x');
+    c.run(200);
+    assert.deepEqual(log, ['y']);
+    tm.at('x', 100, () => log.push('x2'));
+    tm.clearAll();
+    c.run(200);
+    assert.deepEqual(log, ['y']);
   });
 });
