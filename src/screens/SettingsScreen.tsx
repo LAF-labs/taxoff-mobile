@@ -1,0 +1,30 @@
+// 설정(홈 오른쪽 위): 연결된 PC(P-06 연결 상태로) · 승인 기기 상태(준비 중) · 알림 · 잠금 · 앱 정보.
+import { APP_VERSION, LOCK_AFTER_MS } from '../config';
+import { useSession } from '../session';
+import { Group, Row, Screen } from '../ui/kit';
+import { pcLine } from './HomeScreen';
+
+export function SettingsScreen({ onDone, onConnection, onPair }: { onDone: () => void; onConnection: () => void; onPair: () => void }) {
+  const s = useSession();
+  const pair = s.data.pair;
+  const line = pcLine(s.pc, s.data.lastSeenPc);
+  return (
+    <Screen title="설정" onBack={onDone} testID="settings">
+      <Group title="연결된 PC">
+        {pair ? (
+          <Row testID="settings-pc" label={pair.desktopName ?? '내 PC'} sub={line.label} valueInk={line.tone === 'attention' ? 'attention' : 'ink2'} onPress={onConnection} />
+        ) : (
+          <Row testID="settings-pair" label="PC와 연결하기" sub="아직 연결한 PC가 없어요" onPress={onPair} />
+        )}
+      </Group>
+      <Group title="이 폰" note={`앱을 열 때와 ${Math.round(LOCK_AFTER_MS / 1000)}초 넘게 다른 앱에 있다 돌아올 때 얼굴이나 지문으로 열어요.`}>
+        <Row label="승인 기기 상태" value="준비 중" valueInk="ink3" sub="이 폰으로 PC 일을 승인하는 기능" />
+        <Row label="알림" value="준비 중" valueInk="ink3" />
+        <Row label="잠금" value="얼굴·지문" />
+      </Group>
+      <Group title="앱 정보">
+        <Row label="버전" value={APP_VERSION} />
+      </Group>
+    </Screen>
+  );
+}

@@ -88,6 +88,8 @@ export type TypeName = keyof typeof type;
 
 /** 글자 크기 설정은 따르되 화면이 깨지지 않게 상한을 둔다. */
 export const MAX_FONT_SCALE = 1.6;
+/** 화면 갤러리(웹)에서 글자 크기 설정을 흉내 낼 때만 바꾼다(?fs=1.6). 앱에서는 늘 1이고 OS 설정을 따른다. */
+export const textScale = { web: 1 };
 
 export const motion = { fast: 120, base: 160, slow: 220, pulse: 2400 } as const;
 

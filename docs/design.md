@@ -34,7 +34,16 @@
 | `Seg` | 둘 중 하나(매입·매출, 영수·청구) |
 | `Replies` | 점선 전폭 답 후보(Muse 확인 UI). 고르면 실선 + 체크로 굳는다 |
 | `StatusDot` | 점 + 글자. 진행 중이면 2.4초 주기로 숨 쉰다(동작 줄이기면 멈춤) |
-| `Notice` | 사라지지 않는 안내 한 줄 |
+| `Notice` | 사라지지 않는 안내 한 줄(한 화면에 하나까지) |
+| `Empty` | 빈 화면: 무엇이 비었는지 · 왜 · 다음 할 일 하나 |
+
+## 앱 틀과 대화 홈(기획 v2)
+
+- 아래 탭 셋(홈 · 돈 · 기록), 글자만. 고른 탭은 ink 600 + 밑 막대. 키보드가 올라오면 탭 줄을 숨기고 입력 줄이 키보드 위에 붙는다.
+- 홈 맨 위: PC 한 줄(켜짐 파랑 점 · 꺼짐 "마지막 접속 n시간 전" · 오래 꺼짐 황토 · 연결 안 됨 [PC 연결하기]), 그 밑 "지금 할 일" tint 한 줄.
+- 대화: PC 답은 바탕 위 글자, 카드 답은 tint 면(라벨·값 두 칸, 합계는 600), 내 말은 오른쪽 tint 말풍선. 폰에서 나눈 구간은 가운데 tint 알약 머리("폰에서 나눈 대화 · 오전 8:10~9:40").
+- 바닥: 빠른 일 tint 알약(44) + 입력 칸 + [보내기](ink 알약, 이 화면의 주요 단추).
+- 줄바꿈은 낱말 단위(iOS `hangul-word`, 웹 `keep-all`). 붙어 있어야 하는 묶음("밀린 일 1건")은 붙은 칸(U+00A0)으로 잇는다.
 
 아이콘 묶음을 들이지 않는다. 꺾쇠·체크는 선 두 개로 그린다.
 
@@ -44,4 +53,4 @@
 
 ## 점검
 
-`pnpm gallery`로 화면 갤러리를 웹으로 묶는다(가짜 세션, 네트워크·키·카메라 없음). `?s=home`, `home-unpaired`, `home-stale`, `cash`, `connection`, `invoice-confirm`, `invoice-issues`, `receipt-confirm`, `saved`, `camera`를 라이트·다크로 본다. 웹 번들에만 들어가고 앱 번들에는 들어가지 않는다(`metro.config.cjs`).
+`pnpm gallery`로 화면 갤러리를 웹으로 묶는다(가짜 세션, 네트워크·키·카메라 없음). `?s=home-chat-online`, `home-chat-offline`, `home-chat-merged`, `home-unpaired`, `home`, `home-stale`, `money-empty`, `records-empty`, `settings`, `todo`, `issue`, `cash`, `connection`, `invoice-confirm`, `invoice-issues`, `receipt-confirm`, `saved`, `camera`를 라이트·다크로 본다. `&fs=1.6`을 붙이면 글자 크기 1.6배를 흉내 낸다. 웹 번들에만 들어가고 앱 번들에는 들어가지 않는다(`metro.config.cjs`).
