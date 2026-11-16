@@ -5,7 +5,11 @@
     "noUncheckedIndexedAccess": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    "paths": { "@sax/remote": ["./vendor/sax-remote/src/index.ts"] }
+    "paths": {
+      "@sax/remote": ["./vendor/sax-remote/src/index.ts"],
+      "@sax/redaction": ["./vendor/sax-redaction/src/index.ts"],
+      "@sax/chat-core": ["./vendor/sax-chat-core/src/index.ts"]
+    }
   },
   "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules", "dev", "test"]

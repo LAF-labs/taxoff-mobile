@@ -32,7 +32,8 @@ jobs:
       - if: failure()
         run: cat dummy-pc.log || true
   vendor:
-    # @sax/remote 사본이 VENDORED_FROM 커밋과 같은지. tex는 비공개라 읽기 토큰(TEX_READ_TOKEN)이 있을 때만 돈다.
+    # tex 고정 사본(sax-remote·sax-redaction·sax-chat-core)이 사본마다 적힌 VENDORED_FROM 커밋과 같은지.
+    # tex는 비공개라 읽기 토큰(TEX_READ_TOKEN)이 있을 때만 돈다.
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -40,18 +41,20 @@ jobs:
       - id: pin
         env:
           HAS_TOKEN: ${{ secrets.TEX_READ_TOKEN != '' }}
-        run: |
-          echo "sha=$(sed -n 's/^commit: //p' vendor/sax-remote/VENDORED_FROM)" >> "$GITHUB_OUTPUT"
-          echo "run=$HAS_TOKEN" >> "$GITHUB_OUTPUT"
+        run: echo "run=$HAS_TOKEN" >> "$GITHUB_OUTPUT"
       - if: steps.pin.outputs.run == 'true'
         uses: actions/checkout@v4
         with:
           repository: LAF-labs/tex
-          ref: ${{ steps.pin.outputs.sha }}
           token: ${{ secrets.TEX_READ_TOKEN }}
           path: .tex
-          sparse-checkout: |
-            poc/packages/remote/src
-            sovereign-ax/design/schemas
+          fetch-depth: 0
       - if: steps.pin.outputs.run == 'true'
-        run: node scripts/sync-remote.mjs .tex --check
+        run: |
+          set -e
+          for pkg in remote:sax-remote redaction:sax-redaction chat-core:sax-chat-core; do
+            name=${pkg%%:*}; dir=${pkg#*:}
+            sha=$(sed -n 's/^commit: //p' "vendor/$dir/VENDORED_FROM")
+            git -C .tex checkout -q "$sha"
+            node scripts/sync-remote.mjs .tex "$name" --check
+          done
