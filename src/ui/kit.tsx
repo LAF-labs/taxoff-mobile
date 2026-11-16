@@ -7,7 +7,7 @@
 import * as Haptics from 'expo-haptics';
 import { useEffect, useRef, type ReactNode } from 'react';
 import {
-  ActivityIndicator, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View,
+  ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View,
   type AccessibilityRole, type StyleProp, type TextStyle, type ViewStyle,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -66,14 +66,17 @@ export function Screen({
           <View style={[st.headerSide, { alignItems: 'flex-end' }]}>{right}</View>
         </View>
       )}
+      {/* 바닥 동작 줄이 있으면 키보드 위로 함께 올린다(주요 단추가 키보드에 가리지 않게). */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={footer && Platform.OS === 'ios' ? 'padding' : undefined} enabled={!!footer}>
       {scroll ? (
-        <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets>
+        <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets={!footer}>
           {children}
         </ScrollView>
       ) : (
         <View style={[st.content, { flex: 1 }]}>{children}</View>
       )}
       {footer && <View style={[st.footer, { paddingBottom: tabbed ? space.s3 : Math.max(inset.bottom, space.s4), backgroundColor: p.canvas, borderTopColor: p.line }]}>{footer}</View>}
+      </KeyboardAvoidingView>
       {!footer && !tabbed && <View style={{ height: inset.bottom }} />}
     </SafeAreaView>
   );
@@ -287,7 +290,8 @@ export function Seg<K extends string>({ options, value, onChange, testID }: { op
               tap();
               onChange(o.key);
             }}
-            style={[st.segItem, on && { backgroundColor: p.overlay, ...shadowCard }]}
+            // 다크에서는 overlay가 tint와 같아 고른 칸이 사라진다: 한 단 밝은 sunken으로 올린다.
+            style={[st.segItem, on && { backgroundColor: p.overlay === p.tint ? p.sunken : p.overlay, ...shadowCard }]}
           >
             <T v="subStrong" c={on ? 'ink' : 'ink3'}>
               {o.label}
@@ -300,6 +304,25 @@ export function Seg<K extends string>({ options, value, onChange, testID }: { op
 }
 
 const shadowCard = { shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 };
+
+/** 묶음(tint) 안 줄에 붙는 작은 동작: 바탕색 알약 36, 누름 영역 44. */
+export function Pill({ label, onPress, testID }: { label: string; onPress: () => void; testID?: string }) {
+  const p = usePalette();
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={4}
+      onPress={onPress}
+      style={({ pressed }) => [st.pill, { backgroundColor: pressed ? p.sunken : p.canvas }]}
+    >
+      <T v="label" lines={1}>
+        {label}
+      </T>
+    </Pressable>
+  );
+}
 
 /** 빈 화면: 무엇이 비었는지 한 줄, 왜인지 한 줄, 다음 할 일 하나(막다른 화면을 만들지 않는다). */
 export function Empty({ title, sub, action, testID }: { title: string; sub?: string; action?: ReactNode; testID?: string }) {
@@ -346,6 +369,7 @@ export const st = StyleSheet.create({
   row: { minHeight: size.row, flexDirection: 'row', alignItems: 'center', gap: space.s3, paddingHorizontal: space.s4, paddingVertical: space.s3 },
   status: { flexDirection: 'row', alignItems: 'center', gap: space.s2 },
   dot: { width: 8, height: 8, borderRadius: 4 },
+  pill: { minHeight: 36, minWidth: 52, paddingHorizontal: space.s3, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: space.s5, paddingHorizontal: space.s3, paddingBottom: space.s7 },
   notice: { borderRadius: radius.md, paddingVertical: space.s3, paddingHorizontal: space.s4 },
   reply: { minHeight: size.row, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: space.s4, paddingVertical: space.s3, flexDirection: 'row', alignItems: 'center', gap: space.s3 },

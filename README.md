@@ -20,13 +20,15 @@
 | 앱 틀: 아래 탭 홈(대화) · 돈 · 기록, 설정은 홈 오른쪽 위 | 기획 v2 | `src/screens/MainScreen.tsx` |
 | 홈 = PC와 나누는 대화: PC 연결 한 줄 · 지금 할 일 한 줄 · 대화 · 빠른 일 [세금계산서 발급] [찍기] [현금] + 입력 줄 | 기획 v2 | `src/screens/HomeScreen.tsx`, `src/chat.ts` |
 | 돈 · 기록(빈 화면 + 다음 할 일 하나) | 기획 v2 | `src/screens/MoneyScreen.tsx`, `src/screens/RecordsScreen.tsx` |
-| 설정(연결된 PC · 승인 기기 상태 · 알림 · 잠금 · 앱 정보), 지금 할 일, 발급 작성(자리만) | 기획 v2 | `src/screens/SettingsScreen.tsx`, `TodoScreen.tsx`, `IssueScreen.tsx` |
+| 설정(연결된 PC · 승인 기기 상태 · 알림 · 잠금 · 앱 정보) | 기획 v2 | `src/screens/SettingsScreen.tsx` |
+| 밀린 일: 상태별 묶음, 줄마다 쉬운 말 한 줄 + 동작 하나, 시작 확인이면 [모두 시작], 72시간 지나면 만료 | P-13 | `src/screens/QueueScreen.tsx`, `src/queue.ts`, `src/queueStore.tsx` |
+| 발급 작성 + 거래처 고르기: 최근 다섯 곳 · 찾기, 지난번 값, 부가세 별도/포함, 세액 10% 버림, PC 상태에 따른 단추 | P-10 · P-11 | `src/screens/IssueScreen.tsx`, `src/issue.ts` |
 | 폰 연결(QR 스캔 → 24시간 경고 → 6자리 + "PC 화면에만 입력" 경고) | S-03 | `src/screens/PairScreen.tsx` |
 | 연결 상태(켜짐·꺼짐, 마지막 접속, 보낼 것 건수, 연결 해제, SP-1 보호 상태) | P-06 | `src/screens/ConnectionScreen.tsx` |
 | 종이 증빙 촬영: 영수증 · 종이 세금계산서·계산서(앱 안 카메라 → 자르기 → 기기 안 OCR 글자 상자 → 칸 판독·검산 → 확인 → 보관함 → PC) | P-08 | `src/screens/CaptureScreen.tsx`, `src/capture/*` |
 | 현금매출(하루 숫자 하나, 날짜별) | P-09 | `src/screens/CashScreen.tsx` |
 
-폰 승인(P-03, M7-7)은 제안 상태라 넣지 않았다. 홈 대화는 아직 화면만 있다: 적은 말은 이 화면에만 남고("PC 켜지면 보냄") PC로 가지 않는다. PC 답·카드는 갤러리 견본에만 있다(대화 프로토콜은 다음 PR).
+폰 승인(P-03, M7-7)은 제안 상태라 넣지 않았다. 홈 대화는 아직 화면만 있다: 적은 말은 이 화면에만 남고("PC 켜지면 보냄") PC로 가지 않는다. PC 답·카드는 갤러리 견본에만 있다(대화 프로토콜은 다음 PR). 밀린 일·거래처도 아직 메모리 가짜 저장소뿐이다(앱의 거래처 목록은 비어 있다).
 
 디자인 기준은 [docs/design.md](docs/design.md)(tex design-system v2.0을 폰 크기로).
 

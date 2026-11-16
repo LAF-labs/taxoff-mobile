@@ -9,12 +9,14 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { chatFromData, clock, clockRange, type ChatCard, type ChatItem } from '../chat';
 import { BRAND } from '../config';
+import { queueCounts } from '../queue';
+import { useQueue } from '../queueStore';
 import { useSession } from '../session';
 import type { PcStatus } from '../net/pc';
 import { MAX_FONT_SCALE, radius, size, space, textScale, type, usePalette } from '../theme';
-import { Button, Chevron, Notice, StatusDot, T, ago, tap, type Tone } from '../ui/kit';
+import { Button, Check, Chevron, Notice, StatusDot, T, ago, tap, type Tone } from '../ui/kit';
 
-export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'issue' | 'todo';
+export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'issue' | 'queue';
 
 /** 연결 상태 한 줄. 파랑은 "켜져 있어 바로 받는다"에만 쓴다. */
 export function pcLine(pc: PcStatus, lastSeen: number | null): { tone: Tone; label: string; busy?: boolean } {
@@ -62,11 +64,13 @@ export function HomeScreen({ go, chat, todo, draft = '' }: { go: (to: HomeRoute)
   const p = usePalette();
   const paired = !!s.data.pair;
   const line = homeLine(s.pc, s.data.lastSeenPc);
-  const t = todo ?? { approvals: 0, backlog: s.pending.receipts + s.pending.cash };
+  const q = useQueue();
+  const qc = queueCounts(q.jobs, Date.now());
+  const t = todo ?? { approvals: qc.approvals, backlog: qc.backlog + s.pending.receipts + s.pending.cash };
   const [mine, setMine] = useState<ChatItem[]>([]);
   const [text, setText] = useState(draft);
   const list = useRef<ComponentRef<typeof ScrollView>>(null);
-  const items = [...(chat ?? chatFromData(s.data)), ...mine];
+  const items = [...(chat ?? chatFromData(s.data)), ...q.notes, ...mine].sort((a, b) => at(a) - at(b));
   const off = s.pc === 'offline' || s.pc === 'queued';
   /** PC가 꺼져 있으면 폰이 대화를 이어 받는다(기획 v2). */
   const pcOff = off || s.pc === 'stale';
@@ -120,7 +124,7 @@ export function HomeScreen({ go, chat, todo, draft = '' }: { go: (to: HomeRoute)
               <Button testID="go-pair" small label="PC 연결하기" onPress={() => go('pair')} />
             </View>
           )}
-          {paired && <TodoLine todo={t} onPress={() => go('todo')} />}
+          {paired && <TodoLine todo={t} onPress={() => go('queue')} />}
         </View>
 
         <View style={st.fill}>
@@ -199,6 +203,8 @@ function TopFade() {
   );
 }
 
+const at = (it: ChatItem) => (it.kind === 'merged' ? it.from : it.at);
+
 /** 지금 할 일 한 줄. 없으면 누르지 않는 줄로 "없음"만 보인다. */
 function TodoLine({ todo, onPress }: { todo: Todo; onPress: () => void }) {
   const p = usePalette();
@@ -254,6 +260,18 @@ function Item({ it }: { it: ChatItem }) {
             폰에서 나눈 대화 · {clockRange(it.from, it.to)}
           </T>
         </View>
+      </View>
+    );
+  }
+  if (it.kind === 'note') {
+    return (
+      <View style={st.note} testID="chat-note">
+        <View style={{ paddingTop: 8 }}>
+          <Check color={p.ink3} />
+        </View>
+        <T v="sub" c="ink2" style={{ flex: 1 }}>
+          {it.text}
+        </T>
       </View>
     );
   }
@@ -334,6 +352,7 @@ const st = StyleSheet.create({
   bubble: { borderRadius: radius.lg, paddingHorizontal: space.s4, paddingVertical: space.s2 + 2 },
   card: { borderRadius: radius.lg, padding: space.s4, gap: space.s2 },
   cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: space.s3 },
+  note: { flexDirection: 'row', gap: space.s2, alignItems: 'flex-start' },
   mergedWrap: { alignItems: 'center', paddingVertical: space.s1 },
   merged: { borderRadius: radius.full, paddingHorizontal: space.s3, paddingVertical: space.s1 },
   bottom: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: space.s5, paddingTop: space.s3, paddingBottom: space.s3, gap: space.s3 },

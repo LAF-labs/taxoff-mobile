@@ -36,6 +36,7 @@
 | `StatusDot` | 점 + 글자. 진행 중이면 2.4초 주기로 숨 쉰다(동작 줄이기면 멈춤) |
 | `Notice` | 사라지지 않는 안내 한 줄(한 화면에 하나까지) |
 | `Empty` | 빈 화면: 무엇이 비었는지 · 왜 · 다음 할 일 하나 |
+| `Pill` | 묶음 줄 안의 작은 동작(바탕색 알약 36, 누름 영역 44). 밀린 일 [취소] [다시 맡기기] 등 |
 
 ## 앱 틀과 대화 홈(기획 v2)
 
@@ -53,4 +54,4 @@
 
 ## 점검
 
-`pnpm gallery`로 화면 갤러리를 웹으로 묶는다(가짜 세션, 네트워크·키·카메라 없음). `?s=home-chat-online`, `home-chat-offline`, `home-chat-merged`, `home-unpaired`, `home`, `home-stale`, `money-empty`, `records-empty`, `settings`, `todo`, `issue`, `cash`, `connection`, `invoice-confirm`, `invoice-issues`, `receipt-confirm`, `saved`, `camera`를 라이트·다크로 본다. `&fs=1.6`을 붙이면 글자 크기 1.6배를 흉내 낸다. 웹 번들에만 들어가고 앱 번들에는 들어가지 않는다(`metro.config.cjs`).
+`pnpm gallery`로 화면 갤러리를 웹으로 묶는다(가짜 세션, 네트워크·키·카메라 없음). `?s=home-chat-online`, `home-chat-offline`, `home-chat-merged`, `home-unpaired`, `home`, `home-stale`, `money-empty`, `records-empty`, `settings`, `home-chat-entrusted`, `queue-mixed`, `queue-empty`, `issue-picker`, `issue-picker-empty`, `issue-filled-online`, `issue-filled-offline`, `issue-stale`, `issue-first-counterparty`, `issue-duplicate`, `issue-limit`, `cash`, `connection`, `invoice-confirm`, `invoice-issues`, `receipt-confirm`, `saved`, `camera`를 라이트·다크로 본다. `&fs=1.6`을 붙이면 글자 크기 1.6배를 흉내 낸다. 웹 번들에만 들어가고 앱 번들에는 들어가지 않는다(`metro.config.cjs`).
