@@ -1,10 +1,11 @@
 // P-09 현금매출 입력: 하루 숫자 하나, 날짜별로 쌓이고, PC cash_sales로 E2EE 전송(cash.entry). 같은 날을 다시 적으면 바꾼다.
-import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useRef, useState, type ComponentRef } from 'react';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { enqueueCash, makeCashEntry } from '@sax/remote';
 import { useSession } from '../session';
-import { radius, space, type, usePalette } from '../theme';
-import { Button, Card, Notice, Screen, T, won } from '../ui/kit';
+import { MAX_FONT_SCALE, radius, space, type, usePalette } from '../theme';
+import { masked } from '../ui/field';
+import { Button, Chevron, Group, Row, Screen, T, success, won } from '../ui/kit';
 
 export function localDay(d = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -13,7 +14,7 @@ function shift(day: string, n: number): string {
   const [y, m, d] = day.split('-').map(Number) as [number, number, number];
   return localDay(new Date(y, m - 1, d + n));
 }
-const label = (day: string, today: string) => (day === today ? '오늘' : day === shift(today, -1) ? '어제' : day.slice(5).replace('-', '월 ') + '일');
+const label = (day: string, today: string) => (day === today ? '오늘' : day === shift(today, -1) ? '어제' : `${Number(day.slice(5, 7))}월 ${Number(day.slice(8))}일`);
 
 export function CashScreen({ onDone }: { onDone: () => void }) {
   const s = useSession();
@@ -21,14 +22,15 @@ export function CashScreen({ onDone }: { onDone: () => void }) {
   const today = localDay();
   const [day, setDay] = useState(today);
   const existing = s.data.cash.find((c) => c.day === day);
-  const [text, setText] = useState(existing ? String(existing.amount) : '');
+  const [text, setText] = useState(existing ? masked('won', String(existing.amount)) : '');
+  const input = useRef<ComponentRef<typeof TextInput>>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const pick = (d: string) => {
     setDay(d);
     const e = s.data.cash.find((c) => c.day === d);
-    setText(e ? String(e.amount) : '');
+    setText(e ? masked('won', String(e.amount)) : '');
     setErr(null);
   };
 
@@ -44,6 +46,7 @@ export function CashScreen({ onDone }: { onDone: () => void }) {
         cash: [{ day, amount: n, msgId: e.msgId, state: 'pending' as const }, ...d.cash.filter((c) => c.day !== day)].sort((a, b) => b.day.localeCompare(a.day)).slice(0, 400),
       }));
       await s.refreshPending();
+      success();
       void s.sync();
       onDone();
     } catch {
@@ -55,73 +58,108 @@ export function CashScreen({ onDone }: { onDone: () => void }) {
 
   const canNext = day < today;
   const canPrev = day > shift(today, -31);
+  const changed = existing ? String(existing.amount) !== text.replace(/\D/g, '') : true;
   return (
-    <Screen>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={st.pad} keyboardShouldPersistTaps="handled" testID="cash-screen">
-          <T v="title">현금 매출</T>
-          <View style={st.dayRow}>
-            <Button kind="secondary" label="‹" onPress={() => pick(shift(day, -1))} disabled={!canPrev} style={st.arrow} />
-            <T v="label" testID="cash-day">
-              {label(day, today)} · {day}
+    <Screen
+      title="현금 매출"
+      onBack={onDone}
+      testID="cash-screen"
+      footer={<Button testID="cash-save" label={existing ? '고쳐서 PC로 보내기' : '저장하고 PC로 보내기'} onPress={save} busy={busy} disabled={!text || !changed} />}
+    >
+      <View style={{ gap: space.s4 }}>
+        <View style={st.dayRow}>
+          <Step dir="left" label="하루 전" onPress={() => pick(shift(day, -1))} disabled={!canPrev} />
+          <View style={{ alignItems: 'center' }}>
+            <T v="strong" testID="cash-day">
+              {label(day, today)}
             </T>
-            <Button kind="secondary" label="›" onPress={() => pick(shift(day, 1))} disabled={!canNext} style={st.arrow} />
+            <T v="meta" c="ink3">
+              {weekday(day)}
+            </T>
           </View>
-          <Card>
-            <T v="label" c="ink2">
-              {label(day, today)} 현금으로 받은 매출(영수증을 주지 않은 것 포함)
+          <Step dir="right" label="하루 뒤" onPress={() => pick(shift(day, 1))} disabled={!canNext} />
+        </View>
+        <View style={{ gap: space.s2 }}>
+          <T v="label" c="ink3">
+            현금으로 받은 매출 · 영수증을 주지 않은 것 포함
+          </T>
+          <Pressable onPress={() => input.current?.focus()} style={[st.amount, { backgroundColor: p.tint, borderColor: err ? p.attention : 'transparent' }]}>
+            <TextInput
+              ref={input}
+              testID="cash-amount"
+              accessibilityLabel="현금 매출 금액"
+              value={text}
+              onChangeText={(t) => {
+                setErr(null);
+                setText(masked('won', t));
+              }}
+              keyboardType="number-pad"
+              placeholder="0"
+              placeholderTextColor={p.ink4}
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
+              style={[type.figure, st.input, { color: p.ink }]}
+              autoFocus
+            />
+            <T v="figure" c="ink2">
+              원
             </T>
-            <View style={st.amountRow}>
-              <TextInput
-                testID="cash-amount"
-                value={text}
-                onChangeText={setText}
-                keyboardType="number-pad"
-                placeholder="0"
-                placeholderTextColor={p.ink4}
-                style={[type.figure, st.input, { color: p.ink, borderColor: p.lineStrong, backgroundColor: p.surface }]}
-                autoFocus
-              />
-              <T v="title" c="ink2">
-                원
-              </T>
-            </View>
-            <T v="caption" c="ink3">
-              PC로 암호화해 보내요. 같은 날을 다시 적으면 새 숫자로 바꿔요.
+          </Pressable>
+          {err ? (
+            <T v="meta" c="attention">
+              {err}
             </T>
-          </Card>
-          {err && <Notice>{err}</Notice>}
-          <Button testID="cash-save" label="저장하고 PC로 보내기" onPress={save} busy={busy} />
-          <Button kind="secondary" label="닫기" onPress={onDone} />
-          {s.data.cash.length > 0 && (
-            <View style={{ gap: space.s2 }}>
-              <T v="label" c="ink2">
-                최근 기록
-              </T>
-              {s.data.cash.slice(0, 14).map((c) => (
-                <Pressable key={c.day} onPress={() => pick(c.day)} style={[st.hist, { borderColor: p.line, backgroundColor: p.surface }]}>
-                  <T v="body">{c.day}</T>
-                  <T v="body" style={{ fontVariant: ['tabular-nums'] }}>
-                    {won(c.amount)}
-                  </T>
-                  <T v="caption" c={c.state === 'sent' ? 'ink3' : 'attention'}>
-                    {c.state === 'sent' ? 'PC 받음' : c.state === 'queued' ? 'PC 켜지면 받음' : '보낼 예정'}
-                  </T>
-                </Pressable>
-              ))}
-            </View>
+          ) : (
+            <T v="meta" c="ink3">
+              {existing ? `이미 ${won(existing.amount)}을 적었어요. 새 숫자로 바꿔요.` : '현금 매출이 없던 날은 0을 적어요.'}
+            </T>
           )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </View>
+      </View>
+      {s.data.cash.length > 0 && (
+        <Group title="최근 기록">
+          {s.data.cash.slice(0, 14).map((c) => (
+            <Row
+              key={c.day}
+              label={label(c.day, today)}
+              sub={c.state === 'sent' ? 'PC 받음' : c.state === 'queued' ? 'PC가 켜지면 받아요' : '보낼 예정'}
+              value={won(c.amount)}
+              valueInk={c.day === day ? 'ink' : 'ink2'}
+              onPress={() => pick(c.day)}
+              chevron={false}
+            />
+          ))}
+        </Group>
+      )}
     </Screen>
   );
 }
 
+function Step({ dir, label: l, onPress, disabled }: { dir: 'left' | 'right'; label: string; onPress: () => void; disabled: boolean }) {
+  const p = usePalette();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={l}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      hitSlop={4}
+      style={({ pressed }) => [st.step, { backgroundColor: pressed ? p.sunken : p.tint }]}
+    >
+      <Chevron dir={dir} color={disabled ? p.ink4 : p.ink} />
+    </Pressable>
+  );
+}
+
+const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
+function weekday(day: string): string {
+  const [y, m, d] = day.split('-').map(Number) as [number, number, number];
+  return `${m}월 ${d}일 ${WEEK[new Date(y, m - 1, d).getDay()]}요일`;
+}
+
 const st = StyleSheet.create({
-  pad: { padding: space.s5, gap: space.s4 },
   dayRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  arrow: { minHeight: 40, width: 56 },
-  amountRow: { flexDirection: 'row', alignItems: 'center', gap: space.s2 },
-  input: { flex: 1, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: space.s3, paddingVertical: space.s2, textAlign: 'right' },
-  hist: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderRadius: radius.md, padding: space.s3 },
+  step: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  amount: { minHeight: 56, borderRadius: radius.md, borderWidth: 1, paddingHorizontal: space.s4, flexDirection: 'row', alignItems: 'center', gap: space.s2 },
+  input: { flex: 1, textAlign: 'right', paddingVertical: space.s3 },
 });

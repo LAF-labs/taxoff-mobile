@@ -7,19 +7,19 @@ import * as Device from 'expo-device';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { MobilePairing, b64, fromB64, softNoiseStatic, type MobilePairFailure, type MobilePairResult } from '@sax/remote';
-import { DEV_LOCAL, accountKeys, relayAllowlist } from '../config';
+import { BRAND, DEV_LOCAL, accountKeys, relayAllowlist } from '../config';
 import { inflight } from '../inflight';
 import { devFetchQr } from '../net/account';
 import { identityLines } from '../pairing/identity';
 import { relayFor } from '../net/pc';
 import { useSession } from '../session';
-import { space, usePalette } from '../theme';
-import { Button, Card, Notice, Screen, T } from '../ui/kit';
+import { radius, space, usePalette } from '../theme';
+import { Button, Group, Notice, Screen, StatusDot, T } from '../ui/kit';
 
 type Phase = 'scan' | 'warn' | 'confirm' | 'working' | 'sas' | 'done' | 'failed';
 
 const FAIL: Record<MobilePairFailure | 'relay' | 'save', string> = {
-  qr_invalid: 'tex의 연결 QR이 아니에요. PC 화면의 QR을 다시 찍어 주세요.',
+  qr_invalid: `${BRAND}의 연결 QR이 아니에요. PC 화면의 QR을 다시 찍어 주세요.`,
   qr_expired: 'QR 시간이 지났어요. PC에서 [새 QR]을 눌러 주세요.',
   relay_not_allowed: '알 수 없는 연결 서버예요. 연결을 멈췄어요.',
   devlist_invalid: '계정의 기기 목록 서명이 맞지 않아요. 연결을 멈췄어요.',
@@ -157,35 +157,50 @@ export function PairScreen({ onDone }: { onDone: () => void }) {
 
   if (phase === 'scan') {
     return (
-      <Screen>
-        <View style={st.wrap}>
-          <T v="title">PC의 QR을 찍어 주세요</T>
-          <T c="ink2">PC의 tex 앱 → [폰 연결]에 뜬 QR을 네모 안에 맞춰요.</T>
-          {perm?.granted ? (
-            <View style={[st.scanner, { borderColor: p.lineStrong }]}>
-              <CameraView style={StyleSheet.absoluteFill} facing="back" barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={(e) => void onQr(e.data)} />
-            </View>
-          ) : (
-            <Card>
-              <T c="ink2">QR을 찍으려면 카메라가 필요해요. 사진은 저장하지 않아요.</T>
-              <Button label="카메라 허용" onPress={() => void requestPerm()} />
-            </Card>
-          )}
-          {DEV_LOCAL && <Button testID="dev-qr" kind="quiet" label="개발: 더미 PC의 QR 받기(시뮬레이터)" onPress={async () => void onQr(await devFetchQr())} />}
-          <Button kind="secondary" label="취소" onPress={onDone} />
+      <Screen title="PC와 연결" onBack={onDone} backLabel="취소" scroll={false} testID="pair-scan">
+        <View style={{ gap: space.s2 }}>
+          <T v="strong">PC 화면의 QR을 찍어 주세요</T>
+          <T v="sub" c="ink2">PC의 {BRAND} → 설정 → [폰 연결]을 누르면 QR이 떠요.</T>
         </View>
+        {perm?.granted ? (
+          <View style={[st.scanner, { backgroundColor: p.camera }]}>
+            <CameraView style={StyleSheet.absoluteFill} facing="back" barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={(e) => void onQr(e.data)} />
+            <View pointerEvents="none" style={st.reticle}>
+              {(['tl', 'tr', 'bl', 'br'] as const).map((c) => (
+                <View key={c} style={[st.corner, st[c], { borderColor: p.onCamera }]} />
+              ))}
+            </View>
+          </View>
+        ) : (
+          <View style={[st.scanner, st.center, { backgroundColor: p.tint, gap: space.s4, padding: space.s6 }]}>
+            <T v="sub" c="ink2" center>
+              QR을 찍으려면 카메라가 필요해요. 찍은 화면은 저장하지 않아요.
+            </T>
+            <Button small label="카메라 허용" onPress={() => void requestPerm()} />
+          </View>
+        )}
+        {DEV_LOCAL && <Button testID="dev-qr" kind="quiet" label="개발: 더미 PC의 QR 받기" onPress={async () => void onQr(await devFetchQr())} />}
       </Screen>
     );
   }
 
   if (phase === 'warn') {
     return (
-      <Screen>
-        <View style={st.wrap}>
-          <Notice>이 PC는 오늘 등록되었습니다. 직접 등록한 PC가 아니면 중단하세요.</Notice>
-          <T c="ink2">중단하면 이 폰에 연결 정보를 저장하지 않아요. 계정에 다른 기기가 있으면 그 기기와 메일로도 알려요.</T>
-          <Button testID="warn-stop" kind="secondary" label="중단" onPress={stop} />
-          <Button testID="warn-continue" kind="quiet" label="내가 등록한 PC예요. 계속" onPress={() => setPhase('confirm')} />
+      <Screen
+        title="PC와 연결"
+        footer={
+          <>
+            <Button testID="warn-stop" label="중단" onPress={stop} />
+            <Button testID="warn-continue" kind="quiet" label="내가 등록한 PC예요. 계속" onPress={() => setPhase('confirm')} />
+          </>
+        }
+      >
+        <View style={{ gap: space.s3 }}>
+          <StatusDot tone="attention" label="오늘 등록된 PC예요" />
+          <T v="body">직접 등록한 PC가 아니면 여기서 중단하세요.</T>
+          <T v="sub" c="ink2">
+            중단하면 이 폰에 연결 정보를 남기지 않아요. 계정에 다른 기기가 있으면 그 기기와 메일로도 알려요.
+          </T>
         </View>
       </Screen>
     );
@@ -195,55 +210,63 @@ export function PairScreen({ onDone }: { onDone: () => void }) {
     const id = pendingRef.current.identity;
     const lines = identityLines({ accountEmail: id.account.email, desktopName: id.desktopName });
     return (
-      <Screen>
-        <View style={st.wrap} testID="pair-confirm">
-          <T v="title">내 PC와 내 계정이 맞나요?</T>
-          <Card>
-            <T v="label" c="ink3">
-              계정(계정 서버가 확인함)
-            </T>
-            <T v="title" testID="confirm-account">
+      <Screen
+        title="PC와 연결"
+        testID="pair-confirm"
+        footer={
+          <>
+            <Button testID="confirm-mine" label="내 계정이 맞아요" onPress={() => pendingRef.current && void save(pendingRef.current)} />
+            <Button testID="confirm-stop" kind="quiet" label="아니에요, 중단" onPress={stop} />
+          </>
+        }
+      >
+        <T v="strong">내 계정과 내 PC가 맞나요?</T>
+        <Group note="내 계정이 아니면 중단하세요. 연결한 뒤에도 [PC 연결]에서 늘 볼 수 있어요.">
+          <View style={st.kv}>
+            <T v="label" c="ink3">계정 · 계정 서버가 확인함</T>
+            <T v="strong" testID="confirm-account">
               {lines.account}
             </T>
-            <T v="label" c="ink3">
-              PC가 알려 준 이름(참고)
+          </View>
+          <View style={st.kv}>
+            <T v="label" c="ink3">PC가 알려 준 이름 · 참고</T>
+            <T v="body" testID="confirm-pc">
+              {lines.pc}
             </T>
-            <T testID="confirm-pc">{lines.pc}</T>
-          </Card>
-          <T c="ink2">내 계정이 아니면 중단하세요. 중단하면 이 폰에 연결 정보를 저장하지 않아요. 연결한 뒤에도 PC 연결 화면에서 늘 볼 수 있어요.</T>
-          <Button testID="confirm-mine" label="내 계정 맞음" onPress={() => pendingRef.current && void save(pendingRef.current)} />
-          <Button testID="confirm-stop" kind="secondary" label="아니에요, 중단" onPress={stop} />
-        </View>
+          </View>
+        </Group>
       </Screen>
     );
   }
 
   if (phase === 'sas' && sas) {
     return (
-      <Screen>
-        <View style={st.wrap} testID="pair-sas">
-          <T v="title">PC 화면에 이 숫자를 입력하세요</T>
-          <View style={[st.sasBox, { backgroundColor: p.surface, borderColor: p.line }]}>
-            <T v="sas" testID="sas-code">
-              {sas}
-            </T>
-          </View>
-          <Notice>이 숫자는 PC 화면에만 입력하세요. 전화·문자·메신저로 묻는 사람에게는 알려 주지 마세요.</Notice>
-          <T v="caption" c="ink3">
-            PC에서 입력하면 이 화면이 저절로 넘어가요. 세 번 틀리면 처음부터 다시 해요.
+      <Screen title="PC와 연결" testID="pair-sas" onBack={onDone} backLabel="취소">
+        <View style={{ gap: space.s2 }}>
+          <T v="strong">PC 화면에 이 숫자를 입력하세요</T>
+          <T v="sub" c="ink2">
+            입력하면 이 화면이 저절로 넘어가요. 세 번 틀리면 처음부터 다시 해요.
           </T>
         </View>
+        <View style={[st.sasBox, { backgroundColor: p.tint }]} accessible accessibilityLabel={`확인 숫자 ${sas.split('').join(' ')}`}>
+          <T v="sas" testID="sas-code">
+            {sas.slice(0, 3)} {sas.slice(3)}
+          </T>
+        </View>
+        <Notice>이 숫자는 PC 화면에만 입력하세요. 전화·문자·메신저로 묻는 사람에게는 알려 주지 마세요.</Notice>
       </Screen>
     );
   }
 
   if (phase === 'done') {
     return (
-      <Screen>
-        <View style={st.wrap} testID="pair-done">
-          <T v="title">PC와 연결됐어요</T>
-          <T c="ink2">이제 영수증과 현금 매출을 이 PC로 보낼 수 있어요. 보낸 내용은 연결 서버가 볼 수 없어요.</T>
-          <Button label="확인" onPress={onDone} />
+      <Screen title="PC와 연결" testID="pair-done" footer={<Button label="확인" onPress={onDone} />}>
+        <View style={{ gap: space.s3 }}>
+          <StatusDot tone="accent" label="연결됐어요" />
+          <T v="body">이제 종이 증빙과 현금 매출을 이 PC로 보낼 수 있어요.</T>
+          <T v="sub" c="ink2">
+            보내는 내용은 이 폰과 PC만 열 수 있어요. 중간의 연결 서버도 볼 수 없어요.
+          </T>
         </View>
       </Screen>
     );
@@ -251,36 +274,47 @@ export function PairScreen({ onDone }: { onDone: () => void }) {
 
   if (phase === 'failed') {
     return (
-      <Screen>
-        <View style={st.wrap}>
-          <T v="title">연결하지 못했어요</T>
+      <Screen
+        title="PC와 연결"
+        footer={
+          <>
+            <Button
+              label="다시 찍기"
+              onPress={() => {
+                scanned.current = false;
+                setFail(null);
+                setPhase('scan');
+              }}
+            />
+            <Button kind="quiet" label="닫기" onPress={onDone} />
+          </>
+        }
+      >
+        <View style={{ gap: space.s3 }}>
+          <T v="strong">연결하지 못했어요</T>
           <Notice>{FAIL[fail ?? 'handshake']}</Notice>
-          <Button
-            label="다시 찍기"
-            onPress={() => {
-              scanned.current = false;
-              setFail(null);
-              setPhase('scan');
-            }}
-          />
-          <Button kind="secondary" label="닫기" onPress={onDone} />
         </View>
       </Screen>
     );
   }
 
   return (
-    <Screen>
-      <View style={st.wrap}>
-        <T v="title">PC와 연결하는 중</T>
-        <Button label="" busy onPress={() => {}} kind="quiet" />
-      </View>
+    <Screen title="PC와 연결" onBack={onDone} backLabel="취소" testID="pair-working">
+      <StatusDot busy label="PC와 연결하는 중" />
     </Screen>
   );
 }
 
+const CORNER = 28;
 const st = StyleSheet.create({
-  wrap: { flex: 1, padding: space.s5, gap: space.s4 },
-  scanner: { aspectRatio: 1, borderRadius: 12, overflow: 'hidden', borderWidth: 1 },
-  sasBox: { alignItems: 'center', paddingVertical: space.s6, borderRadius: 12, borderWidth: 1 },
+  scanner: { width: '100%', aspectRatio: 1, borderRadius: radius.xl, overflow: 'hidden' },
+  center: { alignItems: 'center', justifyContent: 'center' },
+  reticle: { position: 'absolute', top: '18%', left: '18%', right: '18%', bottom: '18%' },
+  corner: { position: 'absolute', width: CORNER, height: CORNER, borderColor: '#fff' },
+  tl: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 10 },
+  tr: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 10 },
+  bl: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 10 },
+  br: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 10 },
+  sasBox: { alignItems: 'center', paddingVertical: space.s7, borderRadius: radius.lg },
+  kv: { paddingHorizontal: space.s4, paddingVertical: space.s3, gap: 2 },
 });

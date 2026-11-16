@@ -13,6 +13,7 @@
     "expo-crypto": "~58.0.7",
     "expo-device": "~58.0.5",
     "expo-file-system": "~58.0.13",
+    "expo-haptics": "~58.0.8",
     "expo-image-manipulator": "~58.0.16",
     "expo-secure-store": "~58.0.2",
     "expo-status-bar": "~58.0.4",
@@ -21,16 +22,19 @@
     "react-native-safe-area-context": "~5.11.1"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@expo/metro-runtime": "~58.0.17",
     "@types/node": "^24.19.2",
     "@types/react": "~19.3.0",
     "@types/ws": "^8.18.2",
+    "eslint": "10.13.0",
+    "globals": "16.5.0",
+    "react-dom": "19.3.0",
+    "react-native-web": "~0.21.4",
     "toqr": "0.1.1",
     "typescript": "~6.0.3",
-    "ws": "^8.22.1",
-    "eslint": "10.13.0",
-    "@eslint/js": "10.0.1",
     "typescript-eslint": "8.72.1",
-    "globals": "16.5.0"
+    "ws": "^8.22.1"
   },
   "scripts": {
     "start": "expo start",
@@ -43,7 +47,8 @@
     "smoke": "node dev/smoke-phone.ts",
     "lint": "eslint .",
     "sync:remote": "node scripts/sync-remote.mjs",
-    "check": "pnpm typecheck && pnpm lint && pnpm test"
+    "check": "pnpm typecheck && pnpm lint && pnpm test",
+    "gallery": "expo export -p web --output-dir dist-gallery && cp public/sample-invoice.jpg dist-gallery/"
   },
   "private": true
 }

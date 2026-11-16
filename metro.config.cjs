@@ -12,6 +12,11 @@ config.watchFolders = [remote];
 config.resolver.nodeModulesPaths = [path.join(root, 'node_modules')];
 const base = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (ctx, name, platform) => {
+  // 웹은 화면 갤러리만 그린다(디자인 점검용, gallery/). 앱(iOS·Android) 번들에는 들어가지 않는다.
+  if (platform === 'web' && name === './App' && ctx.originModulePath === path.join(root, 'index.ts')) {
+    return { type: 'sourceFile', filePath: path.join(root, 'gallery/Gallery.tsx') };
+  }
+  if (platform === 'web' && name === 'expo-file-system') return { type: 'sourceFile', filePath: path.join(root, 'gallery/stubs/expo-file-system.ts') };
   if (name === '@sax/remote') return { type: 'sourceFile', filePath: path.join(remote, 'src/index.ts') };
   if (name.startsWith('@noble/') && ctx.originModulePath.startsWith(remote)) {
     return (base ?? ctx.resolveRequest)({ ...ctx, originModulePath: path.join(root, 'index.ts') }, name, platform);

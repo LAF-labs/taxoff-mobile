@@ -21,6 +21,8 @@ export interface Session {
 }
 
 const Ctx = createContext<Session | null>(null);
+/** 화면 갤러리(gallery/)가 가짜 세션을 넣을 때만 쓴다. 앱은 SessionProvider로만 연다. */
+export const SessionContext = Ctx;
 
 export function useSession(): Session {
   const s = useContext(Ctx);
