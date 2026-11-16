@@ -1,6 +1,8 @@
 // 밀린 일(P-13, 기획 v2 PR 2): 폰에서 PC에 맡긴 일의 로컬 모델. 아직 프로토콜 없이 화면용 상태만 있다.
 // 맡긴 지 72시간이 지나도록 시작하지 못한 일은 만료로 본다(createdAt 기준, 저장하지 않고 그때그때 계산).
 
+import type { PhoneGate } from './approval';
+
 export const EXPIRE_MS = 72 * 3_600_000;
 
 export type JobState =
@@ -29,6 +31,8 @@ export interface Job {
   createdAt: number;
   state: JobState;
   reason?: NeedPcReason;
+  /** 승인 대기일 때 PC가 보낸 승인 요청(gate.request). 있으면 [승인 열기]가 승인 시트를 연다. */
+  gate?: PhoneGate;
 }
 
 /** 다 끝난 일 한 줄(빈 화면에 보인다) */

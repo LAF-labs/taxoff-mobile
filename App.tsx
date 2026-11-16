@@ -20,6 +20,7 @@ import { PairScreen } from './src/screens/PairScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { QueueScreen } from './src/screens/QueueScreen';
 import { QueueProvider } from './src/queueStore';
+import { ApprovalHost } from './src/screens/ApprovalHost';
 import { SessionProvider } from './src/session';
 import { emptyData, loadData, type AppData } from './src/storage/state';
 import { usePalette } from './src/theme';
@@ -122,6 +123,7 @@ export default function App() {
             }}
           />
         )}
+        <ApprovalHost />
         </QueueProvider>
       </SessionProvider>
     );

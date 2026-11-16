@@ -14,7 +14,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MAX_FONT_SCALE, motion, radius, size, space, textScale, type, useReducedMotion, usePalette, type Ink, type TypeName } from '../theme';
 
 /** 한글은 낱말 단위로 줄을 바꾼다(숫자와 단위, 낱말이 쪼개지지 않게). iOS는 hangul-word, 웹(갤러리)은 keep-all. */
-const keepAll = { wordBreak: 'keep-all', overflowWrap: 'break-word' } as unknown as TextStyle;
+// overflowWrap anywhere: 띄어쓰기 없는 긴 값(이메일 등)은 넘칠 때만 아무 데서나 끊는다.
+const keepAll = { wordBreak: 'keep-all', overflowWrap: 'anywhere' } as unknown as TextStyle;
 
 /** 가운뎃점(·)이 줄 끝에 홀로 남지 않게: 점 뒤 칸을 붙은 칸으로 바꿔 점이 다음 낱말과 함께 넘어가게 한다. */
 export const glueDots = (t: string) => t.replace(/ · /g, ' ·\u00A0');
@@ -106,14 +107,15 @@ export function Check({ color }: { color: string }) {
 }
 
 // ── 단추 ──
-type Kind = 'primary' | 'secondary' | 'quiet';
+/** approve: 파랑 채움. 폰 앱에서 승인 시트의 [승인하고 발급] 하나에만 쓴다(ADR-046 결정 6, docs/design.md). */
+type Kind = 'primary' | 'secondary' | 'quiet' | 'approve';
 export function Button({
   label, onPress, kind = 'primary', disabled, busy, testID, style, small, hint,
 }: { label: string; onPress: () => void; kind?: Kind; disabled?: boolean; busy?: boolean; testID?: string; style?: StyleProp<ViewStyle>; small?: boolean; hint?: string }) {
   const p = usePalette();
-  const bg = kind === 'primary' ? p.ink : kind === 'secondary' ? p.tint : 'transparent';
-  const pressedBg = kind === 'primary' ? p.ink2 : kind === 'secondary' ? p.sunken : p.tint;
-  const fg = kind === 'primary' ? p.onInk : kind === 'quiet' ? p.ink2 : p.ink;
+  const bg = kind === 'primary' ? p.ink : kind === 'approve' ? p.accent : kind === 'secondary' ? p.tint : 'transparent';
+  const pressedBg = kind === 'primary' ? p.ink2 : kind === 'approve' ? p.accent : kind === 'secondary' ? p.sunken : p.tint;
+  const fg = kind === 'primary' ? p.onInk : kind === 'approve' ? p.onAccent : kind === 'quiet' ? p.ink2 : p.ink;
   const off = disabled && !busy;
   return (
     <Pressable
@@ -125,13 +127,14 @@ export function Button({
       disabled={off || busy}
       hitSlop={small ? (size.hit - size.buttonSm) / 2 + 2 : undefined}
       onPress={() => {
-        if (kind === 'primary') tap();
+        if (kind === 'primary' || kind === 'approve') tap();
         onPress();
       }}
       style={({ pressed }) => [
         st.btn,
         small && st.btnSm,
         { backgroundColor: off ? p.tint : pressed ? pressedBg : bg },
+        kind === 'approve' && pressed && !off && { opacity: 0.85 },
         kind === 'quiet' && { alignSelf: 'center', paddingHorizontal: space.s4 },
         style,
       ]}
@@ -227,13 +230,18 @@ export function StatusDot({ tone = 'quiet', label, busy, testID, v = 'subStrong'
 }
 
 /** 확인이 필요한 한 줄(attention-soft 면). 사라지는 토스트 대신 그 자리에 남긴다. */
-export function Notice({ children, tone = 'attention', testID }: { children: ReactNode; tone?: 'attention' | 'quiet'; testID?: string }) {
+export function Notice({ children, tone = 'attention', testID, sub }: { children: ReactNode; tone?: 'attention' | 'quiet'; testID?: string; /** 둘째 줄(작은 회색): 다음에 할 일·안심 문구 */ sub?: string }) {
   const p = usePalette();
   return (
-    <View style={[st.notice, { backgroundColor: tone === 'attention' ? p.attentionSoft : p.tint }]} testID={testID} accessibilityRole="alert">
+    <View style={[st.notice, { backgroundColor: tone === 'attention' ? p.attentionSoft : p.tint, gap: space.s1 }]} testID={testID} accessibilityRole="alert">
       <T v="sub" c={tone === 'attention' ? 'attention' : 'ink2'}>
         {children}
       </T>
+      {sub && (
+        <T v="meta" c="ink2" testID={testID ? `${testID}-sub` : undefined}>
+          {sub}
+        </T>
+      )}
     </View>
   );
 }
