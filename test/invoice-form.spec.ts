@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { checkInvoice, parsePaperInvoice } from '../src/capture/invoice.ts';
-import { emptyInvoiceForm, formFrom, invoiceOf } from '../src/capture/invoice-form.ts';
+import { editInvoiceForm, emptyInvoiceForm, formFrom, invoiceOf } from '../src/capture/invoice-form.ts';
 import { masked } from '../src/ui/mask.ts';
 import { paperTaxInvoice } from './fixtures/invoice-boxes.ts';
 
@@ -40,5 +40,37 @@ describe('세금계산서 확인 칸', () => {
   it('빈 양식은 방향·금액이 필요하다', () => {
     const codes = checkInvoice(invoiceOf(emptyInvoiceForm(), {}, new Set()), TODAY).map((i) => i.code);
     assert.deepEqual(codes, ['direction_required', 'amount_required', 'amount_required']);
+  });
+});
+
+describe('칸 고치기', () => {
+  const none = new Set<string>();
+  /** 한 글자씩 치는 것처럼 */
+  const typeIn = (f: ReturnType<typeof emptyInvoiceForm>, k: 'supply' | 'vat', s: string, touched: ReadonlySet<string> = none) => {
+    for (let i = 1; i <= s.length; i++) f = editInvoiceForm(f, k, masked('won', s.slice(0, i)), touched);
+    return f;
+  };
+  it('공급가액을 치면 세액(10%)을 먼저 정하고 합계에 넣는다', () => {
+    const f = typeIn(emptyInvoiceForm('tax_invoice'), 'supply', '1000000');
+    assert.equal(f.vat, '100,000');
+    assert.equal(f.total, '1,100,000');
+  });
+  it('공급가액을 다시 고치면 자동 세액도 따라간다', () => {
+    let f = typeIn(emptyInvoiceForm('tax_invoice'), 'supply', '1000000');
+    f = editInvoiceForm(f, 'supply', '2,000,000', none);
+    assert.equal(f.vat, '200,000');
+    assert.equal(f.total, '2,200,000');
+  });
+  it('사장님이 고친 세액은 건드리지 않는다', () => {
+    let f = typeIn(emptyInvoiceForm('tax_invoice'), 'supply', '1000000');
+    f = editInvoiceForm(f, 'vat', '99,000', none);
+    f = editInvoiceForm(f, 'supply', '2,000,000', new Set(['vat']));
+    assert.equal(f.vat, '99,000');
+    assert.equal(f.total, '2,099,000');
+  });
+  it('계산서는 세액 없이 합계 = 공급가액', () => {
+    const f = typeIn(emptyInvoiceForm('invoice'), 'supply', '50000');
+    assert.equal(f.vat, '0');
+    assert.equal(f.total, '50,000');
   });
 });

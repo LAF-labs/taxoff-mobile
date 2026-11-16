@@ -71,3 +71,18 @@ export function invoiceOf(f: InvoiceForm, conf: Record<string, number>, touched:
   };
 }
 
+
+/**
+ * 확인 화면에서 칸 하나를 고친 결과. 세액은 사장님이 손대지 않았고 비어 있거나 앞서 자동으로 채운 값(공급가액의 10%)일 때만
+ * 공급가액을 따라가고, 합계는 손대지 않았으면 세액을 정한 뒤 공급가액 + 세액(계산서는 공급가액)으로 맞춘다.
+ */
+export function editInvoiceForm(cur: InvoiceForm, k: keyof InvoiceForm, v: InvoiceForm[keyof InvoiceForm], touched: ReadonlySet<string>): InvoiceForm {
+  const next = { ...cur, [k]: v } as InvoiceForm;
+  const tenth = (x: string) => (num(x) === null ? null : Math.floor(num(x)! / 10));
+  const autoVat = cur.vat === '' || num(cur.vat) === tenth(cur.supply);
+  if (k === 'supply' && next.docKind === 'tax_invoice' && !touched.has('vat') && autoVat) next.vat = fmt(tenth(next.supply));
+  if ((k === 'supply' || k === 'vat') && !touched.has('total') && num(next.supply) !== null) {
+    next.total = fmt(num(next.supply)! + (next.docKind === 'invoice' ? 0 : (num(next.vat) ?? 0)));
+  }
+  return next;
+}
