@@ -8,6 +8,7 @@ import { useRef, useState, type ComponentRef } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { chatFromData, clock, clockRange, type ChatCard, type ChatItem } from '../chat';
+import { useOfflineChat } from '../offline/useOfflineChat';
 import { BRAND } from '../config';
 import { queueCounts } from '../queue';
 import { useQueue } from '../queueStore';
@@ -71,16 +72,23 @@ export function HomeScreen({ go, chat, todo, draft = '' }: { go: (to: HomeRoute)
   const [mine, setMine] = useState<ChatItem[]>([]);
   const [text, setText] = useState(draft);
   const list = useRef<ComponentRef<typeof ScrollView>>(null);
-  const items = [...(chat ?? chatFromData(s.data)), ...q.notes, ...mine].sort((a, b) => at(a) - at(b));
   const off = s.pc === 'offline' || s.pc === 'queued';
   /** PC가 꺼져 있으면 폰이 대화를 이어 받는다(기획 v2). */
   const pcOff = off || s.pc === 'stale';
 
+  // PC가 꺼져 있으면 폰이 게이트웨이를 거쳐 직접 답한다(ADR-047). 켜져 있을 때의 PC 대화는 아직 화면만 있다.
+  const offline = useOfflineChat();
+  const phoneAnswers = pcOff && offline.available;
+  const items = [...(chat ?? chatFromData(s.data)), ...q.notes, ...mine, ...(chat ? [] : offline.items)].sort((a, b) => at(a) - at(b));
   const send = () => {
     const v = text.trim();
-    if (!v) return;
-    setMine((m) => [...m, { kind: 'msg', id: `me-${Date.now()}`, from: 'me', at: Date.now(), text: v, state: 'waiting' }]);
+    if (!v || offline.busy) return;
     setText('');
+    if (phoneAnswers) {
+      void offline.send(v);
+      return;
+    }
+    setMine((m) => [...m, { kind: 'msg', id: `me-${Date.now()}`, from: 'me', at: Date.now(), text: v, state: 'waiting' }]);
   };
 
   return (

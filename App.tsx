@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { LOCK_AFTER_MS, LOCK_DRAIN_MS } from './src/config';
 import { drained, endEpoch } from './src/inflight';
 import { clearDeviceToken } from './src/net/devauth';
+import { closeOfflineChat } from './src/offline/device';
 import { ensureFreshInstall, forget, type DeviceKeys } from './src/keyring';
 import { sweepCaptureTemps } from './src/storage/files';
 import { CaptureScreen } from './src/screens/CaptureScreen';
@@ -52,6 +53,7 @@ export default function App() {
     // 진행 중 저장·전송이 끝난 뒤 지운다(같은 배열을 쓰는 작업이 0 키로 봉인하지 않게, src/inflight.ts)
     const k = keysRef.current;
     clearDeviceToken();
+    closeOfflineChat();
     settling.current = drained(LOCK_DRAIN_MS).then(() => {
       endEpoch();
       forget(k);
