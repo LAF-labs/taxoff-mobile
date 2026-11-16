@@ -1,0 +1,235 @@
+{
+  "source": "LAF-labs/tex e1be78c1b36cbf9273d9eb6c3a0e5647400bc168 poc/packages/engine/src/gate.ts buildGateRequest·cardHash",
+  "vectors": [
+    {
+      "name": "기본 H-01",
+      "fields": [
+        {
+          "key": "supplierBizNo",
+          "value": "123-45-67890"
+        },
+        {
+          "key": "supplierName",
+          "value": "택스오프상회"
+        },
+        {
+          "key": "counterpartBizNo",
+          "value": "220-81-12345"
+        },
+        {
+          "key": "counterpartName",
+          "value": "동네마트 성수점"
+        },
+        {
+          "key": "counterpartEmail",
+          "value": "tax@dongne.example"
+        },
+        {
+          "key": "itemName",
+          "value": "생활용품"
+        },
+        {
+          "key": "itemCount",
+          "value": "1"
+        },
+        {
+          "key": "supplyAmount",
+          "value": "320000"
+        },
+        {
+          "key": "taxAmount",
+          "value": "32000"
+        },
+        {
+          "key": "totalAmount",
+          "value": "352000"
+        },
+        {
+          "key": "issueDate",
+          "value": "2026-11-16"
+        },
+        {
+          "key": "remark",
+          "value": ""
+        },
+        {
+          "key": "receiptType",
+          "value": "청구"
+        },
+        {
+          "key": "$first.bizNo",
+          "value": "false"
+        },
+        {
+          "key": "$first.email",
+          "value": "false"
+        }
+      ],
+      "cardHashInputs": {
+        "readbackHash": "d5117be1bef3d686a46e84eba0c9120c282050e0145f578cd667bf5b32420ed1",
+        "packageDigest": "abababababababababababababababababababababababababababababababab",
+        "authorizes": [
+          "s21"
+        ],
+        "intentId": "01JD8Z6Q3B9K2M4N5P7R8S9T0V"
+      },
+      "cardHash": "80c5e807672a27071ad76ae061db409507db2846fc7e337a1dd33e0a7652d3f8",
+      "actionHash": "1e570bc7b463740919c92ab69a2ebf8d0d1b75ea28541731970e1d77b69f7d56"
+    },
+    {
+      "name": "중복 경고",
+      "fields": [
+        {
+          "key": "supplierBizNo",
+          "value": "123-45-67890"
+        },
+        {
+          "key": "supplierName",
+          "value": "택스오프상회"
+        },
+        {
+          "key": "counterpartBizNo",
+          "value": "220-81-12345"
+        },
+        {
+          "key": "counterpartName",
+          "value": "동네마트 성수점"
+        },
+        {
+          "key": "counterpartEmail",
+          "value": "tax@dongne.example"
+        },
+        {
+          "key": "itemName",
+          "value": "생활용품"
+        },
+        {
+          "key": "itemCount",
+          "value": "1"
+        },
+        {
+          "key": "supplyAmount",
+          "value": "320000"
+        },
+        {
+          "key": "taxAmount",
+          "value": "32000"
+        },
+        {
+          "key": "totalAmount",
+          "value": "352000"
+        },
+        {
+          "key": "issueDate",
+          "value": "2026-11-16"
+        },
+        {
+          "key": "remark",
+          "value": ""
+        },
+        {
+          "key": "receiptType",
+          "value": "청구"
+        },
+        {
+          "key": "$first.bizNo",
+          "value": "false"
+        },
+        {
+          "key": "$first.email",
+          "value": "false"
+        },
+        {
+          "key": "$dup.businessKey",
+          "value": "committed"
+        }
+      ],
+      "cardHashInputs": {
+        "readbackHash": "d5117be1bef3d686a46e84eba0c9120c282050e0145f578cd667bf5b32420ed1",
+        "packageDigest": "abababababababababababababababababababababababababababababababab",
+        "authorizes": [
+          "s21",
+          "s22"
+        ],
+        "intentId": "01JD8Z6Q3B9K2M4N5P7R8S9T0W"
+      },
+      "cardHash": "bf7d78247acf4bf51ae2124d6437b9e12104a163439ea88d836616a8627abdf0",
+      "actionHash": "9b7702bbc31742b0ff6f43f3b0c52a1202f1d9655b6a4f094e0a9fc79dc7ee92"
+    },
+    {
+      "name": "처음 거래처·긴 이름",
+      "fields": [
+        {
+          "key": "supplierBizNo",
+          "value": "123-45-67890"
+        },
+        {
+          "key": "supplierName",
+          "value": "택스오프상회"
+        },
+        {
+          "key": "counterpartBizNo",
+          "value": "220-81-12345"
+        },
+        {
+          "key": "counterpartName",
+          "value": "주식회사 새봄꽃과 정원 관리 서비스 성수동 본점"
+        },
+        {
+          "key": "counterpartEmail",
+          "value": "very.long.address.for.invoices@flower-garden-service.example"
+        },
+        {
+          "key": "itemName",
+          "value": "생활용품"
+        },
+        {
+          "key": "itemCount",
+          "value": "1"
+        },
+        {
+          "key": "supplyAmount",
+          "value": "1230000"
+        },
+        {
+          "key": "taxAmount",
+          "value": "123000"
+        },
+        {
+          "key": "totalAmount",
+          "value": "1353000"
+        },
+        {
+          "key": "issueDate",
+          "value": "2026-11-16"
+        },
+        {
+          "key": "remark",
+          "value": ""
+        },
+        {
+          "key": "receiptType",
+          "value": "청구"
+        },
+        {
+          "key": "$first.bizNo",
+          "value": "true"
+        },
+        {
+          "key": "$first.email",
+          "value": "true"
+        }
+      ],
+      "cardHashInputs": {
+        "readbackHash": "3e6b4919b401d65684639077d309ff81c264b5868ec98561b8a33c91932120bf",
+        "packageDigest": "abababababababababababababababababababababababababababababababab",
+        "authorizes": [
+          "s21"
+        ],
+        "intentId": "01JD8Z6Q3B9K2M4N5P7R8S9T0X"
+      },
+      "cardHash": "837d117aa5ee09785495695b0017fbc8aa21fe18ea41d8d60d350047a4506a2b",
+      "actionHash": "e6c49fb260566fc3e9f5d5b174a67afdedf4a1ecb3bd1798d65ea14bb33fe8a2"
+    }
+  ]
+}

@@ -10,7 +10,9 @@ import { MainScreen, type Tab } from '../src/screens/MainScreen';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
 import { QueueScreen } from '../src/screens/QueueScreen';
 import { IssueScreen, type IssuePreview } from '../src/screens/IssueScreen';
-import { QueueProvider } from '../src/queueStore';
+import { QueueProvider, type ApprovalSettings } from '../src/queueStore';
+import { ApprovalHost } from '../src/screens/ApprovalHost';
+import { buildGate, type GateField, type PhoneGate } from '../src/approval';
 import type { DoneJob, Job } from '../src/queue';
 import type { Counterparty, IssuedToday } from '../src/issue';
 import { CashScreen } from '../src/screens/CashScreen';
@@ -126,11 +128,61 @@ const JOBS: Job[] = [
 ];
 const LAST_DONE: DoneJob = { title: '가나식자재 세금계산서', finishedAt: at(9, 12) };
 
+// ---- 승인 시트 견본(P-03): 엔진과 같은 식으로 만든 게이트, 시계는 멈춘다 ----
+const RB = {
+  supplierBizNo: '123-45-67890', supplierName: '택스오프상회', counterpartBizNo: '211-09-87654', counterpartName: '서울청과',
+  counterpartEmail: 'tax@seoulfruit.example', itemName: '과일', itemCount: '1', supplyAmount: '800000', taxAmount: '80000', totalAmount: '880000',
+  issueDate: iso(today), remark: '', receiptType: '청구',
+};
+const LONG = {
+  ...RB, counterpartName: '주식회사 새봄꽃과 정원 관리 서비스 성수동 본점', counterpartBizNo: '402-11-55667',
+  counterpartEmail: 'very.long.address.for.invoices@flower-garden-service.example', itemName: '사무실 화분 관리(11월분) 및 계절 꽃 교체',
+  supplyAmount: '12300000', taxAmount: '1230000', totalAmount: '13530000',
+};
+const NO_FIRST: GateField[] = [{ key: '$first.bizNo', value: 'false' }, { key: '$first.email', value: 'false' }];
+const gate = (o: { rb?: typeof RB; reserved?: GateField[]; left?: number; tamper?: boolean } = {}): PhoneGate => {
+  const g = buildGate({
+    readback: o.rb ?? RB, reserved: o.reserved ?? NO_FIRST, packageDigest: 'ab'.repeat(32), authorizes: ['s21'], intentId: '01JD8Z6Q3B9K2M4N5P7R8S9T0V',
+    reqId: '01JD0000000000000000000000', challenge: 'A'.repeat(43) + '=', exp: now + (o.left ?? 118_000),
+  });
+  // 해시 불일치: PC가 보낸 값 하나가 화면과 다르다(엔진 버그·변조를 흉내)
+  return o.tamper ? { ...g, fields: g.fields.map((f) => (f.key === 'totalAmount' ? { ...f, value: '8800000' } : f)) } : g;
+};
+const HW: ApprovalSettings = { attest: 'hw', iosAllowed: false, usedToday: 1 };
+const sheetCase = (g: PhoneGate, o: { settings?: ApprovalSettings; openedAt?: number; state?: Job['state']; acked?: string[] } = {}) => ({
+  session: fake(paired(), 'online'),
+  jobs: [{ id: 'ap', title: `${g.fields.find((f) => f.key === 'counterpartName')!.value} 세금계산서`, amount: Number(g.fields.find((f) => f.key === 'totalAmount')!.value), createdAt: now - 60_000, state: o.state ?? ('approval' as const), gate: g }, ...JOBS.slice(6, 8)],
+  sheet: 'ap',
+  approval: o.settings ?? HW,
+  sheetPreview: { now, openedAt: o.openedAt ?? now - 5_000, acked: o.acked },
+  node: <QueueScreen onDone={noop} onConnection={noop} onOpen={noop} now={now} />,
+});
+
 const issue = (preview: IssuePreview, cps = CPS, today: IssuedToday[] = [], left = 5) => (
   <IssueScreen counterparties={cps} issuedToday={today} approvalsLeft={left} onDone={noop} onCapture={noop} onSubmitted={noop} preview={preview} />
 );
 
-const SCREENS: Record<string, () => { session: Session; node: React.ReactNode; jobs?: Job[]; last?: DoneJob; notes?: ChatItem[] }> = {
+const SCREENS: Record<
+  string,
+  () => { session: Session; node: React.ReactNode; jobs?: Job[]; last?: DoneJob; notes?: ChatItem[]; sheet?: string; approval?: ApprovalSettings; sheetPreview?: { now: number; openedAt: number; acked?: string[] } }
+> = {
+  'approval-default': () => sheetCase(gate()),
+  'approval-arming': () => sheetCase(gate({ left: 119_700 }), { openedAt: now - 300 }),
+  'approval-urgent': () => sheetCase(gate({ left: 14_000 })),
+  'approval-expired': () => sheetCase(gate({ left: -1 })),
+  'approval-dup': () => sheetCase(gate({ reserved: [...NO_FIRST, { key: '$dup.businessKey', value: 'committed' }] })),
+  /** 값이 승인번호 끝·시각을 실어 올 때(모양은 엔진과 맞출 것) */
+  'approval-dup-detail': () => sheetCase(gate({ reserved: [...NO_FIRST, { key: '$dup.businessKey', value: 'committed;4821;10:20' }] })),
+  'approval-dup-acked': () => sheetCase(gate({ reserved: [...NO_FIRST, { key: '$dup.businessKey', value: 'committed' }] }), { acked: ['$dup.businessKey'] }),
+  'approval-unknown': () => sheetCase(gate({ reserved: [...NO_FIRST, { key: '$bank.account', value: '1234' }] })),
+  'approval-first': () => sheetCase(gate({ rb: LONG, reserved: [{ key: '$first.bizNo', value: 'true' }, { key: '$first.email', value: 'true' }] })),
+  'approval-limit': () => sheetCase(gate(), { settings: { ...HW, usedToday: 5 } }),
+  'approval-no-key': () => sheetCase(gate(), { settings: { attest: 'none', iosAllowed: false, usedToday: 0 } }),
+  'approval-ios-allowed': () => sheetCase(gate(), { settings: { attest: 'ios_app_attest', iosAllowed: true, usedToday: 1 } }),
+  'approval-ios-denied': () => sheetCase(gate(), { settings: { attest: 'ios_app_attest', iosAllowed: false, usedToday: 1 } }),
+  'approval-mismatch': () => sheetCase(gate({ tamper: true })),
+  'approval-in-doubt': () => sheetCase(gate(), { state: 'verify' }),
+  'approval-long': () => sheetCase(gate({ rb: LONG })),
   'home-chat-online': () => ({ session: fake(paired(), 'online', { receipts: 1, cash: 0 }), node: <Main chat={CHAT} /> }),
   'home-chat-offline': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * 3_600_000 }, 'offline', { receipts: 1, cash: 0 }), node: <Main chat={CHAT_OFFLINE} /> }),
   'home-chat-merged': () => ({ session: fake(paired(), 'online', { receipts: 1, cash: 0 }), node: <Main chat={CHAT_MERGED} /> }),
@@ -190,13 +242,16 @@ export default function Gallery() {
   const name = q.get('s') || 'home-chat-online';
   textScale.web = Math.min(Number(q.get('fs')) || 1, MAX_FONT_SCALE);
   const make = SCREENS[name] ?? SCREENS['home-chat-online']!;
-  const { session, node, jobs, last, notes } = make();
+  const { session, node, jobs, last, notes, sheet, approval, sheetPreview } = make();
+  const w = Number(q.get('w')) || 393;
+  const h = Number(q.get('h')) || 852;
   return (
-    <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 393, height: 852 }, insets: { top: 59, left: 0, right: 0, bottom: 34 } }}>
+    <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: w, height: h }, insets: h < 700 ? { top: 20, left: 0, right: 0, bottom: 0 } : { top: 59, left: 0, right: 0, bottom: 34 } }}>
       <View style={{ flex: 1, backgroundColor: p.canvas }}>
         <SessionContext.Provider value={session}>
-          <QueueProvider initial={jobs} last={last} notes={notes}>
+          <QueueProvider initial={jobs} last={last} notes={notes} sheet={sheet} approval={approval} simulate>
             {node}
+            <ApprovalHost preview={sheetPreview} />
           </QueueProvider>
         </SessionContext.Provider>
       </View>

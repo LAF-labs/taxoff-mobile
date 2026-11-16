@@ -38,7 +38,7 @@ export function QueueScreen({ onDone, onConnection, onOpen, now = Date.now() }: 
           {groups.map((g) => (
             <Group key={g.state} title={`${STATE_NAME[g.state]} · ${g.jobs.length}건`} testID={`queue-${g.state}`}>
               {g.jobs.map((j) => (
-                <JobRow key={j.id} job={j} state={g.state} onAction={(a) => (a === 'cancel' || a === 'retry' ? q.act(j.id, a) : onOpen(j, a))} />
+                <JobRow key={j.id} job={j} state={g.state} onAction={(a) => (a === 'cancel' || a === 'retry' ? q.act(j.id, a) : a === 'approve' && j.gate ? q.openSheet(j.id) : onOpen(j, a))} />
               ))}
             </Group>
           ))}
