@@ -2,6 +2,7 @@
 // 맡긴 지 72시간이 지나도록 시작하지 못한 일은 만료로 본다(createdAt 기준, 저장하지 않고 그때그때 계산).
 
 import type { PhoneGate } from './approval';
+import type { RunView } from './run';
 
 export const EXPIRE_MS = 72 * 3_600_000;
 
@@ -18,7 +19,9 @@ export type JobState =
   | 'needPc'
   /** 발급됐는지 확인 필요 */
   | 'verify'
-  | 'expired';
+  | 'expired'
+  /** 발급까지 끝남(결과를 다시 볼 수 있다) */
+  | 'done';
 
 export type NeedPcReason = 'firstCounterparty' | 'dailyLimit' | 'notApprover';
 
@@ -33,6 +36,8 @@ export interface Job {
   reason?: NeedPcReason;
   /** 승인 대기일 때 PC가 보낸 승인 요청(gate.request). 있으면 [승인 열기]가 승인 시트를 연다. */
   gate?: PhoneGate;
+  /** PC가 알려 준 진행·결과(P-04) */
+  run?: RunView;
 }
 
 /** 다 끝난 일 한 줄(빈 화면에 보인다) */
@@ -42,7 +47,7 @@ export interface DoneJob {
 }
 
 /** 화면에 보이는 순서: 사장님이 할 일 → PC가 하는 일 → 기다리는 일 → 끝난 일. */
-export const ORDER: JobState[] = ['confirmStart', 'approval', 'needPc', 'verify', 'running', 'entrusted', 'phoneWaiting', 'expired'];
+export const ORDER: JobState[] = ['confirmStart', 'approval', 'needPc', 'verify', 'running', 'entrusted', 'phoneWaiting', 'expired', 'done'];
 
 export const STATE_NAME: Record<JobState, string> = {
   entrusted: '맡김',
@@ -53,6 +58,7 @@ export const STATE_NAME: Record<JobState, string> = {
   needPc: 'PC 앞 필요',
   verify: '확인 필요',
   expired: '만료',
+  done: '끝남',
 };
 
 export const STATE_LINE: Record<JobState, string> = {
@@ -64,6 +70,7 @@ export const STATE_LINE: Record<JobState, string> = {
   needPc: 'PC 앞에서 해야 해요',
   verify: '발급됐는지 확인이 필요해요',
   expired: '3일이 지나 취소됐어요',
+  done: '발급했어요',
 };
 
 export const REASON_LINE: Record<NeedPcReason, string> = {
@@ -73,7 +80,7 @@ export const REASON_LINE: Record<NeedPcReason, string> = {
 };
 
 /** 줄마다 하나뿐인 동작. 시작 확인은 바닥 [모두 시작]이 주요 동작이고, 줄에는 건별 [빼기](글자만)만 있다. */
-export type JobAction = 'cancel' | 'progress' | 'approve' | 'retry';
+export type JobAction = 'cancel' | 'progress' | 'approve' | 'retry' | 'result';
 export const STATE_ACTION: Record<JobState, { key: JobAction; label: string } | null> = {
   entrusted: { key: 'cancel', label: '취소' },
   phoneWaiting: { key: 'cancel', label: '취소' },
@@ -81,8 +88,9 @@ export const STATE_ACTION: Record<JobState, { key: JobAction; label: string } | 
   running: { key: 'progress', label: '진행 보기' },
   approval: { key: 'approve', label: '승인 열기' },
   needPc: null,
-  verify: null,
+  verify: { key: 'progress', label: '자세히' },
   expired: { key: 'retry', label: '다시 맡기기' },
+  done: { key: 'result', label: '결과 보기' },
 };
 
 /**
@@ -105,7 +113,7 @@ export function queueCounts(jobs: Job[], now: number): { approvals: number; back
   for (const j of jobs) {
     const s = stateAt(j, now);
     if (s === 'approval') approvals++;
-    else if (s !== 'expired') backlog++;
+    else if (s !== 'expired' && s !== 'done') backlog++;
   }
   return { approvals, backlog };
 }

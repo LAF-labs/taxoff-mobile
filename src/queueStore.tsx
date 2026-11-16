@@ -1,10 +1,13 @@
 // 밀린 일 가짜 저장소(기획 v2 PR 2·5): 메모리에만 둔다. PC와 주고받는 프로토콜이 생기면 세션으로 옮긴다.
 // 승인 시트(P-03)도 여기서 연다: 승인 대기 일에 PC 승인 요청(gate)이 붙어 있으면 그 일의 시트를 띄운다.
-// simulate(갤러리·시연 전용): PC가 켜져 맡긴 발급이 1.5초 뒤 "PC가 승인 요청함"으로 바뀌고 시트가 뜬다.
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+// simulate(갤러리·시연 전용): PC가 켜져 맡긴 발급이 준비 → 홈택스 로그인 → 값 확인을 지나 "PC가 승인 요청함"이 되고 시트가 뜬다.
+//   승인하면 발급 → 확인 → 결과 카드. simulate='inDoubt'이면 발급 뒤 응답이 끊겨 확인 중(조회 n회째) → 확인 필요로 간다.
+import { createContext, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 import { GATE_TTL_MS, buildGate, type AttestState, type PhoneGate, type READBACK_KEYS } from './approval';
 import type { ChatItem } from './chat';
 import { applyAction, startAll as startAllJobs, type DoneJob, type Job, type JobAction, type NeedPcReason } from './queue';
+import type { IssueResult, RunAction, RunView } from './run';
+import sampleDoc from '../assets/sample/tax-invoice.pdf';
 import { b64, randomBytes } from '../vendor/sax-remote/src/index.ts';
 
 export type Readback = Record<(typeof READBACK_KEYS)[number], string>;
@@ -37,24 +40,48 @@ export interface QueueStore {
   park: (id: string, reason: NeedPcReason) => void;
   /** 만료된 승인 요청을 PC에 다시 요청(시연에서는 새 마감으로 다시 온다). */
   rerequest: (id: string) => void;
+  /** 진행 카드의 동작(다시 준비·다시 요청·중지·PC에서 열기 예약) */
+  runAction: (id: string, action: RunAction) => void;
+  /** 진행·결과·서류 화면이 보는 일 */
+  focus: Job | null;
+  setFocus: (id: string | null) => void;
 }
+
+/** 번들 견본 서류(다음 PR에서 PC가 보낸 암호 파일을 풀어 쓴다) */
+export const SAMPLE_DOC = sampleDoc;
 
 const Ctx = createContext<QueueStore | null>(null);
 
 const SIM_SUPPLIER = { supplierBizNo: '123-45-67890', supplierName: '택스오프상회' };
 
 export function QueueProvider({
-  initial = [], last = null, notes: initialNotes = [], approval = { attest: 'none', iosAllowed: false, usedToday: 0 }, sheet = null, simulate = false, children,
+  initial = [], last = null, notes: initialNotes = [], approval = { attest: 'none', iosAllowed: false, usedToday: 0 }, sheet = null, simulate = false, focus: initialFocus = null, children,
 }: {
   initial?: Job[]; last?: DoneJob | null; notes?: ChatItem[]; approval?: ApprovalSettings;
   /** 처음부터 열어 둘 승인 시트(갤러리) */
   sheet?: string | null;
-  simulate?: boolean; children: ReactNode;
+  simulate?: boolean | 'inDoubt';
+  focus?: string | null;
+  children: ReactNode;
 }) {
   const [jobs, setJobs] = useState<Job[]>(initial);
   const [notes, setNotes] = useState<ChatItem[]>(initialNotes);
   const [sheetId, setSheetId] = useState<string | null>(sheet);
   const [used, setUsed] = useState(approval.usedToday);
+  const [focusId, setFocusId] = useState<string | null>(initialFocus);
+  const setRun = (id: string, f: (r: RunView | undefined, j: Job) => RunView, extra: Partial<Job> = {}) => patch(id, (j) => ({ ...j, ...extra, run: f(j.run, j) }));
+  const at = (ms: number, f: () => void) => setTimeout(f, ms);
+  /** 시연: 준비 → 로그인 → 값 확인 → 승인 요청 */
+  const drivePrepare = (id: string, readback: Readback, startedAt: number) => {
+    setRun(id, () => ({ kind: 'running', step: 'prepare', startedAt }));
+    at(700, () => setRun(id, () => ({ kind: 'running', step: 'login', startedAt })));
+    at(1400, () => setRun(id, () => ({ kind: 'running', step: 'readback', startedAt })));
+    at(2100, () => {
+      setRun(id, () => ({ kind: 'running', step: 'approve', startedAt }), { state: 'approval', gate: fakeGate({ ...readback, ...SIM_SUPPLIER }) });
+      setSheetId(id);
+    });
+  };
+  const readbacks = useRef(new Map<string, Readback>()).current;
   const note = (id: string, text: string) => setNotes((n) => [...n, { kind: 'note', id: `note-${id}-${Date.now()}`, at: Date.now(), text }]);
   const patch = (id: string, f: (j: Job) => Job) => setJobs((js) => js.map((j) => (j.id === id ? f(j) : j)));
   const fakeGate = (readback: Readback, first = false): PhoneGate =>
@@ -79,13 +106,13 @@ export function QueueProvider({
       act: (id, action) => setJobs((js) => applyAction(js, id, action, Date.now())),
       startAll: () => setJobs((js) => startAllJobs(js, Date.now())),
       add: (job, text, readback) => {
-        setJobs((js) => [...js, job]);
-        note(job.id, text);
+        const now = Date.now();
+        setJobs((js) => [...js, job.state === 'running' ? { ...job, run: { kind: 'running', step: 'prepare', startedAt: now } } : job]);
+        if (job.state === 'running') setNotes((n) => [...n, { kind: 'run', id: `run-${job.id}`, at: now, jobId: job.id }]);
+        else note(job.id, text);
         if (simulate && readback && job.state === 'running') {
-          setTimeout(() => {
-            patch(job.id, (j) => ({ ...j, state: 'approval', gate: fakeGate({ ...readback, ...SIM_SUPPLIER }) }));
-            setSheetId(job.id);
-          }, 1500);
+          readbacks.set(job.id, readback);
+          drivePrepare(job.id, readback, now);
         }
       },
       openSheet: (id) => setSheetId(id),
@@ -95,8 +122,21 @@ export function QueueProvider({
         setSheetId(null);
         if (decision === 'approve') {
           setUsed((u) => u + 1);
-          patch(id, (x) => ({ ...x, state: 'running', gate: undefined }));
-          note(id, `${j?.title ?? '세금계산서'}을 승인했어요. PC가 홈택스에서 발급하고 있어요`);
+          const startedAt = j?.run?.startedAt ?? Date.now();
+          setRun(id, () => ({ kind: 'running', step: 'issue', startedAt }), { state: 'running', gate: undefined });
+          if (!j?.run) note(id, `${j?.title ?? '세금계산서'}을 승인했어요. PC가 홈택스에서 발급하고 있어요`);
+          if (simulate && j?.gate) {
+            const f = Object.fromEntries(j.gate.fields.map((x) => [x.key, x.value]));
+            if (simulate === 'inDoubt') {
+              at(1200, () => setRun(id, () => ({ kind: 'inDoubt', tries: 1, startedAt }), { state: 'verify' }));
+              at(2700, () => setRun(id, () => ({ kind: 'inDoubt', tries: 2, startedAt })));
+              at(4200, () => setRun(id, () => ({ kind: 'inDoubt', tries: 3, startedAt })));
+              at(5700, () => setRun(id, () => ({ kind: 'verify', startedAt })));
+            } else {
+              at(1200, () => setRun(id, () => ({ kind: 'running', step: 'verify', startedAt })));
+              at(2200, () => setRun(id, () => ({ kind: 'done', startedAt, result: sampleResult(f) }), { state: 'done' }));
+            }
+          }
         } else {
           setJobs((js) => js.filter((x) => x.id !== id));
           note(id, `${j?.title ?? '세금계산서'} 발급을 거절했어요`);
@@ -106,14 +146,47 @@ export function QueueProvider({
         setSheetId(null);
         patch(id, (x) => ({ ...x, state: 'needPc', reason, gate: undefined }));
       },
+      runAction: (id, a) => {
+        const j = jobs.find((x) => x.id === id);
+        if (!j?.run) return;
+        const startedAt = j.run.startedAt;
+        if (a === 'stop') {
+          setJobs((js) => js.filter((x) => x.id !== id));
+          note(id, `${j.title} 발급을 중지했어요. 아무것도 발급하지 않았어요`);
+        } else if (a === 'reserveOnPc') {
+          setRun(id, (r) => (r?.kind === 'stopped' ? { ...r, reserved: true } : { kind: 'stopped', step: 'login', reason: 'unknownScreen', startedAt, reserved: true }));
+          note(id, `PC에서 ${j.title}을 먼저 열어 둘게요`);
+        } else if (a === 'retryPrepare' || a === 'resendAuth') {
+          const rb = readbacks.get(id);
+          if (simulate && rb) drivePrepare(id, rb, startedAt);
+          else setRun(id, () => ({ kind: 'running', step: a === 'resendAuth' ? 'login' : 'prepare', startedAt }));
+        }
+      },
+      focus: jobs.find((j) => j.id === focusId) ?? null,
+      setFocus: (id) => setFocusId(id),
       rerequest: (id) => {
         if (!simulate) return setSheetId(null);
         patch(id, (x) => (x.gate ? { ...x, gate: { ...x.gate, challenge: b64(randomBytes(32)), exp: Date.now() + GATE_TTL_MS } } : x));
       },
     }),
-    [jobs, last, notes, sheetId, used, approval.attest, approval.iosAllowed, simulate],
+    [jobs, last, notes, sheetId, used, focusId, approval.attest, approval.iosAllowed, simulate],
   );
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
+}
+
+/** 시연 결과: 게이트 값에서 거래처·합계·이메일을 가져온다(승인번호는 견본). */
+function sampleResult(f: Record<string, string>): IssueResult {
+  const email = f.counterpartEmail || null;
+  const name = f.counterpartName ?? '거래처';
+  return {
+    approvalNo: '20261116-41000000-12345678',
+    counterpart: name,
+    total: Number(f.totalAmount ?? 0),
+    email,
+    emailSent: !!email,
+    issuedAt: Date.now(),
+    doc: { name: `세금계산서_${name.replace(/\s+/g, '')}_${(f.issueDate ?? '').replace(/-/g, '')}.pdf`, issuedOn: f.issueDate ?? '', uri: '' },
+  };
 }
 
 export function useQueue(): QueueStore {

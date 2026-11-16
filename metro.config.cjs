@@ -9,6 +9,8 @@ const remote = path.resolve(root, 'vendor/sax-remote');
 const config = getDefaultConfig(root);
 
 config.watchFolders = [remote];
+// 서류 보기 견본(assets/sample/tax-invoice.pdf)을 묶는다. 실제 서류는 PC가 보낸 암호 파일을 풀어 쓴다(다음 PR).
+config.resolver.assetExts = [...config.resolver.assetExts, 'pdf'];
 config.resolver.nodeModulesPaths = [path.join(root, 'node_modules')];
 const base = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (ctx, name, platform) => {
