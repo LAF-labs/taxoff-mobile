@@ -1,5 +1,5 @@
 repo: LAF-labs/tex
-commit: d569d6c5f59f31ab19a5c990d92070591db9a15c
+commit: baad80d82bee34830870e44501827a61463af8ed
 paths: poc/packages/redaction/src
 
 이 폴더는 tex 정본의 사본이다. 여기서 고치지 말고 tex에서 고친 뒤 pnpm sync:remote <tex 경로> redaction로 다시 맞춘다.
