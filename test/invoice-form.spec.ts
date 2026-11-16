@@ -12,7 +12,7 @@ describe('입력 표기', () => {
     assert.equal(masked('won', '1230000'), '1,230,000');
     assert.equal(masked('won', '1,230,0001'), '12,300,001');
     assert.equal(masked('won', ''), '');
-    assert.equal(masked('bizNo', '1234567891'), '123-45-67891');
+    assert.equal(masked('bizNo', '1111111119'), '111-11-11119');
     assert.equal(masked('bizNo', '1234'), '123-4');
     assert.equal(masked('day', '20261105'), '2026-11-05');
     assert.equal(masked('text', ' 그대로 '), ' 그대로 ');

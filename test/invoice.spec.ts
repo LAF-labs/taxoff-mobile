@@ -15,8 +15,8 @@ describe('종이 세금계산서 파서', () => {
     assert.equal(r.copyOf, 'buyer');
     assert.equal(i.direction, 'purchase');
     assert.equal(r.electronicCopy, false);
-    assert.deepEqual(i.supplier, { bizNo: '123-45-67891', name: '가나식자재', ceo: '김가나', address: '서울 마포구 월드컵로 1' });
-    assert.deepEqual(i.buyer, { bizNo: '220-81-12341', name: '율무커피', ceo: '박율무', address: '서울 성동구 왕십리로 2' });
+    assert.deepEqual(i.supplier, { bizNo: '111-11-11119', name: '가나식자재', ceo: '김가나', address: '서울 마포구 월드컵로 1' });
+    assert.deepEqual(i.buyer, { bizNo: '999-99-99997', name: '시험카페', ceo: '홍길동', address: '서울 성동구 왕십리로 2' });
     assert.equal(i.writtenOn, '2026-11-05');
     assert.equal(i.supplyAmount, 1_230_000);
     assert.equal(i.vatAmount, 123_000);
@@ -49,8 +49,8 @@ describe('종이 세금계산서 파서', () => {
 
   it('라벨이 안 읽혀도 사업자번호는 왼쪽·오른쪽 순서로 나눈다', () => {
     const r = parsePaperInvoice(paperTaxInvoice({ noLabels: true }), TODAY)!;
-    assert.equal(r.invoice.supplier.bizNo, '123-45-67891');
-    assert.equal(r.invoice.buyer.bizNo, '220-81-12341');
+    assert.equal(r.invoice.supplier.bizNo, '111-11-11119');
+    assert.equal(r.invoice.buyer.bizNo, '999-99-99997');
   });
 
   it('공급자 보관용이면 매출, 승인번호가 있으면 전자세금계산서 출력물', () => {
@@ -61,12 +61,12 @@ describe('종이 세금계산서 파서', () => {
     assert.equal(r.invoice.approvalNo, '20261105-41000012-00001234');
     assert.equal(r.electronicCopy, true);
     // 매출이면 상대는 공급받는자
-    assert.deepEqual(toV1Candidates(r.invoice), { amount: 1_353_000, issuedOn: '2026-11-05', merchant: '율무커피', merchantBizNo: '220-81-12341' });
+    assert.deepEqual(toV1Candidates(r.invoice), { amount: 1_353_000, issuedOn: '2026-11-05', merchant: '시험카페', merchantBizNo: '999-99-99997' });
   });
 
   it('매입이면 v1 후보의 상호·번호는 공급자', () => {
     const r = parsePaperInvoice(paperTaxInvoice(), TODAY)!;
-    assert.deepEqual(toV1Candidates(r.invoice), { amount: 1_353_000, issuedOn: '2026-11-05', merchant: '가나식자재', merchantBizNo: '123-45-67891' });
+    assert.deepEqual(toV1Candidates(r.invoice), { amount: 1_353_000, issuedOn: '2026-11-05', merchant: '가나식자재', merchantBizNo: '111-11-11119' });
   });
 
   it('계산서(면세)는 세액 0, 합계 = 공급가액', () => {
@@ -81,11 +81,11 @@ describe('종이 세금계산서 파서', () => {
   });
 
   it('줄 목록만 있는 OCR에서도 서식 이름·번호·금액을 건진다', () => {
-    const lines = ['세금계산서', '(공급받는자 보관용)', '등록번호 123-45-67891', '등록번호 220-81-12341', '작성 2026.11.05', '공급가액 50,000 세액 5,000', '합계금액 55,000'];
+    const lines = ['세금계산서', '(공급받는자 보관용)', '등록번호 111-11-11119', '등록번호 999-99-99997', '작성 2026.11.05', '공급가액 50,000 세액 5,000', '합계금액 55,000'];
     assert.equal(looksLikeInvoice(lines), 'tax_invoice');
     const r = parsePaperInvoice(linesToBoxes(lines), TODAY)!;
-    assert.equal(r.invoice.supplier.bizNo, '123-45-67891');
-    assert.equal(r.invoice.buyer.bizNo, '220-81-12341');
+    assert.equal(r.invoice.supplier.bizNo, '111-11-11119');
+    assert.equal(r.invoice.buyer.bizNo, '999-99-99997');
     assert.equal(r.invoice.writtenOn, '2026-11-05');
     assert.equal(r.invoice.supplyAmount, 50_000);
     assert.equal(r.invoice.total, 55_000);
