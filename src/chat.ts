@@ -12,7 +12,9 @@ export interface ChatCard {
 export type ChatItem =
   | { kind: 'msg'; id: string; from: 'pc' | 'me'; at: number; text?: string; card?: ChatCard; state?: 'sent' | 'waiting' }
   /** 폰에서 나눈 대화를 PC 대화에 합친 구간의 머리. from·to는 시각(ms). */
-  | { kind: 'merged'; id: string; from: number; to: number };
+  | { kind: 'merged'; id: string; from: number; to: number }
+  /** 폰에서 한 일의 확인 한 줄(예: 발급을 맡겼어요). 사라지는 토스트 대신 대화에 남긴다. */
+  | { kind: 'note'; id: string; at: number; text: string };
 
 /** 오전 8:10 · 오후 2:05 */
 export function clock(ts: number): string {

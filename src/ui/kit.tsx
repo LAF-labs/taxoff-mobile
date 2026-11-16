@@ -7,7 +7,7 @@
 import * as Haptics from 'expo-haptics';
 import { useEffect, useRef, type ReactNode } from 'react';
 import {
-  ActivityIndicator, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View,
+  ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View,
   type AccessibilityRole, type StyleProp, type TextStyle, type ViewStyle,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,6 +15,10 @@ import { MAX_FONT_SCALE, motion, radius, size, space, textScale, type, useReduce
 
 /** 한글은 낱말 단위로 줄을 바꾼다(숫자와 단위, 낱말이 쪼개지지 않게). iOS는 hangul-word, 웹(갤러리)은 keep-all. */
 const keepAll = { wordBreak: 'keep-all', overflowWrap: 'break-word' } as unknown as TextStyle;
+
+/** 가운뎃점(·)이 줄 끝에 홀로 남지 않게: 점 뒤 칸을 붙은 칸으로 바꿔 점이 다음 낱말과 함께 넘어가게 한다. */
+export const glueDots = (t: string) => t.replace(/ · /g, ' ·\u00A0');
+const glue = (c: ReactNode): ReactNode => (typeof c === 'string' ? glueDots(c) : Array.isArray(c) ? c.map(glue) : c);
 
 /** 누를 때 가벼운 진동. 실패해도 조용히 넘긴다(진동이 없는 기기·설정). */
 export const tap = () => void Haptics.selectionAsync().catch(() => {});
@@ -37,7 +41,7 @@ export function T({
       lineBreakStrategyIOS="hangul-word"
       style={[base, k !== 1 && { fontSize: base.fontSize * k, lineHeight: base.lineHeight * k }, { color: p[c] }, keepAll, center && { textAlign: 'center' }, style]}
     >
-      {children}
+      {glue(children)}
     </Text>
   );
 }
@@ -66,14 +70,17 @@ export function Screen({
           <View style={[st.headerSide, { alignItems: 'flex-end' }]}>{right}</View>
         </View>
       )}
+      {/* 바닥 동작 줄이 있으면 키보드 위로 함께 올린다(주요 단추가 키보드에 가리지 않게). */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={footer && Platform.OS === 'ios' ? 'padding' : undefined} enabled={!!footer}>
       {scroll ? (
-        <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets>
+        <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets={!footer}>
           {children}
         </ScrollView>
       ) : (
         <View style={[st.content, { flex: 1 }]}>{children}</View>
       )}
       {footer && <View style={[st.footer, { paddingBottom: tabbed ? space.s3 : Math.max(inset.bottom, space.s4), backgroundColor: p.canvas, borderTopColor: p.line }]}>{footer}</View>}
+      </KeyboardAvoidingView>
       {!footer && !tabbed && <View style={{ height: inset.bottom }} />}
     </SafeAreaView>
   );
@@ -287,7 +294,8 @@ export function Seg<K extends string>({ options, value, onChange, testID }: { op
               tap();
               onChange(o.key);
             }}
-            style={[st.segItem, on && { backgroundColor: p.overlay, ...shadowCard }]}
+            // 다크에서는 overlay가 tint와 같아 고른 칸이 사라진다: 한 단 밝은 sunken으로 올린다.
+            style={[st.segItem, on && { backgroundColor: p.overlay === p.tint ? p.sunken : p.overlay, ...shadowCard }]}
           >
             <T v="subStrong" c={on ? 'ink' : 'ink3'}>
               {o.label}
@@ -300,6 +308,25 @@ export function Seg<K extends string>({ options, value, onChange, testID }: { op
 }
 
 const shadowCard = { shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 };
+
+/** 묶음(tint) 안 줄에 붙는 작은 동작: 바탕색 알약 36, 누름 영역 44. */
+export function Pill({ label, onPress, testID, quiet }: { label: string; onPress: () => void; testID?: string; /** 글자만(덜 중요한 동작, 예: 건별 빼기) */ quiet?: boolean }) {
+  const p = usePalette();
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={4}
+      onPress={onPress}
+      style={({ pressed }) => [st.pill, { backgroundColor: pressed ? p.sunken : quiet ? 'transparent' : p.canvas }]}
+    >
+      <T v="label" c={quiet ? 'ink2' : 'ink'} lines={1}>
+        {label}
+      </T>
+    </Pressable>
+  );
+}
 
 /** 빈 화면: 무엇이 비었는지 한 줄, 왜인지 한 줄, 다음 할 일 하나(막다른 화면을 만들지 않는다). */
 export function Empty({ title, sub, action, testID }: { title: string; sub?: string; action?: ReactNode; testID?: string }) {
@@ -346,6 +373,7 @@ export const st = StyleSheet.create({
   row: { minHeight: size.row, flexDirection: 'row', alignItems: 'center', gap: space.s3, paddingHorizontal: space.s4, paddingVertical: space.s3 },
   status: { flexDirection: 'row', alignItems: 'center', gap: space.s2 },
   dot: { width: 8, height: 8, borderRadius: 4 },
+  pill: { minHeight: 36, minWidth: 52, paddingHorizontal: space.s3, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: space.s5, paddingHorizontal: space.s3, paddingBottom: space.s7 },
   notice: { borderRadius: radius.md, paddingVertical: space.s3, paddingHorizontal: space.s4 },
   reply: { minHeight: size.row, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: space.s4, paddingVertical: space.s3, flexDirection: 'row', alignItems: 'center', gap: space.s3 },

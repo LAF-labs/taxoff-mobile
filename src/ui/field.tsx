@@ -2,7 +2,7 @@
 // 읽은 값의 확신이 낮으면 '확인해 주세요'(attention)를 붙인다. 사장님이 고치면 사라진다. 오류는 칸 아래에 남긴다(사라지는 토스트 없음).
 import { useRef, useState, type ComponentRef } from 'react';
 import { Pressable, StyleSheet, TextInput, View, type KeyboardTypeOptions } from 'react-native';
-import { MAX_FONT_SCALE, radius, space, type, usePalette } from '../theme';
+import { MAX_FONT_SCALE, radius, space, textScale, type, usePalette } from '../theme';
 import { T } from './kit';
 
 export { masked, type Mask } from './mask.ts';
@@ -17,8 +17,10 @@ const MAXLEN: Record<Mask, number> = { won: 16, bizNo: 12, day: 10, text: 80 };
  * 확신이 낮은 값은 라벨 아래 '확인해 주세요'(attention). 오류는 줄 아래에 남긴다.
  */
 export function Field({
-  label, value, onChange, mask = 'text', placeholder, unsure, error, testID, unit, maxLength, fix,
+  label, value, onChange, mask = 'text', placeholder, unsure, error, testID, unit, maxLength, fix, tag,
 }: {
+  /** 라벨 아래 회색 꼬리표(예: "지난번 값"). 확인 필요가 있으면 그것이 먼저다. */
+  tag?: string;
   label: string; value: string; onChange: (v: string) => void; mask?: Mask; placeholder?: string;
   /** 읽은 값의 확신이 낮다(사장님이 보고 고칠 칸) */
   unsure?: boolean; error?: string | null; testID?: string; unit?: string; maxLength?: number;
@@ -43,6 +45,11 @@ export function Field({
               확인해 주세요
             </T>
           )}
+          {tag && !unsure && !focus && !error && (
+            <T v="meta" c="ink3" testID={testID ? `${testID}-tag` : undefined}>
+              {tag}
+            </T>
+          )}
         </View>
         <View style={[s.box, { borderColor: border, backgroundColor: boxed ? p.canvas : 'transparent', paddingHorizontal: boxed ? space.s3 : 0 }]}>
           <TextInput
@@ -63,7 +70,7 @@ export function Field({
             autoCorrect={false}
             autoCapitalize="none"
             selectTextOnFocus={mask !== 'text'}
-            style={[mask === 'text' ? type.body : type.value, s.input, { color: p.ink }]}
+            style={[mask === 'text' ? type.body : type.value, textScale.web !== 1 && { fontSize: 17 * textScale.web, lineHeight: 24 * textScale.web }, s.input, { color: p.ink }]}
           />
           {unit && (
             <T v="value" c={empty ? 'ink4' : 'ink'}>
@@ -96,7 +103,7 @@ const s = StyleSheet.create({
   row: { paddingHorizontal: space.s4, paddingVertical: space.s2, gap: space.s1, minHeight: 56, justifyContent: 'center' },
   line: { flexDirection: 'row', alignItems: 'center', gap: space.s3 },
   label: { minWidth: 76, gap: 1 },
-  box: { flex: 1, minHeight: 40, borderWidth: 1, borderRadius: radius.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2 },
-  input: { flex: 1, textAlign: 'right', paddingVertical: space.s1 },
+  box: { flex: 1, minHeight: 40, borderWidth: 1, borderRadius: radius.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
+  input: { flex: 1, textAlign: 'right', paddingVertical: space.s1, paddingRight: 0 },
   fix: { alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center', paddingHorizontal: space.s3, borderRadius: radius.full, marginTop: space.s1 },
 });

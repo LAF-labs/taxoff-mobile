@@ -17,7 +17,8 @@ import { LockScreen } from './src/screens/LockScreen';
 import { MainScreen, type MainRoute, type Tab } from './src/screens/MainScreen';
 import { PairScreen } from './src/screens/PairScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
-import { TodoScreen } from './src/screens/TodoScreen';
+import { QueueScreen } from './src/screens/QueueScreen';
+import { QueueProvider } from './src/queueStore';
 import { SessionProvider } from './src/session';
 import { emptyData, loadData, type AppData } from './src/storage/state';
 import { usePalette } from './src/theme';
@@ -32,7 +33,6 @@ export default function App() {
   /** 화면 쌓기: 맨 아래는 늘 탭. 뒤로는 하나 내린다. */
   const [stack, setStack] = useState<Route[]>(['tabs']);
   const [tab, setTab] = useState<Tab>('home');
-  const [draft, setDraft] = useState('');
   const [cover, setCover] = useState(false);
   const [bootErr, setBootErr] = useState(false);
   const bgAt = useRef<number | null>(null);
@@ -93,29 +93,23 @@ export default function App() {
   else {
     const route = stack[stack.length - 1] ?? 'tabs';
     const go = (r: MainRoute) => {
-      setDraft('');
       setStack((x) => [...x, r]);
     };
     const back = () => setStack((x) => (x.length > 1 ? x.slice(0, -1) : x));
-    const home = () => setStack(['tabs']);
+    const home = () => {
+      setTab('home');
+      setStack(['tabs']);
+    };
     body = (
       <SessionProvider keys={unlocked.keys} initial={unlocked.data}>
-        {route === 'tabs' && <MainScreen tab={tab} onTab={setTab} go={go} draft={draft} />}
+        <QueueProvider>
+        {route === 'tabs' && <MainScreen tab={tab} onTab={setTab} go={go} />}
         {route === 'pair' && <PairScreen onDone={home} />}
         {route === 'capture' && <CaptureScreen onDone={back} />}
         {route === 'cash' && <CashScreen onDone={back} />}
         {route === 'settings' && <SettingsScreen onDone={back} onConnection={() => go('connection')} onPair={() => go('pair')} />}
-        {route === 'todo' && <TodoScreen onDone={back} onConnection={() => go('connection')} />}
-        {route === 'issue' && (
-          <IssueScreen
-            onDone={back}
-            onAsk={() => {
-              setTab('home');
-              setStack(['tabs']);
-              setDraft('세금계산서 발급해 주세요. 받는 곳: , 금액: ');
-            }}
-          />
-        )}
+        {route === 'queue' && <QueueScreen onDone={back} onConnection={() => go('connection')} onOpen={home} />}
+        {route === 'issue' && <IssueScreen counterparties={[]} onDone={back} onCapture={() => go('capture')} onSubmitted={home} />}
         {route === 'connection' && (
           <ConnectionScreen
             onDone={back}
@@ -126,6 +120,7 @@ export default function App() {
             }}
           />
         )}
+        </QueueProvider>
       </SessionProvider>
     );
   }
