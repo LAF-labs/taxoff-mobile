@@ -1,0 +1,57 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      # 더미 PC + 개발 릴레이(localhost:8787)와 Node 폰으로 페어링·사진·현금매출 전송까지
+      - name: smoke (pairing + transfer)
+        run: |
+          node dev/dummy-pc.ts > dummy-pc.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:8787/dev/status >/dev/null 2>&1 && break; sleep 0.5; done
+          timeout 60 node dev/smoke-phone.ts
+          kill %1 || true
+      - if: failure()
+        run: cat dummy-pc.log || true
+  vendor:
+    # @sax/remote 사본이 VENDORED_FROM 커밋과 같은지. tex는 비공개라 읽기 토큰(TEX_READ_TOKEN)이 있을 때만 돈다.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - id: pin
+        env:
+          HAS_TOKEN: ${{ secrets.TEX_READ_TOKEN != '' }}
+        run: |
+          echo "sha=$(sed -n 's/^commit: //p' vendor/sax-remote/VENDORED_FROM)" >> "$GITHUB_OUTPUT"
+          echo "run=$HAS_TOKEN" >> "$GITHUB_OUTPUT"
+      - if: steps.pin.outputs.run == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: LAF-labs/tex
+          ref: ${{ steps.pin.outputs.sha }}
+          token: ${{ secrets.TEX_READ_TOKEN }}
+          path: .tex
+          sparse-checkout: |
+            poc/packages/remote/src
+            sovereign-ax/design/schemas
+      - if: steps.pin.outputs.run == 'true'
+        run: node scripts/sync-remote.mjs .tex --check
