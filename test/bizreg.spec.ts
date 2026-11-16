@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { josa } from '../src/ui/josa.ts';
+import { glueAddress } from '../src/ui/address.ts';
 import { UNSURE_BELOW, formatBizNo, parseBizReg } from '../src/capture/bizreg.ts';
 
 // 가짜 사업자로 만든 등록증 OCR 줄(개인·법인 서식)
@@ -62,5 +63,14 @@ describe('조사', () => {
     assert.equal(josa('새봄꽃집', '은', '는'), '새봄꽃집은');
     assert.equal(josa('가나식자재', '은', '는'), '가나식자재는');
     assert.equal(josa('가나식자재 세금계산서', '을', '를'), '가나식자재 세금계산서를');
+  });
+});
+
+describe('주소 보기 표기', () => {
+  it('번지·층·괄호는 앞에 붙이고 시·구·로 사이에서만 끊는다', () => {
+    const NB = '\u00A0';
+    assert.equal(glueAddress('서울특별시 성동구 성수이로 00, 1층'), `서울특별시 성동구 성수이로${NB}00,${NB}1층`);
+    assert.equal(glueAddress('왕십리로 000, 새봄빌딩 3층 301호(성수동2가)'), `왕십리로${NB}000,${NB}새봄빌딩${NB}3층${NB}301호(성수동2가)`);
+    assert.equal(glueAddress('서울특별시 성동구 성수이로 00, 1층').replace(/\u00A0/g, ' '), '서울특별시 성동구 성수이로 00, 1층');
   });
 });

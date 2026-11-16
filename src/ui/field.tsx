@@ -19,8 +19,10 @@ const MAXLEN: Record<Mask, number> = { won: 16, bizNo: 12, day: 10, text: 80, em
  * 확신이 낮은 값은 라벨 아래 '확인해 주세요'(attention). 오류는 줄 아래에 남긴다.
  */
 export function Field({
-  label, value, onChange, mask = 'text', placeholder, unsure, error, testID, unit, maxLength, fix, tag, multiline,
+  label, value, onChange, mask = 'text', placeholder, unsure, error, testID, unit, maxLength, fix, tag, multiline, format,
 }: {
+  /** 보기 표기(칸을 누르지 않았을 때만). 예: 주소의 번지·층을 붙은 칸으로 묶기. 저장 값은 바꾸지 않는다. */
+  format?: (v: string) => string;
   /** 긴 글(주소): 줄을 바꿔 다 보인다 */
   multiline?: boolean;
   /** 라벨 아래 회색 꼬리표(예: "지난번 값"). 확인 필요가 있으면 그것이 먼저다. */
@@ -55,14 +57,21 @@ export function Field({
             </T>
           )}
         </View>
-        <View style={[s.box, { borderColor: border, backgroundColor: boxed ? p.canvas : 'transparent', paddingHorizontal: boxed ? space.s3 : 0 }]}>
+        <View
+          style={[
+            s.box,
+            { borderColor: border, backgroundColor: boxed ? p.canvas : 'transparent', paddingHorizontal: boxed ? space.s3 : 0 },
+            // 확인이 필요한 값은 황토 밑줄: 눌러서 바로 고칠 수 있는 칸이라는 표시. 고치면(unsure가 풀리면) 사라진다.
+            unsure && !boxed && { borderBottomColor: p.attention, borderRadius: 0 },
+          ]}
+        >
           <TextInput
             ref={ref}
             testID={testID}
             accessibilityLabel={label}
             accessibilityHint={unsure ? '읽은 값이 확실하지 않아요. 종이와 맞는지 봐 주세요.' : undefined}
-            value={value}
-            onChangeText={(t) => onChange(masked(mask, t))}
+            value={format && !focus ? format(value) : value}
+            onChangeText={(t) => onChange(masked(mask, t.replace(/\u00A0/g, ' ')))}
             onFocus={() => setFocus(true)}
             onBlur={() => setFocus(false)}
             keyboardType={KB[mask]}

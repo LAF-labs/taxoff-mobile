@@ -17,6 +17,7 @@ import { useEffect } from 'react';
 import { useQueue } from '../src/queueStore';
 import { RunScreen } from '../src/screens/RunScreen';
 import { BizRegScreen, type BizRegPreview } from '../src/screens/BizRegScreen';
+import { PDF_LINE } from '../src/capture/pick';
 import { DocScreen, type DocState } from '../src/screens/DocScreen';
 import type { IssueResult, RunView } from '../src/run';
 import type { DoneJob, Job } from '../src/queue';
@@ -222,6 +223,13 @@ const SCREENS: Record<
   }
 > = {
   'bizreg-camera': () => ({ session: fake(paired(), 'online'), node: <BizRegScreen existing={CPS} onDone={noop} onSaved={noop} onUseExisting={noop} /> }),
+  'bizreg-camera-denied': () => ({ session: fake(paired(), 'online'), node: <BizRegScreen existing={CPS} onDone={noop} onSaved={noop} onUseExisting={noop} preview={{ phase: 'camera', denied: true }} /> }),
+  'bizreg-album': () => biz({ fromAlbum: true }),
+  'bizreg-pdf': () => ({ session: fake(paired(), 'online'), node: <BizRegScreen existing={CPS} onDone={noop} onSaved={noop} onUseExisting={noop} preview={{ phase: 'camera', err: PDF_LINE }} /> }),
+  'receipt-album': () => ({
+    session: fake(paired(), 'online'),
+    node: <CaptureScreen onDone={noop} preview={{ phase: 'confirm', docMode: 'receipt', shot: SAMPLE_SHOT, fromAlbum: true, receipt: { amount: '12,800', issuedOn: iso(today), merchant: '동네마트 성수점', bizNo: '' }, engine: 'ios_vision' }} />,
+  }),
   'bizreg-confirm': () => biz({ values: { ...BIZ_VALUES, email: 'tax@dongne.example' } }),
   'bizreg-email-empty': () => biz({}),
   'bizreg-low-conf': () => biz({ conf: { ...HIGH, ceo: 0.4, address: 0.5 } }),

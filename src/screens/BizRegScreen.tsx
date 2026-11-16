@@ -1,18 +1,20 @@
 // 사업자등록증 찍기(기획 v2 PR 7): 처음 거래하는 곳의 등록증을 찍어 거래처를 만든다.
 // 찍기 → 기기 안 OCR → 읽은 값 확인(낮은 확신 "확인해 주세요", 사업자번호 검증식) → [거래처로 저장] → 발급 작성(이 거래처가 골라짐).
-// 종이 증빙 찍기(P-08)의 자르기·OCR·임시 파일 정리를 그대로 쓴다. 앱 안 카메라만(갤러리 가져오기 없음, ADR-034 결정 9).
+// 종이 증빙 찍기(P-08)의 자르기·OCR·임시 파일 정리를 그대로 쓴다. 카메라와 앨범 둘 다(2026-11-16 대표 결정):
+// 앨범에서 고른 사진은 고르기가 만든 사본만 지우고 원본은 그대로 둔다.
 // 원본 사진은 PC에 보관하고 이 폰에서는 거래처를 저장하면 지운다(PC로 보내기는 프로토콜이 생긴 뒤).
 import { Asset } from 'expo-asset';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { File } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { useEffect, useRef, useState } from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, View, type LayoutRectangle } from 'react-native';
+import { Image, Linking, Modal, Pressable, ScrollView, StyleSheet, View, type LayoutRectangle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { UNSURE_BELOW, parseBizReg, type BizRegFields, type BizRegKey } from '../capture/bizreg';
 import { GUIDE_RATIO, fitEdge, guideCrop, guideRect } from '../capture/crop';
 import { toRows } from '../capture/invoice';
 import { ocrEngine } from '../capture/ocr';
+import { PDF_LINE, pickPhoto } from '../capture/pick';
 import { validBizNo } from '../capture/parser';
 import { DEV_LOCAL, PHOTO_MAX_EDGE, PHOTO_QUALITY } from '../config';
 import { findByBizNo, type Counterparty } from '../issue';
@@ -20,6 +22,7 @@ import { useQueue } from '../queueStore';
 import { useSession } from '../session';
 import { deleteQuietly, sweepCaptureTemps } from '../storage/files';
 import { radius, space, usePalette } from '../theme';
+import { glueAddress } from '../ui/address';
 import { Field } from '../ui/field';
 import { Button, Group, Notice, Screen, StatusDot, T, tap } from '../ui/kit';
 import sampleBizReg from '../../assets/dev/sample-bizreg.jpg';
@@ -32,6 +35,12 @@ interface Shot {
 
 export interface BizRegPreview {
   phase: 'camera' | 'confirm';
+  /** 갤러리: 카메라 권한을 거절한 뒤(설정에서 허용) */
+  denied?: boolean;
+  /** 앨범에서 고른 사진 */
+  fromAlbum?: boolean;
+  /** 갤러리: 카메라 화면 아래 안내 한 줄(예: PDF) */
+  err?: string;
   shot?: Shot;
   values?: BizRegFields & { email: string };
   conf?: Partial<Record<BizRegKey, number>>;
@@ -56,7 +65,8 @@ export function BizRegScreen({
   const q = useQueue();
   const s = useSession();
   const existing = given ?? q.counterparties;
-  const [perm, requestPerm] = useCameraPermissions();
+  const [realPerm, requestPerm] = useCameraPermissions();
+  const perm = preview?.denied ? { granted: false, canAskAgain: false } : realPerm;
   const cam = useRef<CameraView>(null);
   const [view, setView] = useState<LayoutRectangle | null>(null);
   const [phase, setPhase] = useState<'camera' | 'reading' | 'confirm'>(preview?.phase ?? 'camera');
@@ -65,7 +75,8 @@ export function BizRegScreen({
   const [conf, setConf] = useState<Partial<Record<BizRegKey, number>>>(preview?.conf ?? {});
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [poor, setPoor] = useState(!!preview?.poor);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(preview?.err ?? null);
+  const [fromAlbum, setFromAlbum] = useState(!!preview?.fromAlbum);
   const [zoom, setZoom] = useState(false);
   const temp = useRef<string[]>([]);
   const gone = useRef(false);
@@ -121,8 +132,24 @@ export function BizRegScreen({
     }
   }
 
+  async function album() {
+    setErr(null);
+    tap();
+    try {
+      const r = await pickPhoto();
+      if (!r) return;
+      if (r.kind === 'pdf') return setErr(PDF_LINE);
+      setFromAlbum(true);
+      // 고른 사진은 안내 틀이 없으니 자르지 않는다. 사본(앱 캐시)은 track이 지운다.
+      await process(r, false);
+    } catch {
+      setErr('사진을 고르지 못했어요.');
+    }
+  }
+
   async function take() {
     setErr(null);
+    setFromAlbum(false);
     tap();
     try {
       const r = await cam.current?.takePictureAsync({ quality: 0.92, exif: false, shutterSound: true });
@@ -225,7 +252,7 @@ export function BizRegScreen({
             error={badNo ? '번호가 맞지 않아요 · 사진을 보고 고쳐 주세요' : null}
           />
           <Field testID="bz-ceo" label="대표자" value={v.ceo} onChange={set('ceo')} placeholder="대표자" unsure={unsure('ceo')} />
-          <Field testID="bz-address" label="사업장 주소" value={v.address} onChange={set('address')} placeholder="주소" unsure={unsure('address')} multiline />
+          <Field testID="bz-address" label="사업장 주소" value={v.address} onChange={set('address')} placeholder="주소" unsure={unsure('address')} multiline format={glueAddress} />
           <Field testID="bz-bizType" label="업태" value={v.bizType} onChange={set('bizType')} placeholder="업태" unsure={unsure('bizType')} />
           <Field testID="bz-item" label="종목" value={v.item} onChange={set('item')} placeholder="종목" unsure={unsure('item')} />
         </Group>
@@ -233,7 +260,7 @@ export function BizRegScreen({
           <Field testID="bz-email" label="이메일" mask="email" value={v.email} onChange={set('email')} placeholder="tax@example.com" multiline={v.email.length > 24} error={badEmail ? '이메일 모양이 아니에요' : null} />
         </Group>
         <T v="meta" c="ink3" style={{ paddingHorizontal: space.s1 }} testID="bizreg-privacy">
-          사진은 PC에 보관하고 이 폰에서는 지워요
+          {fromAlbum ? '사진은 PC에 보관해요 · 앨범 원본은 그대로 둬요' : '사진은 PC에 보관하고 이 폰에서는 지워요'}
         </T>
 
         <Modal visible={zoom} animationType="fade" onRequestClose={() => setZoom(false)}>
@@ -286,29 +313,52 @@ export function BizRegScreen({
           </View>
         )}
         {!perm?.granted && !DEV_LOCAL && (
-          <View style={[StyleSheet.absoluteFill, st.center, { padding: space.s6, gap: space.s4 }]}>
-            <T v="sub" c="onCamera" center>
-              등록증을 찍으려면 카메라가 필요해요. 사진은 사진 앱에 저장하지 않아요.
-            </T>
-            <Button small kind="secondary" label="카메라 허용" onPress={() => void requestPerm()} />
+          <View style={[StyleSheet.absoluteFill, st.center, { padding: space.s6, gap: space.s4 }]} testID="bizreg-perm">
+            <View style={{ gap: space.s1 }}>
+              <T v="subStrong" c="onCamera" center>
+                등록증을 찍으려면 카메라가 필요해요
+              </T>
+              <T v="meta" c="onCamera" center style={{ opacity: 0.72 }}>
+                사진은 사진 앱에 저장하지 않아요
+              </T>
+            </View>
+            {perm && !perm.canAskAgain ? (
+              // 한 번 거절하면 앱이 다시 물을 수 없다: 설정 앱의 이 앱 화면으로
+              <Button small kind="secondary" label="설정에서 허용" onPress={() => void Linking.openSettings()} testID="bizreg-open-settings" />
+            ) : (
+              <Button small kind="secondary" label="카메라 허용" onPress={() => void requestPerm()} testID="bizreg-ask-camera" />
+            )}
           </View>
         )}
       </View>
       <View style={st.camBar}>
-        {err && <Notice>{err}</Notice>}
+        {err && <Notice testID="bizreg-cam-err">{err}</Notice>}
         {DEV_LOCAL ? (
           <Button kind="secondary" label="개발: 견본 등록증으로 찍기" onPress={() => void devSample()} busy={phase === 'reading'} style={{ alignSelf: 'stretch' }} />
         ) : (
-          <Pressable
-            testID="bizreg-shutter"
-            accessibilityRole="button"
-            accessibilityLabel="찍기"
-            disabled={!perm?.granted || phase === 'reading'}
-            onPress={() => void take()}
-            style={[st.shutter, { opacity: !perm?.granted ? 0.4 : 1 }]}
-          >
-            {({ pressed }) => <View style={[st.shutterIn, { transform: [{ scale: pressed ? 0.92 : 1 }] }]} />}
-          </Pressable>
+          <View style={st.shutterRow}>
+            {/* 셔터 왼쪽 [앨범]: 카메라 권한 없이도 고를 수 있다 */}
+            <Pressable testID="bizreg-album" accessibilityRole="button" accessibilityLabel="앨범에서 고르기" onPress={() => void album()} disabled={phase === 'reading'} style={({ pressed }) => [st.side, pressed && { opacity: 0.6 }]}>
+              <T v="subStrong" c="onCamera">
+                앨범
+              </T>
+            </Pressable>
+            {perm?.granted ? (
+              <Pressable
+                testID="bizreg-shutter"
+                accessibilityRole="button"
+                accessibilityLabel="찍기"
+                disabled={phase === 'reading'}
+                onPress={() => void take()}
+                style={st.shutter}
+              >
+                {({ pressed }) => <View style={[st.shutterIn, { transform: [{ scale: pressed ? 0.92 : 1 }] }]} />}
+              </Pressable>
+            ) : (
+              <View style={st.shutterSpace} />
+            )}
+            <View style={st.side} />
+          </View>
         )}
       </View>
     </SafeAreaView>
@@ -324,6 +374,9 @@ const st = StyleSheet.create({
   camSide: { minWidth: 56, height: 44, justifyContent: 'center' },
   camBar: { paddingHorizontal: space.s5, paddingTop: space.s4, paddingBottom: space.s4, gap: space.s4, alignItems: 'center' },
   guide: { position: 'absolute' },
+  shutterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', alignSelf: 'stretch' },
+  side: { width: 72, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  shutterSpace: { width: 76, height: 76 },
   shutter: { width: 76, height: 76, borderRadius: 38, borderWidth: 4, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   shutterIn: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#FFFFFF' },
   corner: { position: 'absolute', width: CORNER, height: CORNER, borderColor: '#FFFFFF' },

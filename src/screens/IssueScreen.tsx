@@ -13,7 +13,7 @@ import { useQueue } from '../queueStore';
 import { useSession } from '../session';
 import { MAX_FONT_SCALE, radius, size, space, textScale, type, usePalette } from '../theme';
 import { Field, masked } from '../ui/field';
-import { Button, Empty, Group, Notice, Row, Screen, Seg, StatusDot, T, josa, won } from '../ui/kit';
+import { Button, Empty, Group, Notice, Pill, Row, Screen, Seg, StatusDot, T, josa, won } from '../ui/kit';
 import { localDay } from './CashScreen';
 
 const NB = ' ';
@@ -92,16 +92,13 @@ export function IssueScreen({
   let notice = null;
   if (closed) {
     // 08 §11 "거래처 휴·폐업": 초안 단계 경고 줄 + [그래도 진행] [취소]
+    // 경고와 두 단추를 한 황토 면 안에. [다시 고르기]는 거래처 고르기로 돌아간다.
     notice = (
-      <View style={{ gap: space.s2 }} testID="issue-closed">
-        <Notice>
-          {josa(who, '은', '는')} {closed.on} {closed.what}으로 조회돼요
-        </Notice>
-        <View style={{ flexDirection: 'row', gap: space.s2 }}>
-          <Button kind="secondary" small label="그래도 진행" onPress={() => setClosedOk(true)} testID="issue-closed-ok" />
-          <Button kind="quiet" small label="취소" onPress={onDone} testID="issue-closed-cancel" />
-        </View>
-      </View>
+      <ClosedWarning
+        line={`${josa(who, '은', '는')} ${closed.on} ${closed.what}으로 조회돼요`}
+        onGo={() => setClosedOk(true)}
+        onBack={() => setPhase('pick')}
+      />
     );
   } else if (dup) {
     notice = (
@@ -138,7 +135,14 @@ export function IssueScreen({
       PC를 켜면 다시 맡길 수 있어요
     </T>
   ) : (
-    <Button testID="issue-submit" label={online ? '홈택스에서 준비' : 'PC 켜지면 준비하기'} onPress={submit} disabled={!ready} />
+    <>
+      {closed && (
+        <T v="meta" c="ink2" center testID="issue-submit-why">
+          폐업 경고를 먼저 확인해 주세요
+        </T>
+      )}
+      <Button testID="issue-submit" label={online ? '홈택스에서 준비' : 'PC 켜지면 준비하기'} onPress={submit} disabled={!ready} />
+    </>
   );
 
   return (
@@ -209,6 +213,22 @@ export function IssueScreen({
         </Group>
       </View>
     </Screen>
+  );
+}
+
+/** 휴·폐업 경고: 황토 면 하나에 한 줄과 두 단추(08 §11 [그래도 진행] [취소], 취소는 거래처 다시 고르기). */
+function ClosedWarning({ line, onGo, onBack }: { line: string; onGo: () => void; onBack: () => void }) {
+  const p = usePalette();
+  return (
+    <View style={[st.warn, { backgroundColor: p.attentionSoft }]} testID="issue-closed" accessibilityRole="alert">
+      <T v="sub" c="attention">
+        {line}
+      </T>
+      <View style={st.warnActions}>
+        <Pill label="그래도 진행" onPress={onGo} testID="issue-closed-ok" />
+        <Pill quiet label="거래처 다시 고르기" onPress={onBack} testID="issue-closed-cancel" />
+      </View>
+    </View>
   );
 }
 
@@ -297,6 +317,8 @@ function lastLine(c: Counterparty): string {
 }
 
 const st = StyleSheet.create({
+  warn: { borderRadius: radius.md, paddingVertical: space.s3, paddingHorizontal: space.s4, gap: space.s3 },
+  warnActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s2 },
   sums: { paddingHorizontal: space.s4, paddingTop: space.s1, paddingBottom: space.s3, gap: space.s1 },
   sum: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'baseline', gap: space.s3 },
   sumValue: { minWidth: 120, textAlign: 'right' },

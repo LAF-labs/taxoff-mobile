@@ -62,16 +62,24 @@ describe('사진 보호(ADR-034 결정 9·D07)', () => {
     assert.equal(app.ios.entitlements['com.apple.developer.default-data-protection'], 'NSFileProtectionComplete');
     assert.equal(app.ios.infoPlist.UIFileSharingEnabled, false);
   });
-  it('갤러리·사진 앱 권한과 의존성이 없다', () => {
+  // 2026-11-16 대표 결정: 종이 증빙·사업자등록증은 카메라와 앨범 둘 다. 앨범은 시스템 사진 고르기 한 장만(읽기),
+  // 카메라 롤·앨범에 저장하는 길과 앨범 전체 접근 라이브러리는 여전히 없다.
+  it('사진 고르기만 있고 앨범 저장·전체 접근 의존성은 없다', () => {
     const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-    for (const d of ['expo-media-library', 'expo-image-picker', 'expo-document-picker', '@react-native-camera-roll/camera-roll']) assert.equal(deps[d], undefined, d);
+    for (const d of ['expo-media-library', 'expo-document-picker', '@react-native-camera-roll/camera-roll']) assert.equal(deps[d], undefined, d);
+    assert.ok(deps['expo-image-picker'], 'expo-image-picker');
     const json = JSON.stringify(app);
-    assert.doesNotMatch(json, /NSPhotoLibrary(Add)?UsageDescription/);
+    assert.doesNotMatch(json, /NSPhotoLibraryAddUsageDescription/);
+    assert.equal(plugin('expo-image-picker')[1].photosPermission, '고른 사진만 읽어요. 앨범 전체를 올리지 않아요.');
+    assert.equal(plugin('expo-image-picker')[1].microphonePermission, false);
     for (const perm of ['READ_MEDIA_IMAGES', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE', 'RECORD_AUDIO']) assert.ok(app.android.blockedPermissions.includes(`android.permission.${perm}`), perm);
     assert.equal(plugin('expo-camera')[1].microphonePermission, false);
   });
-  it('소스에 갤러리 저장·가져오기 호출이 없다', () => {
-    for (const { f, s } of appSources) assert.doesNotMatch(s, /saveToLibrary|launchImageLibrary|MediaLibrary|CameraRoll|pickFileAsync/, f);
+  it('소스에 앨범 저장이 없고, 고르기는 src/capture/pick.ts 한 곳뿐', () => {
+    for (const { f, s } of appSources) {
+      assert.doesNotMatch(s, /saveToLibrary|MediaLibrary|CameraRoll|pickFileAsync/, f);
+      if (!f.endsWith('src/capture/pick.ts')) assert.doesNotMatch(s, /launchImageLibrary|expo-image-picker/, f);
+    }
   });
   it('보관 파일은 봉인 후 보호 지정(writeProtected), 보호 불가면 거부', () => {
     const files = src('src/storage/files.ts');

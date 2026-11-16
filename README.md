@@ -48,7 +48,7 @@
 ## 지키는 것
 
 - 키: `src/keyring.ts` — ThisDeviceOnly + 생체, 백업 제외, 서버로 가지 않는다(ADR-029, D08 §3.1). 절차·통과 기준은 [docs/sp1-key-backup.md](docs/sp1-key-backup.md).
-- 사진: 앱 안 카메라만, 갤러리 가져오기·카메라 롤 저장 없음, 봉인 + 파일 보호 Complete + 백업 제외(`src/storage/*`, `modules/sax-native`).
+- 사진: 카메라와 앨범 둘 다(2026-11-16 대표 결정, 종이 증빙·사업자등록증). 앨범은 시스템 사진 고르기(iOS PHPicker, 권한 없이 고른 한 장만)이고, 앱은 고르기가 만든 사본만 지우며 앨범 원본은 건드리지 않는다. 카메라 롤 저장 없음, 봉인 + 파일 보호 Complete + 백업 제외(`src/storage/*`, `modules/sax-native`, `src/capture/pick.ts`).
 - 업데이트: 스토어 서명 빌드만, OTA 없음(`updates.enabled=false`, D01 §6·ADR-028). 릴레이 허용 목록은 `src/config.ts`에 내장.
 - 로그: 앱 소스에 console 호출 없음(시험이 막는다). 비밀·사진·금액을 로그에 넣지 않는다.
 - OCR: iOS Vision(기기 안, 모델 없음) → 규칙 파서(`src/capture/parser.ts`) → 사장님 확인. 값은 후보일 뿐이고 PC docparse가 정본(ADR-034 결정 9). Android·OCR 불가 기기는 사진만 보낸다.

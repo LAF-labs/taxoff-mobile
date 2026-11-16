@@ -1,5 +1,5 @@
 // 앱 데이터 폴더. 문서 폴더 아래 sax/ 하나에 모은다: 파일 보호 등급 Complete(iOS 기본 등급 entitlement + 파일마다 지정)와
-// 백업 제외(isExcludedFromBackup, Android는 allowBackup=false·dataExtractionRules 전부 제외). 카메라 롤·갤러리는 쓰지 않는다.
+// 백업 제외(isExcludedFromBackup, Android는 allowBackup=false·dataExtractionRules 전부 제외). 카메라 롤에는 저장하지 않는다(앨범에서 고른 사진은 고르기가 만든 사본만 지운다).
 // 보호 지정이 안 되는 환경(네이티브 모듈 없음)에서는 저장을 거부한다.
 import { Directory, File, Paths } from 'expo-file-system';
 import SaxNative, { type PathProtection } from '../../modules/sax-native/src/SaxNativeModule';
