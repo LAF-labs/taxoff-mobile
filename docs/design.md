@@ -19,7 +19,7 @@
 
 - 바탕 `canvas` 하나, 묶음(`Group`)·입력은 `tint` 채움, 누름은 `sunken`. 카드 테두리·그림자 없음. 줄 사이는 안쪽 머리카락 선.
 - 바닥 동작 줄(`Screen footer`)만 위에 머리카락 선이 있다(내용이 그 밑으로 스크롤되므로).
-- 파랑(`accent`)은 "PC 켜짐 · 바로 받음"과 연결 완료 점에만. 파랑 채움 단추는 폰에 없다(승인이 없다).
+- 파랑(`accent`)은 "PC 켜짐 · 바로 받음"과 연결 완료 점, 그리고 승인 시트의 [승인하고 발급] 하나에만. 파랑 채움 단추는 폰 앱에서 그 하나뿐이다(ADR-046 결정 6, `Button kind="approve"`). 다른 화면의 주요 단추는 ink 채움이다.
 - 황토(`attention`)는 확인 필요: 읽은 값의 확신이 낮은 칸("확인해 주세요"), 검산 오류, PC 연결 확인 필요.
 - 완료는 체크 모양, 실패는 문구. 초록·빨강 없음.
 
@@ -38,6 +38,14 @@
 | `Empty` | 빈 화면: 무엇이 비었는지 · 왜 · 다음 할 일 하나 |
 | `Pill` | 묶음 줄 안의 작은 동작(바탕색 알약 36, 누름 영역 44). 밀린 일 [취소] [다시 맡기기] 등 |
 
+## 승인 시트(P-03, 기획 v2 PR 5)
+
+- 바닥에서 올라오는 시트 하나에 비가역 행위 하나. 묶음 승인 없음. 값은 PC가 되읽은 값 전체(금액 → 받는 곳 → 내용 → 보내는 곳), 라벨은 앱 내장 사전.
+- 폰이 cardHash·actionHash를 다시 계산해 맞을 때만 [승인하고 발급]이 켜진다. 시트가 뜬 뒤 0.8초는 잠김(무장 지연). 남은 시간 120초, 마지막 20초만 황토 + 600.
+- 멈춤(처음 거래처 · 하루 5건 · 키 없음 · iPhone 거부 · 모르는 항목 · 해시 불일치)은 시트 안 Notice 한 줄 + 다음 할 일 단추. 새 알림창 없음.
+- 같은 건 경고($dup.*)는 황토 면 한 줄 + [확인했어요]. 확인해야 승인이 켜진다.
+- 결과 모름이면 다시 발급하는 단추를 두지 않는다([닫기]만).
+
 ## 앱 틀과 대화 홈(기획 v2)
 
 - 아래 탭 셋(홈 · 돈 · 기록), 글자만. 고른 탭은 ink 600 + 밑 막대. 키보드가 올라오면 탭 줄을 숨기고 입력 줄이 키보드 위에 붙는다.
@@ -54,4 +62,4 @@
 
 ## 점검
 
-`pnpm gallery`로 화면 갤러리를 웹으로 묶는다(가짜 세션, 네트워크·키·카메라 없음). `?s=home-chat-online`, `home-chat-offline`, `home-chat-merged`, `home-unpaired`, `home`, `home-stale`, `money-empty`, `records-empty`, `settings`, `home-chat-entrusted`, `queue-mixed`, `queue-empty`, `issue-picker`, `issue-picker-empty`, `issue-filled-online`, `issue-filled-offline`, `issue-stale`, `issue-first-counterparty`, `issue-duplicate`, `issue-limit`, `cash`, `connection`, `invoice-confirm`, `invoice-issues`, `receipt-confirm`, `saved`, `camera`를 라이트·다크로 본다. `&fs=1.6`을 붙이면 글자 크기 1.6배를 흉내 낸다. 웹 번들에만 들어가고 앱 번들에는 들어가지 않는다(`metro.config.cjs`).
+`pnpm gallery`로 화면 갤러리를 웹으로 묶는다(가짜 세션, 네트워크·키·카메라 없음). `?s=home-chat-online`, `home-chat-offline`, `home-chat-merged`, `home-unpaired`, `home`, `home-stale`, `money-empty`, `records-empty`, `settings`, `home-chat-entrusted`, `queue-mixed`, `queue-empty`, `issue-picker`, `issue-picker-empty`, `issue-filled-online`, `issue-filled-offline`, `issue-stale`, `issue-first-counterparty`, `issue-duplicate`, `issue-limit`, `issue-inexact`, `approval-default`, `approval-arming`, `approval-urgent`, `approval-expired`, `approval-dup`, `approval-dup-acked`, `approval-unknown`, `approval-first`, `approval-limit`, `approval-no-key`, `approval-ios-allowed`, `approval-ios-denied`, `approval-mismatch`, `approval-in-doubt`, `approval-long`, `cash`, `connection`, `invoice-confirm`, `invoice-issues`, `receipt-confirm`, `saved`, `camera`를 라이트·다크로 본다. `&fs=1.6`을 붙이면 글자 크기 1.6배를, `&w=375&h=667`이면 작은 폰(SE)을 흉내 낸다. 웹 번들에만 들어가고 앱 번들에는 들어가지 않는다(`metro.config.cjs`).
