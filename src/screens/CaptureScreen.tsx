@@ -15,7 +15,7 @@ import { toWire } from '../capture/invoice-wire';
 import { DEV_LOCAL, PHOTO_MAX_EDGE, PHOTO_QUALITY } from '../config';
 import { GUIDE_RATIO, fitEdge, guideCrop, guideRect } from '../capture/crop';
 import { blocking, checkInvoice, issueText, looksLikeInvoice, parsePaperInvoice, toRows, toV1Candidates } from '../capture/invoice';
-import { FIELD_KEY, emptyInvoiceForm, fmt, formFrom, invoiceOf, num, type InvoiceForm } from '../capture/invoice-form';
+import { FIELD_KEY, editInvoiceForm, emptyInvoiceForm, formFrom, invoiceOf, type InvoiceForm } from '../capture/invoice-form';
 import { ocrEngine } from '../capture/ocr';
 import { parseReceipt, validBizNo } from '../capture/parser';
 import { useSession } from '../session';
@@ -262,15 +262,7 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
   /** 칸 바꾸기. 공급가액·세액을 고치면 사장님이 만지지 않은 합계를 따라 맞춘다. */
   const setI = (k: keyof InvoiceForm, v: InvoiceForm[keyof InvoiceForm]) => {
     setTouched((t) => new Set(t).add(k));
-    setInv((cur) => {
-      const next = { ...cur, [k]: v } as InvoiceForm;
-      if ((k === 'supply' || k === 'vat') && !touched.has('total')) {
-        const sum = (num(next.supply) ?? 0) + (next.docKind === 'invoice' ? 0 : (num(next.vat) ?? 0));
-        next.total = num(next.supply) === null ? next.total : fmt(sum);
-      }
-      if (k === 'supply' && next.docKind === 'tax_invoice' && !touched.has('vat') && cur.vat === '' && num(next.supply) !== null) next.vat = fmt(Math.floor(num(next.supply)! / 10));
-      return next;
-    });
+    setInv((cur) => editInvoiceForm(cur, k, v, touched));
   };
   const unsure = (k: string) => !touched.has(FIELD_KEY[k] ?? k) && (conf[k] ?? 0) < 0.8;
 
