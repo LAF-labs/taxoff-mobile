@@ -56,9 +56,9 @@ export function cardOf(s: PhoneShow): ChatCard {
   };
 }
 
-/** 코어 메시지 → 홈 대화 줄. 앱 답은 'pc' 쪽 말풍선에 그린다(폰이 대신 답한 것도 같은 대화다). */
+/** 코어 메시지 → 홈 대화 줄. 앱 답은 'pc' 쪽 말풍선에 그린다. 이 대화는 이 폰에만 있어서 'PC 받음' 표시는 없다. */
 export function itemOf(m: ChatMessage): ChatItem {
-  return { kind: 'msg', id: m.id, from: m.from === 'user' ? 'me' : 'pc', at: m.at, text: m.text, state: m.from === 'user' ? (m.synced ? 'sent' : undefined) : undefined };
+  return { kind: 'msg', id: m.id, from: m.from === 'user' ? 'me' : 'pc', at: m.at, text: m.text };
 }
 
 export class OfflineChat {
