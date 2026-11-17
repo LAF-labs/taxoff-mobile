@@ -8,6 +8,8 @@ import type { ChatItem } from '../src/chat';
 import { SessionContext, type Session } from '../src/session';
 import { MainScreen, type Tab } from '../src/screens/MainScreen';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
+import { LockScreen } from '../src/screens/LockScreen';
+import type { BioInfo } from '../src/biometry';
 import { QueueScreen } from '../src/screens/QueueScreen';
 import { IssueScreen, type IssuePreview } from '../src/screens/IssueScreen';
 import { QueueProvider, type ApprovalSettings } from '../src/queueStore';
@@ -70,6 +72,11 @@ function fake(data: AppData, pc: PcStatus, pending = { receipts: 0, cash: 0 }): 
 }
 
 const noop = () => {};
+const FACE: BioInfo = { kind: 'faceId', enrolled: true };
+function Cover() {
+  const p = usePalette();
+  return <View style={{ flex: 1, backgroundColor: p.canvas }} testID="privacy-cover" />;
+}
 const at = (h: number, m: number, dayOffset = 0) => {
   const d = new Date(now - dayOffset * DAY);
   d.setHours(h, m, 0, 0);
@@ -400,7 +407,17 @@ const SCREENS: Record<
   'money-mark': () => money(MONEY_OK, { start: 'mark' }),
   'money-mark-offline': () => money(MONEY_LAST, { start: 'mark', live: false, pc: 'offline' }),
   'records-empty': () => ({ session: fake(paired(), 'online'), node: <Main start="records" /> }),
-  settings: () => ({ session: fake(paired(), 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} /> }),
+  settings: () => ({ session: fake(paired(), 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} bioPreview={FACE} /> }),
+  // ---- 앱 잠금(P-01) ----
+  'lock-faceid': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: FACE }} /> }),
+  'lock-touchid': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'touchId', enrolled: true } }} /> }),
+  'lock-android': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'fingerprint', enrolled: true } }} /> }),
+  'lock-failed': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: FACE, err: 'cancelled' }} /> }),
+  'lock-not-enrolled': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'faceId', enrolled: false } }} /> }),
+  'lock-no-passcode': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: FACE, err: 'passcode_required' }} /> }),
+  'lock-first-run': () => ({ session: fake(emptyData(), 'unpaired'), node: <LockScreen firstRun onUnlocked={noop} onReset={noop} preview={{ bio: FACE }} /> }),
+  /** 앱 전환 덮개: 다른 앱으로 넘어가면 내용을 바탕색 면으로 가린다(App.tsx privacy-cover) */
+  'lock-cover': () => ({ session: fake(paired(), 'online'), node: <View style={{ flex: 1 }}><Main chat={CHAT} /><View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}><Cover /></View></View> }),
   /** 꺼진 PC에 발급을 맡기고 홈으로 돌아온 뒤: 대화 끝에 확인 한 줄 */
   'home-chat-entrusted': () => ({
     session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'),
