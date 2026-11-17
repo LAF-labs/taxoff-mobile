@@ -6,6 +6,12 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { b64, concat, utf8 } from '../vendor/sax-remote/src/index.ts';
 import type { AttestState } from './approval';
 
+/**
+ * 승인 서명 키(Px)와 시작 게이트의 사용자 인증: 생체만(D08 §3.1, 2026-11-17 대표 결정 뒤에도 그대로).
+ * 앱 잠금은 폰 암호 대체를 받지만(keyring.ts APP_USER_AUTH) 비가역 승인은 받지 않는다. 진짜 구현(다음 PR)은 이 값을 쓴다.
+ */
+export const PX_USER_AUTH = { ios: 'biometryCurrentSet', android: 'BIOMETRIC_STRONG' } as const;
+
 export interface ApprovalKey {
   /** hw: 하드웨어 키 생성이 증명됨 · ios_app_attest: 앱 무결성만(iPhone, ADR-046 결정 4) · none: 승인 기기로 못 씀 */
   readonly attestState: AttestState;
