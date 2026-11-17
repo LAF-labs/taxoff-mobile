@@ -1,13 +1,13 @@
 // P-06 연결 상태: PC 켜짐·꺼짐, 마지막 접속, 페어링, PC로 아직 못 보낸 사진·현금매출 건수.
 import { useState } from 'react';
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 import { sp1Report, type Sp1Report } from '../diag';
 import { identityLines } from '../pairing/identity';
-import { resetDevice } from '../keyring';
 import { useSession } from '../session';
 import { space } from '../theme';
 import { Button, Group, Row, Screen, StatusDot, T, ago } from '../ui/kit';
 import { pcLine } from './HomeScreen';
+import { confirmLeaveThisPhone } from './leavePhone';
 
 export function ConnectionScreen({ onDone, onReset, onRepair }: { onDone: () => void; onReset: () => void; onRepair: () => void }) {
   const s = useSession();
@@ -60,19 +60,7 @@ export function ConnectionScreen({ onDone, onReset, onRepair }: { onDone: () => 
             label="이 폰 연결 해제"
             testID="unpair"
             chevron={false}
-            onPress={() =>
-              Alert.alert('이 폰 연결 해제', '이 폰의 열쇠와 아직 보내지 않은 사진·현금 매출을 지워요. PC의 기기 목록에서도 이 폰을 해제해 주세요.', [
-                { text: '취소', style: 'cancel' },
-                {
-                  text: '해제',
-                  style: 'destructive',
-                  onPress: async () => {
-                    await resetDevice();
-                    onReset();
-                  },
-                },
-              ])
-            }
+            onPress={() => confirmLeaveThisPhone({ pair, keys: s.keys, onReset })}
           />
         )}
       </Group>
