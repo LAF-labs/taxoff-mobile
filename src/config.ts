@@ -22,9 +22,9 @@ export const DEV_RELAY_HOST: string = DEV.devRelayHost;
 
 /**
  * 계정·릴레이 공개 origin(DPoP htu 앞부분, 팀장 결정 2026-11-05: 둘 다 https://tax.laf-co.com, 경로는 services API.md).
- * 릴리스 빌드 설정의 자리만 둔다. 값은 배포 때 넣는다. 비어 있으면 릴리스 빌드는 연결하지 않는다.
+ * 개발 스택이 아닌 빌드(릴리스, EXPO_PUBLIC_TEX_DEV_HOST 없는 실기기 개발 빌드)는 이 운영 origin에 붙는다.
  */
-export const PUBLIC_ORIGIN: string = '';
+export const PUBLIC_ORIGIN: string = 'https://tax.laf-co.com';
 
 /**
  * acct_claim(설계 #120) 서명을 검증할 계정 서비스 공개키(devhost.ts RELEASE_ACCOUNT_KEYS·DEV_ACCOUNT_KEY).

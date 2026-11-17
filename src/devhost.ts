@@ -1,8 +1,11 @@
 // 빌드 종류에 따른 개발 스택 판정(순수 함수, RN 의존 없음 — tests/remote-devhost-release.test.ts가 직접 부른다).
 // 릴리스(__DEV__ = false)에서는 무엇을 넣어도 개발 호스트를 쓰지 않고, 릴레이 허용 목록은 바이너리 고정 값뿐이며, mDNS 평문도 켜지 않는다.
 
-/** 릴레이 허용 목록은 바이너리에 고정한다(OTA 없음, ADR-028 앱 채널 = 스토어 서명 빌드만, D01 §6). */
-export const RELAY_ALLOWLIST: readonly string[] = ['relay.tex.laf-co.com'];
+/**
+ * 릴레이 허용 목록은 바이너리에 고정한다(OTA 없음, ADR-028 앱 채널 = 스토어 서명 빌드만, D01 §6).
+ * 운영 룸 호스트는 PC 앱 CLOUD_WS_HOST(@sax/net cloud.ts)와 같아야 한다. 다르면 페어링이 relay_not_allowed로 멈춘다.
+ */
+export const RELAY_ALLOWLIST: readonly string[] = ['rooms.tax.laf-co.com'];
 const SIM_DEV_HOST = 'localhost:8787';
 
 /**
