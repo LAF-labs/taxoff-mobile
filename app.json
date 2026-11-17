@@ -57,7 +57,13 @@
         "expo-secure-store",
         {
           "configureAndroidBackup": false,
-          "faceIDPermission": "앱을 열 때 얼굴로 확인해요. 얼굴 정보는 이 폰 밖으로 나가지 않아요."
+          "faceIDPermission": "앱을 열 때 본인인지 확인해요"
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "앱을 열 때 본인인지 확인해요"
         }
       ],
       [
