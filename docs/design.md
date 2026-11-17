@@ -38,6 +38,14 @@
 | `Empty` | 빈 화면: 무엇이 비었는지 · 왜 · 다음 할 일 하나 |
 | `Pill` | 묶음 줄 안의 작은 동작(바탕색 알약 36, 누름 영역 44). 밀린 일 [취소] [다시 맡기기] 등 |
 
+## 돈 탭(기획 v2 PR 8, 11-cash-flow §3.7)
+
+- 위에서부터 알림 한 줄(있을 때만, 주의 면은 하나) → 이번 달(라벨 왼쪽·금액 오른쪽 세 줄) + 기준 줄 → 받을 돈 → 낼 돈 → 앞으로 30일 → "세무·회계 의견이 아니에요".
+- 기준 줄: PC에서 지금 받았으면 "기준 11월 17일 오전 9:10 · 계좌 2개", 아니면 "PC에서 마지막으로 받은 값이에요 · 어제 오후 6:20".
+- 모르는 것을 0으로 보이지 않는다: 이번 달 숫자는 "—"와 "확인 못 함 · ○○ 계좌 거래내역이 7일 넘게 오래됐어요".
+- 금액은 줄바꿈 없이 고정폭, 1억이 넘으면 "1억 2,345만원"처럼 줄이고 누르면 정확한 값. 기한 지남은 황토 글자(면이 아니다).
+- 받을 돈 줄의 [받았어요] → 받은 방법(현금·다른 계좌·상계·기타) · 금액 · 날짜 → 줄 아래 "받음 처리했어요 · [되돌리기]". 낼 돈은 보기만.
+
 ## 찍기 화면(P-08·사업자등록증)
 
 - 카메라와 앨범 둘 다(2026-11-16 대표 결정). 셔터 왼쪽에 [앨범] 글자 단추. 카메라 권한 전에는 셔터를 숨기고 [앨범]은 그대로 둔다.
@@ -48,9 +56,10 @@
 
 - 바닥에서 올라오는 시트 하나에 비가역 행위 하나. 묶음 승인 없음. 값은 PC가 되읽은 값 전체(금액 → 받는 곳 → 내용 → 보내는 곳), 라벨은 앱 내장 사전.
 - 폰이 cardHash·actionHash를 다시 계산해 맞을 때만 [승인하고 발급]이 켜진다. 시트가 뜬 뒤 0.8초는 잠김(무장 지연). 남은 시간 120초, 마지막 20초만 황토 + 600.
-- 멈춤(처음 거래처 · 하루 5건 · 키 없음 · iPhone 거부 · 모르는 항목 · 해시 불일치)은 시트 안 Notice 한 줄 + 다음 할 일 단추. 새 알림창 없음.
+- 멈춤(처음 거래처 · 하루 5건 · 키 없음 · 정책으로 iPhone을 막은 경우 · 모르는 항목 · 해시 불일치)은 시트 안 Notice 한 줄 + 다음 할 일 단추. 새 알림창 없음.
 - 같은 건 경고($dup.*)는 황토 면 한 줄 + [확인했어요]. 확인해야 승인이 켜진다.
 - 결과 모름이면 다시 발급하는 단추를 두지 않는다([닫기]만).
+- iPhone(앱 무결성만, `ios_app_attest`)도 승인 기기로 받는다(ADR-046 결정 4 채택, tex #403). 하루 5건·처음 거래처 PC 승인은 그대로이고, 단추 위 회색 한 줄 "이 iPhone은 앱 무결성만 확인돼요"를 둔다.
 
 ## 진행·결과·서류(P-04·P-05, 기획 v2 PR 6)
 
@@ -76,4 +85,4 @@
 
 ## 점검
 
-`pnpm gallery`로 화면 갤러리를 웹으로 묶는다(가짜 세션, 네트워크·키·카메라 없음). `?s=home-chat-online`, `home-chat-offline`, `home-chat-merged`, `home-unpaired`, `home`, `home-stale`, `money-empty`, `records-empty`, `settings`, `home-chat-entrusted`, `queue-mixed`, `queue-empty`, `issue-picker`, `issue-picker-empty`, `issue-filled-online`, `issue-filled-offline`, `issue-stale`, `issue-first-counterparty`, `issue-duplicate`, `issue-limit`, `issue-inexact`, `approval-default`, `approval-arming`, `approval-urgent`, `approval-expired`, `approval-dup`, `approval-dup-acked`, `approval-unknown`, `approval-first`, `approval-limit`, `approval-no-key`, `approval-ios-allowed`, `approval-ios-denied`, `approval-mismatch`, `approval-in-doubt`, `approval-long`, `run-prepare`·`run-login`·`run-readback`·`run-issue`·`run-verify-step`, `run-simple-auth`, `run-simple-auth-unknown`, `run-cert`, `run-stop-blocked`, `run-stop-blocked-reserved`, `run-stop-unknown-screen`, `run-stop-date`, `run-stop-input`, `run-in-doubt`, `run-verify-needed`, `result-email`, `result-no-email`, `result-long`, `home-chat-run`, `home-chat-result`, `queue-with-done`, `doc-loading`, `doc-receiving`, `doc-pc-off`, `doc-pc-off-asked`, `doc-backup`, `doc-error`, `doc-ready`, `doc-long`, `demo`, `demo-in-doubt`, `bizreg-camera`, `bizreg-confirm`, `bizreg-email-empty`, `bizreg-low-conf`, `bizreg-checksum`, `bizreg-blurry`, `bizreg-existing`, `bizreg-long`, `issue-new-checking`, `issue-new-pc-off`, `issue-new-closed`, `bizreg-camera-denied`, `bizreg-album`, `bizreg-pdf`, `camera`(앨범 단추), `cash`, `connection`, `invoice-confirm`, `invoice-issues`, `receipt-confirm`, `saved`, `camera`를 라이트·다크로 본다. `&fs=1.6`을 붙이면 글자 크기 1.6배를, `&w=375&h=667`이면 작은 폰(SE)을 흉내 낸다. 웹 번들에만 들어가고 앱 번들에는 들어가지 않는다(`metro.config.cjs`).
+`pnpm gallery`로 화면 갤러리를 웹으로 묶는다(가짜 세션, 네트워크·키·카메라 없음). `?s=home-chat-online`, `home-chat-offline`, `home-chat-merged`, `home-unpaired`, `home`, `home-stale`, `money-empty`, `records-empty`, `settings`, `home-chat-entrusted`, `queue-mixed`, `queue-empty`, `issue-picker`, `issue-picker-empty`, `issue-filled-online`, `issue-filled-offline`, `issue-stale`, `issue-first-counterparty`, `issue-duplicate`, `issue-limit`, `issue-inexact`, `approval-default`, `approval-arming`, `approval-urgent`, `approval-expired`, `approval-dup`, `approval-dup-acked`, `approval-unknown`, `approval-first`, `approval-limit`, `approval-no-key`, `approval-ios-allowed`, `approval-ios-policy-blocked`, `approval-mismatch`, `approval-in-doubt`, `approval-long`, `run-prepare`·`run-login`·`run-readback`·`run-issue`·`run-verify-step`, `run-simple-auth`, `run-simple-auth-unknown`, `run-cert`, `run-stop-blocked`, `run-stop-blocked-reserved`, `run-stop-unknown-screen`, `run-stop-date`, `run-stop-input`, `run-in-doubt`, `run-verify-needed`, `result-email`, `result-no-email`, `result-long`, `home-chat-run`, `home-chat-result`, `queue-with-done`, `doc-loading`, `doc-receiving`, `doc-pc-off`, `doc-pc-off-asked`, `doc-backup`, `doc-error`, `doc-ready`, `doc-long`, `demo`, `demo-in-doubt`, `bizreg-camera`, `bizreg-confirm`, `bizreg-email-empty`, `bizreg-low-conf`, `bizreg-checksum`, `bizreg-blurry`, `bizreg-existing`, `bizreg-long`, `issue-new-checking`, `issue-new-pc-off`, `issue-new-closed`, `bizreg-camera-denied`, `bizreg-album`, `bizreg-pdf`, `camera`(앨범 단추), `money-ok`, `money-late`, `money-shortfall`, `money-unsure`, `money-last`, `money-no-account`, `money-loading`, `money-error`, `money-empty`, `money-unpaired`, `money-recv`, `money-recv-marked`, `money-recv-late`, `money-pay`, `money-mark`, `money-mark-offline`, `cash`, `connection`, `invoice-confirm`, `invoice-issues`, `receipt-confirm`, `saved`, `camera`를 라이트·다크로 본다. `&fs=1.6`을 붙이면 글자 크기 1.6배를, `&w=375&h=667`이면 작은 폰(SE)을 흉내 낸다. 웹 번들에만 들어가고 앱 번들에는 들어가지 않는다(`metro.config.cjs`).

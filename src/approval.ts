@@ -189,7 +189,7 @@ export interface SheetContext {
   now: number;
   openedAt: number;
   attest: AttestState;
-  /** iPhone(ios_app_attest)을 승인 기기로 받는지(ADR-046 결정 4가 제안이라 플래그) */
+  /** iPhone(ios_app_attest)을 승인 기기로 받는지. ADR-046 결정 4 채택(tex #403)으로 기본 true, false는 정책으로 막은 경우 */
   iosAllowed: boolean;
   usedToday: number;
   dailyLimit?: number;

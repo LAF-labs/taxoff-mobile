@@ -18,6 +18,10 @@ import { useQueue } from '../src/queueStore';
 import { RunScreen } from '../src/screens/RunScreen';
 import { BizRegScreen, type BizRegPreview } from '../src/screens/BizRegScreen';
 import { PDF_LINE } from '../src/capture/pick';
+import { MoneyProvider, type MarkState, type MoneyStatus } from '../src/moneyStore';
+import type { CashFlowResult, MoneySnapshot, ReceivableView } from '../src/money';
+import { MoneyListScreen } from '../src/screens/MoneyListScreen';
+import { MarkReceivedScreen } from '../src/screens/MarkReceivedScreen';
 import { DocScreen, type DocState } from '../src/screens/DocScreen';
 import type { IssueResult, RunView } from '../src/run';
 import type { DoneJob, Job } from '../src/queue';
@@ -155,7 +159,7 @@ const gate = (o: { rb?: typeof RB; reserved?: GateField[]; left?: number; tamper
   // 해시 불일치: PC가 보낸 값 하나가 화면과 다르다(엔진 버그·변조를 흉내)
   return o.tamper ? { ...g, fields: g.fields.map((f) => (f.key === 'totalAmount' ? { ...f, value: '8800000' } : f)) } : g;
 };
-const HW: ApprovalSettings = { attest: 'hw', iosAllowed: false, usedToday: 1 };
+const HW: ApprovalSettings = { attest: 'hw', iosAllowed: true, usedToday: 1 };
 const sheetCase = (g: PhoneGate, o: { settings?: ApprovalSettings; openedAt?: number; state?: Job['state']; acked?: string[] } = {}) => ({
   session: fake(paired(), 'online'),
   jobs: [{ id: 'ap', title: `${g.fields.find((f) => f.key === 'counterpartName')!.value} 세금계산서`, amount: Number(g.fields.find((f) => f.key === 'totalAmount')!.value), createdAt: now - 60_000, state: o.state ?? ('approval' as const), gate: g }, ...JOBS.slice(6, 8)],
@@ -199,6 +203,73 @@ const issueNew = (status: Counterparty['status'], pc: PcStatus = 'online') => ({
   node: issue({ phase: 'form', cpId: 'new', amount: '320,000' }, [...CPS, { ...NEW_CP, status }]),
 });
 
+// ---- 돈 탭(PR 8) 견본: 엔진 db.query.bank.summary·cashflow 모양 그대로(가짜 거래처) ----
+const dayOff = (n: number) => iso(new Date(now + n * DAY));
+const rv = (id: string, cpName: string, total: number, writtenAgo: number, dueIn: number | null, o: Partial<ReceivableView> = {}): ReceivableView => ({
+  id, counterpartyId: null, cpName, cpBizNo: null, item: null, approvalTail: null, writtenOn: dayOff(-writtenAgo), total, received: 0, remaining: total,
+  dueOn: dueIn === null ? null : dayOff(dueIn), promisedOn: null, dueIn, overdue: dueIn !== null && dueIn < 0, status: 'unpaid', via: null, offAccount: null, sources: ['hometax'], excludedReason: null, ...o,
+});
+const RECV = [
+  rv('rc1', '가나식자재', 1_353_000, 52, -22),
+  rv('rc2', '서울청과', 880_000, 40, -10),
+  rv('rc3', '한빛인쇄', 495_000, 25, 5),
+  rv('rc4', '주식회사 새봄꽃과 정원 관리 서비스 성수동 본점', 13_530_000, 20, 10),
+  rv('rc5', '미래포장', 2_200_000, 12, 18, { received: 1_000_000, remaining: 1_200_000, status: 'partial' }),
+  rv('rc6', '그린위생', 165_000, 8, null),
+];
+const PAY = [
+  rv('py1', '동네마트 성수점', 352_000, 30, -3),
+  rv('py2', '서울청과', 440_000, 10, 4),
+  rv('py3', '한빛인쇄', 1_100_000, 6, 20),
+  rv('py4', '미래포장', 280_000, 3, null),
+];
+const sum = (xs: ReceivableView[]) => xs.reduce((a, v) => a + v.remaining, 0);
+const open = (xs: ReceivableView[]) => xs.filter((v) => v.status !== 'received');
+const over = (xs: ReceivableView[]) => open(xs).filter((v) => v.overdue);
+const soon = (xs: ReceivableView[]) => open(xs).filter((v) => !v.overdue && v.dueIn !== null && v.dueIn <= 7);
+const cashflow = (o: { inT: number; outT: number; complete?: boolean; hasAccounts?: boolean; alerts?: CashFlowResult['alerts']; missingDays?: number }): CashFlowResult => ({
+  month: {
+    month: iso(today).slice(0, 7), from: `${iso(today).slice(0, 7)}-01`, to: iso(today), complete: o.complete ?? true, hasAccounts: o.hasAccounts ?? true,
+    missing: o.complete === false ? [{ accountId: 'a2', last4: '5521', bank: '국민', coverTo: dayOff(-(o.missingDays ?? 9)) }] : [],
+    cash: { in: { total: o.inT, by: {} }, out: { total: o.outT, by: {} }, net: o.inT - o.outT, excluded: 0 },
+    accrual: { salesInvoices: 0, cashSales: null, purchaseInvoices: 0, card: null, receipts: 0, payroll: null }, collectionRate: null,
+    unknown: { inTotal: 0, outTotal: 0, inCount: 0, outCount: 0, topIds: [] },
+  },
+  snapshot: {
+    today: iso(today), balance: { total: 8_400_000, partial: false, accounts: [] },
+    next30: { payOut: 1_820_000, payOverdue: 352_000, payIn: 18_420_000, noDuePay: 1, noDueRecv: 1 },
+    aging: { notDue: 0, d0_30: 0, d31_60: 0, d61_90: 0, d90p: 0, unknown: 0 }, collectDays: { overall: null, byCounterparty: [] }, payDays: null,
+    concentration: { months: [], invoiceCount: 0, top1: null, top3Share: null },
+  },
+  alerts: o.alerts ?? [],
+});
+const snapOf = (recv: ReceivableView[], pay: ReceivableView[], cf: CashFlowResult, o: { at?: number; accounts?: number } = {}): MoneySnapshot => ({
+  at: o.at ?? at(9, 10), accounts: o.accounts ?? 2, receivables: recv, payables: pay, cashflow: cf,
+  summary: {
+    today: iso(today), latestDay: iso(today), stale: !cf.month.complete, hasAccounts: cf.month.hasAccounts,
+    unpaidCount: open(recv).length, unpaidTotal: sum(open(recv)), overdueCount: over(recv).length, overdueTotal: sum(over(recv)), oldestOverdue: null, reviewCount: 0, autoCount: 0,
+    payable: { unpaidCount: open(pay).length, unpaidTotal: sum(open(pay)), overdueCount: over(pay).length, overdueTotal: sum(over(pay)), dueSoonCount: soon(pay).length, dueSoonTotal: sum(soon(pay)), reviewCount: 0 },
+  },
+});
+const MONEY_OK = snapOf(RECV, PAY, cashflow({ inT: 18_420_000, outT: 12_950_000 }));
+const RECV_LATE = [
+  ...RECV.map((v, i) => (i < 4 ? { ...v, dueIn: -15 - i * 9, dueOn: dayOff(-15 - i * 9), overdue: true } : v)),
+  rv('rc7', '동쪽건설', 98_000_000, 120, -90),
+  rv('rc8', '바른식품', 3_300_000, 70, -40),
+];
+const MONEY_LATE = snapOf(RECV_LATE, PAY, cashflow({ inT: 4_120_000, outT: 15_880_000, alerts: [{ id: 's1', kind: 'slowdown', counterpartyKey: 'k', cpName: '가나식자재', priorDays: 32, recentDays: 51 }] }));
+const MONEY_SHORT = snapOf(RECV, PAY, cashflow({ inT: 6_200_000, outT: 9_400_000, alerts: [{ id: 'f1', kind: 'shortfall', gap: 1_240_000 }] }));
+const MONEY_UNSURE = snapOf(RECV.map((v, i) => (i === 1 ? { ...v, status: 'unknown' as const } : v)), PAY, cashflow({ inT: 6_200_000, outT: 9_400_000, complete: false }));
+const MONEY_LAST = snapOf(RECV, PAY, cashflow({ inT: 18_420_000, outT: 12_950_000 }), { at: at(18, 20, 1) });
+const MONEY_NOACCT = snapOf(RECV, [], cashflow({ inT: 0, outT: 0, hasAccounts: false }), { accounts: 0 });
+const MARKS: Record<string, MarkState> = { rc1: { kind: 'done', seq: 101, method: 'cash', amount: 1_353_000 }, rc2: { kind: 'queued' }, rc3: { kind: 'already' } };
+const money = (snap: MoneySnapshot | null, o: { status?: MoneyStatus; live?: boolean; pc?: PcStatus; start?: 'list' | 'pay' | 'mark'; marks?: Record<string, MarkState> } = {}) => ({
+  session: fake(o.pc && o.pc !== 'online' ? { ...paired(), lastSeenPc: now - 15 * H } : paired(), o.pc ?? 'online'),
+  money: { status: o.status ?? (snap ? 'ready' : 'none'), snap, live: o.live ?? true, marks: o.marks, focus: o.start === 'mark' ? 'rc1' : null },
+  node:
+    o.start === 'list' ? <MoneyListScreen kind="recv" onDone={noop} onMark={noop} /> : o.start === 'pay' ? <MoneyListScreen kind="pay" onDone={noop} onMark={noop} /> : o.start === 'mark' ? <MarkReceivedScreen onDone={noop} /> : <Main start="money" />,
+});
+
 /** 시연: 켜진 PC에 발급을 맡긴 순간부터(대화 홈 + 승인 시트가 스스로 뜬다) */
 function Demo() {
   const q = useQueue();
@@ -220,6 +291,7 @@ const SCREENS: Record<
   () => {
     session: Session; node: React.ReactNode; jobs?: Job[]; last?: DoneJob; notes?: ChatItem[]; sheet?: string; approval?: ApprovalSettings;
     sheetPreview?: { now: number; openedAt: number; acked?: string[] }; focus?: string; simulate?: boolean | 'inDoubt';
+    money?: { status: MoneyStatus; snap: MoneySnapshot | null; live: boolean; marks?: Record<string, MarkState>; focus?: string | null };
   }
 > = {
   'bizreg-camera': () => ({ session: fake(paired(), 'online'), node: <BizRegScreen existing={CPS} onDone={noop} onSaved={noop} onUseExisting={noop} /> }),
@@ -299,7 +371,8 @@ const SCREENS: Record<
   'approval-limit': () => sheetCase(gate(), { settings: { ...HW, usedToday: 5 } }),
   'approval-no-key': () => sheetCase(gate(), { settings: { attest: 'none', iosAllowed: false, usedToday: 0 } }),
   'approval-ios-allowed': () => sheetCase(gate(), { settings: { attest: 'ios_app_attest', iosAllowed: true, usedToday: 1 } }),
-  'approval-ios-denied': () => sheetCase(gate(), { settings: { attest: 'ios_app_attest', iosAllowed: false, usedToday: 1 } }),
+  /** 정책으로 iPhone 승인을 막은 경우(기본은 허용, ADR-046 결정 4 채택) */
+  'approval-ios-policy-blocked': () => sheetCase(gate(), { settings: { attest: 'ios_app_attest', iosAllowed: false, usedToday: 1 } }),
   'approval-mismatch': () => sheetCase(gate({ tamper: true })),
   'approval-in-doubt': () => sheetCase(gate(), { state: 'verify' }),
   'approval-long': () => sheetCase(gate({ rb: LONG })),
@@ -310,7 +383,22 @@ const SCREENS: Record<
   /** 처음 연결한 뒤 대화가 아직 없는 홈(앱이 이 폰 기록으로 만든 대화) */
   home: () => ({ session: fake(paired(), 'online', { receipts: 2, cash: 0 }), node: <Main /> }),
   'home-stale': () => ({ session: fake({ ...paired(), lastSeenPc: now - 9 * DAY }, 'stale', { receipts: 3, cash: 1 }), node: <Main chat={CHAT} /> }),
-  'money-empty': () => ({ session: fake(paired(), 'online'), node: <Main start="money" /> }),
+  'money-empty': () => money(null),
+  'money-ok': () => money(MONEY_OK),
+  'money-late': () => money(MONEY_LATE),
+  'money-shortfall': () => money(MONEY_SHORT),
+  'money-unsure': () => money(MONEY_UNSURE),
+  'money-last': () => money(MONEY_LAST, { live: false, pc: 'offline' }),
+  'money-no-account': () => money(MONEY_NOACCT),
+  'money-loading': () => money(MONEY_OK, { status: 'loading' }),
+  'money-error': () => money(MONEY_OK, { status: 'error' }),
+  'money-unpaired': () => ({ session: fake(emptyData(), 'unpaired'), node: <Main start="money" /> }),
+  'money-recv': () => money(MONEY_OK, { start: 'list' }),
+  'money-recv-marked': () => money(MONEY_OK, { start: 'list', marks: MARKS }),
+  'money-recv-late': () => money(MONEY_LATE, { start: 'list' }),
+  'money-pay': () => money(MONEY_OK, { start: 'pay' }),
+  'money-mark': () => money(MONEY_OK, { start: 'mark' }),
+  'money-mark-offline': () => money(MONEY_LAST, { start: 'mark', live: false, pc: 'offline' }),
   'records-empty': () => ({ session: fake(paired(), 'online'), node: <Main start="records" /> }),
   settings: () => ({ session: fake(paired(), 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} /> }),
   /** 꺼진 PC에 발급을 맡기고 홈으로 돌아온 뒤: 대화 끝에 확인 한 줄 */
@@ -362,7 +450,7 @@ export default function Gallery() {
   const name = q.get('s') || 'home-chat-online';
   textScale.web = Math.min(Number(q.get('fs')) || 1, MAX_FONT_SCALE);
   const make = SCREENS[name] ?? SCREENS['home-chat-online']!;
-  const { session, node, jobs, last, notes, sheet, approval, sheetPreview, focus, simulate } = make();
+  const { session, node, jobs, last, notes, sheet, approval, sheetPreview, focus, simulate, money: mny } = make();
   const w = Number(q.get('w')) || 393;
   const h = Number(q.get('h')) || 852;
   return (
@@ -370,8 +458,10 @@ export default function Gallery() {
       <View style={{ flex: 1, backgroundColor: p.canvas }}>
         <SessionContext.Provider value={session}>
           <QueueProvider initial={jobs} last={last} notes={notes} sheet={sheet} approval={approval} simulate={simulate ?? true} focus={focus}>
-            {node}
-            <ApprovalHost preview={sheetPreview} />
+            <MoneyProvider status={mny?.status ?? 'none'} snap={mny?.snap ?? null} live={mny?.live ?? false} marks={mny?.marks} focus={mny?.focus ?? null} simulate>
+              {node}
+              <ApprovalHost preview={sheetPreview} />
+            </MoneyProvider>
           </QueueProvider>
         </SessionContext.Provider>
       </View>

@@ -17,7 +17,7 @@ export type Readback = Record<(typeof READBACK_KEYS)[number], string>;
 
 export interface ApprovalSettings {
   attest: AttestState;
-  /** iPhone(앱 무결성만)을 승인 기기로 받는지(ADR-046 결정 4, 제안) */
+  /** iPhone(앱 무결성만)을 승인 기기로 받는지. ADR-046 결정 4 채택(tex #403)으로 기본은 받는다. false는 정책으로 막은 경우 */
   iosAllowed: boolean;
   usedToday: number;
 }
@@ -66,7 +66,7 @@ const Ctx = createContext<QueueStore | null>(null);
 const SIM_SUPPLIER = { supplierBizNo: '123-45-67890', supplierName: '택스오프상회' };
 
 export function QueueProvider({
-  initial = [], last = null, notes: initialNotes = [], approval = { attest: 'none', iosAllowed: false, usedToday: 0 }, sheet = null, simulate = false, focus: initialFocus = null, counterparties: initialCps = [], pick = null, children,
+  initial = [], last = null, notes: initialNotes = [], approval = { attest: 'none', iosAllowed: true, usedToday: 0 }, sheet = null, simulate = false, focus: initialFocus = null, counterparties: initialCps = [], pick = null, children,
 }: {
   initial?: Job[]; last?: DoneJob | null; notes?: ChatItem[]; approval?: ApprovalSettings;
   /** 처음부터 열어 둘 승인 시트(갤러리) */
