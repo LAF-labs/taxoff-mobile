@@ -38,6 +38,8 @@ export interface Job {
   gate?: PhoneGate;
   /** PC가 알려 준 진행·결과(P-04) */
   run?: RunView;
+  /** 폰 발급 명령(cmd.run, pc_only): 승인·중지·예약은 PC에서. 폰 진행 화면은 닫기만 둔다. */
+  pcOnly?: boolean;
 }
 
 /** 다 끝난 일 한 줄(빈 화면에 보인다) */

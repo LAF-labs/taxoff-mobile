@@ -22,7 +22,8 @@ export const AUTH_APPS: Readonly<Record<string, string>> = {
 /** deadline: PC가 알려 준 간편인증 마감(ms). 있으면 경과 대신 남은 시간을 보인다. */
 export type Auth = { method: 'simple'; app: string; deadline?: number } | { method: 'cert' };
 
-export type StopReason = 'blocked' | 'unknownScreen' | 'dateMismatch' | 'inputMismatch' | 'totalMismatch' | 'otherLogin' | 'passwordError';
+/** pcStopped: 폰 발급 명령을 PC가 멈춤(이유 코드 없음. 이유는 PC에서 본다) */
+export type StopReason = 'blocked' | 'unknownScreen' | 'dateMismatch' | 'inputMismatch' | 'totalMismatch' | 'otherLogin' | 'passwordError' | 'pcStopped';
 
 /** 폰에서 할 수 있는 다음 행동. 못 하는 것(브라우저로 가기·금고에서 확인)은 PC에서 열기 예약으로 바꾼다. */
 export type RunAction = 'retryPrepare' | 'reserveOnPc' | 'resendAuth' | 'stop' | 'close' | 'openApp';
@@ -35,6 +36,7 @@ export const STOP_COPY: Record<StopReason, { line: string; action: 'retryPrepare
   totalMismatch: { line: '홈택스 화면의 공급가액과 세액을 더한 값이 합계와 달라 승인을 열지 않았어요. 아무것도 발급하지 않았어요.', action: 'retryPrepare' },
   otherLogin: { line: '다른 곳에서 홈택스에 로그인해 연결이 끊겼어요. 아무것도 발급하지 않았어요.', action: 'retryPrepare' },
   passwordError: { line: '홈택스가 비밀번호 오류라고 알렸어요. 금고의 비밀번호를 PC에서 확인해 주세요. 아무것도 발급하지 않았어요.', action: 'reserveOnPc' },
+  pcStopped: { line: '멈췄어요. 아무것도 발급하지 않았어요. 이유는 PC에서 볼 수 있어요.', action: 'reserveOnPc' },
 };
 
 export const ACTION_LABEL: Record<RunAction, string> = {
@@ -65,8 +67,14 @@ export interface IssueResult {
   doc: DocRef;
 }
 
+/** 폰 발급 명령을 PC가 받지 않은 이유(remote-envelope v1.8 cmd.ack rejected) + PC가 issue.v1을 모름 */
+export type RefuseReason = 'playbook_unavailable' | 'input_invalid' | 'counterparty_unknown' | 'duplicate' | 'pc_busy' | 'hometax_paused' | 'pc_old';
+
 export type RunView =
-  | { kind: 'running'; step: Step; startedAt: number }
+  /** pcApproval: 승인은 PC 승인 바에서(cmd.ack pc_only). 승인 단계에서 그 안내를 보인다. */
+  | { kind: 'running'; step: Step; startedAt: number; pcApproval?: boolean }
+  /** PC가 명령을 받지 않음(아무것도 시작하지 않았다) */
+  | { kind: 'refused'; reason: RefuseReason; startedAt: number }
   /** 내 차례: 로그인 단계의 사람 확인 */
   | { kind: 'myTurn'; step: Step; auth: Auth; startedAt: number }
   | { kind: 'stopped'; step: Step; reason: StopReason; startedAt: number; reserved?: boolean }
@@ -78,6 +86,7 @@ export type RunView =
 
 export function stepOf(r: RunView): Step {
   if (r.kind === 'running' || r.kind === 'myTurn' || r.kind === 'stopped') return r.step;
+  if (r.kind === 'refused') return 'prepare';
   // 결과 모름(발급목록 조회 중)·확인 필요·발급됨은 모두 발급 뒤 "확인" 칸이다. 발급 클릭은 이미 지났다.
   return 'verify';
 }
@@ -91,6 +100,8 @@ export function chipOf(r: RunView): { label: string; tone: 'quiet' | 'attention'
       return { label: '내 차례', tone: 'attention' };
     case 'stopped':
       return { label: '중지됨', tone: 'quiet' };
+    case 'refused':
+      return { label: '시작 못 함', tone: 'quiet' };
     case 'inDoubt':
       return { label: '확인 중', tone: 'attention', busy: true };
     case 'verify':
@@ -113,6 +124,7 @@ export function actionsOf(r: RunView, now = Date.now()): RunAction[] {
       return Object.hasOwn(AUTH_APPS, r.auth.app) ? ['openApp', 'resendAuth', 'stop'] : ['resendAuth', 'stop'];
     case 'stopped':
       return r.reserved ? ['close'] : [STOP_COPY[r.reason].action, 'close'];
+    case 'refused':
     case 'inDoubt':
     case 'verify':
     case 'done':

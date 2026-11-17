@@ -1,5 +1,7 @@
 // 앱 상태 파일(페어링 기록·기기 목록·IK 타임스탬프·현금매출 기록). fileKey로 XChaCha20-Poly1305 봉인해 sax/state.bin에 둔다.
 import type { MoneySnapshot } from '../money';
+import type { PhoneCopyBody } from '@sax/remote';
+import type { PhoneCmd } from '../phoneCmd';
 import { File } from 'expo-file-system';
 import { fromUtf8, utf8, xOpen, xSeal, type DeviceListJson, type SignedCert } from '@sax/remote';
 import { currentEpoch, inflight, liveKey, sameEpoch } from '../inflight';
@@ -65,6 +67,10 @@ export interface AppData {
   qbundleSeq: number;
   /** 돈 탭: PC에서 마지막으로 받은 요약(받은 시각 포함). 거래처 이름·금액·날짜만, 사업자번호·계좌는 지운 뒤 봉인 보관(src/money.ts storeable) */
   money?: MoneySnapshot | null;
+  /** PC가 라이브 세션마다 넘기는 폰 사본(remote-envelope v1.8 phone.copy): 거래처·최근 발급·돈 요약. 이메일은 가린 힌트, 계좌는 은행 이름뿐이다. */
+  pcCopy?: PhoneCopyBody | null;
+  /** 폰 발급 명령(cmd.run). 보내기 전에 cmdId와 함께 저장해 다시 보낼 때 같은 cmdId를 쓴다(src/phoneCmd.ts). */
+  cmds?: PhoneCmd[];
 }
 
 export const emptyData = (): AppData => ({ v: 1, pair: null, deviceList: null, seenListVersion: 0, ikTs: 0, lastSeenPc: null, cash: [], recent: [], queueSeq: 0, qbundleSeq: 0 });

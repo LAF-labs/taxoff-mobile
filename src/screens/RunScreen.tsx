@@ -31,7 +31,10 @@ export function RunScreen({ onDone, onDoc, onRecords, now: fixedNow }: { onDone:
     if (a === 'stop') onDone();
   };
   let footer;
-  if (r.kind === 'done') {
+  if (job.pcOnly) {
+    // 폰 발급 명령: 승인·중지·서류는 PC에서. 폰은 지켜보기만 한다.
+    footer = <Button kind="secondary" label="닫기" onPress={onDone} testID="run-main-close" />;
+  } else if (r.kind === 'done') {
     footer = (
       <>
         <Button label="서류 보기" onPress={onDoc} testID="run-doc" />
@@ -64,11 +67,20 @@ export function RunScreen({ onDone, onDoc, onRecords, now: fixedNow }: { onDone:
               {`${s.data.pair?.desktopName ?? '내 PC'}에서 하고 있어요`}
             </T>
             <T v="meta" c="ink3">
-              {r.kind === 'inDoubt' ? '앱을 닫아도 확인을 계속해요. 결과가 나오면 알려 드려요' : '앱을 닫아도 계속돼요. 끝나면 알림으로 알려 드려요'}
+              {job.pcOnly
+                ? '앱을 닫아도 PC는 계속해요. 다시 열면 지금 상태를 받아 와요'
+                : r.kind === 'inDoubt'
+                  ? '앱을 닫아도 확인을 계속해요. 결과가 나오면 알려 드려요'
+                  : '앱을 닫아도 계속돼요. 끝나면 알림으로 알려 드려요'}
             </T>
           </View>
         )}
-        {r.kind === 'done' && (
+        {r.kind === 'done' && job.pcOnly && (
+          <T v="meta" c="ink3" style={{ paddingHorizontal: space.s1 }} testID="run-doc-on-pc">
+            서류는 PC 기록에 있어요
+          </T>
+        )}
+        {r.kind === 'done' && !job.pcOnly && (
           <Pressable onPress={onRecords} accessibilityRole="button" style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: space.s1, minHeight: 44, paddingHorizontal: space.s1 }, pressed && { opacity: 0.6 }]} testID="run-records">
             <T v="meta" c="ink3">
               기록 탭에도 남겨 뒀어요

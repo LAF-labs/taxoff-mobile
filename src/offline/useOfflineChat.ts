@@ -5,6 +5,7 @@ import type { ChatItem } from '../chat';
 import { useSession } from '../session';
 import type { OfflineReply } from './chat';
 import { offlineChat } from './device';
+import { chatCopyOf } from '../net/pcCopy';
 
 export interface OfflineChatView {
   /** 페어링 전이거나 게이트웨이를 정할 수 없으면 거짓 */
@@ -18,8 +19,10 @@ export interface OfflineChatView {
 export function useOfflineChat(): OfflineChatView {
   const s = useSession();
   const pair = s.data.pair;
-  // 폰 사본(거래처·최근 발급)은 PC가 넘기는 봉투가 생기면 여기서 phoneCopyFrom으로 넣는다. 지금은 없음(사본: none).
-  const chat = useMemo(() => (pair ? offlineChat(pair, s.keys, () => null) : null), [pair, s.keys]);
+  // 폰 사본(거래처·최근 발급): PC가 라이브 세션마다 넘긴 마지막 phone.copy. 대화를 다시 만들지 않고 물을 때마다 최신 값을 읽는다.
+  const copyRef = useRef(s.data.pcCopy);
+  copyRef.current = s.data.pcCopy;
+  const chat = useMemo(() => (pair ? offlineChat(pair, s.keys, () => chatCopyOf(copyRef.current)) : null), [pair, s.keys]);
   const [log, setLog] = useState<ChatItem[]>([]);
   const [extra, setExtra] = useState<ChatItem[]>([]);
   const [chips, setChips] = useState<OfflineReply['chips']>([]);
