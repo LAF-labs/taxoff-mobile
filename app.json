@@ -61,6 +61,13 @@
         }
       ],
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "고른 사진만 읽어요. 앨범 전체를 올리지 않아요.",
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "종이 영수증을 찍어 내 PC로 보낼 때 카메라를 써요. 사진은 사진 앱에 저장하지 않아요.",

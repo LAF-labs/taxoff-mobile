@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { EXPIRE_MS, applyAction, groupJobs, queueCounts, startAll, stateAt, type Job } from '../src/queue.ts';
-import { findDuplicate, recentCounterparties, searchCounterparties, splitAmount, type Counterparty } from '../src/issue.ts';
+import { findByBizNo, findDuplicate, recentCounterparties, searchCounterparties, splitAmount, type Counterparty } from '../src/issue.ts';
 
 const now = 1_800_000_000_000;
 const job = (id: string, state: Job['state'], ageH = 1): Job => ({ id, title: id, amount: 1000, createdAt: now - ageH * 3_600_000, state });
@@ -66,6 +66,10 @@ describe('발급 작성(P-10)', () => {
     assert.deepEqual(searchCounterparties(cps, '마트').map((c) => c.id), ['2']);
     assert.deepEqual(searchCounterparties(cps, '2208').map((c) => c.id), ['2']);
     assert.deepEqual(searchCounterparties(cps, ' '), []);
+  });
+  it('같은 사업자번호 거래처(하이픈 무시)', () => {
+    assert.equal(findByBizNo(cps, '2208112345')?.id, '2');
+    assert.equal(findByBizNo(cps, '220-81-1234'), null);
   });
   it('오늘 같은 곳 같은 금액이면 중복', () => {
     const t = [{ counterpartyId: '1', total: 1_353_000, at: 1 }];

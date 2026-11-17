@@ -4,7 +4,7 @@
 // - 금액: [부가세 별도|포함] 아래 숫자 칸, 그 밑 한 줄에 공급가액·세액·합계(세액 = 공급가액 10% 버림).
 // - 바닥 주요 단추는 PC 상태를 따른다: 켜짐 [홈택스에서 준비] · 꺼짐 [PC 켜지면 준비하기] · 오래 꺼짐 단추 없이 황토 한 줄.
 // - 경고는 한 번에 하나(Notice): 오늘 같은 곳 같은 금액 > 처음 거래하는 곳 > 폰 승인 남은 건수.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { clock } from '../chat';
 import { findDuplicate, recentCounterparties, searchCounterparties, splitAmount, type Counterparty, type IssuedToday, type VatMode } from '../issue';
@@ -13,7 +13,7 @@ import { useQueue } from '../queueStore';
 import { useSession } from '../session';
 import { MAX_FONT_SCALE, radius, size, space, textScale, type, usePalette } from '../theme';
 import { Field, masked } from '../ui/field';
-import { Button, Empty, Group, Notice, Row, Screen, Seg, T, won } from '../ui/kit';
+import { Button, Empty, Group, Notice, Pill, Row, Screen, Seg, StatusDot, T, josa, won } from '../ui/kit';
 import { localDay } from './CashScreen';
 
 const NB = ' ';
@@ -29,9 +29,10 @@ export interface IssuePreview {
 }
 
 export function IssueScreen({
-  counterparties, issuedToday = [], approvalsLeft = 5, onDone, onCapture, onSubmitted, preview,
+  counterparties: given, issuedToday = [], approvalsLeft = 5, onDone, onCapture, onSubmitted, preview,
 }: {
-  counterparties: Counterparty[];
+  /** 없으면 저장소의 거래처 */
+  counterparties?: Counterparty[];
   issuedToday?: IssuedToday[];
   /** 오늘 폰으로 승인할 수 있는 남은 건수 */
   approvalsLeft?: number;
@@ -44,8 +45,15 @@ export function IssueScreen({
 }) {
   const s = useSession();
   const queue = useQueue();
-  const first = preview?.cpId ? counterparties.find((c) => c.id === preview.cpId) ?? null : null;
-  const [phase, setPhase] = useState<'pick' | 'form'>(preview?.phase ?? 'pick');
+  const counterparties = given ?? queue.counterparties;
+  // 등록증으로 막 만든 거래처가 있으면 그것을 골라 둔 채로 연다(기획 v2 PR 7)
+  const picked = queue.pickId ? counterparties.find((c) => c.id === queue.pickId) ?? null : null;
+  const first = preview?.cpId ? counterparties.find((c) => c.id === preview.cpId) ?? null : picked;
+  const [phase, setPhase] = useState<'pick' | 'form'>(preview?.phase ?? (picked ? 'form' : 'pick'));
+  const [closedOk, setClosedOk] = useState(false);
+  useEffect(() => {
+    if (queue.pickId) queue.clearPick();
+  }, []);
   const [cp, setCp] = useState<Counterparty | null>(first);
   const [manual, setManual] = useState(!!preview?.manual);
   const [name, setName] = useState('');
@@ -57,6 +65,7 @@ export function IssueScreen({
   const [dupOk, setDupOk] = useState(false);
 
   const pick = (c: Counterparty | null) => {
+    setClosedOk(false);
     setCp(c);
     setManual(!c);
     setItem(c?.lastItem ?? '');
@@ -68,6 +77,9 @@ export function IssueScreen({
 
   if (phase === 'pick') return <Picker all={counterparties} initialQuery={preview?.query ?? ''} onPick={pick} onDone={onDone} onCapture={onCapture} />;
 
+  const live = cp ? counterparties.find((c) => c.id === cp.id) ?? cp : null;
+  const status = live?.status;
+  const closed = status?.kind === 'closed' && !closedOk ? status : null;
   const a = splitAmount(Number(amount.replace(/\D/g, '')), vat);
   const lastAmount = cp?.lastSupply ? masked('won', String(cp.lastSupply)) : null;
   const who = cp?.name ?? name.trim();
@@ -75,10 +87,20 @@ export function IssueScreen({
   const firstTime = manual || (cp?.issued ?? 0) === 0;
   const online = s.pc === 'online';
   const stale = s.pc === 'stale';
-  const ready = !!who && (cp ? true : bizNo.replace(/\D/g, '').length === 10) && a.supply > 0 && /^\d{4}-\d{2}-\d{2}$/.test(day) && !dup;
+  const ready = !!who && (cp ? true : bizNo.replace(/\D/g, '').length === 10) && a.supply > 0 && /^\d{4}-\d{2}-\d{2}$/.test(day) && !dup && !closed;
 
   let notice = null;
-  if (dup) {
+  if (closed) {
+    // 08 §11 "거래처 휴·폐업": 초안 단계 경고 줄 + [그래도 진행] [취소]
+    // 경고와 두 단추를 한 황토 면 안에. [다시 고르기]는 거래처 고르기로 돌아간다.
+    notice = (
+      <ClosedWarning
+        line={`${josa(who, '은', '는')} ${closed.on} ${closed.what}으로 조회돼요`}
+        onGo={() => setClosedOk(true)}
+        onBack={() => setPhase('pick')}
+      />
+    );
+  } else if (dup) {
     notice = (
       <View style={{ gap: space.s2 }} testID="issue-dup">
         <Notice>
@@ -113,12 +135,20 @@ export function IssueScreen({
       PC를 켜면 다시 맡길 수 있어요
     </T>
   ) : (
-    <Button testID="issue-submit" label={online ? '홈택스에서 준비' : 'PC 켜지면 준비하기'} onPress={submit} disabled={!ready} />
+    <>
+      {closed && (
+        <T v="meta" c="ink2" center testID="issue-submit-why">
+          폐업 경고를 먼저 확인해 주세요
+        </T>
+      )}
+      <Button testID="issue-submit" label={online ? '홈택스에서 준비' : 'PC 켜지면 준비하기'} onPress={submit} disabled={!ready} />
+    </>
   );
 
   return (
     <Screen title="세금계산서 발급" onBack={() => setPhase('pick')} backLabel="거래처 다시 고르기" testID="issue-form" footer={footer}>
       {notice}
+      <View style={{ gap: space.s2 }}>
       <Group title="받는 곳">
         {cp ? (
           <Row label={cp.name} sub={cp.bizNo} value="바꾸기" valueInk="ink3" onPress={() => setPhase('pick')} testID="issue-cp" />
@@ -129,6 +159,8 @@ export function IssueScreen({
           </>
         )}
       </Group>
+      {statusNote(status, firstTime && (!!closed || !!dup))}
+      </View>
       <Group title="내용">
         <Field label="품목" value={item} onChange={setItem} placeholder="예: 식자재" tag={cp?.lastItem && item === cp.lastItem ? LAST : undefined} testID="issue-item" />
         <Field label="작성일자" value={day} onChange={setDay} mask="day" testID="issue-day" />
@@ -182,6 +214,32 @@ export function IssueScreen({
       </View>
     </Screen>
   );
+}
+
+/** 휴·폐업 경고: 황토 면 하나에 한 줄과 두 단추(08 §11 [그래도 진행] [취소], 취소는 거래처 다시 고르기). */
+function ClosedWarning({ line, onGo, onBack }: { line: string; onGo: () => void; onBack: () => void }) {
+  const p = usePalette();
+  return (
+    <View style={[st.warn, { backgroundColor: p.attentionSoft }]} testID="issue-closed" accessibilityRole="alert">
+      <T v="sub" c="attention">
+        {line}
+      </T>
+      <View style={st.warnActions}>
+        <Pill label="그래도 진행" onPress={onGo} testID="issue-closed-ok" />
+        <Pill quiet label="거래처 다시 고르기" onPress={onBack} testID="issue-closed-cancel" />
+      </View>
+    </View>
+  );
+}
+
+/** 받는 곳 아래 한 줄: 휴·폐업 확인 진행, 그리고 다른 경고가 Notice를 차지했을 때의 처음 거래처 안내 */
+function statusNote(status: Counterparty['status'], firstAsLine: boolean) {
+  const parts: React.ReactNode[] = [];
+  if (status?.kind === 'checking') parts.push(<StatusDot key="s" busy tone="quiet" v="meta" label="PC가 휴·폐업 여부를 확인해요" testID="issue-status-checking" />);
+  if (status?.kind === 'waitPc') parts.push(<T key="s" v="meta" c="ink3" testID="issue-status-wait">PC가 켜지면 휴·폐업을 확인해요</T>);
+  if (status?.kind === 'ok') parts.push(<T key="s" v="meta" c="ink3" testID="issue-status-ok">휴·폐업 조회 정상</T>);
+  if (firstAsLine) parts.push(<T key="f" v="meta" c="ink3">처음 거래하는 곳이라 승인은 PC에서 해요</T>);
+  return parts.length ? <View style={{ gap: 2, paddingHorizontal: space.s1 }}>{parts}</View> : null;
 }
 
 /** 거래처 고르기(P-11): 최근 다섯 곳 → 찾기 → 직접 입력. */
@@ -246,8 +304,8 @@ function Picker({
           ))}
       </View>
       <Group>
+        <Row label="새 거래처 · 사업자등록증 찍기" onPress={onCapture} testID="picker-capture" />
         <Row label="새 거래처 직접 입력" onPress={() => onPick(null)} testID="picker-manual" />
-        <Row label="사업자등록증 찍기" onPress={onCapture} testID="picker-capture" />
       </Group>
     </Screen>
   );
@@ -259,6 +317,8 @@ function lastLine(c: Counterparty): string {
 }
 
 const st = StyleSheet.create({
+  warn: { borderRadius: radius.md, paddingVertical: space.s3, paddingHorizontal: space.s4, gap: space.s3 },
+  warnActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s2 },
   sums: { paddingHorizontal: space.s4, paddingTop: space.s1, paddingBottom: space.s3, gap: space.s1 },
   sum: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'baseline', gap: space.s3 },
   sumValue: { minWidth: 120, textAlign: 'right' },

@@ -1,7 +1,8 @@
 // P-08 종이 증빙 촬영: 앱 안 카메라 → 안내 틀로 자르기 → 기기 안 OCR(글자 상자) → 규칙 파서 후보 → 사장님 확인 → 보관함 → PC로.
 // 영수증과 종이 세금계산서·계산서 두 가지다. 찍기 전에 고르고(틀 비율이 다르다), 찍은 뒤 서식 이름을 보고 바로잡는다.
 // 세금계산서는 칸 위치로 공급자·공급받는자·금액·품목을 읽고 검산한다(src/capture/invoice.ts). PC는 원본과 확인한 값을 꾸러미에 함께 넣는다.
-// 갤러리 가져오기 없음, 카메라 롤 저장 없음(ADR-034 결정 9). 카메라·편집 임시 파일은 캐시에 생기며 봉인해 옮긴 뒤 바로 지운다.
+// 카메라와 앨범 둘 다(2026-11-16 대표 결정, ADR-034 결정 9 개정). 카메라 롤에 저장하지 않는다. 카메라·편집·앨범 사본 임시 파일은
+// 캐시에 생기며 봉인해 옮긴 뒤 바로 지운다(앨범 원본은 건드리지 않는다).
 // 사진·금액은 로그에 넣지 않는다.
 import { Asset } from 'expo-asset';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -17,6 +18,7 @@ import { GUIDE_RATIO, fitEdge, guideCrop, guideRect } from '../capture/crop';
 import { blocking, checkInvoice, issueText, looksLikeInvoice, parsePaperInvoice, toRows, toV1Candidates } from '../capture/invoice';
 import { FIELD_KEY, editInvoiceForm, emptyInvoiceForm, formFrom, invoiceOf, type InvoiceForm } from '../capture/invoice-form';
 import { ocrEngine } from '../capture/ocr';
+import { PDF_LINE, pickPhoto } from '../capture/pick';
 import { parseReceipt, validBizNo } from '../capture/parser';
 import { useSession } from '../session';
 import { deleteQuietly, sweepCaptureTemps } from '../storage/files';
@@ -37,6 +39,8 @@ export type Mode = 'receipt' | 'invoice';
 
 /** 화면 갤러리(gallery/)에서 확인 화면을 바로 그릴 때만 쓴다. 앱은 넘기지 않는다. */
 export interface CapturePreview {
+  /** 앨범에서 고른 사진 */
+  fromAlbum?: boolean;
   phase: Phase;
   docMode: Mode;
   shot: Shot;
@@ -71,6 +75,7 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
   const [tried, setTried] = useState(!!preview?.tried);
   const [err, setErr] = useState<string | null>(null);
   const [zoom, setZoom] = useState(false);
+  const [fromAlbum, setFromAlbum] = useState(!!preview?.fromAlbum);
   const [sent, setSent] = useState<{ title: string; value: string } | null>(preview?.sent ?? null);
   const temp = useRef<string[]>([]);
   const gone = useRef(false);
@@ -142,8 +147,23 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
     }
   }
 
+  async function album() {
+    setErr(null);
+    tap();
+    try {
+      const r = await pickPhoto();
+      if (!r) return;
+      if (r.kind === 'pdf') return setErr(PDF_LINE);
+      setFromAlbum(true);
+      await process(r, false);
+    } catch {
+      setErr('사진을 고르지 못했어요.');
+    }
+  }
+
   async function take() {
     setErr(null);
+    setFromAlbum(false);
     tap();
     try {
       const r = await cam.current?.takePictureAsync({ quality: 0.92, exif: false, shutterSound: true });
@@ -330,6 +350,11 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
             승인번호가 있는 전자세금계산서 출력물이에요. PC가 홈택스에서 이미 가져오니 꾸러미에 두 번 들어가지 않게 PC가 승인번호로 맞춰요.
           </Notice>
         )}
+        {fromAlbum && (
+          <T v="meta" c="ink3" testID="capture-album-note">
+            사진은 PC에 보관해요 · 앨범 원본은 그대로 둬요
+          </T>
+        )}
         {engine === 'none' && (
           <T v="meta" c="ink3">
             이 폰에서는 글자를 읽지 않아요. 비워 두면 PC가 사진에서 읽어요.
@@ -395,9 +420,14 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
         )}
         {!perm?.granted && !DEV_LOCAL && (
           <View style={[StyleSheet.absoluteFill, st.center, { padding: space.s6, gap: space.s4 }]}>
-            <T v="sub" c="onCamera" center>
-              종이 증빙을 찍으려면 카메라가 필요해요. 사진은 사진 앱에 저장하지 않아요.
-            </T>
+            <View style={{ gap: space.s1 }}>
+              <T v="subStrong" c="onCamera" center>
+                종이 증빙을 찍으려면 카메라가 필요해요
+              </T>
+              <T v="meta" c="onCamera" center style={{ opacity: 0.72 }}>
+                사진은 사진 앱에 저장하지 않아요 · 앨범에서 골라도 돼요
+              </T>
+            </View>
             <Button small kind="secondary" label="카메라 허용" onPress={() => void requestPerm()} />
           </View>
         )}
@@ -410,16 +440,22 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
         {DEV_LOCAL ? (
           <Button testID="dev-sample" kind="secondary" label="개발: 견본 영수증으로 찍기" onPress={() => void devSample()} busy={phase === 'reading'} style={{ alignSelf: 'stretch' }} />
         ) : (
-          <Pressable
-            testID="shutter"
-            accessibilityRole="button"
-            accessibilityLabel="찍기"
-            disabled={!perm?.granted || phase === 'reading'}
-            onPress={() => void take()}
-            style={[st.shutter, { opacity: !perm?.granted ? 0.4 : 1 }]}
-          >
-            {({ pressed }) => <View style={[st.shutterIn, { transform: [{ scale: pressed ? 0.92 : 1 }] }]} />}
-          </Pressable>
+          <View style={st.shutterRow}>
+            {/* 셔터 왼쪽 [앨범]: 카메라 권한 없이도 고를 수 있다 */}
+            <Pressable testID="capture-album" accessibilityRole="button" accessibilityLabel="앨범에서 고르기" onPress={() => void album()} disabled={phase === 'reading'} style={({ pressed }) => [st.side, pressed && { opacity: 0.6 }]}>
+              <T v="subStrong" c="onCamera">
+                앨범
+              </T>
+            </Pressable>
+            {perm?.granted ? (
+              <Pressable testID="shutter" accessibilityRole="button" accessibilityLabel="찍기" disabled={phase === 'reading'} onPress={() => void take()} style={st.shutter}>
+                {({ pressed }) => <View style={[st.shutterIn, { transform: [{ scale: pressed ? 0.92 : 1 }] }]} />}
+              </Pressable>
+            ) : (
+              <View style={{ width: 76, height: 76 }} />
+            )}
+            <View style={st.side} />
+          </View>
         )}
       </View>
     </SafeAreaView>
@@ -567,6 +603,8 @@ const st = StyleSheet.create({
   camBar: { paddingHorizontal: space.s5, paddingTop: space.s4, paddingBottom: space.s4, gap: space.s4, alignItems: 'center' },
   camSeg: { flexDirection: 'row', borderRadius: radius.md, padding: 3, backgroundColor: '#FFFFFF1F' },
   camSegItem: { flex: 1, minHeight: 38, borderRadius: radius.sm + 1, alignItems: 'center', justifyContent: 'center' },
+  shutterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', alignSelf: 'stretch' },
+  side: { width: 72, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   shutter: { width: 76, height: 76, borderRadius: 38, borderWidth: 4, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   shutterIn: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#FFFFFF' },
   corner: { position: 'absolute', width: CORNER, height: CORNER, borderColor: '#FFFFFF' },

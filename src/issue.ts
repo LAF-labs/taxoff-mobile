@@ -12,6 +12,23 @@ export interface Counterparty {
   lastAt?: number;
   /** 지금까지 발급한 건수(0이면 처음 거래하는 곳) */
   issued: number;
+  /** 등록증에서 읽은 값(기획 v2 PR 7) */
+  ceo?: string;
+  address?: string;
+  bizType?: string;
+  item?: string;
+  /** 세금계산서 받을 이메일 */
+  email?: string;
+  /** 휴·폐업 확인: PC가 확인 중 · PC가 켜지면 확인 · 정상 · 휴업·폐업(조회일) */
+  status?: CounterpartyStatus;
+}
+
+export type CounterpartyStatus = { kind: 'checking' } | { kind: 'waitPc' } | { kind: 'ok' } | { kind: 'closed'; what: '휴업' | '폐업'; on: string };
+
+/** 같은 사업자번호(숫자만 비교)의 거래처 */
+export function findByBizNo(all: Counterparty[], bizNo: string): Counterparty | null {
+  const d = bizNo.replace(/\D/g, '');
+  return d.length === 10 ? (all.find((c) => c.bizNo.replace(/\D/g, '') === d) ?? null) : null;
 }
 
 /** 오늘 이미 발급한 것(중복 경고용) */

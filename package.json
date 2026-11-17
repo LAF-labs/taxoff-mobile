@@ -16,6 +16,7 @@
     "expo-file-system": "~58.0.13",
     "expo-haptics": "~58.0.8",
     "expo-image-manipulator": "~58.0.16",
+    "expo-image-picker": "~58.0.10",
     "expo-secure-store": "~58.0.2",
     "expo-sharing": "~58.0.23",
     "expo-status-bar": "~58.0.4",
@@ -50,7 +51,7 @@
     "lint": "eslint .",
     "sync:remote": "node scripts/sync-remote.mjs",
     "check": "pnpm typecheck && pnpm lint && pnpm test",
-    "gallery": "expo export -p web --output-dir dist-gallery && cp public/sample-invoice.jpg dist-gallery/"
+    "gallery": "expo export -p web --output-dir dist-gallery && cp public/sample-invoice.jpg public/sample-bizreg.jpg dist-gallery/"
   },
   "private": true
 }

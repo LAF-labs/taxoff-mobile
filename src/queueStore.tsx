@@ -4,10 +4,12 @@
 //   승인하면 발급 → 확인 → 결과 카드. simulate='inDoubt'이면 발급 뒤 응답이 끊겨 확인 중(조회 n회째) → 확인 필요로 간다.
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { jobTimers } from './jobTimers';
+import { josa } from './ui/josa';
 import { GATE_TTL_MS, buildGate, type AttestState, type PhoneGate, type READBACK_KEYS } from './approval';
 import type { ChatItem } from './chat';
 import { applyAction, startAll as startAllJobs, type DoneJob, type Job, type JobAction, type NeedPcReason } from './queue';
 import type { IssueResult, RunAction, RunView } from './run';
+import type { Counterparty } from './issue';
 import sampleDoc from '../assets/sample/tax-invoice.pdf';
 import { b64, randomBytes } from '../vendor/sax-remote/src/index.ts';
 
@@ -46,6 +48,14 @@ export interface QueueStore {
   /** 진행·결과·서류 화면이 보는 일 */
   focus: Job | null;
   setFocus: (id: string | null) => void;
+  /** 거래처(이 폰에서 만든 것. PC 사본은 ADR-046 결정 5 뒤) */
+  counterparties: Counterparty[];
+  /** 등록증으로 만든 거래처를 더하고 발급 작성에서 골라 둔다. PC가 켜져 있으면 휴·폐업 확인 중, 꺼져 있으면 켜지면 확인. */
+  addCounterparty: (cp: Counterparty, pcOnline: boolean) => void;
+  /** 발급 작성이 열릴 때 골라 둘 거래처 */
+  pickId: string | null;
+  setPick: (id: string) => void;
+  clearPick: () => void;
 }
 
 /** 번들 견본 서류(다음 PR에서 PC가 보낸 암호 파일을 풀어 쓴다) */
@@ -56,13 +66,15 @@ const Ctx = createContext<QueueStore | null>(null);
 const SIM_SUPPLIER = { supplierBizNo: '123-45-67890', supplierName: '택스오프상회' };
 
 export function QueueProvider({
-  initial = [], last = null, notes: initialNotes = [], approval = { attest: 'none', iosAllowed: false, usedToday: 0 }, sheet = null, simulate = false, focus: initialFocus = null, children,
+  initial = [], last = null, notes: initialNotes = [], approval = { attest: 'none', iosAllowed: false, usedToday: 0 }, sheet = null, simulate = false, focus: initialFocus = null, counterparties: initialCps = [], pick = null, children,
 }: {
   initial?: Job[]; last?: DoneJob | null; notes?: ChatItem[]; approval?: ApprovalSettings;
   /** 처음부터 열어 둘 승인 시트(갤러리) */
   sheet?: string | null;
   simulate?: boolean | 'inDoubt';
   focus?: string | null;
+  counterparties?: Counterparty[];
+  pick?: string | null;
   children: ReactNode;
 }) {
   const [jobs, setJobs] = useState<Job[]>(initial);
@@ -70,6 +82,8 @@ export function QueueProvider({
   const [sheetId, setSheetId] = useState<string | null>(sheet);
   const [used, setUsed] = useState(approval.usedToday);
   const [focusId, setFocusId] = useState<string | null>(initialFocus);
+  const [cps, setCps] = useState<Counterparty[]>(initialCps);
+  const [pickId, setPickId] = useState<string | null>(pick);
   const setRun = (id: string, f: (r: RunView | undefined, j: Job) => RunView, extra: Partial<Job> = {}) => patch(id, (j) => ({ ...j, ...extra, run: f(j.run, j) }));
   // 일별 타이머: 같은 일의 흐름을 다시 시작하면 앞 흐름을 지운다(겹치지 않게). 저장소가 사라질 때도 지운다.
   const timers = useRef(jobTimers()).current;
@@ -131,7 +145,7 @@ export function QueueProvider({
           setUsed((u) => u + 1);
           const startedAt = j?.run?.startedAt ?? Date.now();
           setRun(id, () => ({ kind: 'running', step: 'issue', startedAt }), { state: 'running', gate: undefined });
-          if (!j?.run) note(id, `${j?.title ?? '세금계산서'}을 승인했어요. PC가 홈택스에서 발급하고 있어요`);
+          if (!j?.run) note(id, `${josa(j?.title ?? '세금계산서', '을', '를')} 승인했어요. PC가 홈택스에서 발급하고 있어요`);
           if (simulate && j?.gate) {
             timers.clear(id);
             const f = Object.fromEntries(j.gate.fields.map((x) => [x.key, x.value]));
@@ -167,13 +181,23 @@ export function QueueProvider({
         } else if (a === 'reserveOnPc') {
           timers.clear(id);
           setRun(id, (r) => (r?.kind === 'stopped' ? { ...r, reserved: true } : { kind: 'stopped', step: 'login', reason: 'unknownScreen', startedAt, reserved: true }));
-          note(id, `PC에서 ${j.title}을 먼저 열어 둘게요`);
+          note(id, `PC에서 ${josa(j.title, '을', '를')} 먼저 열어 둘게요`);
         } else if (a === 'retryPrepare' || a === 'resendAuth') {
           const rb = readbacks.get(id);
           if (simulate && rb) drivePrepare(id, rb, startedAt);
           else setRun(id, () => ({ kind: 'running', step: a === 'resendAuth' ? 'login' : 'prepare', startedAt }));
         }
       },
+      counterparties: cps,
+      addCounterparty: (cp, pcOnline) => {
+        setCps((xs) => [...xs, { ...cp, status: pcOnline ? { kind: 'checking' } : { kind: 'waitPc' } }]);
+        setPickId(cp.id);
+        // 시연: PC가 조회를 마치면 정상으로
+        if (simulate && pcOnline) timers.at(cp.id, 1800, () => setCps((xs) => xs.map((c) => (c.id === cp.id ? { ...c, status: { kind: 'ok' } } : c))));
+      },
+      pickId,
+      setPick: (id) => setPickId(id),
+      clearPick: () => setPickId(null),
       focus: jobs.find((j) => j.id === focusId) ?? null,
       setFocus: (id) => setFocusId(id),
       rerequest: (id) => {
@@ -181,7 +205,7 @@ export function QueueProvider({
         patch(id, (x) => (x.gate ? { ...x, gate: { ...x.gate, challenge: b64(randomBytes(32)), exp: Date.now() + GATE_TTL_MS } } : x));
       },
     }),
-    [jobs, last, notes, sheetId, used, focusId, approval.attest, approval.iosAllowed, simulate],
+    [jobs, last, notes, sheetId, used, focusId, cps, pickId, approval.attest, approval.iosAllowed, simulate],
   );
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }
