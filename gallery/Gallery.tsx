@@ -1,6 +1,7 @@
 // 화면 갤러리(웹 전용, 디자인 점검용). 가짜 세션으로 화면 하나를 그린다: /?s=home-chat-online | home-unpaired | money-empty | ...
 // ?fs=1.6 이면 글자 크기 설정 1.6배를 흉내 낸다(앱에서는 OS 설정을 따른다).
 // 앱 번들에는 들어가지 않는다(metro.config.cjs가 web에서만 App을 이것으로 바꾼다). 네트워크·키·카메라를 쓰지 않는다.
+import type { PhoneCopyBody } from '@sax/remote';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -70,6 +71,34 @@ function fake(data: AppData, pc: PcStatus, pending = { receipts: 0, cash: 0 }): 
     update: async () => {}, sync: async () => {}, refreshPending: async () => {},
   };
 }
+
+/** PC가 세션마다 넘기는 폰 사본(remote-envelope v1.8 phone.copy) 가짜 */
+const COPY_AT = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 10, 0).getTime();
+const COPY: PhoneCopyBody = {
+  asOf: COPY_AT,
+  counterparties: [
+    { ref: 'cp_gana', name: '가나식자재', bizNo: '123-45-67891', emailHint: 't***@gana.example', last: { supply: 1_230_000, vatMode: 'excl', item: '식자재', day: iso(new Date(now - 3 * DAY)) } },
+    { ref: 'cp_dong', name: '동네마트 성수점', bizNo: '220-81-11111', last: { supply: 480_000, vatMode: 'excl', item: '포장 용기', day: iso(new Date(now - 9 * DAY)) } },
+    { ref: 'cp_seoul', name: '서울청과', last: { supply: 2_750_000, vatMode: 'excl', item: '과일 납품', day: iso(new Date(now - 20 * DAY)) } },
+    { ref: 'cp_new', name: '한빛인테리어', bizNo: '105-87-22222' },
+  ],
+  money: {
+    asOf: COPY_AT,
+    accounts: 2,
+    receivable: { unpaidCount: 4, unpaidTotal: 6_820_000, overdueCount: 1, overdueTotal: 1_353_000, dueSoonCount: 2, dueSoonTotal: 3_190_000, reviewCount: 0 },
+    payable: { unpaidCount: 3, unpaidTotal: 2_410_000, overdueCount: 0, overdueTotal: 0, dueSoonCount: 1, dueSoonTotal: 880_000, reviewCount: 0 },
+    cashflow: { month: iso(today).slice(0, 7), complete: true, inTotal: 12_480_000, outTotal: 9_215_000, net: 3_265_000, in30: 6_820_000, out30: 2_410_000, noDueOutCount: 1, alerts: [] },
+  },
+};
+const copyData = (c: PhoneCopyBody | null = COPY): AppData => ({ ...paired(), pcCopy: c });
+const COPY_UNSURE: PhoneCopyBody = {
+  ...COPY,
+  money: {
+    ...COPY.money!,
+    cashflow: { month: iso(today).slice(0, 7), complete: false, missing: ['국민 1234'], inTotal: null, outTotal: null, net: null, in30: 6_820_000, out30: null, alerts: [{ id: 'a1', kind: 'slow_collection', text: '가나식자재 입금이 평소보다 늦어지고 있어요(평균 12일 → 31일)' }] },
+  },
+};
+const COPY_NO_ACCT: PhoneCopyBody = { ...COPY, money: { asOf: COPY_AT, accounts: 0, receivable: COPY.money!.receivable, payable: { unpaidCount: 0, unpaidTotal: 0, overdueCount: 0, overdueTotal: 0, dueSoonCount: 0, dueSoonTotal: 0, reviewCount: 0 } } };
 
 const noop = () => {};
 const FACE: BioInfo = { kind: 'faceId', enrolled: true };
@@ -391,6 +420,9 @@ const SCREENS: Record<
   home: () => ({ session: fake(paired(), 'online', { receipts: 2, cash: 0 }), node: <Main /> }),
   'home-stale': () => ({ session: fake({ ...paired(), lastSeenPc: now - 9 * DAY }, 'stale', { receipts: 3, cash: 1 }), node: <Main chat={CHAT} /> }),
   'money-empty': () => money(null),
+  'money-copy': () => ({ ...money(null, { pc: 'offline' }), session: fake({ ...copyData(), lastSeenPc: now - 15 * H }, 'offline') }),
+  'money-copy-unsure': () => ({ ...money(null, { pc: 'offline' }), session: fake({ ...copyData(COPY_UNSURE), lastSeenPc: now - 15 * H }, 'offline') }),
+  'money-copy-no-account': () => ({ ...money(null, { pc: 'offline' }), session: fake({ ...copyData(COPY_NO_ACCT), lastSeenPc: now - 15 * H }, 'offline') }),
   'money-ok': () => money(MONEY_OK),
   'money-late': () => money(MONEY_LATE),
   'money-shortfall': () => money(MONEY_SHORT),
@@ -430,6 +462,8 @@ const SCREENS: Record<
   'queue-empty': () => ({ session: fake(paired(), 'online'), last: LAST_DONE, node: <QueueScreen onDone={noop} onConnection={noop} onOpen={noop} now={now} /> }),
   'issue-picker': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'pick' }) }),
   'issue-picker-empty': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'pick' }, []) }),
+  'issue-picker-copy': () => ({ session: fake(copyData(), 'offline'), node: <IssueScreen onDone={noop} onCapture={noop} onSubmitted={noop} preview={{ phase: 'pick' }} /> }),
+  'issue-copy-filled': () => ({ session: fake(copyData(), 'offline'), node: <IssueScreen onDone={noop} onCapture={noop} onSubmitted={noop} preview={{ phase: 'form', cpId: 'cp_gana' }} /> }),
   'issue-filled-online': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'form', cpId: 'ga' }) }),
   'issue-filled-offline': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: issue({ phase: 'form', cpId: 'dm', amount: '352,000', vat: 'incl' }) }),
   'issue-stale': () => ({ session: fake({ ...paired(), lastSeenPc: now - 9 * DAY }, 'stale'), node: issue({ phase: 'form', cpId: 'ga' }) }),

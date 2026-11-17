@@ -4,11 +4,12 @@
 // - 금액: [부가세 별도|포함] 아래 숫자 칸, 그 밑 한 줄에 공급가액·세액·합계(세액 = 공급가액 10% 버림).
 // - 바닥 주요 단추는 PC 상태를 따른다: 켜짐 [홈택스에서 준비] · 꺼짐 [PC 켜지면 준비하기] · 오래 꺼짐 단추 없이 황토 한 줄.
 // - 경고는 한 번에 하나(Notice): 오늘 같은 곳 같은 금액 > 처음 거래하는 곳 > 폰 승인 남은 건수.
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { clock } from '../chat';
 import { findDuplicate, recentCounterparties, searchCounterparties, splitAmount, type Counterparty, type IssuedToday, type VatMode } from '../issue';
 import type { Job } from '../queue';
+import { counterpartiesOf } from '../net/pcCopy';
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
 import { MAX_FONT_SCALE, radius, size, space, textScale, type, usePalette } from '../theme';
@@ -45,7 +46,11 @@ export function IssueScreen({
 }) {
   const s = useSession();
   const queue = useQueue();
-  const counterparties = given ?? queue.counterparties;
+  // 저장소에 거래처가 없으면 PC가 넘긴 사본(AppData.pcCopy)의 거래처를 쓴다. 사본도 없으면 지금처럼 빈 목록.
+  const copy = s.data.pcCopy ?? null;
+  const fromCopy = useMemo(() => (copy ? counterpartiesOf(copy) : null), [copy]);
+  const counterparties = given ?? (queue.counterparties.length > 0 || !fromCopy ? queue.counterparties : fromCopy);
+  const copyAt = !given && queue.counterparties.length === 0 && fromCopy ? copy?.asOf ?? null : null;
   // 등록증으로 막 만든 거래처가 있으면 그것을 골라 둔 채로 연다(기획 v2 PR 7)
   const picked = queue.pickId ? counterparties.find((c) => c.id === queue.pickId) ?? null : null;
   const first = preview?.cpId ? counterparties.find((c) => c.id === preview.cpId) ?? null : picked;
@@ -75,7 +80,7 @@ export function IssueScreen({
     setPhase('form');
   };
 
-  if (phase === 'pick') return <Picker all={counterparties} initialQuery={preview?.query ?? ''} onPick={pick} onDone={onDone} onCapture={onCapture} />;
+  if (phase === 'pick') return <Picker all={counterparties} copyAt={copyAt} initialQuery={preview?.query ?? ''} onPick={pick} onDone={onDone} onCapture={onCapture} />;
 
   const live = cp ? counterparties.find((c) => c.id === cp.id) ?? cp : null;
   const status = live?.status;
@@ -244,8 +249,8 @@ function statusNote(status: Counterparty['status'], firstAsLine: boolean) {
 
 /** 거래처 고르기(P-11): 최근 다섯 곳 → 찾기 → 직접 입력. */
 function Picker({
-  all, initialQuery, onPick, onDone, onCapture,
-}: { all: Counterparty[]; initialQuery: string; onPick: (c: Counterparty | null) => void; onDone: () => void; onCapture: () => void }) {
+  all, copyAt, initialQuery, onPick, onDone, onCapture,
+}: { all: Counterparty[]; copyAt: number | null; initialQuery: string; onPick: (c: Counterparty | null) => void; onDone: () => void; onCapture: () => void }) {
   const p = usePalette();
   const [q, setQ] = useState(initialQuery);
   if (all.length === 0) {
@@ -271,7 +276,7 @@ function Picker({
   return (
     <Screen title="거래처 고르기" onBack={onDone} testID="issue-picker">
       {!q && (
-        <Group title="최근 거래처" testID="picker-recent">
+        <Group title="최근 거래처" testID="picker-recent" note={copyAt ? `PC 기준 ${copyWhen(copyAt)}` : undefined}>
           {recent.map((c) => (
             <Row key={c.id} label={c.name} sub={lastLine(c)} onPress={() => onPick(c)} testID={`cp-${c.id}`} />
           ))}
@@ -294,7 +299,7 @@ function Picker({
           (found.length > 0 ? (
             <Group title="찾은 거래처">
               {found.map((c) => (
-                <Row key={c.id} label={c.name} sub={`${c.bizNo}${c.lastAt ? ` · ${lastLine(c)}` : ''}`} onPress={() => onPick(c)} testID={`cp-${c.id}`} />
+                <Row key={c.id} label={c.name} sub={[c.bizNo, c.lastAt ? lastLine(c) : ''].filter(Boolean).join(' · ') || undefined} onPress={() => onPick(c)} testID={`cp-${c.id}`} />
               ))}
             </Group>
           ) : (
@@ -324,3 +329,9 @@ const st = StyleSheet.create({
   sumValue: { minWidth: 120, textAlign: 'right' },
   search: { minHeight: size.hit + 4, borderRadius: radius.full, paddingHorizontal: space.s4 },
 });
+
+/** 사본 시각 "11월 17일 오전 10:00" */
+export function copyWhen(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getMonth() + 1}월${NB}${d.getDate()}일 ${clock(ts)}`;
+}
