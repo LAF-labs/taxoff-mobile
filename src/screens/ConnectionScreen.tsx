@@ -80,7 +80,7 @@ export function ConnectionScreen({ onDone, onReset, onRepair }: { onDone: () => 
       {sp1 && (
         <Group title="보호 상태" testID="sp1-result">
           <Row label={sp1.ok ? '열쇠·파일 보호 정상' : '보호가 약한 항목이 있어요'} valueInk={sp1.ok ? 'ink2' : 'attention'} value={sp1.ok ? '정상' : '확인'} />
-          <Row label="열쇠" value={sp1.keychain.accessible} sub={sp1.keychain.biometric ? '열 때 얼굴·지문 필요' : '생체 없음(시뮬레이터 개발)'} />
+          <Row label="열쇠" value={sp1.keychain.accessible} sub={sp1.keychain.auth === 'none' ? '인증 없음(시뮬레이터 개발)' : sp1.keychain.auth === 'missing' ? '열쇠 정책을 읽지 못했어요' : '열 때 얼굴·지문, 안 되면 폰 암호'} />
           {sp1.files.slice(0, 8).map((f, i) => (
             <Row key={`${i}:${f.path}`} label={f.path} value={f.excludedFromBackup ? '백업 제외' : '백업 포함'} valueInk={f.excludedFromBackup ? 'ink3' : 'attention'} sub={f.protection} />
           ))}

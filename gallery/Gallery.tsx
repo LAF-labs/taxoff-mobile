@@ -412,8 +412,9 @@ const SCREENS: Record<
   'lock-faceid': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: FACE }} /> }),
   'lock-touchid': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'touchId', enrolled: true } }} /> }),
   'lock-android': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'fingerprint', enrolled: true } }} /> }),
-  'lock-failed': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: FACE, err: 'cancelled' }} /> }),
-  'lock-not-enrolled': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'faceId', enrolled: false } }} /> }),
+  'lock-failed': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: FACE, err: 'unavailable' }} /> }),
+  'lock-passcode-fallback': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: FACE, err: 'cancelled' }} /> }),
+  'lock-no-biometric-passcode': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'faceId', enrolled: false } }} /> }),
   'lock-no-passcode': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: FACE, err: 'passcode_required' }} /> }),
   'lock-first-run': () => ({ session: fake(emptyData(), 'unpaired'), node: <LockScreen firstRun onUnlocked={noop} onReset={noop} preview={{ bio: FACE }} /> }),
   /** 앱 전환 덮개: 다른 앱으로 넘어가면 내용을 바탕색 면으로 가린다(App.tsx privacy-cover) */
