@@ -132,7 +132,8 @@ describe('업데이트 채널(ADR-028, D01 §6)', () => {
     assert.equal({ ...pkg.dependencies }['expo-updates'], undefined);
   });
   it('릴레이 허용 목록은 바이너리 내장값', () => {
-    assert.match(src('src/devhost.ts'), /RELAY_ALLOWLIST: readonly string\[\] = \['relay\.tex\.laf-co\.com'\]/);
+    assert.match(src('src/devhost.ts'), /RELAY_ALLOWLIST: readonly string\[\] = \['rooms\.tax\.laf-co\.com'\]/);
+    assert.match(src('src/config.ts'), /PUBLIC_ORIGIN: string = 'https:\/\/tax\.laf-co\.com';/);
     assert.deepEqual(resolveDevConfig({ isDev: false, isDevice: true, envHost: 'evil.local:8787' }).relayAllowlist, RELAY_ALLOWLIST);
     assert.match(src('src/config.ts'), /relayAllowlist = \(\): readonly string\[\] => DEV\.relayAllowlist;/);
   });

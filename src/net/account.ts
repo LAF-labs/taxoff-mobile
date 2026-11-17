@@ -10,8 +10,8 @@ export class AccountUnavailable extends Error {
 }
 
 /**
- * 계정 서비스 origin(DPoP htu의 앞부분). 개발 빌드는 더미 PC(dev/dummy-pc.ts)다. 릴리스는 config PUBLIC_ORIGIN
- * (배포 때 넣는다). 비어 있으면 연결하지 않는다.
+ * 계정 서비스 origin(DPoP htu의 앞부분). 개발 스택은 더미 PC(dev/dummy-pc.ts)다. 그 밖에는 config PUBLIC_ORIGIN(운영)
+ * 이다. 비어 있으면 연결하지 않는다.
  */
 export function accountOrigin(): string {
   if (DEV_STACK) return `http://${DEV_RELAY_HOST}`;
