@@ -131,7 +131,7 @@ export function stopConfirm(row: Pick<DeviceRow, 'label' | 'role'>): { title: st
   const what = row.role === 'desktop' ? 'PC' : '폰';
   return {
     title: `${row.label} 정지`,
-    body: `이 ${what}는 바로 계정을 쓸 수 없게 되고 7일 뒤 연결이 끊겨요. 잘못 눌렀으면 그 전에 켜져 있는 PC의 기기 연결 화면에서 되돌릴 수 있어요.`,
+    body: `이 ${what}는 바로 계정을 쓸 수 없게 되고 7일 뒤 연결이 끊겨요.`,
     action: '정지',
   };
 }
@@ -211,7 +211,7 @@ export function devicesErrorText(code: string): string {
     case 'policy.rate_limited':
       return '오늘은 더 정지할 수 없어요. 내일 다시 하거나 PC의 기기 연결 화면에서 끊어 주세요.';
     case 'account.device_suspended':
-      return '이 폰은 다른 기기에서 정지했거나 연결을 끊었어요. 정지라면 켜져 있는 PC의 기기 연결 화면에서 풀 수 있어요.';
+      return '이 폰은 다른 기기에서 정지했거나 연결을 끊었어요.';
     case 'devices.unreachable':
       return '서버에 닿지 못했어요. 인터넷 연결을 확인하고 다시 해 주세요.';
     default:

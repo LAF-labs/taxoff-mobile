@@ -87,7 +87,7 @@ export function DevicesScreen({ onDone, onReset, onPair, preview }: { onDone: ()
   } else if (load.kind === 'error' && isStopped(load.code)) {
     body = (
       <>
-        <Notice testID="devices-stopped" sub="정지가 아니면 이 폰 연결을 해제하고 PC와 다시 연결해 주세요.">
+        <Notice testID="devices-stopped" sub="다시 쓰려면 이 폰 연결을 해제하고 PC와 다시 연결해 주세요.">
           {devicesErrorText(load.code)}
         </Notice>
         {thisPhone}
