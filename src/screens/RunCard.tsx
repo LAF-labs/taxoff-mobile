@@ -6,6 +6,7 @@
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
+import { REJECT_LINE } from '../phoneCmd';
 import type { Job } from '../queue';
 import { ACTION_LABEL, AUTH_APPS, STEPS, STEP_LABEL, STOP_COPY, actionsOf, chipOf, elapsed, groupApprovalNo, mmss, stepOf, type IssueResult, type RunAction, type RunView } from '../run';
 import { radius, space, usePalette } from '../theme';
@@ -90,10 +91,11 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
             </T>
           ))}
       </View>
-      {r.kind !== 'done' && <StepBar r={r} />}
+      {/* 이유 없는 PC 멈춤은 어느 단계였는지 모르니 단계 막대를 두지 않는다 */}
+      {r.kind !== 'done' && r.kind !== 'refused' && !(r.kind === 'stopped' && r.reason === 'pcStopped') && <StepBar r={r} />}
       <StateLines r={r} />
       {r.kind === 'done' && <ResultRows result={r.result} />}
-      {compact && <CardActions r={r} now={now} onAction={onAction} onDoc={onDoc} onShare={onShare} />}
+      {compact && !job.pcOnly && <CardActions r={r} now={now} onAction={onAction} onDoc={onDoc} onShare={onShare} />}
     </View>
   );
   if (!compact || !onOpen) return body;
@@ -128,6 +130,19 @@ function StepBar({ r }: { r: RunView }) {
 function StateLines({ r }: { r: RunView }) {
   const p = usePalette();
   switch (r.kind) {
+    case 'running':
+      // 폰 발급 명령(pc_only): 승인은 PC 승인 바에서
+      return r.pcApproval && r.step === 'approve' ? (
+        <T v="sub" c="attention" testID="run-pc-approve">
+          PC 승인 바에서 승인해 주세요
+        </T>
+      ) : null;
+    case 'refused':
+      return (
+        <T v="sub" c="ink2" testID={`run-refused-${r.reason}`}>
+          {REJECT_LINE[r.reason]}
+        </T>
+      );
     case 'myTurn':
       return (
         <T v="sub" c="attention" testID="run-my-turn">

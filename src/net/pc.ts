@@ -12,6 +12,8 @@ import { deviceAuthFor, fetchJson, type Htm } from './devauth';
 import type { DeviceKeys } from '../keyring';
 import type { FileOutbox } from '../storage/outbox';
 import type { AppData } from '../storage/state';
+import { PHONE_CAPS, newerCopy, receiveCopy } from './pcCopy';
+import { driveCmds, trimCmds } from './issueLive';
 
 /** queued: PC는 꺼져 있고 릴레이 큐에 맡겼다. stale: PC가 오래 꺼져 있어 유효한 번들이 없다(맡길 수 없다). */
 export type PcStatus = 'unpaired' | 'connecting' | 'online' | 'queued' | 'stale' | 'offline';
@@ -21,6 +23,10 @@ export interface SyncDeps {
   data: () => AppData;
   update: (f: (d: AppData) => AppData) => Promise<void>;
   outbox: FileOutbox;
+  /** 세션이 열리면 부른다(명령을 지켜보는 동안 화면이 '연결 중'에 머물지 않게) */
+  onLive?: () => void;
+  /** 잠그면 거짓 */
+  alive?: () => boolean;
 }
 
 export interface SyncResult {
@@ -66,6 +72,8 @@ export async function syncWithPc(d: SyncDeps): Promise<SyncResult> {
   if (!pair) return { status: 'unpaired' };
   const live = await viaLive(d, pair);
   if (live) return live;
+  // 잠겨서 멈췄으면 큐로 넘어가지 않는다(키가 지워지는 중)
+  if (d.alive && !d.alive()) return { status: 'offline' };
   return viaQueue(d, pair);
 }
 
@@ -85,13 +93,17 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | null> {
       pairId: pair.pairId,
       noise,
       desktopStatic: fromB64(pair.desktopStatic),
-      hello: { appVersion: APP_VERSION, deviceListVersion: d.data().seenListVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash] },
+      hello: { appVersion: APP_VERSION, deviceListVersion: d.data().seenListVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash, ...PHONE_CAPS] },
       nextTimestamp: () => (used = clock()),
       responseTimeoutMs: 8000,
     });
     if (used) await d.update((x) => ({ ...x, ikTs: Math.max(x.ikTs, used) }));
     if (!s) return null;
     await d.update((x) => ({ ...x, lastSeenPc: Date.now() }));
+    d.onLive?.();
+    // PC는 세션을 열자마자 사본을 보낸다. 보관함을 비우기 전에 받는다(비우는 동안 온 다른 봉투는 버려진다).
+    const copy = await receiveCopy(s.channel, s.peerHello.capabilities).catch(() => null);
+    if (copy) await d.update((x) => ({ ...x, pcCopy: newerCopy(x.pcCopy, copy) }));
     const flushed = await flushOutbox(s.channel, d.outbox);
     if (flushed.sent.length) {
       const sent = new Set(flushed.sent);
@@ -101,6 +113,13 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | null> {
         recent: x.recent.map((r) => (sent.has(r.msgId) ? { ...r, state: 'sent' as const } : r)),
       }));
     }
+    // 폰 발급 명령: 저장된 cmdId로 보내고(다시 보내도 같은 cmdId), 끝날 때까지 진행을 받는다
+    await driveCmds(s.channel, s.peerHello.capabilities, {
+      cmds: () => d.data().cmds ?? [],
+      save: (f) => d.update((x) => ({ ...x, cmds: trimCmds(f(x.cmds ?? [])) })),
+      onCopy: (c) => d.update((x) => ({ ...x, pcCopy: newerCopy(x.pcCopy, c) })),
+      alive: d.alive,
+    });
     s.channel.close();
     return { status: 'online', flushed };
   } catch {

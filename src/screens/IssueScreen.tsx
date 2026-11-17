@@ -4,11 +4,15 @@
 // - 금액: [부가세 별도|포함] 아래 숫자 칸, 그 밑 한 줄에 공급가액·세액·합계(세액 = 공급가액 10% 버림).
 // - 바닥 주요 단추는 PC 상태를 따른다: 켜짐 [홈택스에서 준비] · 꺼짐 [PC 켜지면 준비하기] · 오래 꺼짐 단추 없이 황토 한 줄.
 // - 경고는 한 번에 하나(Notice): 오늘 같은 곳 같은 금액 > 처음 거래하는 곳 > 폰 승인 남은 건수.
-import { useEffect, useState } from 'react';
+// - PC 사본에서 고른 거래처는 폰 발급 명령(cmd.run)으로 맡긴다: [발급 맡기기], 승인은 PC 승인 바, 작성일자는 오늘(src/phoneCmd.ts).
+import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { clock } from '../chat';
 import { findDuplicate, recentCounterparties, searchCounterparties, splitAmount, type Counterparty, type IssuedToday, type VatMode } from '../issue';
 import type { Job } from '../queue';
+import { ulid } from '@sax/remote';
+import { counterpartiesOf } from '../net/pcCopy';
+import { issueRequest, kstDay, type PhoneCmd } from '../phoneCmd';
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
 import { MAX_FONT_SCALE, radius, size, space, textScale, type, usePalette } from '../theme';
@@ -45,7 +49,11 @@ export function IssueScreen({
 }) {
   const s = useSession();
   const queue = useQueue();
-  const counterparties = given ?? queue.counterparties;
+  // 저장소에 거래처가 없으면 PC가 넘긴 사본(AppData.pcCopy)의 거래처를 쓴다. 사본도 없으면 지금처럼 빈 목록.
+  const copy = s.data.pcCopy ?? null;
+  const fromCopy = useMemo(() => (copy ? counterpartiesOf(copy) : null), [copy]);
+  const counterparties = given ?? (queue.counterparties.length > 0 || !fromCopy ? queue.counterparties : fromCopy);
+  const copyAt = !given && queue.counterparties.length === 0 && fromCopy ? copy?.asOf ?? null : null;
   // 등록증으로 막 만든 거래처가 있으면 그것을 골라 둔 채로 연다(기획 v2 PR 7)
   const picked = queue.pickId ? counterparties.find((c) => c.id === queue.pickId) ?? null : null;
   const first = preview?.cpId ? counterparties.find((c) => c.id === preview.cpId) ?? null : picked;
@@ -61,6 +69,9 @@ export function IssueScreen({
   const [item, setItem] = useState(first?.lastItem ?? '');
   const [day, setDay] = useState(localDay());
   const [vat, setVat] = useState<VatMode>(preview?.vat ?? 'excl');
+  /** PC에 맡길 명령을 폰에 저장하는 중 · 저장 실패 */
+  const [saving, setSaving] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
   const [amount, setAmount] = useState(preview?.amount ?? (first?.lastSupply ? masked('won', String(first.lastSupply)) : ''));
   const [dupOk, setDupOk] = useState(false);
 
@@ -75,7 +86,7 @@ export function IssueScreen({
     setPhase('form');
   };
 
-  if (phase === 'pick') return <Picker all={counterparties} initialQuery={preview?.query ?? ''} onPick={pick} onDone={onDone} onCapture={onCapture} />;
+  if (phase === 'pick') return <Picker all={counterparties} copyAt={copyAt} initialQuery={preview?.query ?? ''} onPick={pick} onDone={onDone} onCapture={onCapture} />;
 
   const live = cp ? counterparties.find((c) => c.id === cp.id) ?? cp : null;
   const status = live?.status;
@@ -87,6 +98,8 @@ export function IssueScreen({
   const firstTime = manual || (cp?.issued ?? 0) === 0;
   const online = s.pc === 'online';
   const stale = s.pc === 'stale';
+  // PC 사본에서 고른 거래처면 폰 발급 명령(cmd.run)으로 맡긴다: 거래처는 ref만, 승인은 PC 승인 바, 작성일자는 오늘(한국 시간)
+  const viaPc = !!cp && !manual && !!fromCopy?.some((c) => c.id === cp.id) && !!s.data.pair;
   const ready = !!who && (cp ? true : bizNo.replace(/\D/g, '').length === 10) && a.supply > 0 && /^\d{4}-\d{2}-\d{2}$/.test(day) && !dup && !closed;
 
   let notice = null;
@@ -109,7 +122,8 @@ export function IssueScreen({
         <Button kind="secondary" small label="그래도 작성" onPress={() => setDupOk(true)} testID="issue-dup-ok" style={{ alignSelf: 'flex-start' }} />
       </View>
     );
-  } else if (firstTime) notice = <Notice testID="issue-first">처음 거래하는 곳이라 발급 승인은 PC에서 해요</Notice>;
+  } else if (viaPc) notice = null;
+  else if (firstTime) notice = <Notice testID="issue-first">처음 거래하는 곳이라 발급 승인은 PC에서 해요</Notice>;
   else if (approvalsLeft <= 1)
     notice = <Notice testID="issue-limit">{approvalsLeft === 0 ? '오늘 폰 승인을 다 썼어요. 발급 승인은 PC에서 해요' : `오늘 폰 승인은 ${approvalsLeft}건 남았어요`}</Notice>;
 
@@ -119,7 +133,29 @@ export function IssueScreen({
   const inexactAsNotice = !!inexactLine && !notice;
   if (inexactAsNotice) notice = <Notice testID="issue-inexact">{inexactLine}</Notice>;
 
+  const submitToPc = async () => {
+    if (!cp || saving) return;
+    const cmd: PhoneCmd = { cmdId: ulid(), req: issueRequest({ ref: cp.id, supply: a.supply, item }), cpName: cp.name, total: a.total, createdAt: Date.now() };
+    setSaving(true);
+    setSaveFailed(false);
+    // 보내기 전에 봉인 상태에 저장한다(다시 보낼 때 같은 cmdId). 저장하지 못하면 맡기지 않고 이 화면에 남는다.
+    try {
+      await s.update((d) => ({ ...d, cmds: [...(d.cmds ?? []), cmd] }));
+    } catch {
+      // 메모리에 먼저 들어간 명령을 빼서, 다음 저장이 맡기지 않은 명령을 적지 않게 한다
+      await s.update((d) => ({ ...d, cmds: (d.cmds ?? []).filter((c) => c.cmdId !== cmd.cmdId) })).catch(() => undefined);
+      setSaving(false);
+      setSaveFailed(true);
+      return;
+    }
+    setSaving(false);
+    queue.noteCmd(`cmd-${cmd.cmdId}`, online ? null : `${cp.name} 세금계산서 ${won(a.total)}을 맡겼어요. PC 켜지면 보내요`);
+    void s.sync();
+    onSubmitted();
+  };
+
   const submit = () => {
+    if (viaPc) return void submitToPc();
     const job: Job = { id: `job-${Date.now()}`, title: `${who} 세금계산서`, amount: a.total, createdAt: Date.now(), state: online ? 'running' : 'entrusted' };
     // PC가 되읽을 값(시연 저장소가 승인 요청을 만들 때만 쓴다). 금액은 원 단위 숫자 글자.
     const readback = {
@@ -141,7 +177,17 @@ export function IssueScreen({
           폐업 경고를 먼저 확인해 주세요
         </T>
       )}
-      <Button testID="issue-submit" label={online ? '홈택스에서 준비' : 'PC 켜지면 준비하기'} onPress={submit} disabled={!ready} />
+      {viaPc && saveFailed && (
+        <T v="meta" c="attention" center testID="issue-save-failed">
+          폰에 저장하지 못해 맡기지 않았어요. 다시 눌러 주세요
+        </T>
+      )}
+      {viaPc && (
+        <T v="meta" c="ink3" center testID="issue-pc-approve">
+          승인은 PC 승인 바에서 해요
+        </T>
+      )}
+      <Button testID="issue-submit" label={viaPc ? (online ? '발급 맡기기' : 'PC 켜지면 맡기기') : online ? '홈택스에서 준비' : 'PC 켜지면 준비하기'} onPress={submit} disabled={!ready || saving} />
     </>
   );
 
@@ -163,7 +209,11 @@ export function IssueScreen({
       </View>
       <Group title="내용">
         <Field label="품목" value={item} onChange={setItem} placeholder="예: 식자재" tag={cp?.lastItem && item === cp.lastItem ? LAST : undefined} testID="issue-item" />
-        <Field label="작성일자" value={day} onChange={setDay} mask="day" testID="issue-day" />
+        {viaPc ? (
+          <Row label="작성일자" value={`${kstDay()} 오늘`} testID="issue-day-today" />
+        ) : (
+          <Field label="작성일자" value={day} onChange={setDay} mask="day" testID="issue-day" />
+        )}
       </Group>
       <View style={{ gap: space.s2 }}>
         <T v="label" c="ink3" style={{ paddingHorizontal: space.s1 }}>
@@ -244,8 +294,8 @@ function statusNote(status: Counterparty['status'], firstAsLine: boolean) {
 
 /** 거래처 고르기(P-11): 최근 다섯 곳 → 찾기 → 직접 입력. */
 function Picker({
-  all, initialQuery, onPick, onDone, onCapture,
-}: { all: Counterparty[]; initialQuery: string; onPick: (c: Counterparty | null) => void; onDone: () => void; onCapture: () => void }) {
+  all, copyAt, initialQuery, onPick, onDone, onCapture,
+}: { all: Counterparty[]; copyAt: number | null; initialQuery: string; onPick: (c: Counterparty | null) => void; onDone: () => void; onCapture: () => void }) {
   const p = usePalette();
   const [q, setQ] = useState(initialQuery);
   if (all.length === 0) {
@@ -271,7 +321,7 @@ function Picker({
   return (
     <Screen title="거래처 고르기" onBack={onDone} testID="issue-picker">
       {!q && (
-        <Group title="최근 거래처" testID="picker-recent">
+        <Group title="최근 거래처" testID="picker-recent" note={copyAt ? `PC 기준 ${copyWhen(copyAt)}` : undefined}>
           {recent.map((c) => (
             <Row key={c.id} label={c.name} sub={lastLine(c)} onPress={() => onPick(c)} testID={`cp-${c.id}`} />
           ))}
@@ -294,7 +344,7 @@ function Picker({
           (found.length > 0 ? (
             <Group title="찾은 거래처">
               {found.map((c) => (
-                <Row key={c.id} label={c.name} sub={`${c.bizNo}${c.lastAt ? ` · ${lastLine(c)}` : ''}`} onPress={() => onPick(c)} testID={`cp-${c.id}`} />
+                <Row key={c.id} label={c.name} sub={[c.bizNo, c.lastAt ? lastLine(c) : ''].filter(Boolean).join(' · ') || undefined} onPress={() => onPick(c)} testID={`cp-${c.id}`} />
               ))}
             </Group>
           ) : (
@@ -324,3 +374,9 @@ const st = StyleSheet.create({
   sumValue: { minWidth: 120, textAlign: 'right' },
   search: { minHeight: size.hit + 4, borderRadius: radius.full, paddingHorizontal: space.s4 },
 });
+
+/** 사본 시각 "11월 17일 오전 10:00" */
+export function copyWhen(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getMonth() + 1}월${NB}${d.getDate()}일 ${clock(ts)}`;
+}
