@@ -174,14 +174,14 @@ export function Group({ children, title, note, style, testID }: { children: Reac
 
 /** 목록 줄: 왼쪽 라벨, 오른쪽 값(또는 꺾쇠). 누를 수 있으면 누름 면이 생긴다. */
 export function Row({
-  label, value, sub, onPress, chevron, testID, valueInk = 'ink2', strong, accessory,
-}: { label: string; value?: ReactNode; sub?: string; onPress?: () => void; chevron?: boolean; testID?: string; valueInk?: Ink; strong?: boolean; accessory?: ReactNode }) {
+  label, value, sub, onPress, chevron, testID, valueInk = 'ink2', strong, accessory, subInk = 'ink3',
+}: { label: string; value?: ReactNode; sub?: string; onPress?: () => void; chevron?: boolean; testID?: string; valueInk?: Ink; strong?: boolean; accessory?: ReactNode; /** 둘째 줄 색: 확인이 필요한 상태(정지됨 등)는 attention */ subInk?: Ink }) {
   const p = usePalette();
   const body = (
     <>
       <View style={{ flex: 1, gap: 2 }}>
         <T v={strong ? 'strong' : 'body'}>{label}</T>
-        {sub && <T v="meta" c="ink3">{sub}</T>}
+        {sub && <T v="meta" c={subInk}>{sub}</T>}
       </View>
       {value !== undefined && (typeof value === 'string' ? <T v="value" c={valueInk} lines={1} style={{ flexShrink: 1, textAlign: 'right' }}>{value}</T> : value)}
       {accessory}

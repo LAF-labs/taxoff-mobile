@@ -13,6 +13,7 @@ import { sweepCaptureTemps } from './src/storage/files';
 import { CaptureScreen } from './src/screens/CaptureScreen';
 import { CashScreen } from './src/screens/CashScreen';
 import { ConnectionScreen } from './src/screens/ConnectionScreen';
+import { DevicesScreen } from './src/screens/DevicesScreen';
 import { IssueScreen } from './src/screens/IssueScreen';
 import { LockScreen } from './src/screens/LockScreen';
 import { MainScreen, type MainRoute, type Tab } from './src/screens/MainScreen';
@@ -118,7 +119,7 @@ export default function App() {
         {route === 'pair' && <PairScreen onDone={home} />}
         {route === 'capture' && <CaptureScreen onDone={back} />}
         {route === 'cash' && <CashScreen onDone={back} />}
-        {route === 'settings' && <SettingsScreen onDone={back} onConnection={() => go('connection')} onPair={() => go('pair')} />}
+        {route === 'settings' && <SettingsScreen onDone={back} onConnection={() => go('connection')} onPair={() => go('pair')} onDevices={() => go('devices')} />}
         {route === 'queue' && <QueueScreen onDone={back} onConnection={() => go('connection')} onOpen={(j) => (j.run ? go('run') : home())} />}
         {route === 'run' && (
           <RunScreen
@@ -136,6 +137,16 @@ export default function App() {
         {route === 'pay' && <MoneyListScreen kind="pay" onDone={back} onMark={() => go('mark')} />}
         {route === 'mark' && <MarkReceivedScreen onDone={back} />}
         {route === 'bizreg' && <BizRegScreen onDone={back} onSaved={back} onUseExisting={back} />}
+        {route === 'devices' && (
+          <DevicesScreen
+            onDone={back}
+            onPair={() => go('pair')}
+            onReset={() => {
+              lock();
+              setBoot({ hasDevice: false });
+            }}
+          />
+        )}
         {route === 'connection' && (
           <ConnectionScreen
             onDone={back}

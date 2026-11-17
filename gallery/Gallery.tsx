@@ -36,7 +36,8 @@ import { CaptureScreen, formFrom, type CapturePreview } from '../src/screens/Cap
 import { MAX_FONT_SCALE, textScale, usePalette } from '../src/theme';
 import { emptyData, type AppData } from '../src/storage/state';
 import type { PcStatus } from '../src/net/pc';
-import { SAMPLE_INVOICE, SAMPLE_SHOT } from './samples';
+import { DEVICES_FULL, DEVICES_NORMAL, DEVICES_SUSPENDED, DEVICE_SELF, SAMPLE_INVOICE, SAMPLE_SHOT } from './samples';
+import { DevicesScreen, type DevicesPreview } from '../src/screens/DevicesScreen';
 import { parsePaperInvoice } from '../src/capture/invoice';
 
 const DAY = 86_400_000;
@@ -327,6 +328,10 @@ function Demo() {
   return <Main chat={CHAT} live />;
 }
 
+const devices = (load: DevicesPreview['load']) => ({
+  session: fake(paired(), 'online'),
+  node: <DevicesScreen onDone={noop} onReset={noop} onPair={noop} preview={{ load, selfId: DEVICE_SELF }} />,
+});
 const issue = (preview: IssuePreview, cps = CPS, today: IssuedToday[] = [], left = 5) => (
   <IssueScreen counterparties={cps} issuedToday={today} approvalsLeft={left} onDone={noop} onCapture={noop} onSubmitted={noop} preview={preview} />
 );
@@ -462,7 +467,7 @@ const SCREENS: Record<
   'money-mark': () => money(MONEY_OK, { start: 'mark' }),
   'money-mark-offline': () => money(MONEY_LAST, { start: 'mark', live: false, pc: 'offline' }),
   'records-empty': () => ({ session: fake(paired(), 'online'), node: <Main start="records" /> }),
-  settings: () => ({ session: fake(paired(), 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} bioPreview={FACE} /> }),
+  settings: () => ({ session: fake(paired(), 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} /> }),
   // ---- 앱 잠금(P-01) ----
   'lock-faceid': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: FACE }} /> }),
   'lock-touchid': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'touchId', enrolled: true } }} /> }),
@@ -497,6 +502,13 @@ const SCREENS: Record<
   'issue-inexact': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'form', cpId: 'ga', amount: '21', vat: 'incl' }) }),
   'issue-limit': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'form', cpId: 'sc' }, CPS, [], 1) }),
   cash: () => ({ session: fake(paired(), 'online'), node: <CashScreen onDone={noop} /> }),
+  devices: () => devices({ kind: 'ready', devices: DEVICES_NORMAL() }),
+  'devices-full': () => devices({ kind: 'ready', devices: DEVICES_FULL() }),
+  'devices-suspended': () => devices({ kind: 'ready', devices: DEVICES_SUSPENDED() }),
+  'devices-error': () => devices({ kind: 'error', code: 'devices.unreachable' }),
+  'devices-stopped': () => devices({ kind: 'error', code: 'account.device_suspended' }),
+  'devices-loading': () => devices({ kind: 'loading' }),
+  'devices-unpaired': () => ({ session: fake(emptyData(), 'unpaired'), node: <DevicesScreen onDone={noop} onReset={noop} onPair={noop} preview={{ load: { kind: 'loading' }, selfId: DEVICE_SELF }} /> }),
   connection: () => ({ session: fake(paired(), 'queued', { receipts: 2, cash: 1 }), node: <ConnectionScreen onDone={noop} onReset={noop} onRepair={noop} /> }),
   'invoice-confirm': () => ({
     session: fake(paired(), 'online'),
