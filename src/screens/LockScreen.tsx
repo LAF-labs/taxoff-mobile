@@ -89,7 +89,7 @@ export function LockScreen({ firstRun, onUnlocked, onReset, preview }: { firstRu
           </View>
         )}
         <View style={st.actions}>
-          {shown !== 'passcode_required' && <Button testID="unlock" label={label} onPress={() => open(noBio && !retry)} busy={busy} style={st.btn} />}
+          {shown !== 'passcode_required' && <Button testID="unlock" label={label} onPress={() => open(noBio)} busy={busy} style={st.btn} />}
           {showPasscode && <Button testID="unlock-passcode" kind="quiet" label={PASSCODE} onPress={() => open(true)} disabled={busy} />}
           {shown === 'passcode_required' && <Button testID="unlock" kind="secondary" label="다시 확인" onPress={() => open()} busy={busy} style={st.btn} />}
           {shown === 'corrupt' && (
