@@ -38,6 +38,14 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
   const [pc, setPc] = useState<PcStatus>(initial.pair ? 'offline' : 'unpaired');
   const [syncing, setSyncing] = useState(false);
   const busy = useRef(false);
+  /** 잠그면(이 공급자가 내려가면) 거짓. 지켜보던 발급 명령 세션을 멈춘다. */
+  const alive = useRef(true);
+  useEffect(
+    () => () => {
+      alive.current = false;
+    },
+    [],
+  );
 
   const update = useCallback(
     async (f: (d: AppData) => AppData) => {
@@ -60,7 +68,7 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
     setSyncing(true);
     setPc('connecting');
     try {
-      const r = await inflight(() => syncWithPc({ keys, data: () => dataRef.current, update, outbox }));
+      const r = await inflight(() => syncWithPc({ keys, data: () => dataRef.current, update, outbox, onLive: () => alive.current && setPc('online'), alive: () => alive.current }));
       setPc(r.status);
     } finally {
       busy.current = false;

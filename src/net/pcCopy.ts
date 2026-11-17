@@ -8,8 +8,8 @@ import type { PhoneCopy } from '@sax/chat-core';
 import type { Counterparty } from '../issue.ts';
 import { phoneCopyFrom } from '../offline/copy.ts';
 
-/** 폰이 hello에 알리는 v1.8 기능(지금은 사본만. 발급 명령 issue.v1은 진행 화면과 함께 켠다) */
-export const PHONE_CAPS: readonly string[] = [CAP.copy];
+/** 폰이 hello에 알리는 v1.8 기능: 사본(copy.v1)과 발급 명령·진행(issue.v1, src/net/issueLive.ts) */
+export const PHONE_CAPS: readonly string[] = [CAP.copy, CAP.issue];
 
 const COPY_WAIT_MS = 2000;
 const DAY = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;

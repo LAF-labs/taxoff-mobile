@@ -65,8 +65,14 @@ export interface IssueResult {
   doc: DocRef;
 }
 
+/** 폰 발급 명령을 PC가 받지 않은 이유(remote-envelope v1.8 cmd.ack rejected) + PC가 issue.v1을 모름 */
+export type RefuseReason = 'playbook_unavailable' | 'input_invalid' | 'counterparty_unknown' | 'duplicate' | 'pc_busy' | 'hometax_paused' | 'pc_old';
+
 export type RunView =
-  | { kind: 'running'; step: Step; startedAt: number }
+  /** pcApproval: 승인은 PC 승인 바에서(cmd.ack pc_only). 승인 단계에서 그 안내를 보인다. */
+  | { kind: 'running'; step: Step; startedAt: number; pcApproval?: boolean }
+  /** PC가 명령을 받지 않음(아무것도 시작하지 않았다) */
+  | { kind: 'refused'; reason: RefuseReason; startedAt: number }
   /** 내 차례: 로그인 단계의 사람 확인 */
   | { kind: 'myTurn'; step: Step; auth: Auth; startedAt: number }
   | { kind: 'stopped'; step: Step; reason: StopReason; startedAt: number; reserved?: boolean }
@@ -78,6 +84,7 @@ export type RunView =
 
 export function stepOf(r: RunView): Step {
   if (r.kind === 'running' || r.kind === 'myTurn' || r.kind === 'stopped') return r.step;
+  if (r.kind === 'refused') return 'prepare';
   // 결과 모름(발급목록 조회 중)·확인 필요·발급됨은 모두 발급 뒤 "확인" 칸이다. 발급 클릭은 이미 지났다.
   return 'verify';
 }
@@ -91,6 +98,8 @@ export function chipOf(r: RunView): { label: string; tone: 'quiet' | 'attention'
       return { label: '내 차례', tone: 'attention' };
     case 'stopped':
       return { label: '중지됨', tone: 'quiet' };
+    case 'refused':
+      return { label: '시작 못 함', tone: 'quiet' };
     case 'inDoubt':
       return { label: '확인 중', tone: 'attention', busy: true };
     case 'verify':
@@ -113,6 +122,7 @@ export function actionsOf(r: RunView, now = Date.now()): RunAction[] {
       return Object.hasOwn(AUTH_APPS, r.auth.app) ? ['openApp', 'resendAuth', 'stop'] : ['resendAuth', 'stop'];
     case 'stopped':
       return r.reserved ? ['close'] : [STOP_COPY[r.reason].action, 'close'];
+    case 'refused':
     case 'inDoubt':
     case 'verify':
     case 'done':

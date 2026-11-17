@@ -2,6 +2,7 @@
 // ?fs=1.6 이면 글자 크기 설정 1.6배를 흉내 낸다(앱에서는 OS 설정을 따른다).
 // 앱 번들에는 들어가지 않는다(metro.config.cjs가 web에서만 App을 이것으로 바꾼다). 네트워크·키·카메라를 쓰지 않는다.
 import type { PhoneCopyBody } from '@sax/remote';
+import type { PhoneCmd } from '../src/phoneCmd';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -221,6 +222,14 @@ const T0 = now - 80_000;
 const runCase = (run: RunView, o: { title?: string; amount?: number } = {}) => ({
   session: fake(paired(), 'online'), jobs: [runJob(run, o)], focus: 'r1', node: <RunScreen onDone={noop} onDoc={noop} onRecords={noop} now={now} />,
 });
+/** 폰 발급 명령(cmd.run, pc_only): 봉인 상태의 명령 하나를 PC 진행으로 본다 */
+const CMD = (o: Partial<PhoneCmd> = {}): PhoneCmd => ({
+  cmdId: 'G1', req: { counterpartyRef: 'cp_gana', supply: 1_230_000, tax: 123_000, item: '식자재', day: iso(today) }, cpName: '가나식자재', total: 1_353_000,
+  createdAt: now - 90_000, sentAt: now - 88_000, ack: 'pc_only', runId: 'run1', at: now - 5_000, ...o,
+});
+const pcRun = (o: Partial<PhoneCmd>) => ({
+  session: fake({ ...copyData(), cmds: [CMD(o)] }, 'online'), focus: 'cmd-G1', node: <RunScreen onDone={noop} onDoc={noop} onRecords={noop} now={now} />,
+});
 const docCase = (state: DocState, result = RES) => ({
   session: fake(paired(), state.kind === 'pcOff' ? 'offline' : 'online'), jobs: [runJob({ kind: 'done', result, startedAt: T0 })], focus: 'r1', node: <DocScreen onDone={noop} state={state} />,
 });
@@ -368,6 +377,20 @@ const SCREENS: Record<
   'run-stop-input': () => runCase({ kind: 'stopped', step: 'readback', reason: 'inputMismatch', startedAt: T0 }),
   'run-in-doubt': () => runCase({ kind: 'inDoubt', tries: 3, startedAt: now - 200_000 }),
   'run-verify-needed': () => runCase({ kind: 'verify', startedAt: now - 600_000 }),
+  'run-pc-prepare': () => pcRun({ ack: undefined, runId: undefined, at: undefined }),
+  'run-pc-readback': () => pcRun({ phase: 'readback' }),
+  'run-pc-approve': () => pcRun({ phase: 'approve' }),
+  'run-pc-in-doubt': () => pcRun({ phase: 'verify', code: 'in_doubt', attempt: 2 }),
+  'run-pc-stopped': () => pcRun({ phase: 'stopped', code: 'date_mismatch' }),
+  'run-pc-done': () => pcRun({ phase: 'done', result: { approvalNo: '20261117-41000000-12345678', total: 1_353_000, emailSent: true } }),
+  'run-pc-refused': () => pcRun({ ack: 'rejected', reason: 'counterparty_unknown', runId: undefined }),
+  'run-pc-busy': () => pcRun({ ack: 'rejected', reason: 'pc_busy', runId: undefined }),
+  'run-pc-old': () => pcRun({ ack: undefined, pcOld: true, runId: undefined }),
+  'home-chat-pc-run': () => ({
+    session: fake({ ...copyData(), cmds: [CMD({ phase: 'approve' })] }, 'online'),
+    notes: [{ kind: 'run', id: 'run-cmd-G1', at: now - 90_000, jobId: 'cmd-G1' }],
+    node: <Main chat={CHAT} live />,
+  }),
   'result-email': () => runCase({ kind: 'done', result: RES, startedAt: T0 }),
   'result-no-email': () => runCase({ kind: 'done', result: { ...RES, email: null, emailSent: false }, startedAt: T0 }),
   'result-long': () => runCase({ kind: 'done', result: RES_LONG, startedAt: T0 }, { title: '주식회사 새봄꽃과 정원 관리 서비스 성수동 본점 세금계산서', amount: 13_530_000 }),
@@ -463,6 +486,7 @@ const SCREENS: Record<
   'issue-picker': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'pick' }) }),
   'issue-picker-empty': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'pick' }, []) }),
   'issue-picker-copy': () => ({ session: fake(copyData(), 'offline'), node: <IssueScreen onDone={noop} onCapture={noop} onSubmitted={noop} preview={{ phase: 'pick' }} /> }),
+  'issue-copy-online': () => ({ session: fake(copyData(), 'online'), node: <IssueScreen onDone={noop} onCapture={noop} onSubmitted={noop} preview={{ phase: 'form', cpId: 'cp_gana' }} /> }),
   'issue-copy-filled': () => ({ session: fake(copyData(), 'offline'), node: <IssueScreen onDone={noop} onCapture={noop} onSubmitted={noop} preview={{ phase: 'form', cpId: 'cp_gana' }} /> }),
   'issue-filled-online': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'form', cpId: 'ga' }) }),
   'issue-filled-offline': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: issue({ phase: 'form', cpId: 'dm', amount: '352,000', vat: 'incl' }) }),

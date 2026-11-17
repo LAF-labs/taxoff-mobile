@@ -4,12 +4,15 @@
 // - 금액: [부가세 별도|포함] 아래 숫자 칸, 그 밑 한 줄에 공급가액·세액·합계(세액 = 공급가액 10% 버림).
 // - 바닥 주요 단추는 PC 상태를 따른다: 켜짐 [홈택스에서 준비] · 꺼짐 [PC 켜지면 준비하기] · 오래 꺼짐 단추 없이 황토 한 줄.
 // - 경고는 한 번에 하나(Notice): 오늘 같은 곳 같은 금액 > 처음 거래하는 곳 > 폰 승인 남은 건수.
+// - PC 사본에서 고른 거래처는 폰 발급 명령(cmd.run)으로 맡긴다: [발급 맡기기], 승인은 PC 승인 바, 작성일자는 오늘(src/phoneCmd.ts).
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { clock } from '../chat';
 import { findDuplicate, recentCounterparties, searchCounterparties, splitAmount, type Counterparty, type IssuedToday, type VatMode } from '../issue';
 import type { Job } from '../queue';
+import { ulid } from '@sax/remote';
 import { counterpartiesOf } from '../net/pcCopy';
+import { issueRequest, kstDay, type PhoneCmd } from '../phoneCmd';
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
 import { MAX_FONT_SCALE, radius, size, space, textScale, type, usePalette } from '../theme';
@@ -92,6 +95,8 @@ export function IssueScreen({
   const firstTime = manual || (cp?.issued ?? 0) === 0;
   const online = s.pc === 'online';
   const stale = s.pc === 'stale';
+  // PC 사본에서 고른 거래처면 폰 발급 명령(cmd.run)으로 맡긴다: 거래처는 ref만, 승인은 PC 승인 바, 작성일자는 오늘(한국 시간)
+  const viaPc = !!cp && !manual && !!fromCopy?.some((c) => c.id === cp.id) && !!s.data.pair;
   const ready = !!who && (cp ? true : bizNo.replace(/\D/g, '').length === 10) && a.supply > 0 && /^\d{4}-\d{2}-\d{2}$/.test(day) && !dup && !closed;
 
   let notice = null;
@@ -114,7 +119,8 @@ export function IssueScreen({
         <Button kind="secondary" small label="그래도 작성" onPress={() => setDupOk(true)} testID="issue-dup-ok" style={{ alignSelf: 'flex-start' }} />
       </View>
     );
-  } else if (firstTime) notice = <Notice testID="issue-first">처음 거래하는 곳이라 발급 승인은 PC에서 해요</Notice>;
+  } else if (viaPc) notice = null;
+  else if (firstTime) notice = <Notice testID="issue-first">처음 거래하는 곳이라 발급 승인은 PC에서 해요</Notice>;
   else if (approvalsLeft <= 1)
     notice = <Notice testID="issue-limit">{approvalsLeft === 0 ? '오늘 폰 승인을 다 썼어요. 발급 승인은 PC에서 해요' : `오늘 폰 승인은 ${approvalsLeft}건 남았어요`}</Notice>;
 
@@ -124,7 +130,18 @@ export function IssueScreen({
   const inexactAsNotice = !!inexactLine && !notice;
   if (inexactAsNotice) notice = <Notice testID="issue-inexact">{inexactLine}</Notice>;
 
+  const submitToPc = async () => {
+    if (!cp) return;
+    const cmd: PhoneCmd = { cmdId: ulid(), req: issueRequest({ ref: cp.id, supply: a.supply, item }), cpName: cp.name, total: a.total, createdAt: Date.now() };
+    // 보내기 전에 봉인 상태에 저장한다(다시 보낼 때 같은 cmdId)
+    await s.update((d) => ({ ...d, cmds: [...(d.cmds ?? []), cmd] }));
+    queue.noteCmd(`cmd-${cmd.cmdId}`, online ? null : `${cp.name} 세금계산서 ${won(a.total)}을 맡겼어요. PC 켜지면 보내요`);
+    void s.sync();
+    onSubmitted();
+  };
+
   const submit = () => {
+    if (viaPc) return void submitToPc();
     const job: Job = { id: `job-${Date.now()}`, title: `${who} 세금계산서`, amount: a.total, createdAt: Date.now(), state: online ? 'running' : 'entrusted' };
     // PC가 되읽을 값(시연 저장소가 승인 요청을 만들 때만 쓴다). 금액은 원 단위 숫자 글자.
     const readback = {
@@ -146,7 +163,12 @@ export function IssueScreen({
           폐업 경고를 먼저 확인해 주세요
         </T>
       )}
-      <Button testID="issue-submit" label={online ? '홈택스에서 준비' : 'PC 켜지면 준비하기'} onPress={submit} disabled={!ready} />
+      {viaPc && (
+        <T v="meta" c="ink3" center testID="issue-pc-approve">
+          승인은 PC 승인 바에서 해요
+        </T>
+      )}
+      <Button testID="issue-submit" label={viaPc ? (online ? '발급 맡기기' : 'PC 켜지면 맡기기') : online ? '홈택스에서 준비' : 'PC 켜지면 준비하기'} onPress={submit} disabled={!ready} />
     </>
   );
 
@@ -168,7 +190,11 @@ export function IssueScreen({
       </View>
       <Group title="내용">
         <Field label="품목" value={item} onChange={setItem} placeholder="예: 식자재" tag={cp?.lastItem && item === cp.lastItem ? LAST : undefined} testID="issue-item" />
-        <Field label="작성일자" value={day} onChange={setDay} mask="day" testID="issue-day" />
+        {viaPc ? (
+          <Row label="작성일자" value={`${kstDay()} 오늘`} testID="issue-day-today" />
+        ) : (
+          <Field label="작성일자" value={day} onChange={setDay} mask="day" testID="issue-day" />
+        )}
       </Group>
       <View style={{ gap: space.s2 }}>
         <T v="label" c="ink3" style={{ paddingHorizontal: space.s1 }}>

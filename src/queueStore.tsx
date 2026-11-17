@@ -3,6 +3,8 @@
 // simulate(갤러리·시연 전용): PC가 켜져 맡긴 발급이 준비 → 홈택스 로그인 → 값 확인을 지나 "PC가 승인 요청함"이 되고 시트가 뜬다.
 //   승인하면 발급 → 확인 → 결과 카드. simulate='inDoubt'이면 발급 뒤 응답이 끊겨 확인 중(조회 n회째) → 확인 필요로 간다.
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { jobOf } from './phoneCmd';
+import { SessionContext } from './session';
 import { jobTimers } from './jobTimers';
 import { josa } from './ui/josa';
 import { GATE_TTL_MS, buildGate, type AttestState, type PhoneGate, type READBACK_KEYS } from './approval';
@@ -28,6 +30,8 @@ export interface QueueStore {
   last: DoneJob | null;
   act: (id: string, action: JobAction) => void;
   startAll: () => void;
+  /** 폰 발급 명령(AppData.cmds)의 진행 카드를 대화에 붙인다(cmd.run을 보낸 뒤). 맡겨 둔 것이면 확인 한 줄. */
+  noteCmd: (jobId: string, text: string | null) => void;
   /** 맡기고 대화에 확인 한 줄을 남긴다. readback은 시연(simulate)에서 PC가 되읽을 값. */
   add: (job: Job, note: string, readback?: Readback) => void;
   /** 이 폰에서 남긴 확인 줄(홈 대화 끝에 붙는다) */
@@ -77,7 +81,11 @@ export function QueueProvider({
   pick?: string | null;
   children: ReactNode;
 }) {
-  const [jobs, setJobs] = useState<Job[]>(initial);
+  const [localJobs, setJobs] = useState<Job[]>(initial);
+  // 폰 발급 명령(봉인 상태 파일)은 세션에서 읽어 일로 바꿔 붙인다. 갤러리 가짜 세션에도 있다.
+  const sess = useContext(SessionContext);
+  const cmds = sess?.data.cmds;
+  const jobs = useMemo(() => [...localJobs, ...(cmds ?? []).map(jobOf)], [localJobs, cmds]);
   const [notes, setNotes] = useState<ChatItem[]>(initialNotes);
   const [sheetId, setSheetId] = useState<string | null>(sheet);
   const [used, setUsed] = useState(approval.usedToday);
@@ -121,7 +129,18 @@ export function QueueProvider({
       notes,
       approval: { ...approval, usedToday: used },
       sheetJob: jobs.find((j) => j.id === sheetId && j.gate) ?? null,
+      noteCmd: (jobId, text) => {
+        const now = Date.now();
+        if (text === null) setNotes((n) => [...n, { kind: 'run', id: `run-${jobId}`, at: now, jobId }]);
+        else note(jobId, text);
+      },
       act: (id, action) => {
+        if (action === 'cancel' && id.startsWith('cmd-')) {
+          // 아직 보내지 않은 명령만 지운다(보낸 명령은 PC에서 멈춘다)
+          const cmdId = id.slice(4);
+          void sess?.update((d) => ({ ...d, cmds: (d.cmds ?? []).filter((c) => c.cmdId !== cmdId || !!c.sentAt) }));
+          return;
+        }
         if (action === 'cancel') timers.clear(id);
         setJobs((js) => applyAction(js, id, action, Date.now()));
       },
@@ -205,7 +224,7 @@ export function QueueProvider({
         patch(id, (x) => (x.gate ? { ...x, gate: { ...x.gate, challenge: b64(randomBytes(32)), exp: Date.now() + GATE_TTL_MS } } : x));
       },
     }),
-    [jobs, last, notes, sheetId, used, focusId, cps, pickId, approval.attest, approval.iosAllowed, simulate],
+    [jobs, last, notes, sheetId, used, focusId, cps, pickId, approval.attest, approval.iosAllowed, simulate, sess],
   );
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }
