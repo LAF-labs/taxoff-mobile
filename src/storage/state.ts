@@ -1,4 +1,5 @@
 // 앱 상태 파일(페어링 기록·기기 목록·IK 타임스탬프·현금매출 기록). fileKey로 XChaCha20-Poly1305 봉인해 sax/state.bin에 둔다.
+import type { MoneySnapshot } from '../money';
 import { File } from 'expo-file-system';
 import { fromUtf8, utf8, xOpen, xSeal, type DeviceListJson, type SignedCert } from '@sax/remote';
 import { currentEpoch, inflight, liveKey, sameEpoch } from '../inflight';
@@ -62,6 +63,8 @@ export interface AppData {
   queueSeq: number;
   /** 본 우편함 번들 seq 최고값(이보다 낮은 번들로는 봉인하지 않는다). */
   qbundleSeq: number;
+  /** 돈 탭: PC에서 마지막으로 받은 요약(받은 시각 포함). 거래처 이름·금액·날짜만, 사업자번호·계좌는 지운 뒤 봉인 보관(src/money.ts storeable) */
+  money?: MoneySnapshot | null;
 }
 
 export const emptyData = (): AppData => ({ v: 1, pair: null, deviceList: null, seenListVersion: 0, ikTs: 0, lastSeenPc: null, cash: [], recent: [], queueSeq: 0, qbundleSeq: 0 });

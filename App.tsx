@@ -23,6 +23,9 @@ import { QueueProvider } from './src/queueStore';
 import { ApprovalHost } from './src/screens/ApprovalHost';
 import { DocScreen } from './src/screens/DocScreen';
 import { BizRegScreen } from './src/screens/BizRegScreen';
+import { MoneyListScreen } from './src/screens/MoneyListScreen';
+import { MarkReceivedScreen } from './src/screens/MarkReceivedScreen';
+import { MoneyProvider } from './src/moneyStore';
 import { RunScreen } from './src/screens/RunScreen';
 import { SessionProvider } from './src/session';
 import { emptyData, loadData, type AppData } from './src/storage/state';
@@ -109,6 +112,8 @@ export default function App() {
     body = (
       <SessionProvider keys={unlocked.keys} initial={unlocked.data}>
         <QueueProvider>
+        {/* 돈 탭: PC에서 마지막으로 받은 요약(봉인 보관). 지금 받아 오기는 다음 PR(프로토콜) */}
+        <MoneyProvider status={unlocked.data.money ? 'ready' : 'none'} snap={unlocked.data.money ?? null}>
         {route === 'tabs' && <MainScreen tab={tab} onTab={setTab} go={go} />}
         {route === 'pair' && <PairScreen onDone={home} />}
         {route === 'capture' && <CaptureScreen onDone={back} />}
@@ -127,6 +132,9 @@ export default function App() {
         )}
         {route === 'doc' && <DocScreen onDone={back} />}
         {route === 'issue' && <IssueScreen onDone={back} onCapture={() => go('bizreg')} onSubmitted={home} />}
+        {route === 'recv' && <MoneyListScreen kind="recv" onDone={back} onMark={() => go('mark')} />}
+        {route === 'pay' && <MoneyListScreen kind="pay" onDone={back} onMark={() => go('mark')} />}
+        {route === 'mark' && <MarkReceivedScreen onDone={back} />}
         {route === 'bizreg' && <BizRegScreen onDone={back} onSaved={back} onUseExisting={back} />}
         {route === 'connection' && (
           <ConnectionScreen
@@ -139,6 +147,7 @@ export default function App() {
           />
         )}
         <ApprovalHost />
+        </MoneyProvider>
         </QueueProvider>
       </SessionProvider>
     );
