@@ -19,6 +19,7 @@ registerHooks({
 const { CAP, checkIssueRequest } = await import('@sax/remote');
 const { driveCmds, trimCmds } = await import('../src/net/issueLive.ts');
 const { PHONE_CAPS } = await import('../src/net/pcCopy.ts');
+const { STOP_COPY } = await import('../src/run.ts');
 const { REJECT_LINE, applyAck, applyEvent, issueRequest, jobOf, kstDay, runViewOf, settled } = await import('../src/phoneCmd.ts');
 
 const T0 = Date.parse('2026-11-17T01:00:00Z');
@@ -75,6 +76,14 @@ describe('cmd.ack · run.event → 진행 화면', () => {
     const c = applyEvent(applyAck(cmd(), { cmdId: cmd().cmdId, state: 'pc_only', runId: 'run1' }), { runId: 'run1', event: 'phase', at: T0 + 1, phase: 'verify', code: 'in_doubt', attempt: 2 });
     assert.deepEqual(runViewOf(c), { kind: 'inDoubt', tries: 2, startedAt: T0 });
     assert.equal(settled(c), false);
+  });
+  it('멈춤: 코드 없음·모르는 코드는 이유 없는 멈춤, in_doubt는 확인 중', () => {
+    const base = applyAck(cmd({ sentAt: T0 }), { cmdId: cmd().cmdId, state: 'pc_only', runId: 'run1' });
+    const stop = (code?: string) => runViewOf(applyEvent(base, { runId: 'run1', event: 'phase', at: T0 + 1, phase: 'stopped', code }));
+    assert.deepEqual(stop(), { kind: 'stopped', step: 'prepare', reason: 'pcStopped', startedAt: T0 });
+    assert.deepEqual(stop('date_mismatch'), { kind: 'stopped', step: 'prepare', reason: 'pcStopped', startedAt: T0 });
+    assert.deepEqual(runViewOf(applyEvent(base, { runId: 'run1', event: 'phase', at: T0 + 1, phase: 'verify', code: 'in_doubt', attempt: 1 })), { kind: 'inDoubt', tries: 1, startedAt: T0 });
+    assert.match(STOP_COPY.pcStopped.line, /아무것도 발급하지 않았어요/);
   });
   it('거절 이유는 한 줄 문구로, 같은 runId의 duplicate는 다시 붙기', () => {
     for (const reason of ['playbook_unavailable', 'input_invalid', 'counterparty_unknown', 'pc_busy', 'hometax_paused'] as const) {
@@ -158,7 +167,7 @@ describe('라이브 세션 구동(mock)', () => {
     assert.equal(await driveCmds(m.ch as never, [CAP.issue], s.io, 5000), 'settled');
     assert.equal((m.sent[0]!.body as { cmdId: string }).cmdId, cmd().cmdId);
     assert.equal(s.get()[0]!.ack, 'pc_only');
-    assert.deepEqual(runViewOf(s.get()[0]!), { kind: 'stopped', step: 'prepare', reason: 'dateMismatch', startedAt: T0 });
+    assert.deepEqual(runViewOf(s.get()[0]!), { kind: 'stopped', step: 'prepare', reason: 'pcStopped', startedAt: T0 });
   });
   it('PC가 issue.v1을 모르면 보내지 않고 새 버전 안내', async () => {
     const m = mockChannel(() => []);

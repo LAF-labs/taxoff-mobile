@@ -381,7 +381,7 @@ const SCREENS: Record<
   'run-pc-readback': () => pcRun({ phase: 'readback' }),
   'run-pc-approve': () => pcRun({ phase: 'approve' }),
   'run-pc-in-doubt': () => pcRun({ phase: 'verify', code: 'in_doubt', attempt: 2 }),
-  'run-pc-stopped': () => pcRun({ phase: 'stopped', code: 'date_mismatch' }),
+  'run-pc-stopped': () => pcRun({ phase: 'stopped' }),
   'run-pc-done': () => pcRun({ phase: 'done', result: { approvalNo: '20261117-41000000-12345678', total: 1_353_000, emailSent: true } }),
   'run-pc-refused': () => pcRun({ ack: 'rejected', reason: 'counterparty_unknown', runId: undefined }),
   'run-pc-busy': () => pcRun({ ack: 'rejected', reason: 'pc_busy', runId: undefined }),

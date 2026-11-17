@@ -91,7 +91,8 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
             </T>
           ))}
       </View>
-      {r.kind !== 'done' && r.kind !== 'refused' && <StepBar r={r} />}
+      {/* 이유 없는 PC 멈춤은 어느 단계였는지 모르니 단계 막대를 두지 않는다 */}
+      {r.kind !== 'done' && r.kind !== 'refused' && !(r.kind === 'stopped' && r.reason === 'pcStopped') && <StepBar r={r} />}
       <StateLines r={r} />
       {r.kind === 'done' && <ResultRows result={r.result} />}
       {compact && !job.pcOnly && <CardActions r={r} now={now} onAction={onAction} onDoc={onDoc} onShare={onShare} />}

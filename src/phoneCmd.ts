@@ -5,7 +5,7 @@
 // - 거래처는 PC 사본의 ref만 싣는다(사업자번호·이메일 원문 없음). 세액은 floor(공급가액/10), 작성일자는 오늘(한국 시간).
 import type { CmdAckBody, CmdAckState, CmdRejectReason, PhoneIssueRequest, RunEventBody, RunPhase, RunResult } from '@sax/remote';
 import type { Job } from './queue';
-import type { RunView, StopReason } from './run';
+import type { RunView } from './run';
 
 export interface PhoneCmd {
   cmdId: string;
@@ -82,28 +82,6 @@ export const REJECT_LINE: Record<CmdRejectReason | 'pc_old', string> = {
   pc_old: 'PC 앱을 새 버전으로 올리면 폰에서 맡길 수 있어요.',
 };
 
-/** PC 중지 코드 → 폰 문구(run.ts STOP_COPY). 모르는 코드는 예상 못 한 화면으로 본다. */
-function stopReason(code: string | undefined): StopReason {
-  switch (code) {
-    case 'blocked':
-    case 'hometax_blocked':
-      return 'blocked';
-    case 'date_mismatch':
-      return 'dateMismatch';
-    case 'input_mismatch':
-    case 'readback_mismatch':
-      return 'inputMismatch';
-    case 'total_mismatch':
-      return 'totalMismatch';
-    case 'other_login':
-      return 'otherLogin';
-    case 'password_error':
-      return 'passwordError';
-    default:
-      return 'unknownScreen';
-  }
-}
-
 /** 진행 화면 모델. 보내지 못했거나 PC가 아직 답하지 않았으면 null(맡김). */
 export function runViewOf(c: PhoneCmd): RunView | null {
   const startedAt = c.sentAt ?? c.createdAt;
@@ -131,7 +109,8 @@ export function runViewOf(c: PhoneCmd): RunView | null {
         },
       };
     case 'stopped':
-      return { kind: 'stopped', step: 'prepare', reason: stopReason(c.code), startedAt };
+      // PC는 run.event code로 'in_doubt'만 보낸다. 코드가 없거나 모르는 코드면 이유 없이 멈춤(이유는 PC에서)
+      return { kind: 'stopped', step: 'prepare', reason: 'pcStopped', startedAt };
     default:
       return { kind: 'running', step: c.phase, startedAt, pcApproval: true };
   }
