@@ -155,7 +155,7 @@ const gate = (o: { rb?: typeof RB; reserved?: GateField[]; left?: number; tamper
   // 해시 불일치: PC가 보낸 값 하나가 화면과 다르다(엔진 버그·변조를 흉내)
   return o.tamper ? { ...g, fields: g.fields.map((f) => (f.key === 'totalAmount' ? { ...f, value: '8800000' } : f)) } : g;
 };
-const HW: ApprovalSettings = { attest: 'hw', iosAllowed: false, usedToday: 1 };
+const HW: ApprovalSettings = { attest: 'hw', iosAllowed: true, usedToday: 1 };
 const sheetCase = (g: PhoneGate, o: { settings?: ApprovalSettings; openedAt?: number; state?: Job['state']; acked?: string[] } = {}) => ({
   session: fake(paired(), 'online'),
   jobs: [{ id: 'ap', title: `${g.fields.find((f) => f.key === 'counterpartName')!.value} 세금계산서`, amount: Number(g.fields.find((f) => f.key === 'totalAmount')!.value), createdAt: now - 60_000, state: o.state ?? ('approval' as const), gate: g }, ...JOBS.slice(6, 8)],
@@ -299,7 +299,8 @@ const SCREENS: Record<
   'approval-limit': () => sheetCase(gate(), { settings: { ...HW, usedToday: 5 } }),
   'approval-no-key': () => sheetCase(gate(), { settings: { attest: 'none', iosAllowed: false, usedToday: 0 } }),
   'approval-ios-allowed': () => sheetCase(gate(), { settings: { attest: 'ios_app_attest', iosAllowed: true, usedToday: 1 } }),
-  'approval-ios-denied': () => sheetCase(gate(), { settings: { attest: 'ios_app_attest', iosAllowed: false, usedToday: 1 } }),
+  /** 정책으로 iPhone 승인을 막은 경우(기본은 허용, ADR-046 결정 4 채택) */
+  'approval-ios-policy-blocked': () => sheetCase(gate(), { settings: { attest: 'ios_app_attest', iosAllowed: false, usedToday: 1 } }),
   'approval-mismatch': () => sheetCase(gate({ tamper: true })),
   'approval-in-doubt': () => sheetCase(gate(), { state: 'verify' }),
   'approval-long': () => sheetCase(gate({ rb: LONG })),

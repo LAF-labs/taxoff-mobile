@@ -21,7 +21,7 @@ const STOP_LINE: Record<SheetStop, string> = {
   mismatch: 'PC가 보낸 값이 맞지 않아요 · 승인할 수 없어요',
   unknown: '이 폰 앱이 모르는 항목이 있어요 · PC에서 승인해 주세요',
   noKey: '이 폰은 승인 기기로 쓸 수 없어요 · PC에서 승인해 주세요',
-  iosDenied: 'iPhone은 아직 승인 기기로 쓰지 않아요 · PC에서 승인해 주세요',
+  iosDenied: '이 iPhone은 정책으로 승인 기기에서 빠져 있어요 · PC에서 승인해 주세요',
   first: '처음 거래하는 곳은 PC에서 승인해요',
   limit: `오늘 폰 승인 ${DAILY_LIMIT}건을 다 썼어요 · PC에서 승인해 주세요`,
 };
@@ -138,7 +138,7 @@ export function ApprovalSheet({
       <>
         {settings.attest === 'ios_app_attest' && (
           <T v="meta" c="ink3" center>
-            이 iPhone으로 승인해요 · 앱 무결성만 확인돼요
+            이 iPhone은 앱 무결성만 확인돼요
           </T>
         )}
         {state.armed && state.needsAck && (

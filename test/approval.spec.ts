@@ -49,7 +49,7 @@ describe('승인 시트 상태', () => {
     assert.equal((sheetState(g, ctx({ now: 115_000 })) as { urgent: boolean }).urgent, true);
     assert.deepEqual(sheetState(g, ctx({ now: 130_000 })), { kind: 'expired' });
   });
-  it('멈춤 우선순위: 해시 > 모르는 항목 > 키 > iPhone > 처음 거래처 > 한도', () => {
+  it('멈춤 우선순위: 해시 > 모르는 항목 > 키 > iPhone(정책으로 막은 경우) > 처음 거래처 > 한도', () => {
     const g = gateOf(v);
     assert.deepEqual(sheetState({ ...g, actionHash: '0'.repeat(64) }, ctx()), { kind: 'stopped', stop: 'mismatch' });
     assert.deepEqual(sheetState(g, ctx({ attest: 'none' })), { kind: 'stopped', stop: 'noKey' });
