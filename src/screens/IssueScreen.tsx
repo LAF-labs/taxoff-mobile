@@ -69,6 +69,9 @@ export function IssueScreen({
   const [item, setItem] = useState(first?.lastItem ?? '');
   const [day, setDay] = useState(localDay());
   const [vat, setVat] = useState<VatMode>(preview?.vat ?? 'excl');
+  /** PC에 맡길 명령을 폰에 저장하는 중 · 저장 실패 */
+  const [saving, setSaving] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
   const [amount, setAmount] = useState(preview?.amount ?? (first?.lastSupply ? masked('won', String(first.lastSupply)) : ''));
   const [dupOk, setDupOk] = useState(false);
 
@@ -131,10 +134,21 @@ export function IssueScreen({
   if (inexactAsNotice) notice = <Notice testID="issue-inexact">{inexactLine}</Notice>;
 
   const submitToPc = async () => {
-    if (!cp) return;
+    if (!cp || saving) return;
     const cmd: PhoneCmd = { cmdId: ulid(), req: issueRequest({ ref: cp.id, supply: a.supply, item }), cpName: cp.name, total: a.total, createdAt: Date.now() };
-    // 보내기 전에 봉인 상태에 저장한다(다시 보낼 때 같은 cmdId)
-    await s.update((d) => ({ ...d, cmds: [...(d.cmds ?? []), cmd] }));
+    setSaving(true);
+    setSaveFailed(false);
+    // 보내기 전에 봉인 상태에 저장한다(다시 보낼 때 같은 cmdId). 저장하지 못하면 맡기지 않고 이 화면에 남는다.
+    try {
+      await s.update((d) => ({ ...d, cmds: [...(d.cmds ?? []), cmd] }));
+    } catch {
+      // 메모리에 먼저 들어간 명령을 빼서, 다음 저장이 맡기지 않은 명령을 적지 않게 한다
+      await s.update((d) => ({ ...d, cmds: (d.cmds ?? []).filter((c) => c.cmdId !== cmd.cmdId) })).catch(() => undefined);
+      setSaving(false);
+      setSaveFailed(true);
+      return;
+    }
+    setSaving(false);
     queue.noteCmd(`cmd-${cmd.cmdId}`, online ? null : `${cp.name} 세금계산서 ${won(a.total)}을 맡겼어요. PC 켜지면 보내요`);
     void s.sync();
     onSubmitted();
@@ -163,12 +177,17 @@ export function IssueScreen({
           폐업 경고를 먼저 확인해 주세요
         </T>
       )}
+      {viaPc && saveFailed && (
+        <T v="meta" c="attention" center testID="issue-save-failed">
+          폰에 저장하지 못해 맡기지 않았어요. 다시 눌러 주세요
+        </T>
+      )}
       {viaPc && (
         <T v="meta" c="ink3" center testID="issue-pc-approve">
           승인은 PC 승인 바에서 해요
         </T>
       )}
-      <Button testID="issue-submit" label={viaPc ? (online ? '발급 맡기기' : 'PC 켜지면 맡기기') : online ? '홈택스에서 준비' : 'PC 켜지면 준비하기'} onPress={submit} disabled={!ready} />
+      <Button testID="issue-submit" label={viaPc ? (online ? '발급 맡기기' : 'PC 켜지면 맡기기') : online ? '홈택스에서 준비' : 'PC 켜지면 준비하기'} onPress={submit} disabled={!ready || saving} />
     </>
   );
 
