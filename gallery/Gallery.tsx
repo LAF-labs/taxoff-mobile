@@ -36,7 +36,8 @@ import { CaptureScreen, formFrom, type CapturePreview } from '../src/screens/Cap
 import { MAX_FONT_SCALE, textScale, usePalette } from '../src/theme';
 import { emptyData, type AppData } from '../src/storage/state';
 import type { PcStatus } from '../src/net/pc';
-import { DEVICES_FULL, DEVICES_NORMAL, DEVICES_SUSPENDED, DEVICE_SELF, SAMPLE_INVOICE, SAMPLE_SHOT } from './samples';
+import { DEVICES_FULL, DEVICES_NORMAL, DEVICES_SUSPENDED, DEVICE_SELF, SAMPLE_INVOICE, SAMPLE_SHOT, phoneChat } from './samples';
+import type { OfflineChatView } from '../src/offline/useOfflineChat';
 import { DevicesScreen, type DevicesPreview } from '../src/screens/DevicesScreen';
 import { parsePaperInvoice } from '../src/capture/invoice';
 
@@ -144,9 +145,9 @@ const CHAT_MERGED: ChatItem[] = [
 const TODO = { approvals: 2, backlog: 1 };
 
 /** 탭 화면을 가짜 세션으로 그린다. 탭은 눌러서 바꿀 수 있다. */
-function Main({ start = 'home', chat, live }: { start?: Tab; chat?: ChatItem[]; /** 지금 할 일 건수를 가짜 밀린 일에서 센다 */ live?: boolean }) {
+function Main({ start = 'home', chat, live, phone }: { start?: Tab; chat?: ChatItem[]; /** 지금 할 일 건수를 가짜 밀린 일에서 센다 */ live?: boolean; phone?: OfflineChatView }) {
   const [tab, setTab] = useState<Tab>(start);
-  return <MainScreen tab={tab} onTab={setTab} go={noop} chat={chat} todo={chat && !live ? TODO : undefined} />;
+  return <MainScreen tab={tab} onTab={setTab} go={noop} chat={chat} todo={chat && !live ? TODO : undefined} phone={phone} />;
 }
 const read = parsePaperInvoice(SAMPLE_INVOICE, today)!;
 
@@ -444,6 +445,14 @@ const SCREENS: Record<
   'home-chat-offline': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * 3_600_000 }, 'offline', { receipts: 1, cash: 0 }), node: <Main chat={CHAT_OFFLINE} /> }),
   'home-chat-merged': () => ({ session: fake(paired(), 'online', { receipts: 1, cash: 0 }), node: <Main chat={CHAT_MERGED} /> }),
   'home-unpaired': () => ({ session: fake(emptyData(), 'unpaired'), node: <Main /> }),
+  /** 연결은 됐고 대화가 아직 없는 홈: 무엇을 시킬 수 있는지 + 예시 문장 */
+  'home-chat-empty': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} /> }),
+  /** PC가 꺼져 폰이 답하는 대화(ADR-047): 빈 상태 · 답 쓰는 중 · 되묻기 칩 · 못 보냄 + 다시 보내기 · 오늘 한도 */
+  'home-phone-empty': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('empty')} /> }),
+  'home-phone-typing': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('typing')} /> }),
+  'home-phone-reply': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('reply')} /> }),
+  'home-phone-failed': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('failed')} /> }),
+  'home-phone-limit': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('limit')} /> }),
   /** 처음 연결한 뒤 대화가 아직 없는 홈(앱이 이 폰 기록으로 만든 대화) */
   home: () => ({ session: fake(paired(), 'online', { receipts: 2, cash: 0 }), node: <Main /> }),
   'home-stale': () => ({ session: fake({ ...paired(), lastSeenPc: now - 9 * DAY }, 'stale', { receipts: 3, cash: 1 }), node: <Main chat={CHAT} /> }),
