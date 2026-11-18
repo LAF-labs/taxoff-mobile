@@ -2,6 +2,7 @@
 import type { MoneySnapshot } from '../money';
 import type { PhoneCopyBody } from '@sax/remote';
 import type { PhoneCmd } from '../phoneCmd';
+import type { PcWhy } from '../net/pcWhy';
 import { File } from 'expo-file-system';
 import { fromUtf8, utf8, xOpen, xSeal, type DeviceListJson, type SignedCert } from '@sax/remote';
 import { currentEpoch, inflight, liveKey, sameEpoch } from '../inflight';
@@ -71,6 +72,8 @@ export interface AppData {
   pcCopy?: PhoneCopyBody | null;
   /** 폰 발급 명령(cmd.run). 보내기 전에 cmdId와 함께 저장해 다시 보낼 때 같은 cmdId를 쓴다(src/phoneCmd.ts). */
   cmds?: PhoneCmd[];
+  /** PC 연결이 안 된 최근 원인(net/pcWhy.ts, '단계:원인'과 시각만. 최대 20개) */
+  pcLog?: PcWhy[];
 }
 
 export const emptyData = (): AppData => ({ v: 1, pair: null, deviceList: null, seenListVersion: 0, ikTs: 0, lastSeenPc: null, cash: [], recent: [], queueSeq: 0, qbundleSeq: 0 });
