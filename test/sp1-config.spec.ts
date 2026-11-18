@@ -144,3 +144,22 @@ describe('로그 금지(규칙 ⑤)', () => {
     for (const { f, s } of appSources) assert.doesNotMatch(s, /console\.(log|info|warn|error|debug)/, f);
   });
 });
+
+describe('앱 표시 이름', () => {
+  it('홈 화면 이름은 BRAND(택스오프), 프로젝트 이름·번들 ID는 그대로(tex · com.lafco.tex)', () => {
+    assert.equal(app.name, 'tex');
+    assert.equal(app.ios.bundleIdentifier, 'com.lafco.tex');
+    assert.equal(app.android.package, 'com.lafco.tex');
+    const brand = /export const BRAND = '([^']+)'/.exec(src('src/config.ts'))?.[1];
+    assert.deepEqual(plugin('./plugins/with-display-name.cjs'), ['./plugins/with-display-name.cjs', { name: brand }]);
+  });
+  it('스플래시는 앱 바탕색(theme canvas) 위 표시, 라이트·다크', () => {
+    const s = plugin('expo-splash-screen')[1];
+    const t = src('src/theme.ts');
+    const canvas = [...t.matchAll(/canvas: '(#[0-9A-F]{6})'/g)].map((m) => m[1]);
+    assert.equal(s.backgroundColor, canvas[0]);
+    assert.equal(s.dark.backgroundColor, canvas[1]);
+    assert.match(src('App.tsx'), /SplashScreen\.preventAutoHideAsync\(\)/);
+    assert.match(src('App.tsx'), /SplashScreen\.hideAsync\(\)/);
+  });
+});

@@ -477,6 +477,10 @@ const SCREENS: Record<
   'lock-no-biometric-passcode': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'faceId', enrolled: false } }} /> }),
   'lock-no-passcode': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: FACE, err: 'passcode_required' }} /> }),
   'lock-first-run': () => ({ session: fake(emptyData(), 'unpaired'), node: <LockScreen firstRun onUnlocked={noop} onReset={noop} preview={{ bio: FACE }} /> }),
+  /** 첫 실행, 생체를 등록하지 않은 폰: 열쇠 안내가 "폰 암호로 확인해요"로 바뀐다 */
+  'lock-first-run-no-bio': () => ({ session: fake(emptyData(), 'unpaired'), node: <LockScreen firstRun onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'none', enrolled: false } }} /> }),
+  /** 첫 실행, 폰 암호가 없어 열쇠를 못 만든 경우 */
+  'lock-first-run-no-passcode': () => ({ session: fake(emptyData(), 'unpaired'), node: <LockScreen firstRun onUnlocked={noop} onReset={noop} preview={{ bio: FACE, err: 'passcode_required' }} /> }),
   /** 앱 전환 덮개: 다른 앱으로 넘어가면 내용을 바탕색 면으로 가린다(App.tsx privacy-cover) */
   'lock-cover': () => ({ session: fake(paired(), 'online'), node: <View style={{ flex: 1 }}><Main chat={CHAT} /><View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}><Cover /></View></View> }),
   /** 꺼진 PC에 발급을 맡기고 홈으로 돌아온 뒤: 대화 끝에 확인 한 줄 */

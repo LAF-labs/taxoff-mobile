@@ -1,5 +1,5 @@
 // 홈 = PC와 나누는 하나의 대화(기획 v2 PR 1). 위에서부터:
-//   PC 연결 한 줄(켜짐 파랑 점 · 꺼짐 마지막 접속 · 오래 꺼짐 황토 · 연결 안 됨 [PC 연결하기])
+//   PC 연결 한 줄(켜짐 파랑 점 · 꺼짐 마지막 접속 · 오래 꺼짐 황토 · 연결 안 됨). 연결 전에는 가운데 안내 면의 [PC와 연결] 하나
 //   지금 할 일 한 줄(승인 대기 · 밀린 일 건수 → 지금 할 일)
 //   대화(PC 답은 글자, 카드 답은 tint 면, 내 말은 오른쪽 tint 말풍선, 폰에서 나눈 구간 머리)
 //   바닥: 빠른 일 [세금계산서 발급] [찍기] [현금] + 입력 줄(보내기). 키보드가 올라오면 함께 올라간다.
@@ -130,7 +130,6 @@ export function HomeScreen({ go, chat, todo, draft = '' }: { go: (to: HomeRoute)
               <View style={{ flex: 1 }}>
                 <StatusDot tone="quiet" label={line.label} v="sub" testID="pc-status" />
               </View>
-              <Button testID="go-pair" small label="PC 연결하기" onPress={() => go('pair')} />
             </View>
           )}
           {paired && <TodoLine todo={t} onPress={() => go('queue')} />}
@@ -147,7 +146,7 @@ export function HomeScreen({ go, chat, todo, draft = '' }: { go: (to: HomeRoute)
           testID="chat"
         >
           {!paired ? (
-            <Intro />
+            <Intro onPair={() => go('pair')} />
           ) : items.length === 0 ? (
             <T v="sub" c="ink3" center style={{ paddingVertical: space.s6 }}>
               PC에 시킬 일을 적거나, 아래에서 골라 주세요.
@@ -250,7 +249,8 @@ function TodoLine({ todo, onPress }: { todo: Todo; onPress: () => void }) {
   );
 }
 
-function Intro() {
+/** 연결 전 홈: 할 일은 하나뿐이라 주 단추 하나([PC와 연결] → QR 찍기). */
+function Intro({ onPair }: { onPair: () => void }) {
   const p = usePalette();
   return (
     <View style={[st.card, { backgroundColor: p.tint }]} testID="unpaired">
@@ -261,6 +261,7 @@ function Intro() {
       <T v="sub" c="ink2">
         연결하면 여기서 PC에 일을 시키고, 종이 증빙을 찍고, 현금 매출을 적을 수 있어요.
       </T>
+      <Button testID="go-pair" label="PC와 연결" onPress={onPair} style={{ marginTop: space.s2 }} />
     </View>
   );
 }

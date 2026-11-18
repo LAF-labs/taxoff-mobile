@@ -54,6 +54,19 @@
     },
     "plugins": [
       [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 96,
+          "resizeMode": "contain",
+          "backgroundColor": "#FCFCFC",
+          "dark": {
+            "image": "./assets/splash-icon-dark.png",
+            "backgroundColor": "#181819"
+          }
+        }
+      ],
+      [
         "expo-secure-store",
         {
           "configureAndroidBackup": false,
@@ -93,7 +106,13 @@
         }
       ],
       "./plugins/with-no-backup.cjs",
-      "expo-asset"
+      "expo-asset",
+      [
+        "./plugins/with-display-name.cjs",
+        {
+          "name": "택스오프"
+        }
+      ]
     ]
   }
 }
