@@ -58,7 +58,7 @@ export function cardOf(s: PhoneShow): ChatCard {
 
 /** 코어 메시지 → 홈 대화 줄. 앱 답은 'pc' 쪽 말풍선에 그린다. 이 대화는 이 폰에만 있어서 'PC 받음' 표시는 없다. */
 export function itemOf(m: ChatMessage): ChatItem {
-  return { kind: 'msg', id: m.id, from: m.from === 'user' ? 'me' : 'pc', at: m.at, text: m.text };
+  return m.from === 'user' ? { kind: 'msg', id: m.id, from: 'me', at: m.at, text: m.text } : { kind: 'msg', id: m.id, from: 'pc', via: 'phone', at: m.at, text: m.text };
 }
 
 export class OfflineChat {
@@ -111,7 +111,7 @@ export class OfflineChat {
     if (r.kind === 'unavailable') return { items: [], chips: [], drafts: [], unavailable: { code: r.code, text: r.text, retry: r.retry } };
     const at = this.ports.now();
     const items: ChatItem[] = [];
-    r.show.forEach((s, i) => items.push({ kind: 'msg', id: `${r.id}-${i}`, from: 'pc', at, card: cardOf(s) }));
+    r.show.forEach((s, i) => items.push({ kind: 'msg', id: `${r.id}-${i}`, from: 'pc', via: 'phone', at, card: cardOf(s) }));
     return { items, chips: r.ask?.chips ?? [], drafts: r.show.flatMap((s) => (s.type === 'card' ? [s.draft] : [])) };
   }
 }

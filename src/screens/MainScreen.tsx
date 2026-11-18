@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ChatItem } from '../chat';
 import { radius, size, space, usePalette } from '../theme';
 import { T, tap } from '../ui/kit';
+import type { OfflineChatView } from '../offline/useOfflineChat';
 import { HomeScreen, type HomeRoute, type Todo } from './HomeScreen';
 import { MoneyScreen } from './MoneyScreen';
 import { RecordsScreen } from './RecordsScreen';
@@ -21,13 +22,13 @@ const TABS: Array<{ key: Tab; label: string; a11y: string }> = [
 ];
 
 export function MainScreen({
-  tab, onTab, go, chat, todo, draft,
-}: { tab: Tab; onTab: (t: Tab) => void; go: (to: MainRoute) => void; chat?: ChatItem[]; todo?: Todo; draft?: string }) {
+  tab, onTab, go, chat, todo, draft, phone,
+}: { tab: Tab; onTab: (t: Tab) => void; go: (to: MainRoute) => void; chat?: ChatItem[]; todo?: Todo; draft?: string; phone?: OfflineChatView }) {
   const kb = useKeyboardShown();
   return (
     <View style={st.fill}>
       <View style={st.fill}>
-        {tab === 'home' && <HomeScreen go={go} chat={chat} todo={todo} draft={draft} />}
+        {tab === 'home' && <HomeScreen go={go} chat={chat} todo={todo} draft={draft} phone={phone} />}
         {tab === 'money' && <MoneyScreen go={go} />}
         {tab === 'records' && <RecordsScreen go={go} />}
       </View>

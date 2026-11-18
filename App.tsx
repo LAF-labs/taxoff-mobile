@@ -1,5 +1,6 @@
 // tex 폰 앱(Phase 1, ADR-034 · 기획 v2 앱 틀): 잠금(P-01) → 탭(홈 대화 · 돈 · 기록) → 연결(S-03)·설정·연결 상태(P-06)·촬영(P-08)·현금매출(P-09).
 // 잠금: 앱을 열 때 생체, 백그라운드 30초 뒤 다시 잠그고 메모리 키를 지운다. 앱 전환기 미리보기는 가린다.
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
@@ -34,6 +35,9 @@ import { usePalette } from './src/theme';
 import { T } from './src/ui/kit';
 
 type Route = 'tabs' | MainRoute;
+
+// 시스템 스플래시(app.json, 바탕색 + 표시)를 첫 화면이 그려질 때까지 둔다. 빈 바탕 한 장이 끼지 않게.
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function App() {
   const p = usePalette();
@@ -98,6 +102,7 @@ export default function App() {
 
   let body;
   if (bootErr) body = <View style={st.center}><T c="attention">보호된 저장 공간을 열 수 없어요. 앱을 다시 설치해 주세요.</T></View>;
+  // 부팅 중에는 스플래시가 덮고 있다(아래 hideAsync). 바탕만 같은 색으로 깔아 둔다.
   else if (!boot) body = <View style={[st.fill, { backgroundColor: p.canvas }]} />;
   else if (!unlocked) body = <LockScreen firstRun={!boot.hasDevice} onUnlocked={(k) => void onUnlocked(k)} onReset={() => setBoot({ hasDevice: false })} />;
   else {
@@ -163,6 +168,16 @@ export default function App() {
       </SessionProvider>
     );
   }
+
+  const ready = bootErr || !!boot;
+  useEffect(() => {
+    // 첫 화면(잠금·첫 실행·오류)이 그려진 다음 프레임에 스플래시를 걷는다
+    if (!ready) return;
+    const id = requestAnimationFrame(() => {
+      SplashScreen.hideAsync().catch(() => {});
+    });
+    return () => cancelAnimationFrame(id);
+  }, [ready]);
 
   return (
     <SafeAreaProvider>

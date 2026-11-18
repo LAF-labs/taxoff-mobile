@@ -14,7 +14,12 @@ export interface OfflineChatView {
   busy: boolean;
   chips: OfflineReply['chips'];
   send(text: string): Promise<void>;
+  /** 못 보낸 말을 다시 보낸다(그 말과 이유 줄은 지우고 새로 보낸다) */
+  retry(noteId: string): Promise<void>;
 }
+
+/** 연결이 끊기는 등 코어가 답을 주지 못하고 던졌을 때 보이는 한 줄 */
+export const SEND_FAILED_TEXT = '연결이 잠깐 끊겨서 보내지 못했어요. 다시 보내 주세요.';
 
 export function useOfflineChat(): OfflineChatView {
   const s = useSession();
@@ -50,19 +55,21 @@ export function useOfflineChat(): OfflineChatView {
       sending.current = true;
       setBusy(true);
       setChips([]);
-      setPending({ kind: 'msg', id: 'off-pending', from: 'me', at: Date.now(), text, state: 'waiting' });
+      setPending({ kind: 'msg', id: 'off-pending', from: 'me', at: Date.now(), text, state: 'sending' });
+      // 모델을 부르지 못한 턴은 코어가 기록하지 않는다: 내가 쓴 말은 화면에 남기고 이유 한 줄과 [다시 보내기]를 붙인다
+      const fail = (why: string, retry: boolean): ChatItem[] => {
+        const at = Date.now();
+        return [
+          { kind: 'msg', id: `off-me-${at}`, from: 'me', at, text, state: 'failed' },
+          { kind: 'note', id: `off-${at}`, at: at + 1, text: why, failed: retry ? { retry: text } : {} },
+        ];
+      };
       try {
         const r = await chat.send(text);
-        const at = Date.now();
-        // 모델을 부르지 못한 턴은 코어가 기록하지 않는다: 내가 쓴 말은 화면에 남기고 이유를 한 줄 붙인다
-        const failed: ChatItem[] = r.unavailable
-          ? [
-              { kind: 'msg', id: `off-me-${at}`, from: 'me', at, text, state: 'waiting' },
-              { kind: 'note', id: `off-${at}`, at: at + 1, text: r.unavailable.text },
-            ]
-          : [];
-        setExtra((x) => [...x, ...r.items, ...failed]);
+        setExtra((x) => [...x, ...r.items, ...(r.unavailable ? fail(r.unavailable.text, r.unavailable.retry) : [])]);
         setChips(r.chips);
+      } catch {
+        setExtra((x) => [...x, ...fail(SEND_FAILED_TEXT, true)]);
       } finally {
         setPending(null);
         sending.current = false;
@@ -72,5 +79,18 @@ export function useOfflineChat(): OfflineChatView {
     [chat],
   );
 
-  return { available: !!chat, items: [...log, ...extra, ...(pending ? [pending] : [])], busy, chips, send };
+  const retry = useCallback(
+    async (noteId: string) => {
+      const i = extra.findIndex((x) => x.id === noteId);
+      const n = extra[i];
+      if (!n || n.kind !== 'note' || !n.failed?.retry || sending.current) return;
+      const text = n.failed.retry;
+      // 이유 줄과 바로 앞의 못 보낸 내 말을 지운다
+      setExtra((x) => x.filter((y, j) => y.id !== noteId && !(j === i - 1 && y.kind === 'msg' && y.state === 'failed')));
+      await send(text);
+    },
+    [extra, send],
+  );
+
+  return { available: !!chat, items: [...log, ...extra, ...(pending ? [pending] : [])], busy, chips, send, retry };
 }

@@ -1,5 +1,5 @@
 // 홈 = PC와 나누는 하나의 대화(기획 v2 PR 1). 위에서부터:
-//   PC 연결 한 줄(켜짐 파랑 점 · 꺼짐 마지막 접속 · 오래 꺼짐 황토 · 연결 안 됨 [PC 연결하기])
+//   PC 연결 한 줄(켜짐 파랑 점 · 꺼짐 마지막 접속 · 오래 꺼짐 황토 · 연결 안 됨). 연결 전에는 가운데 안내 면의 [PC와 연결] 하나
 //   지금 할 일 한 줄(승인 대기 · 밀린 일 건수 → 지금 할 일)
 //   대화(PC 답은 글자, 카드 답은 tint 면, 내 말은 오른쪽 tint 말풍선, 폰에서 나눈 구간 머리)
 //   바닥: 빠른 일 [세금계산서 발급] [찍기] [현금] + 입력 줄(보내기). 키보드가 올라오면 함께 올라간다.
@@ -7,8 +7,8 @@
 import { useRef, useState, type ComponentRef } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { chatFromData, clock, clockRange, type ChatCard, type ChatItem } from '../chat';
-import { useOfflineChat } from '../offline/useOfflineChat';
+import { chatFromData, clockRange, metaOf, type ChatCard, type ChatItem } from '../chat';
+import { useOfflineChat, type OfflineChatView } from '../offline/useOfflineChat';
 import { BRAND } from '../config';
 import { queueCounts } from '../queue';
 import { useQueue } from '../queueStore';
@@ -16,7 +16,7 @@ import { RunCard } from './RunCard';
 import { useSession } from '../session';
 import type { PcStatus } from '../net/pc';
 import { MAX_FONT_SCALE, radius, size, space, textScale, type, usePalette } from '../theme';
-import { Button, Check, Chevron, Notice, StatusDot, T, ago, tap, type Tone } from '../ui/kit';
+import { Button, Check, Chevron, Notice, Pill, StatusDot, T, ago, tap, type Tone } from '../ui/kit';
 
 export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'devices' | 'issue' | 'queue' | 'run' | 'doc' | 'bizreg' | 'recv' | 'pay' | 'mark';
 
@@ -61,7 +61,7 @@ export interface Todo {
   backlog: number;
 }
 
-export function HomeScreen({ go, chat, todo, draft = '' }: { go: (to: HomeRoute) => void; chat?: ChatItem[]; todo?: Todo; draft?: string }) {
+export function HomeScreen({ go, chat, todo, draft = '', phone }: { go: (to: HomeRoute) => void; chat?: ChatItem[]; todo?: Todo; draft?: string; /** 갤러리: 폰 대화 상태를 정해 그린다(네트워크 없음) */ phone?: OfflineChatView }) {
   const s = useSession();
   const p = usePalette();
   const paired = !!s.data.pair;
@@ -77,9 +77,16 @@ export function HomeScreen({ go, chat, todo, draft = '' }: { go: (to: HomeRoute)
   const pcOff = off || s.pc === 'stale';
 
   // PC가 꺼져 있으면 폰이 게이트웨이를 거쳐 직접 답한다(ADR-047). 켜져 있을 때의 PC 대화는 아직 화면만 있다.
-  const offline = useOfflineChat();
+  const live = useOfflineChat();
+  const offline = phone ?? live;
   const phoneAnswers = pcOff && offline.available;
-  const items = [...(chat ?? chatFromData(s.data)), ...q.notes, ...mine, ...(chat ? [] : offline.items)].sort((a, b) => at(a) - at(b));
+  const items = [...(chat ?? chatFromData(s.data)), ...q.notes, ...mine, ...(chat && !phone ? [] : offline.items)].sort((a, b) => at(a) - at(b));
+  const input = useRef<ComponentRef<typeof TextInput>>(null);
+  /** 예시 문장을 누르면 입력 칸에 넣고 바로 고칠 수 있게 한다(보내지는 않는다) */
+  const pick = (v: string) => {
+    setText(v);
+    input.current?.focus();
+  };
   const send = () => {
     const v = text.trim();
     if (!v || offline.busy) return;
@@ -130,7 +137,6 @@ export function HomeScreen({ go, chat, todo, draft = '' }: { go: (to: HomeRoute)
               <View style={{ flex: 1 }}>
                 <StatusDot tone="quiet" label={line.label} v="sub" testID="pc-status" />
               </View>
-              <Button testID="go-pair" small label="PC 연결하기" onPress={() => go('pair')} />
             </View>
           )}
           {paired && <TodoLine todo={t} onPress={() => go('queue')} />}
@@ -147,21 +153,29 @@ export function HomeScreen({ go, chat, todo, draft = '' }: { go: (to: HomeRoute)
           testID="chat"
         >
           {!paired ? (
-            <Intro />
+            <Intro onPair={() => go('pair')} />
           ) : items.length === 0 ? (
-            <T v="sub" c="ink3" center style={{ paddingVertical: space.s6 }}>
-              PC에 시킬 일을 적거나, 아래에서 골라 주세요.
-            </T>
+            <Starter phoneAnswers={phoneAnswers} onPick={pick} />
           ) : (
             items.map((it) =>
               it.kind === 'run' ? (
                 <RunItem key={it.id} jobId={it.jobId} go={go} />
               ) : (
-                <Item key={it.id} it={it} />
+                <Item key={it.id} it={it} onRetry={(id) => void offline.retry(id)} retryOff={offline.busy} />
               ),
             )
           )}
-          {paired && off && <Notice tone="quiet" testID="pc-off-note">PC가 꺼져 있어요. 시키신 일은 PC를 켜면 시작해요</Notice>}
+          {paired && phoneAnswers && offline.busy && <Typing />}
+          {paired && phoneAnswers && !offline.busy && offline.chips.length > 0 && (
+            <View style={st.replies} testID="chat-chips">
+              {offline.chips.map((c) => (
+                <Chip key={c.label} label={c.label} onPress={() => void offline.send(c.text)} />
+              ))}
+            </View>
+          )}
+          {/* 폰이 답할 때는 빈 대화 안내가 같은 말을 하므로 대화가 있을 때만 한 줄 */}
+          {paired && off && !phoneAnswers && <Notice tone="quiet" testID="pc-off-note">PC가 꺼져 있어요. 시키신 일은 PC를 켜면 시작해요</Notice>}
+          {paired && off && phoneAnswers && items.length > 0 && <Notice tone="quiet" testID="pc-off-note">PC가 꺼져 있어 폰이 대신 답해요. 발급은 PC를 켜면 시작해요</Notice>}
           {paired && s.pc === 'stale' && <Notice testID="pc-stale-note">PC가 일주일 넘게 꺼져 있어요. PC를 켜 두거나 다시 연결해 주세요</Notice>}
         </ScrollView>
         <TopFade />
@@ -176,12 +190,13 @@ export function HomeScreen({ go, chat, todo, draft = '' }: { go: (to: HomeRoute)
             </View>
             <View style={st.inputRow}>
               <TextInput
+                ref={input}
                 testID="chat-input"
                 value={text}
                 onChangeText={setText}
-                placeholder={pcOff ? '폰에서 이어서 말하기' : 'PC에 시킬 일'}
+                placeholder={phoneAnswers ? '궁금한 것이나 시킬 일' : 'PC에 시킬 일'}
                 placeholderTextColor={p.ink3}
-                accessibilityLabel={pcOff ? '폰에서 이어서 말하기' : 'PC에 시킬 일 적기'}
+                accessibilityLabel={phoneAnswers ? '궁금한 것이나 시킬 일 적기' : 'PC에 시킬 일 적기'}
                 maxFontSizeMultiplier={MAX_FONT_SCALE}
                 multiline
                 numberOfLines={1}
@@ -193,7 +208,7 @@ export function HomeScreen({ go, chat, todo, draft = '' }: { go: (to: HomeRoute)
                   { backgroundColor: p.tint, color: p.ink },
                 ]}
               />
-              <Button testID="chat-send" small label="보내기" onPress={send} disabled={!text.trim()} />
+              <Button testID="chat-send" small label="보내기" onPress={send} disabled={!text.trim() || (phoneAnswers && offline.busy)} />
             </View>
           </View>
         )}
@@ -250,7 +265,8 @@ function TodoLine({ todo, onPress }: { todo: Todo; onPress: () => void }) {
   );
 }
 
-function Intro() {
+/** 연결 전 홈: 할 일은 하나뿐이라 주 단추 하나([PC와 연결] → QR 찍기). */
+function Intro({ onPair }: { onPair: () => void }) {
   const p = usePalette();
   return (
     <View style={[st.card, { backgroundColor: p.tint }]} testID="unpaired">
@@ -261,6 +277,7 @@ function Intro() {
       <T v="sub" c="ink2">
         연결하면 여기서 PC에 일을 시키고, 종이 증빙을 찍고, 현금 매출을 적을 수 있어요.
       </T>
+      <Button testID="go-pair" label="PC와 연결" onPress={onPair} style={{ marginTop: space.s2 }} />
     </View>
   );
 }
@@ -286,7 +303,7 @@ function RunItem({ jobId, go }: { jobId: string; go: (to: HomeRoute) => void }) 
   );
 }
 
-function Item({ it }: { it: Exclude<ChatItem, { kind: 'run' }> }) {
+function Item({ it, onRetry, retryOff }: { it: Exclude<ChatItem, { kind: 'run' }>; onRetry: (noteId: string) => void; retryOff?: boolean }) {
   const p = usePalette();
   if (it.kind === 'merged') {
     return (
@@ -296,6 +313,21 @@ function Item({ it }: { it: Exclude<ChatItem, { kind: 'run' }> }) {
             폰에서 나눈 대화 · {clockRange(it.from, it.to)}
           </T>
         </View>
+      </View>
+    );
+  }
+  if (it.kind === 'note' && it.failed) {
+    // 못 한 일: 체크 없이 이유 한 줄, 다시 할 수 있으면 [다시 보내기]
+    return (
+      <View style={[st.failed, { backgroundColor: p.tint }]} testID="chat-failed">
+        <T v="sub" c="ink2">
+          {it.text}
+        </T>
+        {it.failed.retry !== undefined && (
+          <View style={{ flexDirection: 'row' }}>
+            <Pill testID="chat-retry" label="다시 보내기" onPress={() => !retryOff && onRetry(it.id)} />
+          </View>
+        )}
       </View>
     );
   }
@@ -312,7 +344,7 @@ function Item({ it }: { it: Exclude<ChatItem, { kind: 'run' }> }) {
     );
   }
   const me = it.from === 'me';
-  const meta = `${me ? '' : 'PC · '}${clock(it.at)}${it.state === 'waiting' ? ' · PC 켜지면 보냄' : ''}`;
+  const meta = metaOf(it);
   return (
     <View style={[st.msg, me ? st.mine : st.theirs]} testID={`chat-${it.from}`}>
       {it.text !== undefined &&
@@ -327,6 +359,36 @@ function Item({ it }: { it: Exclude<ChatItem, { kind: 'run' }> }) {
       <T v="meta" c="ink4" style={me ? { textAlign: 'right' } : undefined}>
         {meta}
       </T>
+    </View>
+  );
+}
+
+/** 답을 쓰는 동안: 상대 쪽에 숨 쉬는 점 한 줄 */
+function Typing() {
+  return (
+    <View style={st.msg} testID="chat-typing">
+      <StatusDot tone="quiet" busy label="답을 쓰고 있어요" v="sub" />
+    </View>
+  );
+}
+
+/** 대화가 비었을 때: 무엇을 할 수 있는지 한 줄 + 눌러서 넣는 예시 문장 셋 */
+const EXAMPLES_PC = ['동네마트에 세금계산서 발급해 줘', '이번 달 매출이 얼마야?', '받을 돈 알려 줘'];
+const EXAMPLES_PHONE = ['지난주에 발급한 것 보여 줘', '받을 돈 알려 줘', '동네마트에 세금계산서 발급해 줘'];
+function Starter({ phoneAnswers, onPick }: { phoneAnswers: boolean; onPick: (text: string) => void }) {
+  return (
+    <View style={st.starter} testID="chat-starter">
+      <View style={{ gap: space.s1 }}>
+        <T v="strong">{phoneAnswers ? 'PC가 꺼져 있어도 물어볼 수 있어요' : '말로 시키면 PC가 해요'}</T>
+        <T v="sub" c="ink2">
+          {phoneAnswers ? 'PC가 넘겨 둔 기록으로 폰이 답해요. 발급은 PC를 켜면 시작해요.' : '평소 말하듯 적어 주세요. 예를 들면 이렇게요.'}
+        </T>
+      </View>
+      <View style={st.examples}>
+        {(phoneAnswers ? EXAMPLES_PHONE : EXAMPLES_PC).map((x) => (
+          <Chip key={x} label={x} onPress={() => onPick(x)} testID="chat-example" />
+        ))}
+      </View>
     </View>
   );
 }
@@ -389,6 +451,10 @@ const st = StyleSheet.create({
   card: { borderRadius: radius.lg, padding: space.s4, gap: space.s2 },
   cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: space.s3 },
   note: { flexDirection: 'row', gap: space.s2, alignItems: 'flex-start' },
+  failed: { borderRadius: radius.lg, paddingHorizontal: space.s4, paddingVertical: space.s3, gap: space.s2 },
+  replies: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s2 },
+  starter: { gap: space.s4, paddingVertical: space.s4 },
+  examples: { alignItems: 'flex-start', gap: space.s2 },
   mergedWrap: { alignItems: 'center', paddingVertical: space.s1 },
   merged: { borderRadius: radius.full, paddingHorizontal: space.s3, paddingVertical: space.s1 },
   bottom: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: space.s5, paddingTop: space.s3, paddingBottom: space.s3, gap: space.s3 },

@@ -13,7 +13,7 @@ import { Button, Empty, Group, Notice, Pill, Row, Screen, StatusDot } from '../u
 import { confirmLeaveThisPhone } from './leavePhone';
 
 export const FULL_NOTE = '3대까지 연결할 수 있어요. 새 기기를 연결하려면 하나를 끊어 주세요.';
-const LAST_PC = '계정에 남은 마지막 PC는 정지할 수 없어요.';
+const LAST_PC = '계정에 남은 마지막 PC는 정지할 수 없어요. 다른 PC를 먼저 연결한 뒤 정지해 주세요.';
 
 export type DevicesLoad = { kind: 'loading' } | { kind: 'ready'; devices: AccountDevice[] } | { kind: 'error'; code: string };
 
