@@ -73,3 +73,11 @@ export function pcWhyText(code: string | null | undefined): string | null {
   if (stage === 'queue') return 'PC에 맡기는 길이 막혔어요. 잠시 뒤 다시 해 볼게요.';
   return null;
 }
+
+/**
+ * 다시 동기화하는 동안 보일 상태. 이미 "PC 켜짐"이면 60초마다의 재접속 동안 "찾는 중"으로 깜빡이지 않게 그대로 둔다.
+ * 끝나면 결과(online·offline 등)로 바뀐다.
+ */
+export function statusWhileSyncing<T extends string>(prev: T): T | 'connecting' {
+  return prev === 'online' ? prev : 'connecting';
+}

@@ -5,6 +5,7 @@ import { RECONNECT_MS } from './config';
 import { inflight } from './inflight';
 import type { DeviceKeys } from './keyring';
 import { syncWithPc, type PcStatus } from './net/pc';
+import { statusWhileSyncing } from './net/pcWhy';
 import { FileOutbox } from './storage/outbox';
 import { saveData, type AppData } from './storage/state';
 
@@ -66,7 +67,7 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
     }
     busy.current = true;
     setSyncing(true);
-    setPc('connecting');
+    setPc(statusWhileSyncing);
     try {
       const r = await inflight(() => syncWithPc({ keys, data: () => dataRef.current, update, outbox, onLive: () => alive.current && setPc('online'), alive: () => alive.current }));
       setPc(r.status);

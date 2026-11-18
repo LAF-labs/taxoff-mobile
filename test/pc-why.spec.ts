@@ -1,7 +1,7 @@
 // PC 연결 원인 코드(src/net/pcWhy.ts): "PC 꺼짐"으로 보일 때 어느 단계에서 왜 멈췄는지 남기고, 사람이 읽는 한 줄을 고른다.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { PC_LOG_MAX, causeOf, pcWhyText, pushWhy, whyCode } from '../src/net/pcWhy.ts';
+import { PC_LOG_MAX, causeOf, pcWhyText, pushWhy, statusWhileSyncing, whyCode } from '../src/net/pcWhy.ts';
 
 describe('원인 코드', () => {
   it('기기 토큰 거절은 계정 서비스 코드와 상태를 남긴다', () => {
@@ -51,5 +51,13 @@ describe('사람이 읽는 한 줄', () => {
       assert.doesNotMatch(t, /relay|queue|token|Noise|우편함|릴레이|토큰|세션/i, c);
     }
     assert.equal(pcWhyText(null), null);
+  });
+});
+
+describe('다시 동기화하는 동안', () => {
+  it('켜짐이면 그대로 두고(깜빡이지 않게), 아니면 찾는 중', () => {
+    assert.equal(statusWhileSyncing('online'), 'online');
+    assert.equal(statusWhileSyncing('offline'), 'connecting');
+    assert.equal(statusWhileSyncing('queued'), 'connecting');
   });
 });
