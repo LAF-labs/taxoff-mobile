@@ -21,15 +21,15 @@ type Phase = 'scan' | 'warn' | 'confirm' | 'working' | 'sas' | 'done' | 'failed'
 const FAIL: Record<MobilePairFailure | 'relay' | 'save', string> = {
   qr_invalid: `${BRAND}의 연결 QR이 아니에요. PC 화면의 QR을 다시 찍어 주세요.`,
   qr_expired: 'QR 시간이 지났어요. PC에서 [새 QR]을 눌러 주세요.',
-  relay_not_allowed: '알 수 없는 연결 서버예요. 연결을 멈췄어요.',
-  devlist_invalid: '계정의 기기 목록 서명이 맞지 않아요. 연결을 멈췄어요.',
+  relay_not_allowed: `${BRAND}가 아닌 곳으로 연결하려 해서 멈췄어요. PC에서 [새 QR]을 눌러 다시 해 주세요.`,
+  devlist_invalid: '내 계정의 기기 목록이 맞는지 확인하지 못해 멈췄어요. PC에서 [새 QR]을 눌러 다시 해 주세요.',
   desktop_unknown: '계정에 등록된 PC가 아니에요. 직접 설치한 PC가 아니면 연결하지 마세요.',
   handshake: 'PC와 연결하지 못했어요. PC에서 [새 QR]을 눌러 다시 해 주세요.',
-  pair_ok_invalid: 'PC가 보낸 연결 정보가 맞지 않아요. 연결을 멈췄어요.',
-  aik_mismatch: '계정 정보가 서로 달라요. 연결을 멈췄어요. 계정 메일을 확인해 주세요.',
+  pair_ok_invalid: 'PC가 보낸 연결 정보가 맞지 않아 멈췄어요. PC에서 [새 QR]을 눌러 다시 해 주세요.',
+  aik_mismatch: '폰과 PC의 계정이 서로 달라 멈췄어요. PC에서 로그인한 계정 메일을 확인해 주세요.',
   acct_claim_invalid: '계정을 확인하지 못했어요. 연결을 멈췄어요. PC에서 [새 QR]을 눌러 다시 해 주세요.',
   timeout: '시간이 지났어요. PC에서 다시 시작해 주세요.',
-  relay: '연결 서버에 닿지 않아요. 인터넷 연결을 확인해 주세요.',
+  relay: '인터넷에 연결되지 않았어요. 와이파이나 데이터를 켜고 다시 해 주세요.',
   save: '연결 정보를 이 폰에 저장하지 못했어요. PC에서 [새 QR]을 눌러 다시 연결해 주세요.',
 };
 
@@ -223,7 +223,7 @@ export function PairScreen({ onDone }: { onDone: () => void }) {
         <T v="strong">내 계정과 내 PC가 맞나요?</T>
         <Group note="내 계정이 아니면 중단하세요. 연결한 뒤에도 [PC 연결]에서 늘 볼 수 있어요.">
           <View style={st.kv}>
-            <T v="label" c="ink3">계정 · 계정 서버가 확인함</T>
+            <T v="label" c="ink3">계정 · {BRAND}가 확인함</T>
             <T v="strong" testID="confirm-account">
               {lines.account}
             </T>

@@ -29,13 +29,13 @@ export type StopReason = 'blocked' | 'unknownScreen' | 'dateMismatch' | 'inputMi
 export type RunAction = 'retryPrepare' | 'reserveOnPc' | 'resendAuth' | 'stop' | 'close' | 'openApp';
 
 export const STOP_COPY: Record<StopReason, { line: string; action: 'retryPrepare' | 'reserveOnPc' }> = {
-  blocked: { line: '홈택스 차단 신호가 보여 24시간 동안 쉬어요. 아무것도 발급하지 않았어요.', action: 'reserveOnPc' },
+  blocked: { line: '홈택스가 잠시 접속을 막아서 24시간 동안 쉬어요. 아무것도 발급하지 않았어요.', action: 'reserveOnPc' },
   unknownScreen: { line: '예상한 홈택스 화면이 아니에요. 아무것도 발급하지 않았어요.', action: 'reserveOnPc' },
   dateMismatch: { line: '홈택스 작성일자가 오늘(한국 시간)과 달라 멈췄어요. 아무것도 발급하지 않았어요.', action: 'retryPrepare' },
   inputMismatch: { line: '홈택스 화면 값이 준비한 값과 달라 승인을 열지 않았어요. 아무것도 발급하지 않았어요.', action: 'retryPrepare' },
   totalMismatch: { line: '홈택스 화면의 공급가액과 세액을 더한 값이 합계와 달라 승인을 열지 않았어요. 아무것도 발급하지 않았어요.', action: 'retryPrepare' },
   otherLogin: { line: '다른 곳에서 홈택스에 로그인해 연결이 끊겼어요. 아무것도 발급하지 않았어요.', action: 'retryPrepare' },
-  passwordError: { line: '홈택스가 비밀번호 오류라고 알렸어요. 금고의 비밀번호를 PC에서 확인해 주세요. 아무것도 발급하지 않았어요.', action: 'reserveOnPc' },
+  passwordError: { line: '홈택스에서 비밀번호가 맞지 않는대요. PC의 금고에 저장한 비밀번호를 확인해 주세요. 아무것도 발급하지 않았어요.', action: 'reserveOnPc' },
   pcStopped: { line: '멈췄어요. 아무것도 발급하지 않았어요. 이유는 PC에서 볼 수 있어요.', action: 'reserveOnPc' },
 };
 

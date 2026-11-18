@@ -142,7 +142,7 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
       setPhase('confirm');
     } catch {
       cleanup();
-      setErr('사진을 처리하지 못했어요. 다시 찍어 주세요.');
+      setErr('사진을 읽지 못했어요. 다시 찍어 주세요.');
       setPhase('camera');
     }
   }

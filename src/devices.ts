@@ -205,15 +205,15 @@ export const isStopped = (code: string): boolean => code === 'account.device_sus
 export function devicesErrorText(code: string): string {
   switch (code) {
     case 'account.last_desktop':
-      return '계정에 남은 마지막 PC는 정지할 수 없어요.';
+      return '계정에 남은 마지막 PC는 정지할 수 없어요. 다른 PC를 먼저 연결한 뒤 정지해 주세요.';
     case 'account.device_not_found':
       return '이미 끊긴 기기예요. 목록을 다시 불러올게요.';
     case 'policy.rate_limited':
       return '오늘은 더 정지할 수 없어요. 내일 다시 하거나 PC의 기기 연결 화면에서 끊어 주세요.';
     case 'account.device_suspended':
-      return '이 폰은 다른 기기에서 정지했거나 연결을 끊었어요.';
+      return '이 폰은 다른 기기에서 정지했거나 연결을 끊었어요. 다시 쓰려면 PC와 다시 연결해 주세요.';
     case 'devices.unreachable':
-      return '서버에 닿지 못했어요. 인터넷 연결을 확인하고 다시 해 주세요.';
+      return '인터넷에 연결되지 않았어요. 와이파이나 데이터를 켜고 다시 해 주세요.';
     default:
       return '지금은 할 수 없어요. 잠시 뒤 다시 해 주세요.';
   }

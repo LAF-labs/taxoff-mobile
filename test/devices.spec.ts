@@ -75,7 +75,7 @@ describe('화면 줄과 정지 규칙', () => {
     for (const c of ['account.last_desktop', 'account.device_not_found', 'policy.rate_limited', 'account.device_suspended', 'devices.unreachable', 'zzz.unknown']) assert.ok(devicesErrorText(c).length > 5, c);
     assert.notEqual(devicesErrorText('account.last_desktop'), devicesErrorText('zzz.unknown'));
     // PC에는 정지 풀기·되돌리기가 없다: 문구가 그런 길을 안내하지 않는다
-    assert.equal(devicesErrorText('account.device_suspended'), '이 폰은 다른 기기에서 정지했거나 연결을 끊었어요.');
+    assert.equal(devicesErrorText('account.device_suspended'), '이 폰은 다른 기기에서 정지했거나 연결을 끊었어요. 다시 쓰려면 PC와 다시 연결해 주세요.');
     assert.doesNotMatch(stopConfirm({ label: '집 PC', role: 'desktop' }).body, /풀 수|되돌릴/);
     assert.deepEqual([isStopped('account.device_suspended'), isStopped('account.unauthorized')], [true, false]);
   });
