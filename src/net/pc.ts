@@ -14,6 +14,7 @@ import type { FileOutbox } from '../storage/outbox';
 import type { AppData } from '../storage/state';
 import { PHONE_CAPS, newerCopy, receiveCopy } from './pcCopy';
 import { driveCmds, trimCmds } from './issueLive';
+import { causeOf, pushWhy, whyCode } from './pcWhy';
 
 /** queued: PC는 꺼져 있고 릴레이 큐에 맡겼다. stale: PC가 오래 꺼져 있어 유효한 번들이 없다(맡길 수 없다). */
 export type PcStatus = 'unpaired' | 'connecting' | 'online' | 'queued' | 'stale' | 'offline';
@@ -31,6 +32,8 @@ export interface SyncDeps {
 
 export interface SyncResult {
   status: PcStatus;
+  /** 라이브가 안 된 이유('단계:원인', net/pcWhy.ts). 라이브로 붙었으면 없다 */
+  why?: string;
   flushed?: FlushResult;
   queued?: QueueSendResult;
 }
@@ -71,22 +74,29 @@ export async function syncWithPc(d: SyncDeps): Promise<SyncResult> {
   const pair = d.data().pair;
   if (!pair) return { status: 'unpaired' };
   const live = await viaLive(d, pair);
-  if (live) return live;
+  if ('status' in live) return live;
   // 잠겨서 멈췄으면 큐로 넘어가지 않는다(키가 지워지는 중)
-  if (d.alive && !d.alive()) return { status: 'offline' };
-  return viaQueue(d, pair);
+  if (d.alive && !d.alive()) return { status: 'offline', why: live.why };
+  const q = await viaQueue(d, pair);
+  // 큐가 막혔으면 그 이유를, 아니면 라이브가 멈춘 이유를 남긴다(둘 다 실패면 큐 쪽이 더 바깥 원인이다: 인터넷·기기 토큰)
+  const why = q.why ?? live.why;
+  await d.update((x) => ({ ...x, pcLog: pushWhy(x.pcLog, { code: why, at: Date.now() }) })).catch(() => undefined);
+  return { ...q, why };
 }
 
 type Pair = NonNullable<AppData['pair']>;
 
-/** 라이브 세션. 세션이 열리지 않으면 null(큐로 넘어간다). */
-async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | null> {
+/** 라이브 세션. 세션이 열리지 않으면 멈춘 단계와 원인(큐로 넘어간다). */
+async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: string }> {
   let link: Link | null = null;
   const noise = softNoiseStatic(d.keys.sm);
+  let stage: 'join' | 'session' | 'live' = 'join';
   try {
     const relay = relayFor(pair.relayHost, deviceAuthFor(pair.pairId, pair.cert, d.keys.vm));
     link = await relay.joinMailbox(fromB64(pair.mbxId), { read: fromB64(pair.tokRead), write: fromB64(pair.tokWrite) }, 'mobile');
-    if (!(await waitPeer(link, PEER_WAIT_MS))) return null;
+    // 우편함에는 들어갔다. PC가 이 우편함을 지키고 있으면 릴레이가 곧 peer를 알린다(없으면 PC가 꺼졌거나 이 폰 기록이 PC에 없다)
+    if (!(await waitPeer(link, PEER_WAIT_MS))) return { why: whyCode('peer', link.closed ? 'closed' : 'timeout') };
+    stage = 'session';
     const clock = monotonicClock(d.data().ikTs);
     let used = 0;
     const s = await openMobileSession(link, {
@@ -98,7 +108,9 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | null> {
       responseTimeoutMs: 8000,
     });
     if (used) await d.update((x) => ({ ...x, ikTs: Math.max(x.ikTs, used) }));
-    if (!s) return null;
+    // PC는 모르는 폰·폐기된 폰·재생된 시각을 무응답으로 거절한다. 응답 시간초과와 구분되지 않는다
+    if (!s) return { why: whyCode('session', link.closed ? 'closed' : 'no_answer') };
+    stage = 'live';
     await d.update((x) => ({ ...x, lastSeenPc: Date.now() }));
     d.onLive?.();
     // PC는 세션을 열자마자 사본을 보낸다. 보관함을 비우기 전에 받는다(비우는 동안 온 다른 봉투는 버려진다).
@@ -122,8 +134,8 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | null> {
     });
     s.channel.close();
     return { status: 'online', flushed };
-  } catch {
-    return null;
+  } catch (e) {
+    return { why: whyCode(stage, causeOf(e)) };
   } finally {
     noise.destroy();
     link?.close();
@@ -144,7 +156,7 @@ async function viaQueue(d: SyncDeps, pair: Pair): Promise<SyncResult> {
     });
     const field = await q.getBundle();
     const bundle = field ? verifyQBundle(field, fromB64(pair.desktopVd), { minSeq: d.data().qbundleSeq }) : null;
-    if (!bundle) return { status: 'stale' };
+    if (!bundle) return { status: 'stale', why: whyCode('stale', field ? 'bundle_invalid' : 'no_bundle') };
     if (bundle.seq > d.data().qbundleSeq) await d.update((x) => ({ ...x, qbundleSeq: Math.max(x.qbundleSeq, bundle.seq) }));
     // 봉투 seq를 먼저 예약해 저장한다(중간에 죽어도 같은 seq를 다시 쓰지 않는다. 빈 번호는 괜찮다).
     const items = await d.outbox.list();
@@ -163,8 +175,8 @@ async function viaQueue(d: SyncDeps, pair: Pair): Promise<SyncResult> {
       }));
     }
     return { status: queued.queued.length || !queued.waiting.length ? 'queued' : 'offline', queued };
-  } catch {
-    return { status: 'offline' };
+  } catch (e) {
+    return { status: 'offline', why: whyCode('queue', causeOf(e)) };
   } finally {
     vm.destroy();
   }
