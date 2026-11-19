@@ -1,5 +1,5 @@
 // 카드에서 바로 승인(대표 결정 2026-11-19): 첫 화면 대화의 진행 카드와 밀린 일 카드가 같이 쓴다.
-// - 받는 곳, 공급가액, 세액, 합계(PC가 홈택스에서 되읽은 값)와 남은 시간, [승인하고 발급] [거절].
+// - 받는 곳, 공급가액, 세액, 합계(PC가 홈택스에서 되읽은 값)와 [거절] [승인하고 발급]. 시간과 '기다려요' 글은 두지 않는다(대표 결정 2026-11-19).
 // - 서명은 승인 시트와 같다: 같은 키(ApprovalHost approvalKeyFor), 같은 메시지(approveMessage), 같은 상태 판단(sheetState).
 // - 경고를 확인해야 하거나(중복 의심), 멈춤(처음 거래처, 한도, 키 없음 등), 결과 모름이면 카드에서 승인하지 않고 [자세히 보기]로 시트를 연다.
 // - [거절]은 앱 안 확인 시트를 한 번 거친다.
@@ -20,28 +20,7 @@ const ROWS: ReadonlyArray<{ key: string; label: string; strong?: boolean }> = [
   { key: 'totalAmount', label: '합계', strong: true },
 ];
 
-/** 남은 시간을 사람 말로 */
-export function leftLine(ms: number): string {
-  if (ms <= 0) return '시간이 지났어요';
-  if (ms > 60_000) return `${Math.ceil(ms / 60_000)}분 남았어요`;
-  return `${Math.ceil(ms / 1000)}초 남았어요`;
-}
-
-/** 승인을 기다려요 / N분 남았어요(오른쪽 맞춤 두 줄). 대화 카드는 진행 줄 오른쪽에 둔다 */
-export function GateLeft({ gate, now }: { gate: PhoneGate; now: number }) {
-  const left = gate.exp - now;
-  if (left <= 0) return null;
-  return (
-    <View style={{ alignItems: 'flex-end', gap: 2, marginLeft: 'auto' }} testID="card-approve-left">
-      <T v="subStrong">승인을 기다려요</T>
-      <T v="meta" c={left <= 20_000 ? 'attention' : 'ink3'} style={{ fontVariant: ['tabular-nums'] }}>
-        {leftLine(left)}
-      </T>
-    </View>
-  );
-}
-
-export function CardApprove({ job, gate, onDetail, now: fixedNow, leftInside = true }: { job: Job; gate: PhoneGate; onDetail: () => void; now?: number; /** 남은 시간 줄을 카드 안에(밀린 일). 대화 카드는 진행 줄 오른쪽에 따로 둔다 */ leftInside?: boolean }) {
+export function CardApprove({ job, gate, onDetail, now: fixedNow }: { job: Job; gate: PhoneGate; onDetail: () => void; now?: number }) {
   const q = useQueue();
   const s = useSession();
   const p = usePalette();
@@ -89,14 +68,6 @@ export function CardApprove({ job, gate, onDetail, now: fixedNow, leftInside = t
       </View>
       {direct ? (
         <>
-          {leftInside && (
-            <View style={{ gap: 2 }}>
-              <T v="subStrong">승인을 기다려요</T>
-              <T v="meta" c={state.urgent ? 'attention' : 'ink3'} style={{ fontVariant: ['tabular-nums'] }}>
-                {leftLine(state.leftMs)}
-              </T>
-            </View>
-          )}
           <View style={st.buttons}>
             <Button kind="secondary" small label="거절" onPress={() => setAsking(true)} disabled={busy} style={{ flex: 1 }} testID="card-deny" />
             <Button
