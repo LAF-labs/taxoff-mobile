@@ -4,8 +4,9 @@
 // - PC가 issue.v1을 알리지 않으면 보내지 않고 "PC 앱을 새 버전으로" 상태로 둔다.
 // - 폰 승인(v1.10, ADR-052): PC가 approve.v1을 알렸으면 gate.request를 받아 명령에 붙이고(승인 시트가 뜬다),
 //   사장님이 서명한 답(gate.response)과 [PC에 다시 요청](gate.refresh)을 이 세션으로 보낸다.
-import { CAP, issueCmd, type Channel, type CmdAckBody, type GateRequestBody, type PhoneCopyBody, type RunEventBody } from '@sax/remote';
-import { applyAck, applyEvent, applyGate, applyHumanRequest, busyWaiting, forRetry, markAnswered, responseDue, retryDue, settled, type PhoneCmd } from '../phoneCmd.ts';
+// - v1.11(sync.v1): PC가 승인 요청을 다른 곳에서 닫으면 gate.resolved가 온다. 받은 요청을 지워 시트를 바로 닫는다.
+import { CAP, issueCmd, type Channel, type CmdAckBody, type GateRequestBody, type GateResolvedBody, type PhoneCopyBody, type RunEventBody } from '@sax/remote';
+import { applyAck, applyEvent, applyGate, applyHumanRequest, applyResolved, busyWaiting, forRetry, markAnswered, responseDue, retryDue, settled, type PhoneCmd } from '../phoneCmd.ts';
 
 export const WATCH_MS = 10 * 60_000;
 const TICK_MS = 2_000;
@@ -135,6 +136,10 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
     } else if (e.type === 'gate.request' && approves) {
       const g = e.body as GateRequestBody;
       await io.save((cs) => cs.map((c) => applyGate(c, g)));
+    } else if (e.type === 'gate.resolved' && approves) {
+      // v1.11: 다른 곳에서 닫힌 승인 요청(시트를 바로 닫는다)
+      const r = e.body as GateResolvedBody;
+      await io.save((cs) => cs.map((c) => applyResolved(c, r)));
     } else if (e.type === 'phone.copy' && io.onCopy) {
       await io.onCopy(e.body as PhoneCopyBody);
     }
