@@ -10,7 +10,7 @@ import { REJECT_LINE } from '../phoneCmd';
 import type { Job } from '../queue';
 import { ACTION_LABEL, AUTH_APPS, STEPS, STEP_LABEL, STOP_COPY, actionsOf, chipOf, elapsed, groupApprovalNo, mmss, stepOf, type IssueResult, type RunAction, type RunView } from '../run';
 import { radius, space, usePalette } from '../theme';
-import { Check, Pill, StatusDot, T, success, won } from '../ui/kit';
+import { Check, Chevron, Pill, StatusDot, T, success, won } from '../ui/kit';
 
 
 export function actionLabel(a: RunAction, r: RunView): string {
@@ -92,7 +92,7 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
           ))}
       </View>
       {/* 이유 없는 PC 멈춤은 어느 단계였는지 모르니 단계 막대를 두지 않는다 */}
-      {r.kind !== 'done' && r.kind !== 'refused' && !(r.kind === 'stopped' && r.reason === 'pcStopped') && <StepBar r={r} />}
+      {r.kind !== 'done' && r.kind !== 'refused' && !(r.kind === 'stopped' && r.reason === 'pcStopped') && (compact ? <FoldSteps id={job.id} r={r} /> : <StepBar r={r} />)}
       <StateLines r={r} />
       {r.kind === 'done' && <ResultRows result={r.result} />}
       {compact && !job.pcOnly && <CardActions r={r} now={now} onAction={onAction} onDoc={onDoc} onShare={onShare} />}
@@ -103,6 +103,59 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
     <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={`${job.title} ${chip.label}. 자세히 보기`} style={({ pressed }) => pressed && { opacity: 0.85 }}>
       {body}
     </Pressable>
+  );
+}
+
+/**
+ * 대화 안 카드의 단계(11-19): 닫힌 채로 시작하고 사용자가 연 카드만 기억한다.
+ * 닫힌 것을 기억하지 않는 까닭: 나중에 온 카드가 "닫힘 목록"에 없어 한 번 펼쳐 그려졌다가 닫히며 화면이 튄다
+ * (Happy docs/chat-list-scrolling.md "Collapsed-by-default"). 연 것은 이 앱이 켜져 있는 동안 기억한다.
+ */
+const opened = new Set<string>();
+function FoldSteps({ id, r }: { id: string; r: RunView }) {
+  const p = usePalette();
+  const [open, setOpen] = useState(() => opened.has(id));
+  const cur = STEPS.indexOf(stepOf(r));
+  const toggle = () => {
+    const next = !open;
+    if (next) opened.add(id);
+    else opened.delete(id);
+    setOpen(next);
+  };
+  return (
+    <View style={{ gap: space.s2 }}>
+      <Pressable
+        onPress={toggle}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={`${STEPS.length}단계 중 ${cur + 1}단계, ${STEP_LABEL[STEPS[cur]!]}. ${open ? '단계 접기' : '단계 보기'}`}
+        style={({ pressed }) => [st.foldRow, pressed && { opacity: 0.6 }]}
+        testID="run-steps-toggle"
+      >
+        <T v="sub" c="ink2" lines={1} style={{ flex: 1 }}>
+          {cur + 1}/{STEPS.length} <T v="subStrong">{STEP_LABEL[STEPS[cur]!]}</T>
+        </T>
+        <T v="meta" c="ink3">
+          {open ? '접기' : '단계 보기'}
+        </T>
+        <View style={{ marginTop: open ? 4 : -4 }}>
+          <Chevron color={p.ink3} dir={open ? 'up' : 'down'} sizePx={7} />
+        </View>
+      </Pressable>
+      {open && (
+        <View style={st.stepList} testID="run-step-list">
+          {STEPS.map((x, i) => (
+            <View key={x} style={st.stepItem}>
+              <View style={[st.stepDot, { backgroundColor: i < cur ? p.ink3 : i === cur ? p.ink : p.ink4 }]} />
+              <T v={i === cur ? 'subStrong' : 'sub'} c={i <= cur ? 'ink' : 'ink3'}>
+                {STEP_LABEL[x]}
+              </T>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -308,5 +361,9 @@ const st = StyleSheet.create({
   nowrap: { flexShrink: 0, ...({ whiteSpace: 'nowrap', wordBreak: 'normal', overflowWrap: 'normal' } as object) },
   email: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: '100%' },
   emailGroup: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: '100%' },
+  foldRow: { flexDirection: 'row', alignItems: 'center', gap: space.s1, minHeight: 32 },
+  stepList: { gap: space.s2, paddingLeft: 2 },
+  stepItem: { flexDirection: 'row', alignItems: 'center', gap: space.s2 },
+  stepDot: { width: 6, height: 6, borderRadius: 3 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.s2, marginTop: space.s1 },
 });

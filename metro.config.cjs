@@ -16,7 +16,8 @@ config.resolver.nodeModulesPaths = [path.join(root, 'node_modules')];
 const base = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (ctx, name, platform) => {
   // 웹은 화면 갤러리만 그린다(디자인 점검용, gallery/). 앱(iOS·Android) 번들에는 들어가지 않는다.
-  if (platform === 'web' && name === './App' && ctx.originModulePath === path.join(root, 'index.ts')) {
+  // GALLERY_NATIVE=1: 시험용 로컬 빌드만 iOS에서도 갤러리를 띄운다(키보드·스크롤 녹화용, EXPO_PUBLIC_GALLERY='s=home-chat-long&n=40'). 배포 빌드에는 쓰지 않는다.
+  if ((platform === 'web' || process.env.GALLERY_NATIVE === '1') && name === './App' && ctx.originModulePath === path.join(root, 'index.ts')) {
     return { type: 'sourceFile', filePath: path.join(root, 'gallery/Gallery.tsx') };
   }
   if (platform === 'web' && name === 'expo-file-system') return { type: 'sourceFile', filePath: path.join(root, 'gallery/stubs/expo-file-system.ts') };
