@@ -18,19 +18,19 @@ import { radius, space, usePalette } from '../theme';
 import { Button, Check, Notice, Pill, T, success, warn } from '../ui/kit';
 
 const STOP_LINE: Record<SheetStop, string> = {
-  mismatch: 'PC가 보낸 내용이 맞지 않아 승인할 수 없어요 · PC에서 확인해 주세요',
-  unknown: '이 앱이 아직 모르는 내용이 있어요 · PC에서 승인해 주세요',
-  noKey: '이 폰은 승인 기기로 쓸 수 없어요 · PC에서 승인해 주세요',
-  iosDenied: '이 iPhone은 승인에 쓰지 않도록 정해져 있어요 · PC에서 승인해 주세요',
-  first: '처음 거래하는 곳은 PC에서 승인해요',
-  limit: `오늘 폰 승인 ${DAILY_LIMIT}건을 다 썼어요 · PC에서 승인해 주세요`,
+  mismatch: 'PC가 보낸 내용이 맞지 않아 승인할 수 없어요',
+  unknown: '이 앱이 아직 모르는 내용이 있어요',
+  noKey: '이 폰은 승인 기기로 쓸 수 없어요',
+  iosDenied: '이 iPhone은 승인에 쓰지 않도록 정해져 있어요',
+  first: '처음 거래하는 곳은 폰으로 승인할 수 없어요',
+  limit: `오늘 폰 승인 ${DAILY_LIMIT}건을 다 썼어요`,
 };
 /** 멈춤 둘째 줄: 다음에 할 일 */
 const STOP_SUB: Record<SheetStop, string> = {
-  mismatch: '발급되지 않았어요. PC에서 이 일을 다시 확인해 주세요',
-  unknown: '발급되지 않았어요. PC에서 이 일을 열면 바로 승인할 수 있어요',
-  noKey: '승인은 PC에서, 작성과 요청은 폰에서 할 수 있어요',
-  iosDenied: '승인은 PC에서, 작성과 요청은 이 iPhone에서 할 수 있어요',
+  mismatch: '발급되지 않았어요',
+  unknown: '발급되지 않았어요. 앱을 업데이트하면 승인할 수 있어요',
+  noKey: '작성과 요청은 폰에서 할 수 있어요. 승인은 PC가 맡아요',
+  iosDenied: '작성과 요청은 이 iPhone에서 할 수 있어요. 승인은 PC가 맡아요',
   first: 'PC를 켜면 밀린 일에서 바로 승인할 수 있어요',
   limit: '내일 0시에 다시 5건이 생겨요',
 };

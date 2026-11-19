@@ -4,8 +4,9 @@
 //   대화(PC 답은 글자, 카드 답은 tint 면, 내 말은 오른쪽 tint 말풍선, 폰에서 나눈 구간 머리)
 //   바닥: 입력 줄 하나. 왼쪽 [+]가 빠른 일(세금계산서 발급·증빙 찍기·현금 매출)을 펼치고, 오른쪽 작은 원이 보내기다. 키보드가 올라오면 함께 올라간다.
 // 적은 말은 PC가 켜져 있든 꺼져 있든 이 폰이 게이트웨이로 직접 보낸다(ADR-047 결정 6, 대화는 기기마다 따로). 발급은 카드에서 PC에 맡긴다.
-import { Fragment, useContext, useEffect, useRef, useState, type ComponentRef } from 'react';
-import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
+import { Animated, Easing, FlatList, Platform, Pressable, ScrollView, StyleSheet, TextInput, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { bubbleGroup, chatFromData, clockRange, stampBefore, stateOf, type ChatCard, type ChatItem } from '../chat';
 import { useOfflineChat, type OfflineChatView } from '../offline/useOfflineChat';
@@ -19,6 +20,8 @@ import { counterpartiesOf } from '../net/pcCopy';
 import { splitAmount, type VatMode } from '../issue';
 import { masked } from '../ui/field';
 import { FlapText } from '../ui/FlapText';
+import { PhotoSlot } from '../ui/PhotoSlot';
+import { jpegUri } from '../capture/thumb';
 import { useSession } from '../session';
 import type { PcStatus } from '../net/pc';
 import { MAX_FONT_SCALE, TextSizeContext, radius, size, space, textScale, type, usePalette, useReducedMotion } from '../theme';
@@ -44,22 +47,6 @@ export function pcLine(pc: PcStatus, lastSeen: number | null): { tone: Tone; lab
   }
 }
 
-/** 홈 머리의 PC 한 줄(대화 홈용). 꺼져 있으면 마지막 접속을 함께 쓴다. */
-export function homeLine(pc: PcStatus, lastSeen: number | null): { tone: Tone; label: string; busy?: boolean } {
-  switch (pc) {
-    case 'online':
-      return { tone: 'accent', label: 'PC 켜짐' };
-    case 'connecting':
-      return { tone: 'quiet', label: 'PC 찾는 중', busy: true };
-    case 'stale':
-      return { tone: 'attention', label: `PC가 오래 꺼져 있어요 · 마지막 접속 ${ago(lastSeen)}` };
-    case 'unpaired':
-      return { tone: 'quiet', label: 'PC 연결 안 됨' };
-    default:
-      return { tone: 'quiet', label: lastSeen ? `PC 꺼짐 · 마지막 접속 ${ago(lastSeen)}` : 'PC 꺼짐' };
-  }
-}
-
 export interface Todo {
   /** PC가 사장님 승인을 기다리는 일(폰 승인은 준비 중이라 앱에서는 0) */
   approvals: number;
@@ -67,7 +54,18 @@ export interface Todo {
   backlog: number;
 }
 
-export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen = false }: { go: (to: HomeRoute) => void; chat?: ChatItem[]; todo?: Todo; draft?: string; /** 갤러리: 폰 대화 상태를 정해 그린다(네트워크 없음) */ phone?: OfflineChatView; /** 갤러리: [+] 메뉴를 펼친 채로 */ menu?: boolean }) {
+/**
+ * 대화 목록은 뒤집힌 FlatList다(Mattermost 모바일 app/components/post_list/post_list.tsx, Happy packages/happy-app/sources/components/ChatList.tsx).
+ * 맨 아래(가장 새 말)가 스크롤 0이라, 키보드가 올라와 화면이 줄어도 새 말 자리가 그대로다(Happy 실측: 보통 목록 582pt 밀림, 뒤집힌 목록 0).
+ * 새 말이 오면 iOS·Android 기본 maintainVisibleContentPosition이 읽던 자리를 지키고, 끝에서 FOLLOW_PX 안일 때만 따라 내린다.
+ * FOLLOW_PX는 PC와 같은 80(Mattermost 60, Happy 200 사이. 대표 지시 값).
+ */
+export const FOLLOW_PX = 80;
+const KEEP_POSITION = { minIndexForVisible: 0, autoscrollToTopThreshold: FOLLOW_PX } as const;
+/** 끝에서 이만큼 올라가 있으면 맨 아래로 단추(화살표)를 띄운다(Mattermost CONTENT_OFFSET_THRESHOLD 160). 새 말이 왔으면 글자 [새 답]. */
+const SHOW_END_PX = 160;
+
+export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen = false, focusAfter }: { go: (to: HomeRoute) => void; chat?: ChatItem[]; todo?: Todo; draft?: string; /** 갤러리: 폰 대화 상태를 정해 그린다(네트워크 없음) */ phone?: OfflineChatView; /** 갤러리: [+] 메뉴를 펼친 채로 */ menu?: boolean; /** 시험용 빌드(갤러리): 이 ms 뒤 입력 칸에 들어가 키보드를 띄우고 3초 뒤 내린다(시뮬레이터 녹화) */ focusAfter?: number }) {
   const s = useSession();
   const p = usePalette();
   // 글자 크기 설정이 바뀌면 입력 칸(textScale.web)도 다시 그린다
@@ -102,7 +100,54 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
     if (a.supply <= 0) return open();
     return entrust({ cp, supply: a.supply, total: a.total, item: d.item ?? '', draftId: d.id });
   };
-  const list = useRef<ComponentRef<typeof ScrollView>>(null);
+  const list = useRef<FlatList<ChatItem>>(null);
+  // ---- 읽던 자리 지키기(11-19): 뒤집힌 목록이라 y는 "가장 새 말에서 떨어진 거리"다 ----
+  const y = useRef(0);
+  /** 맨 아래로 단추: null 없음, 'end' 화살표만, 'new' [새 답] */
+  const [endBtn, setEndBtn] = useState<null | 'end' | 'new'>(null);
+  const endRef = useRef<null | 'end' | 'new'>(null);
+  const setEnd = (v: null | 'end' | 'new') => {
+    if (endRef.current === v) return;
+    endRef.current = v;
+    setEndBtn(v);
+  };
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    y.current = Math.max(0, e.nativeEvent.contentOffset.y);
+    if (y.current <= FOLLOW_PX) setEnd(null);
+    else if (y.current > SHOW_END_PX && endRef.current === null) setEnd('end');
+  };
+  const toEnd = () => {
+    setEnd(null);
+    list.current?.scrollToOffset({ offset: 0, animated: true });
+  };
+  // 웹(갤러리)에는 maintainVisibleContentPosition이 없어 같은 일을 손으로 한다(그 기능과 같은 방식):
+  // 새 말을 그리기 전에 화면 가운데 줄의 화면 위치를 적어 두고, 그린 직후(칠하기 전) 그 줄이 같은 자리에 오도록 scrollTop을 고친다.
+  // 브라우저의 스크롤 고정(overflow-anchor)은 끈다. 뒤집힌 목록에서는 때때로 한 번 더 옮겨 두 번 밀린다(11-19 녹화로 확인).
+  const webNode = () => (Platform.OS === 'web' ? (list.current?.getScrollableNode?.() as HTMLElement | undefined) : undefined);
+  const anchor = useRef<{ el: Element; top: number } | null>(null);
+  const catchAnchor = () => {
+    const node = webNode();
+    if (!node || y.current <= FOLLOW_PX) return null;
+    node.style.overflowAnchor = 'none';
+    const b = node.getBoundingClientRect();
+    const el = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+    return el && node.contains(el) ? { el, top: el.getBoundingClientRect().top } : null;
+  };
+  const holdAnchor = () => {
+    const node = webNode();
+    const a = anchor.current;
+    anchor.current = null;
+    if (!node || !a || !a.el.isConnected) return;
+    for (let k = 0; k < 2; k++) {
+      const drift = a.el.getBoundingClientRect().top - a.top;
+      if (Math.abs(drift) < 0.5) break;
+      // 뒤집힌 목록은 scrollTop 방향이 화면과 반대일 수 있어, 한 번 고쳐 보고 남은 차이로 다시 고친다
+      const before = node.scrollTop;
+      node.scrollTop = before - drift;
+      if (Math.abs(a.el.getBoundingClientRect().top - a.top) > Math.abs(drift)) node.scrollTop = before + drift;
+    }
+    y.current = node.scrollTop;
+  };
   const off = s.pc === 'offline' || s.pc === 'queued';
   /** PC가 꺼져 있으면 폰이 대화를 이어 받는다(기획 v2). */
   const pcOff = off || s.pc === 'stale';
@@ -119,7 +164,29 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
     .filter((j) => j.id.startsWith('cmd-') && j.run && j.state === 'approval' && !carded.has(j.id))
     .map((j) => ({ kind: 'run', id: `run-${j.id}`, at: j.createdAt, jobId: j.id }));
   const items = [...(chat ?? chatFromData(s.data)), ...q.notes, ...waiting, ...mine, ...(chat && !phone ? [] : offline.items)].sort((a, b) => at(a) - at(b));
+  // 뒤집힌 목록: 0번이 가장 새 말이다
+  const data = [...items].reverse();
+  // 가장 새 말이 바뀌었다 = 새 말. 내 말이면 어디를 읽고 있었든 맨 아래로(Mattermost: 보내면 끝으로), 앱의 말이면 끝에서 멀 때 [새 답].
+  const last = items.at(-1);
+  const lastId = last?.id ?? '';
+  const seen = useRef<string | null>(null);
+  // 웹: 새 말을 그리기 전(이 렌더 중)에 읽던 줄을 잡아 둔다
+  if (Platform.OS === 'web' && seen.current !== null && seen.current !== lastId && !anchor.current) anchor.current = catchAnchor();
+  useLayoutEffect(() => holdAnchor());
+  useEffect(() => {
+    const prev = seen.current;
+    seen.current = lastId;
+    if (prev === null || prev === lastId || !last) return;
+    if (last.kind === 'msg' && last.from === 'me') toEnd();
+    else if (y.current > FOLLOW_PX) setEnd('new');
+  }, [lastId]);
   const input = useRef<ComponentRef<typeof TextInput>>(null);
+  useEffect(() => {
+    if (focusAfter === undefined) return;
+    const a = setTimeout(() => input.current?.focus(), focusAfter);
+    const b = setTimeout(() => input.current?.blur(), focusAfter + 3000);
+    return () => (clearTimeout(a), clearTimeout(b));
+  }, [focusAfter]);
   /** 예시 문장을 누르면 입력 칸에 넣고 바로 고칠 수 있게 한다(보내지는 않는다) */
   const pick = (v: string) => {
     setText(v);
@@ -144,7 +211,9 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={[st.fill, { backgroundColor: p.canvas }]} testID="home">
-      <KeyboardAvoidingView style={st.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* 키보드: 입력 줄과 목록을 키보드만큼 함께 올린다(react-native-keyboard-controller, 키보드 움직임과 같은 프레임).
+          뒤집힌 목록은 화면이 줄어도 새 말 자리가 그대로라 따로 고칠 것이 없다(Happy docs/chat-list-scrolling.md "Why the list is inverted"). */}
+      <KeyboardAvoidingView style={st.fill} behavior="translate-with-padding">
         {/* 머리 한 줄: 지금 할 일(누르면 지금 할 일 화면) + ⋮(설정). 연결 전에는 앱 이름. */}
         <View style={st.top}>
           {paired ? (
@@ -177,34 +246,32 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
         )}
 
         <View style={st.fill}>
-        <ScrollView
-          ref={list}
-          style={st.fill}
-          contentContainerStyle={[st.chat, !paired && { justifyContent: 'center' }]}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
-          onContentSizeChange={() => list.current?.scrollToEnd({ animated: false })}
-          testID="chat"
-        >
-          {!paired ? (
-            <Intro onPair={() => go('pair')} />
-          ) : items.length === 0 ? (
-            <Starter phoneAnswers={phoneAnswers} onPick={pick} />
-          ) : (
-            items.map((it, i) => {
-              const stamp = stampBefore(items, i);
-              return (
-                <Fragment key={it.id}>
-                  {stamp !== null && <Stamp text={stamp} first={i === 0} />}
-                  {it.kind === 'run' ? (
-                    <RunItem jobId={it.jobId} go={go} />
-                  ) : (
-                    <Item it={it} group={bubbleGroup(items, i)} onRetry={(id) => void offline.retry(id)} retryOff={offline.busy} openDrafts={offline.openDrafts} onIssue={issueFrom} />
-                  )}
-                </Fragment>
-              );
-            })
-          )}
+        {!paired || items.length === 0 ? (
+          <ScrollView style={st.fill} contentContainerStyle={[st.chat, !paired && { justifyContent: 'center' }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" testID="chat">
+            {!paired ? <Intro onPair={() => go('pair')} /> : <Starter phoneAnswers={phoneAnswers} onPick={pick} />}
+          </ScrollView>
+        ) : (
+          <FlatList
+            ref={list}
+            data={data}
+            inverted
+            keyExtractor={(it) => it.id}
+            maintainVisibleContentPosition={KEEP_POSITION}
+            style={st.fill}
+            contentContainerStyle={st.list}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            // Mattermost post_list.tsx 값: 처음 10개, 한 번에 5개, 창 10
+            initialNumToRender={10}
+            maxToRenderPerBatch={5}
+            updateCellsBatchingPeriod={100}
+            windowSize={10}
+            testID="chat"
+            // 뒤집힌 목록의 머리는 화면 맨 아래다: 기다림 점, 답 칩, 화면 단추
+            ListHeaderComponent={
+              <View style={st.listEnd}>
           {paired && canSend && offline.busy && <Typing />}
           {paired && canSend && !offline.busy && offline.chips.length > 0 && (
             <View style={st.replies} testID="chat-chips">
@@ -220,9 +287,27 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
               ))}
             </View>
           )}
-          {/* 폰이 답할 때는 빈 대화 안내가 같은 말을 하므로 대화가 있을 때만 한 줄 */}
-        </ScrollView>
+              </View>
+            }
+            renderItem={({ item: it, index }) => {
+              // data는 뒤집혀 있다: 원래 순서의 자리
+              const i = items.length - 1 - index;
+              const stamp = stampBefore(items, i);
+              return (
+                <View style={st.row}>
+                  {stamp !== null && <Stamp text={stamp} first={i === 0} />}
+                  {it.kind === 'run' ? (
+                    <RunItem jobId={it.jobId} go={go} />
+                  ) : (
+                    <Item it={it} group={bubbleGroup(items, i)} onRetry={(id) => void offline.retry(id)} retryOff={offline.busy} openDrafts={offline.openDrafts} onIssue={issueFrom} />
+                  )}
+                </View>
+              );
+            }}
+          />
+        )}
         <TopFade />
+        {endBtn && <NewReply fresh={endBtn === 'new'} onPress={toEnd} />}
         </View>
 
         {paired && (
@@ -293,6 +378,39 @@ function TopFade() {
         <View key={i} style={{ height: 2, backgroundColor: p.canvas, opacity: o }} />
       ))}
     </View>
+  );
+}
+
+/**
+ * 맨 아래로 단추(Mattermost scroll_to_end_view.tsx: 끝에서 160 넘게 올라가면 화살표, 새 말이 왔으면 글자 알약. Happy ChatList는 화살표만).
+ * 새 말이 왔으면 [새 답], 아니면 화살표만. 누르면 맨 아래로. 대화를 밀지 않는다. 겉모양은 Muse 면 색(tint)과 알약.
+ */
+function NewReply({ fresh, onPress }: { fresh: boolean; onPress: () => void }) {
+  const p = usePalette();
+  const still = useReducedMotion();
+  const a = useRef(new Animated.Value(still ? 1 : 0)).current;
+  useEffect(() => {
+    if (still) return;
+    Animated.timing(a, { toValue: 1, duration: 160, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [a, still]);
+  return (
+    <Animated.View pointerEvents="box-none" style={[st.newReplyWrap, { opacity: a, transform: [{ translateY: a.interpolate({ inputRange: [0, 1], outputRange: [6, 0] }) }] }]}>
+      <Pressable
+        testID="chat-new-reply"
+        accessibilityRole="button"
+        accessibilityLabel={fresh ? '새 답 보기' : '맨 아래로'}
+        onPress={() => {
+          tap();
+          onPress();
+        }}
+        style={({ pressed }) => [st.newReply, !fresh && st.endOnly, { backgroundColor: pressed ? p.sunken : p.tint, shadowColor: p.ink }]}
+      >
+        <View style={{ marginTop: -4 }}>
+          <Chevron color={p.ink2} dir="down" sizePx={7} />
+        </View>
+        {fresh && <T v="label">새 답</T>}
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -570,6 +688,7 @@ function Card({ card, onIssue }: { card: ChatCard; onIssue?: OnIssue }) {
   return (
     <View style={[st.card, { backgroundColor: p.tint }]} testID="chat-card">
       <T v="subStrong">{card.title}</T>
+      {card.photo && <CardPhoto photo={card.photo} label={`${card.title} 사진`} />}
       {card.rows.map((r, i) => (
         <CardRow key={i} label={r.label} value={r.value} strong={r.strong} />
       ))}
@@ -580,6 +699,14 @@ function Card({ card, onIssue }: { card: ChatCard; onIssue?: OnIssue }) {
       )}
     </View>
   );
+}
+
+/** 증빙 사진 줄: 자리와 흐린 미리보기를 먼저, 원본이 이 폰 보관함에 있으면 열어서 겹친다(PC가 받으면 원본은 지워져 미리보기만 남는다). */
+function CardPhoto({ photo, label }: { photo: NonNullable<ChatCard['photo']>; label: string }) {
+  const s = useSession();
+  const id = photo.msgId;
+  const load = useMemo(() => (id ? () => s.outbox.readPhoto(id).then(jpegUri, () => null) : undefined), [id, s.outbox]);
+  return <PhotoSlot thumb={photo.thumb} load={load} label={label} />;
 }
 
 /** 세금계산서 카드의 값 글자(오른쪽 맞춤) */
@@ -808,6 +935,13 @@ const st = StyleSheet.create({
   pcLine: { minHeight: size.hit, flexDirection: 'row', alignItems: 'center', gap: space.s3, marginHorizontal: -space.s2, paddingHorizontal: space.s2, borderRadius: radius.md },
   todo: { flex: 1, minHeight: size.hit, flexDirection: 'row', alignItems: 'center', gap: space.s2, paddingLeft: space.s1 },
   fade: { position: 'absolute', top: 0, left: 0, right: 0 },
+  newReplyWrap: { position: 'absolute', left: 0, right: 0, bottom: space.s3, alignItems: 'center' },
+  endOnly: { paddingLeft: 0, paddingRight: 0, width: 36, justifyContent: 'center' },
+  /** 뒤집힌 목록: 줄 사이는 칸마다 위 여백(묶음 사이 16), 바닥 여백은 머리(화면 아래) 쪽 */
+  list: { paddingHorizontal: space.s5, paddingTop: space.s4, paddingBottom: space.s3 },
+  row: { gap: space.s4, paddingTop: space.s4 },
+  listEnd: { gap: space.s4, paddingTop: space.s4 },
+  newReply: { flexDirection: 'row', alignItems: 'center', gap: space.s1, minHeight: 36, paddingLeft: space.s3, paddingRight: space.s4, borderRadius: radius.full, shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
   chat: { paddingHorizontal: space.s5, paddingTop: space.s3, paddingBottom: space.s4, gap: space.s4, flexGrow: 1, justifyContent: 'flex-end' },
   msg: { gap: space.s1, alignSelf: 'stretch' },
   /** 같은 쪽이 잇달아 한 말: 묶음 사이(16)보다 훨씬 붙인다(4) */

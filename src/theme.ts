@@ -69,7 +69,6 @@ const dark: typeof light = {
 };
 export type Palette = typeof light;
 export type Ink = 'ink' | 'ink2' | 'ink3' | 'ink4' | 'onInk' | 'accent' | 'attention' | 'onCamera';
-export const palettes = { light, dark } as const;
 
 /** 4의 배수. 화면 옆 여백은 s5(20), 묶음 사이는 s6(28). */
 export const space = { s0: 2, s1: 4, s2: 8, s3: 12, s4: 16, s5: 20, s6: 28, s7: 40 } as const;

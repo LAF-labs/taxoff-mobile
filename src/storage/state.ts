@@ -1,4 +1,5 @@
 // 앱 상태 파일(페어링 기록·기기 목록·IK 타임스탬프·현금매출 기록). fileKey로 XChaCha20-Poly1305 봉인해 sax/state.bin에 둔다.
+import type { Thumb } from '../capture/thumb';
 import type { MoneySnapshot } from '../money';
 import type { PhoneCopyBody } from '@sax/remote';
 import type { PhoneCmd } from '../phoneCmd';
@@ -46,7 +47,7 @@ export interface CashRecord {
   state: 'pending' | 'queued' | 'sent';
 }
 
-/** 홈의 "최근 보낸 것" 한 줄(사진은 없다. 봉인된 상태 파일 안에만 있다). */
+/** 홈의 "최근 보낸 것" 한 줄(원본 사진은 없고 16px 흐린 미리보기만 있다. 봉인된 상태 파일 안에만 있다). */
 export interface RecentRecord {
   msgId: string;
   kind: 'receipt' | 'tax_invoice' | 'invoice';
@@ -54,6 +55,20 @@ export interface RecentRecord {
   amount: number | null;
   at: number;
   state: 'pending' | 'queued' | 'sent';
+  /** 사진 비율과 16px 흐린 미리보기(대화 카드가 사진 자리를 먼저 잡는다). 예전 기록에는 없다. */
+  thumb?: Thumb;
+}
+
+/** 간편인증 본인 정보(홈택스 개인용 간편인증 창과 같은 칸) */
+export interface SimpleId {
+  provider: string;
+  name: string;
+  /** YYYYMMDD */
+  birth: string;
+  /** 숫자만 */
+  phone: string;
+  /** PASS만: 통신사(s·k·l·sa·ka·la) */
+  carrier?: string;
 }
 
 export interface AppData {
@@ -84,6 +99,8 @@ export interface AppData {
   pushHash?: string | null;
   /** 앱 안에서 알림 허용을 물었는지(한 번만 묻는다, ADR-053 결정 4) */
   pushAsked?: boolean;
+  /** 폰에서 시작하는 간편인증에 쓴 값(인증 앱·이름·생년월일·휴대폰 번호). 봉인 상태 파일에만 두고, 다음에 같은 차례가 오면 미리 채운다. */
+  simpleId?: SimpleId | null;
   /** 앱 안 글자 크기(설정 > 화면). 없으면 중간 */
   textSize?: TextSize;
 }

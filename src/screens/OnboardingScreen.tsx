@@ -15,7 +15,7 @@
 // - 잔잔한 반복(떠 있기·빛·물결)은 지금 장에서만 돌고, 넘기면 멈춘다.
 // - 동작 줄이기면 움직임 없이 완성 상태.
 import { useEffect, useMemo, useRef, useState, type ComponentRef, type ReactElement, type ReactNode } from 'react';
-import { Animated, Easing, Image, PanResponder, Pressable, ScrollView, StyleSheet, View, useColorScheme, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { Animated, Easing, Image, PanResponder, Pressable, ScrollView, StyleSheet, View, useColorScheme, type GestureResponderEvent, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import markDark from '../../assets/splash-icon-dark.png';
 import markLight from '../../assets/splash-icon.png';
@@ -130,6 +130,19 @@ export function OnboardingScreen({ onDone, start = 0, fromSplash = false, reveal
     if (w > 0) go(Math.min(ONBOARDING.length - 1, Math.max(0, Math.round(e.nativeEvent.contentOffset.x / w))));
   };
   const last = page === ONBOARDING.length - 1;
+  /**
+   * 마지막 장에서 한 번 더 앞으로(왼쪽으로) 쓸면 다음 단계로 간다([다음]과 같다). 넘기기 칸은 끝에서 튕기지 않으니
+   * 손가락 위치로 본다: 마지막 장에 머문 채 왼쪽으로 60pt 넘게 쓸었으면 넘어간다.
+   */
+  const touch = useRef<{ x: number; y: number; page: number } | null>(null);
+  const onTouchStart = (e: GestureResponderEvent) => (touch.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY, page: pageRef.current });
+  const onTouchEnd = (e: GestureResponderEvent) => {
+    const t = touch.current;
+    touch.current = null;
+    if (!t || t.page !== ONBOARDING.length - 1 || pageRef.current !== ONBOARDING.length - 1) return;
+    const dx = e.nativeEvent.pageX - t.x;
+    if (dx < -60 && Math.abs(e.nativeEvent.pageY - t.y) < Math.abs(dx)) onDone();
+  };
   const next = () => {
     if (last) return onDone();
     const n = pageRef.current + 1;
@@ -175,7 +188,7 @@ export function OnboardingScreen({ onDone, start = 0, fromSplash = false, reveal
         )}
       </View>
 
-      <View style={st.fill} onLayout={onLayout}>
+      <View style={st.fill} onLayout={onLayout} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         <Animated.ScrollView
           ref={list}
           horizontal
@@ -287,11 +300,11 @@ function SplashCover({ cover, breath }: { cover: Animated.Value; breath: Animate
 /**
  * 온보딩 다음 단계(열쇠 만들기 4/5 · PC와 연결 5/5)의 틀. 앞 장과 같은 머리(표시+이름, 왼쪽 위 ‹ 뒤로)·
  * 같은 그림 면(tint xl, 빛)·제목·풀이·단계 점·바닥 단추 자리를 쓴다. 들어올 때 앞 장을 넘긴 것처럼 그림 면이
- * 원근 속에서 돌아 들어온다(네이티브). 왼쪽 가장자리에서 오른쪽으로 쓸면 뒤로(onBack).
+ * 원근 속에서 돌아 들어온다(네이티브). 화면 어디서든 오른쪽으로 쓸면 뒤로(onBack), 왼쪽으로 쓸면 앞으로(onNext).
  */
 export function OnboardingStep({
-  step, onBack, art, title, body, action, testID,
-}: { step: number; onBack?: () => void; art: ReactNode; title: string; body: string; action: ReactNode; testID?: string }) {
+  step, onBack, onNext, art, title, body, action, testID,
+}: { step: number; onBack?: () => void; /** 왼쪽으로 쓸면(앞으로). 없으면 쓸어도 넘어가지 않는다(열쇠를 만들어야 넘어가는 단계) */ onNext?: () => void; art: ReactNode; title: string; body: string; action: ReactNode; testID?: string }) {
   const p = usePalette();
   const inset = useSafeAreaInsets();
   const reduce = useReducedMotion();
@@ -302,15 +315,18 @@ export function OnboardingStep({
     a.start();
     return () => a.stop();
   }, [e, reduce]);
-  // 왼쪽 가장자리 쓸기 → 뒤로(iOS 뒤로 쓸기처럼)
+  // 화면 어디서든 옆으로 쓸기: 오른쪽 → 뒤로(앞 장), 왼쪽 → 앞으로(onNext가 있을 때). 온보딩 장 넘기기와 같은 손짓
   const back = useRef(onBack);
   back.current = onBack;
+  const fwd = useRef(onNext);
+  fwd.current = onNext;
   const pan = useMemo(
     () =>
       PanResponder.create({
-        onMoveShouldSetPanResponder: (ev, g) => !!back.current && ev.nativeEvent.pageX - g.dx < 28 && g.dx > 12 && Math.abs(g.dy) < 30,
+        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 2 && (g.dx > 0 ? !!back.current : !!fwd.current),
         onPanResponderRelease: (_, g) => {
-          if (g.dx > 70) back.current?.();
+          if (g.dx > 60 || (g.dx > 20 && g.vx > 0.5)) back.current?.();
+          else if (g.dx < -60 || (g.dx < -20 && g.vx < -0.5)) fwd.current?.();
         },
       }),
     [],

@@ -99,8 +99,8 @@ function Back({ onPress, label }: { onPress: () => void; label: string }) {
 }
 
 /** 글꼴 없이 그리는 꺾쇠(10×10 두 변). 아이콘 묶음을 들이지 않는다. */
-export function Chevron({ dir = 'right', color, sizePx = 9 }: { dir?: 'left' | 'right' | 'down'; color: string; sizePx?: number }) {
-  const rot = dir === 'left' ? '-135deg' : dir === 'down' ? '135deg' : '45deg';
+export function Chevron({ dir = 'right', color, sizePx = 9 }: { dir?: 'left' | 'right' | 'down' | 'up'; color: string; sizePx?: number }) {
+  const rot = dir === 'left' ? '-135deg' : dir === 'down' ? '135deg' : dir === 'up' ? '-45deg' : '45deg';
   return <View style={{ width: sizePx, height: sizePx, borderTopWidth: 2, borderRightWidth: 2, borderColor: color, transform: [{ rotate: rot }], marginHorizontal: 4 }} />;
 }
 
