@@ -1,10 +1,13 @@
 // 폰 발급 명령(remote-envelope v1.8 cmd.run · cmd.ack · run.event, ADR-046 결정 2). 순수 모델(시험용).
 // - [발급 맡기기]를 누르면 cmdId(ULID)와 입력을 봉인 상태 파일(AppData.cmds)에 먼저 저장하고, 라이브 세션이 열릴 때 보낸다.
 //   다시 연결하면 같은 cmdId로 다시 보낸다. PC는 duplicate로 같은 runId를 돌려주고 지금 상태를 다시 보낸다.
-// - 지금 PC는 모두 'pc_only'로 답한다: 승인은 PC 승인 바에서 한다(폰 승인 시트 없음).
+// - 승인(ADR-052, v1.10): 이 폰의 승인 키를 PC가 받았으면 PC는 'accepted'로 답하고 승인 단계에서 gate.request를 보낸다.
+//   폰은 승인 시트를 띄우고 하드웨어 키로 서명한 gate.response를 보낸다. 그 밖에는 'pc_only'다(승인은 PC 승인 바에서).
+//   PC가 폰으로 보내지 않는 건(처음 거래처·오늘 한도 등)은 run.event.code(pc_*)로 이유가 온다.
 // - 거래처는 PC 사본의 ref만 싣는다(사업자번호·이메일 원문 없음). 세액은 floor(공급가액/10), 작성일자는 오늘(한국 시간).
-import type { CmdAckBody, CmdAckState, CmdRejectReason, PhoneIssueRequest, RunEventBody, RunPhase, RunResult } from '@sax/remote';
-import type { Job } from './queue';
+import type { CmdAckBody, CmdAckState, CmdRejectReason, GateRequestBody, GateResponseBody, PhoneIssueRequest, RunEventBody, RunPhase, RunResult } from '@sax/remote';
+import type { PhoneGate } from './approval';
+import type { Job, NeedPcReason } from './queue';
 import type { RunView } from './run';
 
 export interface PhoneCmd {
@@ -27,10 +30,30 @@ export interface PhoneCmd {
   code?: string;
   attempt?: number;
   result?: RunResult;
+  /** PC가 보낸 승인 요청(gate.request). 승인 단계를 지나면 지운다. */
+  gate?: CmdGate;
+  /** 사장님의 답(서명 포함). 보내면 sentAt이 붙고 gate를 지운다. 마감 전에 못 보내면 버린다(발급되지 않는다). */
+  answer?: CmdAnswer;
+  /** [PC에 다시 요청]을 누른 승인 요청의 reqId(아직 gate.refresh를 보내지 않았다) */
+  refresh?: string;
   /** PC가 다른 일 중이라 거절(pc_busy)했을 때 다시 보낼 시각. 그 전까지는 기다리는 일로 보인다. */
   retryAt?: number;
   /** 다시 보낸 횟수 */
   retries?: number;
+}
+
+export interface CmdGate extends PhoneGate {
+  stepId: string;
+}
+export interface CmdAnswer {
+  reqId: string;
+  stepId: string;
+  decision: 'approve' | 'deny';
+  actionHash: string;
+  /** r‖s 64바이트 base64 */
+  sig: string;
+  exp: number;
+  sentAt?: number;
 }
 
 /** PC가 다른 일 중일 때 다시 보내는 간격과, 그만두는 때(맡긴 지 72시간, 밀린 일 만료와 같다) */
@@ -91,16 +114,73 @@ export function applyEvent(c: PhoneCmd, e: RunEventBody): PhoneCmd {
   if (!next.ack || next.ack === 'rejected') next.ack = 'pc_only';
   if (e.phase) next.phase = e.phase;
   next.code = e.code;
+  // 승인 단계를 지났거나 PC가 폰 승인을 거뒀으면(pc_*) 받은 승인 요청을 지운다
+  if ((e.phase && e.phase !== 'approve') || (e.phase === 'approve' && e.code)) {
+    next.gate = undefined;
+    next.refresh = undefined;
+  }
   if (e.attempt !== undefined) next.attempt = e.attempt;
   if (e.result) next.result = e.result;
   return next;
 }
+
+// ---- 폰 승인(gate.request → gate.response) ----
+
+/** PC가 폰으로 보내지 않는 이유(run.event.code) → 밀린 일 이유 */
+export const PC_CODE_REASON: Readonly<Record<string, NeedPcReason>> = { pc_first: 'firstCounterparty', pc_limit: 'dailyLimit', pc_key: 'notApprover', pc_only: 'notApprover' };
+
+/** gate.request를 그 실행의 명령에 붙인다. 발급 확정(commit)·P-256 요청만 받는다. 새 요청이 오면 앞 요청과 답을 버린다. */
+export function applyGate(c: PhoneCmd, g: GateRequestBody): PhoneCmd {
+  if (!c.runId || g.runId !== c.runId) return c;
+  if (g.gateKind !== 'commit' || g.requiredSigAlg !== 'p256') return c;
+  // 이미 보낸 답의 요청이 다시 오면(재전송) 무시한다
+  if (c.answer?.sentAt && c.answer.reqId === g.reqId) return c;
+  const gate: CmdGate = { stepId: g.stepId, reqId: g.reqId, fields: g.fields, cardHashInputs: g.cardHashInputs, actionHash: g.actionHash, challenge: g.challenge, exp: g.exp };
+  return { ...c, gate, answer: undefined, refresh: undefined, phase: 'approve', code: c.code && c.code in PC_CODE_REASON ? undefined : c.code };
+}
+
+/** 아직 답하지 않은(또는 답을 못 보내고 마감이 지난) 승인 요청 */
+export function openGate(c: PhoneCmd, now = Date.now()): CmdGate | null {
+  if (!c.gate) return null;
+  if (c.answer && c.answer.reqId === c.gate.reqId && (c.answer.sentAt || now <= c.answer.exp)) return null;
+  return c.gate;
+}
+
+/** 승인 시트의 답을 적는다(보내는 것은 라이브 세션). 열린 요청의 답만 받는다. */
+export function answerGate(c: PhoneCmd, a: { reqId: string; decision: 'approve' | 'deny'; actionHash: string; sig: string }, now = Date.now()): PhoneCmd {
+  const g = openGate(c, now);
+  if (!g || g.reqId !== a.reqId || g.actionHash !== a.actionHash || now > g.exp) return c;
+  return { ...c, answer: { reqId: a.reqId, stepId: g.stepId, decision: a.decision, actionHash: a.actionHash, sig: a.sig, exp: g.exp } };
+}
+
+/** 지금 보낼 gate.response. 마감이 지난 답은 보내지 않는다(PC도 받지 않는다). */
+export function responseDue(c: PhoneCmd, now = Date.now()): GateResponseBody | null {
+  const a = c.answer;
+  if (!a || a.sentAt || !c.runId || now > a.exp) return null;
+  return { runId: c.runId, stepId: a.stepId, reqId: a.reqId, decision: a.decision, actionHash: a.actionHash, sigAlg: 'p256', sig: a.sig };
+}
+
+/** 답을 보냈다: 받은 요청을 지운다(결과는 run.event로 온다). */
+export function markAnswered(c: PhoneCmd, reqId: string, now = Date.now()): PhoneCmd {
+  if (c.answer?.reqId !== reqId) return c;
+  return { ...c, answer: { ...c.answer, sentAt: now }, gate: undefined, refresh: undefined };
+}
+
+/** [PC에 다시 요청]: 마감이 지난 요청만 */
+export function askRefresh(c: PhoneCmd, now = Date.now()): PhoneCmd {
+  const g = openGate(c, now);
+  return g && now > g.exp ? { ...c, refresh: g.reqId, answer: undefined } : c;
+}
+
+/** 사장님이 폰에서 거절했고 그 답을 보낸 명령(밀린 일에서 뺀다. PC는 그 실행을 멈춘다) */
+export const deniedByPhone = (c: PhoneCmd): boolean => c.answer?.decision === 'deny' && !!c.answer.sentAt;
 
 /** 더 기다릴 것이 없는 명령(라이브 세션을 붙잡고 있지 않는다) */
 export function settled(c: PhoneCmd, now = Date.now()): boolean {
   if (c.pcOld) return true;
   if (busyWaiting(c, now)) return false;
   if (c.ack === 'rejected') return true;
+  if (deniedByPhone(c)) return true;
   if (c.phase === 'done') return !!c.result || c.code !== 'in_doubt';
   if (c.phase === 'stopped') return c.code !== 'in_doubt';
   return false;
@@ -145,6 +225,10 @@ export function runViewOf(c: PhoneCmd): RunView | null {
     case 'stopped':
       // PC는 run.event code로 'in_doubt'만 보낸다. 코드가 없거나 모르는 코드면 이유 없이 멈춤(이유는 PC에서)
       return { kind: 'stopped', step: 'prepare', reason: 'pcStopped', startedAt };
+    case 'approve':
+      // 승인을 보냈으면 발급 단계로 보인다(결과는 PC가 알려 준다). 폰 승인 요청을 받았으면 PC 승인 바 안내를 뺀다
+      if (c.answer?.sentAt && c.answer.decision === 'approve') return { kind: 'running', step: 'issue', startedAt };
+      return { kind: 'running', step: 'approve', startedAt, pcApproval: !c.gate && !c.answer };
     default:
       return { kind: 'running', step: c.phase, startedAt, pcApproval: true };
   }
@@ -159,6 +243,12 @@ export function jobOf(c: PhoneCmd): Job {
   if (busyWaiting(c)) return { ...base, state: 'phoneWaiting', wait: 'pcBusy' };
   const run = runViewOf(c);
   if (!run) return { ...base, state: 'entrusted' };
+  // PC가 보낸 승인 요청이 열려 있으면 승인 대기([승인 열기] → 승인 시트)
+  const gate = c.phase === 'approve' ? openGate(c) : null;
+  if (gate && run.kind === 'running') return { ...base, state: 'approval', run, gate };
+  // PC가 폰으로 보내지 않은 이유(처음 거래처·오늘 한도·승인 기기 아님). 승인은 PC 승인 바에서 한다
+  const reason = c.phase === 'approve' && c.code ? PC_CODE_REASON[c.code] : undefined;
+  if (reason && run.kind === 'running') return { ...base, state: 'running', run, reason };
   const state: Job['state'] = run.kind === 'done' ? 'done' : run.kind === 'verify' ? 'verify' : run.kind === 'refused' || run.kind === 'stopped' ? 'needPc' : 'running';
   return { ...base, state, run };
 }

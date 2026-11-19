@@ -33,7 +33,7 @@
 | 종이 증빙 촬영: 영수증 · 종이 세금계산서·계산서(앱 안 카메라 → 자르기 → 기기 안 OCR 글자 상자 → 칸 판독·검산 → 확인 → 보관함 → PC) | P-08 | `src/screens/CaptureScreen.tsx`, `src/capture/*` |
 | 현금매출(하루 숫자 하나, 날짜별) | P-09 | `src/screens/CashScreen.tsx` |
 
-폰 승인(P-03, M7-7)은 ADR-046 결정 1로 Phase 1에 들어왔다: 승인 시트 화면과 해시 재계산(`src/approval.ts`, PC 엔진 벡터 `test/fixtures/gate-vectors.json`)은 있고, 하드웨어 키(`src/approvalKey.ts`)는 인터페이스와 가짜 구현뿐이다(실제 키·생체 연동과 gate.request 수신은 다음 PR). 홈 대화는 아직 화면만 있다: 적은 말은 이 화면에만 남고("PC 켜지면 보냄") PC로 가지 않는다. PC 답·카드는 갤러리 견본에만 있다(대화 프로토콜은 다음 PR). 밀린 일·거래처도 아직 메모리 가짜 저장소뿐이다(앱의 거래처 목록은 비어 있다).
+폰 승인(P-03, M7-7)은 ADR-046 결정 1로 Phase 1에 들어왔다: 승인 시트 화면과 해시 재계산(`src/approval.ts`, PC 엔진 벡터 `test/fixtures/gate-vectors.json`)은 있고, 하드웨어 키(`src/approvalKey.ts`)는 iPhone Secure Enclave P-256이다(tex ADR-052, 네이티브 `modules/sax-native` pxCreate·pxSign, 서명마다 생체 확인). 라이브 세션마다 키를 PC에 알리고(`src/net/pxLive.ts`), PC가 보낸 gate.request를 받아 서명한 gate.response를 보낸다(`src/net/issueLive.ts`, `src/phoneCmd.ts`). Android는 키 증명 검증기가 생길 때까지 승인 기기가 아니다(PC에서 승인). 네이티브가 바뀌었으니 다음 개발 빌드에 `expo prebuild`와 `pod install`이 필요하다. 홈 대화는 아직 화면만 있다: 적은 말은 이 화면에만 남고("PC 켜지면 보냄") PC로 가지 않는다. PC 답·카드는 갤러리 견본에만 있다(대화 프로토콜은 다음 PR). 밀린 일·거래처도 아직 메모리 가짜 저장소뿐이다(앱의 거래처 목록은 비어 있다).
 
 디자인 기준은 [docs/design.md](docs/design.md)(tex design-system v2.0을 폰 크기로).
 

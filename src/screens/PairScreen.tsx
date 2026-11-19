@@ -155,7 +155,7 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
     } catch {
       // PC는 이미 이 폰을 받았지만 폰은 기록이 없다. 다시 연결하면 PC가 같은 키를 갱신한다(upsertDevice).
       // 화면 상태에는 남지 않도록 pair를 비워 둔다(저장 실패 뒤 메모리만 연결된 것처럼 보이지 않게).
-      await s.update((d) => ({ ...d, pair: null })).catch(() => undefined);
+      await s.update((d) => ({ ...d, pair: null, px: undefined })).catch(() => undefined);
       return failWith('save');
     }
     setPhase('done');
