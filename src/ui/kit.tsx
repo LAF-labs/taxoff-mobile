@@ -5,13 +5,13 @@
 // - 상태는 점 + 글자(StatusDot). 색은 accent·attention뿐.
 // - 답 후보(Reply): 점선 전폭 줄. 고르면 실선 + 체크로 굳고 나머지는 흐려진다(Muse 확인 UI).
 import * as Haptics from 'expo-haptics';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useContext, useEffect, useRef, type ReactNode } from 'react';
 import {
   ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View,
   type AccessibilityRole, type StyleProp, type TextStyle, type ViewStyle,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MAX_FONT_SCALE, motion, radius, size, space, textScale, type, useReducedMotion, usePalette, type Ink, type TypeName } from '../theme';
+import { MAX_FONT_SCALE, TextSizeContext, motion, radius, size, space, textScale, type, useReducedMotion, usePalette, type Ink, type TypeName } from '../theme';
 
 /** 한글은 낱말 단위로 줄을 바꾼다(숫자와 단위, 낱말이 쪼개지지 않게). iOS는 hangul-word, 웹(갤러리)은 keep-all. */
 // overflowWrap anywhere: 띄어쓰기 없는 긴 값(이메일 등)은 넘칠 때만 아무 데서나 끊는다.
@@ -32,6 +32,8 @@ export function T({
 }: { children: ReactNode; v?: TypeName; c?: Ink; style?: StyleProp<TextStyle>; testID?: string; lines?: number; center?: boolean; role?: AccessibilityRole }) {
   const p = usePalette();
   const base = type[v];
+  // 글자 크기 설정이 바뀌면 다시 그린다(값은 textScale.web에 있다)
+  useContext(TextSizeContext);
   const k = textScale.web;
   return (
     <Text

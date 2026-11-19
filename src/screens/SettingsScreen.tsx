@@ -1,14 +1,15 @@
 // 설정(홈 오른쪽 위): 연결(PC · 계정 · 연결된 기기) · 알림 · 보안(앱 잠금) · 도움말(사용 안내 · 문의) · 앱 정보(버전 · 약관).
 // D08 §4.2: 연결된 PC와 계정은 설정에 늘 보인다. "준비 중"처럼 아무것도 못 하는 줄은 두지 않는다.
 import { useEffect, useState } from 'react';
-import { AppState, Linking } from 'react-native';
+import { AppState, Linking, View } from 'react-native';
 import { APP_VERSION, LOCK_AFTER_MS, PUBLIC_ORIGIN } from '../config';
 import { useSession } from '../session';
 import { useBioInfo, type BioInfo } from '../biometry';
 import { bioName } from '../biometryLabel';
 import { DEFAULT_PREFS } from '../notify/events';
 import { permission, type Permission } from '../notify/local';
-import { Group, Row, Screen } from '../ui/kit';
+import { space, type TextSize } from '../theme';
+import { Group, Row, Screen, Seg, T } from '../ui/kit';
 import { pcLine } from './HomeScreen';
 import { NotifyScreen } from './NotifyScreen';
 
@@ -59,6 +60,25 @@ export function SettingsScreen({
       <Group title="알림">
         <Row testID="settings-notify" label="알림" value={perm === null ? '' : notifyValue} valueInk={perm === 'denied' ? 'attention' : 'ink2'} onPress={() => setSub('notify')} />
       </Group>
+
+      <View style={{ gap: space.s2 }} testID="settings-text-size">
+        <T v="label" c="ink3" style={{ paddingHorizontal: space.s1 }}>
+          글자 크기
+        </T>
+        <Seg<TextSize>
+          testID="text-size"
+          options={[
+            { key: 'small', label: '작게' },
+            { key: 'medium', label: '중간' },
+            { key: 'large', label: '크게' },
+          ]}
+          value={s.data.textSize ?? 'medium'}
+          onChange={(k) => void s.update((d) => ({ ...d, textSize: k }))}
+        />
+        <T v="meta" c="ink3" style={{ paddingHorizontal: space.s1 }}>
+          앱 안의 모든 글자에 적용돼요. 폰 설정의 글자 크기와 함께 커져요.
+        </T>
+      </View>
 
       <Group title="보안" note={`앱을 열 때와 ${Math.round(LOCK_AFTER_MS / 1000)}초 넘게 다른 앱에 있다 돌아올 때 잠가요. 앱 전환 화면에서는 내용을 가려요.`}>
         <Row label="앱 잠금" value="켜짐" sub={lockSub} testID="settings-lock" />

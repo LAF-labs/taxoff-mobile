@@ -24,6 +24,7 @@ import { QueueScreen } from './src/screens/QueueScreen';
 import { QueueProvider } from './src/queueStore';
 import { ApprovalHost } from './src/screens/ApprovalHost';
 import { NotifyHost } from './src/notify/NotifyHost';
+import { TextSizeHost } from './src/ui/TextSizeHost';
 import { DocScreen } from './src/screens/DocScreen';
 import { BizRegScreen } from './src/screens/BizRegScreen';
 import { MoneyListScreen } from './src/screens/MoneyListScreen';
@@ -118,6 +119,7 @@ export default function App() {
     };
     body = (
       <SessionProvider keys={unlocked.keys} initial={unlocked.data}>
+        <TextSizeHost>
         <QueueProvider>
         {/* 돈 탭: PC에서 마지막으로 받은 요약(봉인 보관). 지금 받아 오기는 다음 PR(프로토콜) */}
         <MoneyProvider status={unlocked.data.money ? 'ready' : 'none'} snap={unlocked.data.money ?? null}>
@@ -174,6 +176,7 @@ export default function App() {
         />
         </MoneyProvider>
         </QueueProvider>
+        </TextSizeHost>
       </SessionProvider>
     );
   }
