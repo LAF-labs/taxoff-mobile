@@ -14,6 +14,8 @@ export interface OfflinePorts {
   authHeaders: PhoneGatewayOptions['authHeaders'];
   /** 봉인 저장(대화 기록·카드). 값은 JSON 문자열 하나 */
   store: PhoneChatPorts['store'];
+  /** 대화에 붙은 카드·표를 남기는 봉인 저장(없으면 앱을 끄면 사라진다). 값은 JSON 문자열 하나 */
+  shownStore?: PhoneChatPorts['store'];
   copy(): PhoneCopy | null;
   now(): number;
   newId(): string;
@@ -67,11 +69,18 @@ export function itemOf(m: ChatMessage): ChatItem {
   return m.from === 'user' ? { kind: 'msg', id: m.id, from: 'me', at: m.at, text: m.text } : { kind: 'msg', id: m.id, from: 'pc', via: 'phone', at: m.at, text: m.text };
 }
 
+type Shown = Exclude<ChatItem, { kind: 'merged' }>;
+const isShown = (x: ChatItem): x is Shown => x.kind !== 'merged';
+/** 남겨 두는 카드·표의 수(코어 기록 600개에 비해 충분하다) */
+const SHOWN_MAX = 100;
+
 export class OfflineChat {
   readonly core: PhoneChat;
   private readonly gateway: PhoneGateway;
   private readonly ports: OfflinePorts;
   private check: Promise<SelfCheck> | null = null;
+  /** 대화에 붙은 카드·표(오래된 것부터). 처음 부를 때 한 번 읽는다. */
+  private shown: Promise<Shown[]> | null = null;
 
   constructor(ports: OfflinePorts) {
     this.ports = ports;
@@ -88,12 +97,55 @@ export class OfflineChat {
   async send(text: string): Promise<OfflineReply> {
     const c = await this.ready();
     if (!c.ok) return { items: [], chips: [], drafts: [], screens: [], unavailable: { code: 'chat.unavailable', text: this.ports.pcOnline?.() ? '지금은 폰에서 답할 수 없어요. 앱을 껐다 켠 뒤 다시 말씀해 주세요.' : '지금은 폰에서 답할 수 없어요. PC를 켜면 이어서 할게요.', retry: false } };
-    return this.toReply(await this.core.send(text));
+    const r = this.toReply(await this.core.send(text));
+    if (r.items.length) await this.remember(r.items.filter(isShown));
+    return r;
   }
 
   /** 지금까지의 폰 대화(PC가 넘긴 앞 대화 포함) */
   async items(): Promise<ChatItem[]> {
-    return (await this.core.messages()).map(itemOf);
+    const shown = await this.loadShown();
+    // 코어 기록에서 밀려난 옛 말보다 앞선 카드는 보이지 않게 한다(말이 없는 카드만 덩그러니 남지 않게)
+    const msgs = (await this.core.messages()).map(itemOf).filter(isShown);
+    const first = msgs[0]?.at ?? 0;
+    return [...msgs, ...shown.filter((x) => x.at >= first)].sort((a, b) => a.at - b.at);
+  }
+
+  private loadShown(): Promise<Shown[]> {
+    this.shown ??= (async () => {
+      try {
+        const raw = await this.ports.shownStore?.load();
+        const v = raw ? (JSON.parse(raw) as unknown) : null;
+        return Array.isArray(v) ? (v as Shown[]).filter((x) => x && typeof x === 'object' && (x.kind === 'msg' || x.kind === 'note') && typeof x.id === 'string' && typeof x.at === 'number') : [];
+      } catch {
+        return [];
+      }
+    })();
+    return this.shown;
+  }
+
+  /** 카드·표나 못 보낸 말(과 이유 줄)을 남긴다. 저장이 안 돼도 대화는 계속된다(이번 실행 동안은 화면에 있다). */
+  async keep(items: ChatItem[]): Promise<void> {
+    await this.remember(items.filter(isShown));
+  }
+
+  /** 남겨 둔 줄을 지운다(못 보낸 말을 다시 보낼 때) */
+  async forget(ids: string[]): Promise<void> {
+    const all = (await this.loadShown()).filter((x) => !ids.includes(x.id));
+    await this.write(all);
+  }
+
+  private async remember(items: Shown[]): Promise<void> {
+    await this.write([...(await this.loadShown()).filter((x) => !items.some((n) => n.id === x.id)), ...items].slice(-SHOWN_MAX));
+  }
+
+  private async write(all: Shown[]): Promise<void> {
+    this.shown = Promise.resolve(all);
+    try {
+      await this.ports.shownStore?.save(JSON.stringify(all));
+    } catch {
+      // 못 남겨도 지금 대화는 그대로
+    }
   }
 
   subscribe(f: () => void): () => void {
