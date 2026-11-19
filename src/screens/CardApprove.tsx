@@ -27,7 +27,21 @@ export function leftLine(ms: number): string {
   return `${Math.ceil(ms / 1000)}초 남았어요`;
 }
 
-export function CardApprove({ job, gate, onDetail, now: fixedNow }: { job: Job; gate: PhoneGate; onDetail: () => void; now?: number }) {
+/** 승인을 기다려요 / N분 남았어요(오른쪽 맞춤 두 줄). 대화 카드는 진행 줄 오른쪽에 둔다 */
+export function GateLeft({ gate, now }: { gate: PhoneGate; now: number }) {
+  const left = gate.exp - now;
+  if (left <= 0) return null;
+  return (
+    <View style={{ alignItems: 'flex-end', gap: 2, marginLeft: 'auto' }} testID="card-approve-left">
+      <T v="subStrong">승인을 기다려요</T>
+      <T v="meta" c={left <= 20_000 ? 'attention' : 'ink3'} style={{ fontVariant: ['tabular-nums'] }}>
+        {leftLine(left)}
+      </T>
+    </View>
+  );
+}
+
+export function CardApprove({ job, gate, onDetail, now: fixedNow, leftInside = true }: { job: Job; gate: PhoneGate; onDetail: () => void; now?: number; /** 남은 시간 줄을 카드 안에(밀린 일). 대화 카드는 진행 줄 오른쪽에 따로 둔다 */ leftInside?: boolean }) {
   const q = useQueue();
   const s = useSession();
   const p = usePalette();
@@ -75,12 +89,14 @@ export function CardApprove({ job, gate, onDetail, now: fixedNow }: { job: Job; 
       </View>
       {direct ? (
         <>
-          <View style={{ gap: 2 }}>
-            <T v="subStrong">승인을 기다려요</T>
-            <T v="meta" c={state.urgent ? 'attention' : 'ink3'} style={{ fontVariant: ['tabular-nums'] }} testID="card-approve-left">
-              {leftLine(state.leftMs)}
-            </T>
-          </View>
+          {leftInside && (
+            <View style={{ gap: 2 }}>
+              <T v="subStrong">승인을 기다려요</T>
+              <T v="meta" c={state.urgent ? 'attention' : 'ink3'} style={{ fontVariant: ['tabular-nums'] }}>
+                {leftLine(state.leftMs)}
+              </T>
+            </View>
+          )}
           <View style={st.buttons}>
             <Button kind="secondary" small label="거절" onPress={() => setAsking(true)} disabled={busy} style={{ flex: 1 }} testID="card-deny" />
             <Button

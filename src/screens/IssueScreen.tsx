@@ -177,7 +177,7 @@ export function IssueScreen({
       )}
       {viaPc && (
         <T v="meta" c="ink3" center testID="issue-pc-approve">
-          발급 승인은 PC가 받아요
+          {queue.approval.attest === 'none' ? 'PC가 홈택스에서 준비하고 승인을 받아요' : '승인할 때가 되면 알려 드릴게요'}
         </T>
       )}
       <Button testID="issue-submit" label={viaPc ? (online ? '발급 맡기기' : 'PC 켜지면 맡기기') : online ? '홈택스에서 준비' : 'PC 켜지면 준비하기'} onPress={submit} disabled={!ready || saving} />

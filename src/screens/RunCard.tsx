@@ -11,7 +11,7 @@ import type { Job } from '../queue';
 import { ACTION_LABEL, AUTH_APPS, STEPS, STEP_LABEL, STOP_COPY, actionsOf, chipOf, elapsed, groupApprovalNo, mmss, pcTurnOf, stepOf, type IssueResult, type RunAction, type RunView } from '../run';
 import { radius, space, usePalette } from '../theme';
 import { Check, Chevron, Pill, StatusDot, T, success, won } from '../ui/kit';
-import { CardApprove } from './CardApprove';
+import { CardApprove, GateLeft } from './CardApprove';
 
 
 /** PC가 맡은 일의 로그인 차례(폰에서 할 수 있는 일이 있다) */
@@ -96,11 +96,12 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
               {elapsed(now - r.startedAt)}
             </T>
           ))}
+        {onApprove && job.gate && job.state === 'approval' && <GateLeft gate={job.gate} now={now} />}
       </View>
       {/* 이유 없는 PC 멈춤은 어느 단계였는지 모르니 단계 막대를 두지 않는다 */}
       {r.kind !== 'done' && r.kind !== 'refused' && !(r.kind === 'stopped' && (r.reason === 'pcStopped' || r.reason === 'appOld')) && (compact ? <FoldSteps id={job.id} r={r} /> : <StepBar r={r} />)}
       <StateLines r={r} />
-      {onApprove && job.gate && job.state === 'approval' && <CardApprove job={job} gate={job.gate} onDetail={onApprove} now={fixedNow} />}
+      {onApprove && job.gate && job.state === 'approval' && <CardApprove job={job} gate={job.gate} onDetail={onApprove} now={fixedNow} leftInside={false} />}
       {r.kind === 'done' && <ResultRows result={r.result} />}
       {/* 폰 발급 명령은 지켜보기만 한다. 로그인 차례(간편인증·인증서로 다시·승인했어요)만 대화 카드에서 바로 한다 */}
       {compact && (!job.pcOnly || pcTurn(r)) && <CardActions r={r} now={now} onAction={onAction} onDoc={onDoc} onShare={onShare} />}
