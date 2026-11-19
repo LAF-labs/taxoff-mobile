@@ -136,7 +136,7 @@ export function PushHost({ onQueue, onRun, askPreview }: {
   }, [handle, askPreview]);
 
   // approve: PC가 다시 보낸 승인 요청이 오면 시트를 연다. 기다려도 안 오면 그 실행의 지금 상태
-  const gated = q.jobs.find((j) => j.gate && j.state === 'approval') ?? null;
+  const gated = q.jobs.find((j) => j.gate && j.state === 'approval' && j.gate.exp > Date.now()) ?? null;
   useEffect(() => {
     if (waitSheet === null) return;
     const { q: cq, onRun: toRun, onQueue: toQueue } = live.current;
