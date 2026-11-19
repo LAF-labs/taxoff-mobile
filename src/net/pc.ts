@@ -87,6 +87,17 @@ export async function syncWithPc(d: SyncDeps): Promise<SyncResult> {
 
 type Pair = NonNullable<AppData['pair']>;
 
+/** 지금 열려 있는 우편함 라이브 연결(하나뿐이다. 동시에 두 번 돌지 않는다) */
+let liveLink: Link | null = null;
+
+/**
+ * 앱이 뒤로 가면 라이브 연결을 닫는다(ADR-053). iOS는 뒤로 간 앱을 곧 멈추는데 연결은 그대로 남아, PC는 폰이 붙어 있다고 보고
+ * 승인 요청을 그 세션으로 넘긴다(아무도 못 본다). 닫으면 PC가 세션이 없다고 알고 서버 푸시로 깨운다.
+ */
+export function closeLive(): void {
+  liveLink?.close();
+}
+
 /** 라이브 세션. 세션이 열리지 않으면 멈춘 단계와 원인(큐로 넘어간다). */
 async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: string }> {
   let link: Link | null = null;
@@ -95,6 +106,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
   try {
     const relay = relayFor(pair.relayHost, deviceAuthFor(pair.pairId, pair.cert, d.keys.vm));
     link = await relay.joinMailbox(fromB64(pair.mbxId), { read: fromB64(pair.tokRead), write: fromB64(pair.tokWrite) }, 'mobile');
+    liveLink = link;
     // 우편함에는 들어갔다. PC가 이 우편함을 지키고 있으면 릴레이가 곧 peer를 알린다(없으면 PC가 꺼졌거나 이 폰 기록이 PC에 없다)
     if (!(await waitPeer(link, PEER_WAIT_MS))) return { why: whyCode('peer', link.closed ? 'closed' : 'timeout') };
     stage = 'session';
@@ -143,6 +155,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
   } finally {
     noise.destroy();
     link?.close();
+    if (liveLink === link) liveLink = null;
   }
 }
 
