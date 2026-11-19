@@ -1,6 +1,6 @@
 // P-01 잠금: 앱을 열 때와 백그라운드 30초 뒤. 해제 = 키 항목 읽기(keyring.unlock), 생체 또는 폰 암호(D08 §3.1, 대표 결정 "비밀번호 허용").
 // 화면은 조용한 면 하나에 가운데 단추 하나("Face ID로 열기"처럼 기기 종류에 맞춘 문구). 앱 이름·자물쇠는 두지 않는다.
-// 첫 실행만 다르다(온보딩 다음 장): 표시 + "이 폰에만 있는 열쇠를 만들어요" + 풀이, 아래 tint 면에 열쇠 사실 두 줄, 바닥에 [시작하기].
+// 첫 실행만 다르다(온보딩 다음 단계 4/5): 표시 + "이 폰에만 있는 열쇠를 만들어요" + 풀이, 아래 tint 면에 열쇠 사실 두 줄, 바닥에 단계 점 + [열쇠 만들기]. 다음은 PC와 연결(5/5).
 // 생체가 실패하면 OS가 기본 대체("암호 입력")를 띄우고, 취소해 돌아오면 같은 화면에 한 줄 + [다시 시도] + 회색 [폰 암호로 열기].
 // 생체를 등록하지 않은 폰은 처음부터 [폰 암호로 열기]가 기본 단추. 폰 암호가 없는 폰은 여전히 열 수 없다. 잠금 끄기는 없다.
 // 잠금 해제와 승인 서명은 별개다: 승인 시트의 [승인하고 발급]은 매번 생체만 + 하드웨어 키 서명(폰 암호 대체 없음).
@@ -13,6 +13,7 @@ import markDark from '../../assets/splash-icon-dark.png';
 import markLight from '../../assets/splash-icon.png';
 import { radius, space, usePalette } from '../theme';
 import { Button, Check, Screen, T } from '../ui/kit';
+import { STEP_KEY, StepDots } from '../ui/StepDots';
 
 const PASSCODE = '폰 암호로 열기';
 
@@ -135,7 +136,13 @@ function FirstRun({ bio, noBio, err, busy, onStart }: { bio: BioInfo | null; noB
     <Screen
       scroll={false}
       testID="lock-screen"
-      footer={<Button testID="unlock" label="시작하기" onPress={onStart} busy={busy} />}
+      footer={
+        <>
+          <StepDots index={STEP_KEY} testID="lock-steps" />
+          <View style={{ height: space.s2 }} />
+          <Button testID="unlock" label="열쇠 만들기" onPress={onStart} busy={busy} />
+        </>
+      }
     >
       <View style={st.first} testID="lock-first">
         <View style={st.hero}>

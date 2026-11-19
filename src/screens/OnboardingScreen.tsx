@@ -15,13 +15,14 @@
 // - 잔잔한 반복(떠 있기·빛·물결)은 지금 장에서만 돌고, 넘기면 멈춘다.
 // - 동작 줄이기면 움직임 없이 완성 상태.
 import { useEffect, useMemo, useRef, useState, type ComponentRef, type ReactElement } from 'react';
-import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, View, useColorScheme, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, View, useColorScheme, useWindowDimensions, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import markDark from '../../assets/splash-icon-dark.png';
 import markLight from '../../assets/splash-icon.png';
 import { BRAND } from '../config';
 import { radius, space, usePalette, useReducedMotion, type Palette } from '../theme';
 import { Button, Check, T } from '../ui/kit';
+import { FIRST_RUN_STEPS } from '../ui/StepDots';
 
 type Anim = Animated.Value | Animated.AnimatedInterpolation<number> | Animated.AnimatedAddition;
 
@@ -64,7 +65,7 @@ export const ONBOARDING: Page[] = [
 
 const ONE = new Animated.Value(1);
 
-export function OnboardingScreen({ onDone, start = 0 }: { onDone: () => void; /** 갤러리: 몇 번째 장부터 그릴지 */ start?: number }) {
+export function OnboardingScreen({ onDone, start = 0, fromSplash = false, revealed = true }: { onDone: () => void; /** 갤러리: 몇 번째 장부터 그릴지 */ start?: number; /** 스플래시 바로 뒤: 가운데 표시가 위 왼쪽 표시 자리로 날아가며 시작한다 */ fromSplash?: boolean; /** 스플래시가 걷혔는지. 걷히기 전에는 움직이지 않고 스플래시와 같은 모습으로 기다린다 */ revealed?: boolean }) {
   const p = usePalette();
   const inset = useSafeAreaInsets();
   const reduce = useReducedMotion();
@@ -76,13 +77,27 @@ export function OnboardingScreen({ onDone, start = 0 }: { onDone: () => void; /*
   /** 처음 등장: -1 → 0. pos = x + lead·w 라서 첫 장도 넘겨 들어오는 것과 같은 길로 들어온다 */
   const lead = useRef(new Animated.Value(reduce ? 0 : -1)).current;
   const list = useRef<ComponentRef<typeof ScrollView>>(null);
+  const win = useWindowDimensions();
+  /** 스플래시 표시(가운데 96) → 위 왼쪽 표시(24) 이동: 0 → 1. 스플래시가 걷힌 첫 프레임에 같은 자리·같은 크기로 있다. */
+  const logo = useRef(new Animated.Value(fromSplash && !reduce ? 0 : 1)).current;
+  const [logoGone, setLogoGone] = useState(!fromSplash || reduce);
 
   useEffect(() => {
-    if (reduce || w === 0) return lead.setValue(0);
-    const a = Animated.timing(lead, { toValue: 0, duration: 900, delay: 80, easing: Easing.out(Easing.cubic), useNativeDriver: true });
-    a.start();
+    if (reduce) {
+      lead.setValue(0);
+      logo.setValue(1);
+      setLogoGone(true);
+      return;
+    }
+    if (w === 0 || !revealed) return;
+    const a = Animated.parallel([
+      Animated.timing(logo, { toValue: 1, duration: 700, delay: 120, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+      // 표시가 자리를 잡아 갈 때 그림이 넘겨 들어오듯 이어진다
+      Animated.timing(lead, { toValue: 0, duration: 900, delay: fromSplash ? 520 : 80, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]);
+    a.start(({ finished }) => finished && setLogoGone(true));
     return () => a.stop();
-  }, [lead, reduce, w]);
+  }, [lead, logo, reduce, w, fromSplash, revealed]);
 
   const pos = useMemo(() => Animated.add(x, Animated.multiply(lead, w || 1)), [x, lead, w]);
 
@@ -135,9 +150,10 @@ export function OnboardingScreen({ onDone, start = 0 }: { onDone: () => void; /*
   );
 
   return (
+    <View style={[st.fill, { backgroundColor: p.canvas }]}>
     <SafeAreaView edges={['top', 'left', 'right']} style={[st.fill, { backgroundColor: p.canvas }]} testID="onboarding">
       <View style={st.top}>
-        <BrandMark />
+        <BrandMark logo={logo} />
         {!last ? (
           <Pressable testID="onboarding-skip" accessibilityRole="button" accessibilityLabel="건너뛰기" onPress={onDone} hitSlop={8} style={({ pressed }) => [st.skip, pressed && { backgroundColor: p.tint }]}>
             <T v="subStrong" c="ink2">
@@ -214,20 +230,52 @@ export function OnboardingScreen({ onDone, start = 0 }: { onDone: () => void; /*
       </View>
 
       <View style={[st.footer, { paddingBottom: Math.max(inset.bottom, space.s4), backgroundColor: p.canvas }]}>
-        <Dots x={x} w={w} n={ONBOARDING.length} page={page} reduce={reduce} />
+        <Dots x={x} w={w} n={FIRST_RUN_STEPS} page={page} reduce={reduce} />
         <Button testID="onboarding-next" label="다음" onPress={next} />
       </View>
     </SafeAreaView>
+      {/* 화면 전체 기준(안전 영역 밖): 스플래시 표시와 같은 자리에서 출발한다 */}
+      {!logoGone && (
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          <SplashLogo logo={logo} win={win} top={inset.top} />
+        </View>
+      )}
+    </View>
   );
 }
 
-function BrandMark() {
+function BrandMark({ logo }: { logo: Animated.Value }) {
   const dark = useColorScheme() === 'dark';
   return (
     <View style={st.brand} accessible accessibilityRole="header" accessibilityLabel={BRAND}>
-      <Image source={dark ? markDark : markLight} style={st.brandMark} accessible={false} />
-      <T v="title">{BRAND}</T>
+      {/* 날아오는 표시가 닿는 순간 이 표시로 바뀐다 */}
+      <Animated.Image source={dark ? markDark : markLight} style={[st.brandMark, { opacity: logo.interpolate({ inputRange: [0, 0.95, 1], outputRange: [0, 0, 1] }) }]} accessible={false} />
+      <Animated.View style={{ opacity: logo.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 0, 1] }), transform: [{ translateX: logo.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }] }}>
+        <T v="title">{BRAND}</T>
+      </Animated.View>
     </View>
+  );
+}
+
+/** 스플래시와 같은 자리(화면 가운데)·같은 크기(96)의 표시. 위 왼쪽 표시 자리(가운데 32, inset+24)로 줄어들며 날아간다. */
+function SplashLogo({ logo, win, top }: { logo: Animated.Value; win: { width: number; height: number }; top: number }) {
+  const dark = useColorScheme() === 'dark';
+  const dx = space.s5 + 12 - win.width / 2;
+  const dy = top + 24 - win.height / 2;
+  return (
+    <Animated.Image
+      pointerEvents="none"
+      source={dark ? markDark : markLight}
+      accessible={false}
+      style={[
+        st.splashMark,
+        { left: win.width / 2 - 48, top: win.height / 2 - 48 },
+        {
+          opacity: logo.interpolate({ inputRange: [0, 0.95, 1], outputRange: [1, 1, 0] }),
+          transform: [{ translateX: logo.interpolate({ inputRange: [0, 1], outputRange: [0, dx] }) }, { translateY: logo.interpolate({ inputRange: [0, 1], outputRange: [0, dy] }) }, { scale: logo.interpolate({ inputRange: [0, 1], outputRange: [1, 0.25] }) }],
+        },
+      ]}
+    />
   );
 }
 
@@ -235,9 +283,10 @@ function BrandMark() {
 function Dots({ x, w, n, page, reduce }: { x: Animated.Value; w: number; n: number; page: number; reduce: boolean }) {
   const p = usePalette();
   return (
-    <View style={st.dots} accessible accessibilityRole="text" accessibilityLabel={`${n}장 중 ${page + 1}장`} testID="onboarding-dots">
+    <View style={st.dots} accessible accessibilityRole="text" accessibilityLabel={`${n}단계 중 ${page + 1}단계`} testID="onboarding-dots">
       {Array.from({ length: n }, (_, i) => {
-        const on = reduce || w === 0 ? (i === page ? 1 : 0) : x.interpolate({ inputRange: [(i - 1) * w, i * w, (i + 1) * w], outputRange: [0, 1, 0], extrapolate: 'clamp' });
+        // 4·5번째 점(열쇠·PC 연결)은 다음 화면들의 단계라 여기서는 늘 짧다
+        const on = i >= ONBOARDING.length ? 0 : reduce || w === 0 ? (i === page ? 1 : 0) : x.interpolate({ inputRange: [(i - 1) * w, i * w, (i + 1) * w], outputRange: [0, 1, 0], extrapolate: 'clamp' });
         const scaleX = typeof on === 'number' ? (on ? 1 : 0.3) : on.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] });
         return (
           <View key={i} style={st.dotSlot}>
@@ -493,6 +542,7 @@ const st = StyleSheet.create({
   top: { height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: space.s5, paddingRight: space.s2 },
   brand: { flexDirection: 'row', alignItems: 'center', gap: space.s2 },
   brandMark: { width: 24, height: 24 },
+  splashMark: { position: 'absolute', width: 96, height: 96 },
   skip: { minWidth: 44, minHeight: 44, paddingHorizontal: space.s3, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   page: { flexGrow: 1, paddingHorizontal: space.s5, paddingTop: space.s3, paddingBottom: space.s4, gap: space.s6, justifyContent: 'center' },
   art: { borderRadius: radius.xl, padding: space.s4, justifyContent: 'center', minHeight: 300 },

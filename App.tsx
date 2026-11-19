@@ -39,6 +39,9 @@ type Route = 'tabs' | MainRoute;
 
 // 시스템 스플래시(app.json, 바탕색 + 표시)를 첫 화면이 그려질 때까지 둔다. 빈 바탕 한 장이 끼지 않게.
 SplashScreen.preventAutoHideAsync().catch(() => {});
+/** 앱이 뜬 시각(스플래시를 첫 실행에 1초쯤 보이게 할 때 쓴다) */
+const startedAt = Date.now();
+const SPLASH_MIN_MS = 1000;
 
 export default function App() {
   const p = usePalette();
@@ -46,6 +49,10 @@ export default function App() {
   const [unlocked, setUnlocked] = useState<{ keys: DeviceKeys; data: AppData } | null>(null);
   /** 화면 쌓기: 맨 아래는 늘 탭. 뒤로는 하나 내린다. */
   const [stack, setStack] = useState<Route[]>(['tabs']);
+  /** 첫 실행 온보딩의 마지막 단계(PC와 연결)로 연 페어링 화면인지 */
+  const [firstPair, setFirstPair] = useState(false);
+  /** 스플래시가 걷혔는지(온보딩 표시 이동은 그 뒤에 시작한다) */
+  const [splashGone, setSplashGone] = useState(false);
   const [tab, setTab] = useState<Tab>('home');
   const [cover, setCover] = useState(false);
   const [bootErr, setBootErr] = useState(false);
@@ -88,7 +95,7 @@ export default function App() {
     return () => sub.remove();
   }, [lock]);
 
-  const onUnlocked = async (keys: DeviceKeys) => {
+  const onUnlocked = async (keys: DeviceKeys, created = false) => {
     await settling.current;
     keysRef.current = keys;
     let data = emptyData();
@@ -98,6 +105,11 @@ export default function App() {
       // 상태 파일 봉인이 깨졌으면 빈 상태로 시작한다(페어링을 다시 한다)
     }
     setBoot({ hasDevice: true, onboarded: true });
+    // 방금 열쇠를 만든 첫 실행이면 온보딩이 PC와 연결(5/5)까지 이어진다
+    if (created && !data.pair) {
+      setFirstPair(true);
+      setStack(['tabs', 'pair']);
+    }
     setUnlocked({ keys, data });
   };
 
@@ -108,13 +120,15 @@ export default function App() {
   else if (!unlocked && !boot.hasDevice && !boot.onboarded)
     body = (
       <OnboardingScreen
+        fromSplash
+        revealed={splashGone}
         onDone={() => {
           void markOnboarded();
           setBoot({ hasDevice: false, onboarded: true });
         }}
       />
     );
-  else if (!unlocked) body = <LockScreen firstRun={!boot.hasDevice} onUnlocked={(k) => void onUnlocked(k)} onReset={() => setBoot({ hasDevice: false, onboarded: true })} />;
+  else if (!unlocked) body = <LockScreen firstRun={!boot.hasDevice} onUnlocked={(k, created) => void onUnlocked(k, created)} onReset={() => setBoot({ hasDevice: false, onboarded: true })} />;
   else {
     const route = stack[stack.length - 1] ?? 'tabs';
     const go = (r: MainRoute) => {
@@ -131,7 +145,24 @@ export default function App() {
         {/* 돈 탭: PC에서 마지막으로 받은 요약(봉인 보관). 지금 받아 오기는 다음 PR(프로토콜) */}
         <MoneyProvider status={unlocked.data.money ? 'ready' : 'none'} snap={unlocked.data.money ?? null}>
         {route === 'tabs' && <MainScreen tab={tab} onTab={setTab} go={go} />}
-        {route === 'pair' && <PairScreen onDone={home} />}
+        {route === 'pair' && (
+          <PairScreen
+            onDone={() => {
+              setFirstPair(false);
+              home();
+            }}
+            onboarding={
+              firstPair
+                ? {
+                    onLater: () => {
+                      setFirstPair(false);
+                      home();
+                    },
+                  }
+                : undefined
+            }
+          />
+        )}
         {route === 'capture' && <CaptureScreen onDone={back} />}
         {route === 'cash' && <CashScreen onDone={back} />}
         {route === 'settings' && <SettingsScreen onDone={back} onConnection={() => go('connection')} onPair={() => go('pair')} onDevices={() => go('devices')} />}
@@ -180,14 +211,25 @@ export default function App() {
   }
 
   const ready = bootErr || !!boot;
+  const fresh = !!boot && !boot.hasDevice && !boot.onboarded;
   useEffect(() => {
-    // 첫 화면(잠금·첫 실행·오류)이 그려진 다음 프레임에 스플래시를 걷는다
+    // 첫 화면(잠금·첫 실행·오류)이 그려진 다음 프레임에 스플래시를 걷는다.
+    // 처음 설치한 뒤 첫 실행만 표시를 1초쯤 보여 준 뒤 걷는다(온보딩이 같은 자리의 표시에서 이어 받는다).
     if (!ready) return;
-    const id = requestAnimationFrame(() => {
-      SplashScreen.hideAsync().catch(() => {});
-    });
-    return () => cancelAnimationFrame(id);
-  }, [ready]);
+    let id = 0;
+    const wait = fresh ? Math.max(0, SPLASH_MIN_MS - (Date.now() - startedAt)) : 0;
+    const t = setTimeout(() => {
+      id = requestAnimationFrame(() => {
+        SplashScreen.hideAsync()
+          .catch(() => {})
+          .finally(() => setSplashGone(true));
+      });
+    }, wait);
+    return () => {
+      clearTimeout(t);
+      cancelAnimationFrame(id);
+    };
+  }, [ready, fresh]);
 
   return (
     <SafeAreaProvider>
