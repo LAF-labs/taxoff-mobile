@@ -21,7 +21,7 @@
 | 홈 = PC와 나누는 대화: PC 연결 한 줄 · 지금 할 일 한 줄 · 대화 · 빠른 일 [세금계산서 발급] [찍기] [현금] + 입력 줄 | 기획 v2 | `src/screens/HomeScreen.tsx`, `src/chat.ts` |
 | 돈: 이번 달(들어온·나간·남은 돈), 받을 돈·낼 돈(안 받은 합계·기한 지남·7일 안), 앞으로 30일, 알림 한 줄(11 §3.5), "확인 못 함", 받음 표시·되돌리기. PC가 꺼져 있으면 마지막 요약을 날짜와 함께 | 기획 v2 PR 8 | `src/screens/MoneyScreen.tsx`, `MoneyListScreen.tsx`, `MarkReceivedScreen.tsx`, `src/money.ts`, `src/moneyStore.tsx` |
 | 기록(끝난 발급 목록, 비었으면 [세금계산서 발급]) | 기획 v2 | `src/screens/RecordsScreen.tsx` |
-| 설정(연결된 PC · 승인 기기 상태 · 알림 · 잠금 · 앱 정보) | 기획 v2 | `src/screens/SettingsScreen.tsx` |
+| 설정(연결 · 알림 · 보안 · 도움말 · 앱 정보), 알림 설정과 앱 안 배너·기기 알림 | 기획 v2 | `src/screens/SettingsScreen.tsx`, `NotifyScreen.tsx`, `src/notify/*` |
 | 밀린 일: 상태별 묶음, 줄마다 쉬운 말 한 줄 + 동작 하나, 시작 확인이면 [모두 시작], 72시간 지나면 만료 | P-13 | `src/screens/QueueScreen.tsx`, `src/queue.ts`, `src/queueStore.tsx` |
 | 승인 시트: 되읽은 값 전체, 해시 재계산이 맞을 때만 [승인하고 발급](유일한 파랑 채움), 0.8초 무장 지연, 120초, 멈춤 상태 | P-03 | `src/screens/ApprovalSheet.tsx`, `src/approval.ts`, `src/approvalKey.ts` |
 | 진행·결과 카드: 단계 줄(준비 → 홈택스 로그인 → 값 확인 → 승인 → 발급 → 확인), 내 차례(간편인증·인증서 PC 전용), 중지(08 §11 문구), 확인 중·확인 필요(다시 발급 단추 없음), 결과(승인번호 길게 눌러 복사) | P-04 | `src/screens/RunCard.tsx`, `RunScreen.tsx`, `src/run.ts` |

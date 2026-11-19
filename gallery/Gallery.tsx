@@ -10,6 +10,8 @@ import type { ChatItem } from '../src/chat';
 import { SessionContext, type Session } from '../src/session';
 import { MainScreen, type Tab } from '../src/screens/MainScreen';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
+import { Banner } from '../src/notify/NotifyHost';
+import { TextSizeHost } from '../src/ui/TextSizeHost';
 import { LockScreen } from '../src/screens/LockScreen';
 import { PairScreen } from '../src/screens/PairScreen';
 import { OnboardingScreen } from '../src/screens/OnboardingScreen';
@@ -484,7 +486,31 @@ const SCREENS: Record<
   'money-mark': () => money(MONEY_OK, { start: 'mark' }),
   'money-mark-offline': () => money(MONEY_LAST, { start: 'mark', live: false, pc: 'offline' }),
   'records-empty': () => ({ session: fake(paired(), 'online'), node: <Main start="records" /> }),
-  settings: () => ({ session: fake(paired(), 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} /> }),
+  settings: () => ({ session: fake(paired(), 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="granted" /> }),
+  'settings-text-large': () => ({ session: fake({ ...paired(), textSize: 'large' }, 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="granted" /> }),
+  'settings-text-small': () => ({ session: fake({ ...paired(), textSize: 'small' }, 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="granted" /> }),
+  'settings-unpaired': () => ({ session: fake(emptyData(), 'unpaired'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="undetermined" /> }),
+  'settings-notify': () => ({ session: fake(paired(), 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="granted" sub="notify" /> }),
+  'settings-notify-ask': () => ({ session: fake(paired(), 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="undetermined" sub="notify" /> }),
+  'settings-notify-off': () => ({ session: fake({ ...paired(), notify: { run: true, money: false } }, 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="denied" sub="notify" /> }),
+  'notify-banner': () => ({
+    session: fake(paired(), 'online'),
+    node: (
+      <>
+        <Main start="money" />
+        <Banner ev={{ jobId: 'j', kind: 'done', title: '세금계산서를 발급했어요', line: '가나식자재 세금계산서', os: { title: '', body: '' } }} onPress={noop} onClose={noop} />
+      </>
+    ),
+  }),
+  'notify-banner-turn': () => ({
+    session: fake(paired(), 'online'),
+    node: (
+      <>
+        <Main start="records" />
+        <Banner ev={{ jobId: 'j', kind: 'myTurn', title: '내 차례예요', line: '가나식자재 세금계산서 · 폰에서 간편인증을 승인해 주세요', os: { title: '', body: '' } }} onPress={noop} onClose={noop} />
+      </>
+    ),
+  }),
   // ---- 앱 잠금(P-01) ----
   'lock-faceid': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: FACE }} /> }),
   'lock-touchid': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'touchId', enrolled: true } }} /> }),
@@ -518,7 +544,9 @@ const SCREENS: Record<
   'queue-refused': () => ({
     session: fake(paired(), 'online'),
     jobs: [
-      { ...runJob({ kind: 'refused', reason: 'pc_busy', startedAt: T0 }, { state: 'needPc' }), pcOnly: true },
+      { id: 'w1', title: '서울청과 세금계산서', amount: 880_000, createdAt: T0, state: 'phoneWaiting', wait: 'pcBusy', pcOnly: true },
+      { id: 'w2', title: '한빛인쇄 세금계산서', amount: 495_000, createdAt: T0, state: 'phoneWaiting', wait: 'newDay', waitDay: iso(new Date(now - DAY)), pcOnly: true },
+      { ...runJob({ kind: 'refused', reason: 'counterparty_unknown', startedAt: T0 }, { state: 'needPc' }), pcOnly: true },
       { ...runJob({ kind: 'stopped', step: 'login', reason: 'pcStopped', startedAt: T0 }, { title: '새봄꽃집 세금계산서', amount: 330_000, state: 'needPc' }), id: 'r2', pcOnly: true },
       JOBS[3]!,
     ],
@@ -573,7 +601,8 @@ export default function Gallery() {
   const p = usePalette();
   const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
   const name = q.get('s') || 'home-chat-online';
-  textScale.web = Math.min(Number(q.get('fs')) || 1, MAX_FONT_SCALE);
+  const fs = Math.min(Number(q.get('fs')) || 1, MAX_FONT_SCALE);
+  textScale.web = fs;
   const make = SCREENS[name] ?? SCREENS['home-chat-online']!;
   const { session, node, jobs, last, notes, sheet, approval, sheetPreview, focus, simulate, money: mny } = make();
   const w = Number(q.get('w')) || 393;
@@ -582,12 +611,14 @@ export default function Gallery() {
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: w, height: h }, insets: h < 700 ? { top: 20, left: 0, right: 0, bottom: 0 } : { top: 59, left: 0, right: 0, bottom: 34 } }}>
       <View style={{ flex: 1, backgroundColor: p.canvas }}>
         <SessionContext.Provider value={session}>
+          <TextSizeHost base={fs}>
           <QueueProvider initial={jobs} last={last} notes={notes} sheet={sheet} approval={approval} simulate={simulate ?? true} focus={focus}>
             <MoneyProvider status={mny?.status ?? 'none'} snap={mny?.snap ?? null} live={mny?.live ?? false} marks={mny?.marks} focus={mny?.focus ?? null} simulate>
               {node}
               <ApprovalHost preview={sheetPreview} />
             </MoneyProvider>
           </QueueProvider>
+          </TextSizeHost>
         </SessionContext.Provider>
       </View>
     </SafeAreaProvider>

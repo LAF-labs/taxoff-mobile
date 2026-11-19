@@ -6,7 +6,7 @@
 //   - 큰 글씨로 강조하지 않는다. 중요한 값은 ink + 600으로만 올린다. 숫자는 고정폭.
 //   - 색은 두 뜻뿐: accent(파랑) = 내 차례·승인, attention(황토) = 확인 필요. 완료·실패에 초록·빨강 없음.
 //   - 주요 단추는 ink 채움 하나. 파랑 채움은 승인에만(폰 Phase 1에는 승인이 없어 쓰지 않는다).
-import { useEffect, useState } from 'react';
+import { createContext, useEffect, useState } from 'react';
 import { AccessibilityInfo, useColorScheme } from 'react-native';
 
 const light = {
@@ -88,8 +88,15 @@ export type TypeName = keyof typeof type;
 
 /** 글자 크기 설정은 따르되 화면이 깨지지 않게 상한을 둔다. */
 export const MAX_FONT_SCALE = 1.6;
-/** 화면 갤러리(웹)에서 글자 크기 설정을 흉내 낼 때만 바꾼다(?fs=1.6). 앱에서는 늘 1이고 OS 설정을 따른다. */
+/**
+ * 앱 안 글자 크기 배율. 설정 > 화면 > 글자 크기(작게·중간·크게)가 바꾸고, OS 글자 크기 설정은 그 위에 따로 곱해진다(MAX_FONT_SCALE까지).
+ * 갤러리(웹)는 ?fs=1.6으로 OS 설정을 흉내 낸다. 이름은 예전 그대로 web이지만 앱에서도 쓴다.
+ * 값이 바뀌면 TextSizeContext가 바뀌어 T가 다시 그려진다.
+ */
 export const textScale = { web: 1 };
+export type TextSize = 'small' | 'medium' | 'large';
+export const TEXT_SIZE_FACTOR: Record<TextSize, number> = { small: 0.88, medium: 1, large: 1.15 };
+export const TextSizeContext = createContext<number>(1);
 
 export const motion = { fast: 120, base: 160, slow: 220, pulse: 2400 } as const;
 

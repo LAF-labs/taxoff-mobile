@@ -4,7 +4,7 @@
 //   대화(PC 답은 글자, 카드 답은 tint 면, 내 말은 오른쪽 tint 말풍선, 폰에서 나눈 구간 머리)
 //   바닥: 입력 줄 하나. 왼쪽 [+]가 빠른 일(세금계산서 발급·증빙 찍기·현금 매출)을 펼치고, 오른쪽 작은 원이 보내기다. 키보드가 올라오면 함께 올라간다.
 // 적은 말은 PC가 켜져 있든 꺼져 있든 이 폰이 게이트웨이로 직접 보낸다(ADR-047 결정 6, 대화는 기기마다 따로). 발급은 카드에서 PC에 맡긴다.
-import { useRef, useState, type ComponentRef } from 'react';
+import { useContext, useRef, useState, type ComponentRef } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { chatFromData, clockRange, metaOf, type ChatCard, type ChatItem } from '../chat';
@@ -16,7 +16,7 @@ import { useQueue } from '../queueStore';
 import { RunCard } from './RunCard';
 import { useSession } from '../session';
 import type { PcStatus } from '../net/pc';
-import { MAX_FONT_SCALE, radius, size, space, textScale, type, usePalette } from '../theme';
+import { MAX_FONT_SCALE, TextSizeContext, radius, size, space, textScale, type, usePalette } from '../theme';
 import { Button, Check, Chevron, Pill, StatusDot, T, ago, tap, type Tone } from '../ui/kit';
 
 export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'devices' | 'issue' | 'queue' | 'run' | 'doc' | 'bizreg' | 'recv' | 'pay' | 'mark';
@@ -65,6 +65,8 @@ export interface Todo {
 export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen = false }: { go: (to: HomeRoute) => void; chat?: ChatItem[]; todo?: Todo; draft?: string; /** 갤러리: 폰 대화 상태를 정해 그린다(네트워크 없음) */ phone?: OfflineChatView; /** 갤러리: [+] 메뉴를 펼친 채로 */ menu?: boolean }) {
   const s = useSession();
   const p = usePalette();
+  // 글자 크기 설정이 바뀌면 입력 칸(textScale.web)도 다시 그린다
+  useContext(TextSizeContext);
   const paired = !!s.data.pair;
   const q = useQueue();
   const qc = queueCounts(q.jobs, Date.now());
