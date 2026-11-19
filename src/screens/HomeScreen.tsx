@@ -158,7 +158,12 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
   const canSend = offline.available;
   /** PC가 꺼져 있어 폰 혼자 답하는 중(안내 문구용) */
   const phoneAnswers = pcOff && canSend;
-  const items = [...(chat ?? chatFromData(s.data)), ...q.notes, ...mine, ...(chat && !phone ? [] : offline.items)].sort((a, b) => at(a) - at(b));
+  // 승인을 기다리는 폰 발급은 앱을 다시 열어도 대화에 카드로 남긴다(진행 카드 줄은 메모리에만 있다)
+  const carded = new Set(q.notes.flatMap((n) => (n.kind === 'run' ? [n.jobId] : [])));
+  const waiting: ChatItem[] = q.jobs
+    .filter((j) => j.id.startsWith('cmd-') && j.run && j.state === 'approval' && !carded.has(j.id))
+    .map((j) => ({ kind: 'run', id: `run-${j.id}`, at: j.createdAt, jobId: j.id }));
+  const items = [...(chat ?? chatFromData(s.data)), ...q.notes, ...waiting, ...mine, ...(chat && !phone ? [] : offline.items)].sort((a, b) => at(a) - at(b));
   // 뒤집힌 목록: 0번이 가장 새 말이다
   const data = [...items].reverse();
   // 가장 새 말이 바뀌었다 = 새 말. 내 말이면 어디를 읽고 있었든 맨 아래로(Mattermost: 보내면 끝으로), 앱의 말이면 끝에서 멀 때 [새 답].
@@ -504,6 +509,7 @@ function RunItem({ jobId, go }: { jobId: string; go: (to: HomeRoute) => void }) 
       onAction={(a) => q.runAction(job.id, a)}
       onDoc={() => open('doc')}
       onShare={() => open('doc')}
+      onApprove={() => q.openSheet(job.id)}
     />
   );
 }

@@ -95,6 +95,10 @@ export interface AppData {
   pcLog?: PcWhy[];
   /** 알림 고르기(설정 > 알림). 없으면 모두 켜짐(notify/events DEFAULT_PREFS). OS 허용은 따로 OS가 갖는다. */
   notify?: NotifyPrefs;
+  /** 서버에 마지막으로 올린 푸시 토큰의 지문(notify/wake.ts tokenHash). 토큰 자체는 두지 않는다. 지우면 null */
+  pushHash?: string | null;
+  /** 앱 안에서 알림 허용을 물었는지(한 번만 묻는다, ADR-053 결정 4) */
+  pushAsked?: boolean;
   /** 폰에서 시작하는 간편인증에 쓴 값(인증 앱·이름·생년월일·휴대폰 번호). 봉인 상태 파일에만 두고, 다음에 같은 차례가 오면 미리 채운다. */
   simpleId?: SimpleId | null;
   /** 앱 안 글자 크기(설정 > 화면). 없으면 중간 */

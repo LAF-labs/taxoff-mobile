@@ -10,7 +10,7 @@ import { REJECT_LINE } from '../phoneCmd';
 import type { Job } from '../queue';
 import { ACTION_LABEL, AUTH_APPS, STEPS, STEP_LABEL, STOP_COPY, actionsOf, chipOf, elapsed, groupApprovalNo, mmss, pcTurnOf, stepOf, type IssueResult, type RunAction, type RunView } from '../run';
 import { radius, space, usePalette } from '../theme';
-import { Check, Chevron, Pill, StatusDot, T, success, won } from '../ui/kit';
+import { Button, Check, Chevron, Pill, StatusDot, T, success, won } from '../ui/kit';
 
 
 /** PC가 맡은 일의 로그인 차례(폰에서 할 수 있는 일이 있다) */
@@ -39,7 +39,7 @@ export function useNow(fixed?: number, on = true): number {
   return fixed ?? now;
 }
 
-export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, onShare }: {
+export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, onShare, onApprove }: {
   job: Job;
   /** 갤러리: 시계를 멈춘다 */
   now?: number;
@@ -49,6 +49,8 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
   onAction?: (a: RunAction) => void;
   onDoc?: () => void;
   onShare?: () => void;
+  /** 이 폰으로 승인할 요청이 열려 있을 때 [승인 열기](승인 시트) */
+  onApprove?: () => void;
 }) {
   const p = usePalette();
   const r = job.run;
@@ -81,22 +83,33 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
           (r.kind === 'myTurn' && r.auth.method === 'simple' && r.auth.deadline !== undefined ? (
             r.auth.deadline > now ? (
               <T v="meta" c="attention" testID="run-left" style={{ fontVariant: ['tabular-nums'] }}>
-                · 남은 시간 {mmss(r.auth.deadline - now)}
+                {mmss(r.auth.deadline - now)} 남았어요
               </T>
             ) : (
               <T v="meta" c="attention" testID="run-left">
-                · 시간이 지났어요
+                시간이 지났어요
               </T>
             )
           ) : (
             <T v="meta" c="ink3" testID="run-elapsed">
-              · {elapsed(now - r.startedAt)}
+              {elapsed(now - r.startedAt)}
             </T>
           ))}
       </View>
       {/* 이유 없는 PC 멈춤은 어느 단계였는지 모르니 단계 막대를 두지 않는다 */}
       {r.kind !== 'done' && r.kind !== 'refused' && !(r.kind === 'stopped' && (r.reason === 'pcStopped' || r.reason === 'appOld')) && (compact ? <FoldSteps id={job.id} r={r} /> : <StepBar r={r} />)}
       <StateLines r={r} />
+      {onApprove && job.gate && job.state === 'approval' && job.gate.exp > now && (
+        <View style={st.approve} testID="run-approve">
+          <View style={{ flex: 1, gap: 2 }}>
+            <T v="subStrong">승인을 기다려요</T>
+            <T v="meta" c="ink3" style={{ fontVariant: ['tabular-nums'] }}>
+              {job.gate.exp - now > 60_000 ? `${Math.ceil((job.gate.exp - now) / 60_000)}분 남았어요` : '곧 닫혀요'}
+            </T>
+          </View>
+          <Button kind="approve" small label="승인 열기" onPress={onApprove} testID="run-approve-open" />
+        </View>
+      )}
       {r.kind === 'done' && <ResultRows result={r.result} />}
       {/* 폰 발급 명령은 지켜보기만 한다. 로그인 차례(간편인증·인증서로 다시·승인했어요)만 대화 카드에서 바로 한다 */}
       {compact && (!job.pcOnly || pcTurn(r)) && <CardActions r={r} now={now} onAction={onAction} onDoc={onDoc} onShare={onShare} />}
@@ -164,7 +177,7 @@ function FoldSteps({ id, r }: { id: string; r: RunView }) {
 }
 
 /**
- * 단계: 얇은 6칸 막대(지난 칸 ink3, 지금 칸 ink로 조금 두껍게, 남은 칸 sunken) + 아래 한 줄 "2/6 · 홈택스 로그인".
+ * 단계: 얇은 6칸 막대(지난 칸 ink3, 지금 칸 ink로 조금 두껍게, 남은 칸 sunken) + 아래 한 줄 "홈택스 로그인 2/6".
  * 파랑은 PC 켜짐·승인 단추에만 쓰므로 지금 칸은 ink와 두께로 강조한다. 어느 폭에서도 한 줄이다.
  */
 function StepBar({ r }: { r: RunView }) {
@@ -178,7 +191,7 @@ function StepBar({ r }: { r: RunView }) {
         ))}
       </View>
       <T v="sub" c="ink2" lines={1}>
-        {cur + 1}/{STEPS.length} · <T v="subStrong">{STEP_LABEL[STEPS[cur]!]}</T>
+        <T v="subStrong">{STEP_LABEL[STEPS[cur]!]}</T> {cur + 1}/{STEPS.length}
       </T>
     </View>
   );
@@ -348,9 +361,10 @@ function CardActions({ r, now, onAction, onDoc, onShare }: { r: RunView; now: nu
 }
 
 const st = StyleSheet.create({
+  approve: { flexDirection: 'row', alignItems: 'center', gap: space.s3 },
   card: { borderRadius: radius.lg, padding: space.s4, gap: space.s2 },
   head: { flexDirection: 'row', alignItems: 'baseline', gap: space.s3 },
-  chipLine: { flexDirection: 'row', alignItems: 'center', gap: space.s1, flexWrap: 'wrap' },
+  chipLine: { flexDirection: 'row', alignItems: 'center', gap: space.s3, flexWrap: 'wrap' },
   doneChip: { flexDirection: 'row', alignItems: 'center', gap: space.s2 },
   bar: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: space.s1 },
   seg: { flex: 1, height: 4, borderRadius: 2 },

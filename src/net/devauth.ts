@@ -33,7 +33,7 @@ export function clearDeviceToken(): void {
   cache = null;
 }
 
-export type Htm = 'GET' | 'POST' | 'PUT';
+export type Htm = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
 /** ws-link·큐의 deviceAuth. 토큰이 없거나 만료 1분 전이면 새로 받는다. */
 export function deviceAuthFor(pairId: string, cert: SignedCert, vm: Uint8Array): (htm: Htm, htu: string) => Promise<Record<string, string>> {
