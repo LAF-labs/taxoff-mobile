@@ -156,6 +156,18 @@ export function PushHost({ onQueue, onRun, askPreview }: {
     return () => clearTimeout(t);
   }, [waitSheet, gated]);
 
+  // 앱으로 돌아왔는데 열린 승인 요청이 있고 시트가 닫혀 있으면 연다(뒤에서 받은 요청은 사장님이 아직 못 봤다)
+  useEffect(() => {
+    if (askPreview) return;
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st !== 'active') return;
+      const { q: cq } = live.current;
+      const g = cq.jobs.find((j) => j.id.startsWith('cmd-') && j.gate && j.state === 'approval' && j.gate.exp > Date.now());
+      if (g && !cq.sheetJob) cq.openSheet(g.id);
+    });
+    return () => sub.remove();
+  }, [askPreview]);
+
   // 앱이 뒤에 있는데 승인 요청이 왔다(뒤로 간 직후 아직 붙어 있던 연결로): 폰이 직접 알린다. 앞에 있으면 시트가 바로 뜬다
   const told = useRef(new Set<string>());
   useEffect(() => {
