@@ -4,7 +4,7 @@
 // - 금액: [부가세 별도|포함] 아래 숫자 칸, 그 밑 한 줄에 공급가액·세액·합계(세액 = 공급가액 10% 버림).
 // - 바닥 주요 단추는 PC 상태를 따른다: 켜짐 [홈택스에서 준비] · 꺼짐 [PC 켜지면 준비하기] · 오래 꺼짐 단추 없이 황토 한 줄.
 // - 경고는 한 번에 하나(Notice): 오늘 같은 곳 같은 금액 > 처음 거래하는 곳 > 폰 승인 남은 건수.
-// - PC 사본에서 고른 거래처는 폰 발급 명령(cmd.run)으로 맡긴다: [발급 맡기기], 승인은 PC 승인 바, 작성일자는 오늘(src/phoneCmd.ts).
+// - PC 사본에서 고른 거래처는 폰 발급 명령(cmd.run)으로 맡긴다: [발급 맡기기], 작성일자는 오늘(src/phoneCmd.ts).
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { clock } from '../chat';
@@ -102,7 +102,7 @@ export function IssueScreen({
   const firstTime = manual || (cp?.issued ?? 0) === 0;
   const online = s.pc === 'online';
   const stale = s.pc === 'stale';
-  // PC 사본에서 고른 거래처면 폰 발급 명령(cmd.run)으로 맡긴다: 거래처는 ref만, 승인은 PC 승인 바, 작성일자는 오늘(한국 시간)
+  // PC 사본에서 고른 거래처면 폰 발급 명령(cmd.run)으로 맡긴다: 거래처는 ref만, 작성일자는 오늘(한국 시간)
   const viaPc = !manual && isViaPc(cp);
   const ready = !!who && (cp ? true : bizNo.replace(/\D/g, '').length === 10) && a.supply > 0 && /^\d{4}-\d{2}-\d{2}$/.test(day) && !dup && !closed;
 
@@ -147,6 +147,7 @@ export function IssueScreen({
     onSubmitted();
   };
 
+  // 동작은 폼 맨 아래 제자리에 둔다(바닥 고정·키보드 위로 따라 올라가지 않는다). 키보드가 열리면 입력 칸이 보이게 스크롤만 한다.
   const footer = stale ? (
     <T v="sub" c="attention" center testID="issue-stale">
       PC를 켜면 다시 맡길 수 있어요
@@ -163,17 +164,12 @@ export function IssueScreen({
           폰에 저장하지 못해 맡기지 않았어요. 다시 눌러 주세요
         </T>
       )}
-      {viaPc && (
-        <T v="meta" c="ink3" center testID="issue-pc-approve">
-          발급 승인은 PC가 받아요
-        </T>
-      )}
       <Button testID="issue-submit" label={viaPc ? (online ? '발급 맡기기' : 'PC 켜지면 맡기기') : online ? '홈택스에서 준비' : 'PC 켜지면 준비하기'} onPress={() => void submit()} disabled={!ready || saving} />
     </>
   );
 
   return (
-    <Screen title="세금계산서 발급" onBack={() => setPhase('pick')} backLabel="거래처 다시 고르기" testID="issue-form" footer={footer}>
+    <Screen title="세금계산서 발급" onBack={() => setPhase('pick')} backLabel="거래처 다시 고르기" testID="issue-form">
       {notice}
       <View style={{ gap: space.s2 }}>
       <Group title="받는 곳">
@@ -243,6 +239,7 @@ export function IssueScreen({
           </View>
         </Group>
       </View>
+      <View style={st.actions}>{footer}</View>
     </Screen>
   );
 }
@@ -350,6 +347,7 @@ function lastLine(c: Counterparty): string {
 const st = StyleSheet.create({
   warn: { borderRadius: radius.md, paddingVertical: space.s3, paddingHorizontal: space.s4, gap: space.s3 },
   warnActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s2 },
+  actions: { gap: space.s2, paddingTop: space.s2 },
   sums: { paddingHorizontal: space.s4, paddingTop: space.s1, paddingBottom: space.s3, gap: space.s1 },
   sum: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'baseline', gap: space.s3 },
   sumValue: { minWidth: 120, textAlign: 'right' },

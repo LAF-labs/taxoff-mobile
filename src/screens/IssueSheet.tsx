@@ -173,7 +173,8 @@ export function IssueSheet({ onClose, onSubmitted, onCapture, counterparties: gi
         keyboardType={opts.pad ? 'number-pad' : 'default'}
         maxLength={opts.max}
         maxFontSizeMultiplier={MAX_FONT_SCALE}
-        returnKeyType="next"
+        // 숫자 키보드에는 리턴 키를 붙이지 않는다(iOS 26은 키보드 위에 떠 있는 단추로 그린다)
+        returnKeyType={opts.pad ? undefined : 'next'}
         autoCorrect={false}
         onSubmitEditing={() => primary?.on && primary.go()}
         accessibilityLabel={ASK[key]}
@@ -343,13 +344,9 @@ export function IssueSheet({ onClose, onSubmitted, onCapture, counterparties: gi
           </View>
         ) : firstTime && !viaPc ? (
           <T v="meta" c="ink3">
-            처음 거래하는 곳이라 승인은 PC가 받아요
+            처음 거래하는 곳이라 폰으로는 승인할 수 없어요
           </T>
-        ) : (
-          <T v="meta" c="ink3">
-            발급 승인은 PC가 받아요
-          </T>
-        )}
+        ) : null}
         {failed && (
           <T v="meta" c="attention" testID="issue-sheet-failed">
             폰에 저장하지 못해 맡기지 않았어요. 다시 눌러 주세요
@@ -386,6 +383,8 @@ export function IssueSheet({ onClose, onSubmitted, onCapture, counterparties: gi
           key={step}
           style={[
             st.body,
+            // 목록 단계만 시트를 채운다. 나머지 단계는 단추가 내용 바로 아래 제자리에 있다(키보드에 붙어 떠다니지 않는다).
+            step !== 'cp' && st.bodyFit,
             { opacity: slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }), transform: [{ translateX: slide.interpolate({ inputRange: [0, 1], outputRange: [0, 28 * dir.current] }) }] },
           ]}
         >
@@ -405,6 +404,7 @@ export function IssueSheet({ onClose, onSubmitted, onCapture, counterparties: gi
             </T>
           )}
         </View>
+        {step !== 'cp' && <View style={{ flex: 1 }} />}
       </View>
     </View>
   );
@@ -439,6 +439,7 @@ const st = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.s4, minHeight: 44 },
   headBtn: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
   body: { flex: 1, minHeight: 0, paddingHorizontal: space.s5, paddingTop: space.s2, paddingBottom: space.s3, gap: space.s3 },
+  bodyFit: { flex: 0, flexGrow: 0, flexShrink: 0 },
   foot: { paddingHorizontal: space.s5, gap: space.s1 },
   twin: { flexDirection: 'row', gap: space.s2 },
   search: { minHeight: 44, borderRadius: radius.full, paddingHorizontal: space.s4 },
