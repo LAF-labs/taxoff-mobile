@@ -42,7 +42,8 @@ export function SettingsScreen({
   const line = pcLine(s.pc, s.data.lastSeenPc);
   const prefs = s.data.notify ?? DEFAULT_PREFS;
   const anyOn = prefs.run || prefs.money || wakeOn(prefs);
-  const notifyValue = perm === 'denied' ? '폰에서 꺼짐' : !anyOn ? '끔' : perm === 'granted' ? '켜짐' : '앱 안에서만';
+  // 사장님 말로 둘만: 폰이 알려 주면 켜짐, 아니면 꺼짐(OS가 아직 묻지 않은 상태도 꺼짐이다)
+  const notifyValue = perm === 'granted' && anyOn ? '켜짐' : '꺼짐';
   const lockSub = bio && bio.enrolled && bio.kind !== 'none' ? `${bioName(bio.kind)}, 안 되면 폰 암호` : '폰 암호';
 
   return (
