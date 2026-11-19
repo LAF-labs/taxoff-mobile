@@ -427,7 +427,7 @@ function Item({ it, group, onRetry, retryOff, openDrafts, onIssue }: { it: Exclu
       )}
       {it.card && <Card card={it.card} onIssue={it.card.draft && (!openDrafts || openDrafts.has(it.card.draft.id)) ? onIssue : undefined} />}
       {state !== '' && (
-        <T v="meta" c={it.state === 'failed' ? 'attention' : 'ink3'} style={{ textAlign: 'right' }} testID="chat-state">
+        <T v="meta" c="ink3" style={{ textAlign: 'right' }} testID="chat-state">
           {state}
         </T>
       )}

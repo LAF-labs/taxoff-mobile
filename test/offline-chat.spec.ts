@@ -163,10 +163,10 @@ describe('폰 대화 줄 표시', () => {
     const a = itemOf({ id: 'a', from: 'assistant', at, text: '네' } as never);
     assert.equal(a.kind === 'msg' && a.via, 'phone');
   });
-  it('내 말은 어디까지 갔는지 쓴다(보내는 중, 못 보냄, PC 켜지면)', () => {
+  it('내 말 아래에는 PC 켜지면 보낼 말에만 한 줄을 쓴다(보내는 중, 못 보냄은 다른 데서 보인다)', () => {
     const me = (state: 'sending' | 'failed' | 'waiting' | 'sent') => stateOf({ kind: 'msg', id: 'm', from: 'me', at, text: 'x', state });
-    assert.equal(me('sending'), '보내는 중');
-    assert.equal(me('failed'), '못 보냈어요');
+    assert.equal(me('sending'), '');
+    assert.equal(me('failed'), '');
     assert.equal(me('waiting'), 'PC 켜지면 보내요');
     assert.equal(me('sent'), '');
   });

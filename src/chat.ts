@@ -39,9 +39,12 @@ export function clockRange(from: number, to: number): string {
   return a.slice(0, 2) === b.slice(0, 2) ? `${a}~${b.slice(3)}` : `${a}~${b}`;
 }
 
-/** 내 말이 어디까지 갔는지(보냈으면 빈 글자). 내 말풍선 아래에 작게 쓴다. */
+/**
+ * 내 말풍선 아래 작은 한 줄. PC가 꺼져 있어 아직 맡기지 못한 말에만 쓴다.
+ * 보내는 중은 기다림 점 셋이, 못 보냄은 바로 아래 이유 줄과 [다시 보내기]가 이미 말해 주므로 쓰지 않는다.
+ */
 export function stateOf(it: Extract<ChatItem, { kind: 'msg' }>): string {
-  return it.from !== 'me' ? '' : { sent: '', waiting: 'PC 켜지면 보내요', sending: '보내는 중', failed: '못 보냈어요' }[it.state ?? 'sent'];
+  return it.from === 'me' && it.state === 'waiting' ? 'PC 켜지면 보내요' : '';
 }
 
 const atOf = (it: ChatItem) => (it.kind === 'merged' ? it.from : it.at);
