@@ -47,22 +47,6 @@ export function pcLine(pc: PcStatus, lastSeen: number | null): { tone: Tone; lab
   }
 }
 
-/** 홈 머리의 PC 한 줄(대화 홈용). 꺼져 있으면 마지막 접속을 함께 쓴다. */
-export function homeLine(pc: PcStatus, lastSeen: number | null): { tone: Tone; label: string; busy?: boolean } {
-  switch (pc) {
-    case 'online':
-      return { tone: 'accent', label: 'PC 켜짐' };
-    case 'connecting':
-      return { tone: 'quiet', label: 'PC 찾는 중', busy: true };
-    case 'stale':
-      return { tone: 'attention', label: `PC가 오래 꺼져 있어요 · 마지막 접속 ${ago(lastSeen)}` };
-    case 'unpaired':
-      return { tone: 'quiet', label: 'PC 연결 안 됨' };
-    default:
-      return { tone: 'quiet', label: lastSeen ? `PC 꺼짐 · 마지막 접속 ${ago(lastSeen)}` : 'PC 꺼짐' };
-  }
-}
-
 export interface Todo {
   /** PC가 사장님 승인을 기다리는 일(폰 승인은 준비 중이라 앱에서는 0) */
   approvals: number;
