@@ -1,6 +1,6 @@
 // P-01 잠금: 앱을 열 때와 백그라운드 30초 뒤. 해제 = 키 항목 읽기(keyring.unlock), 생체 또는 폰 암호(D08 §3.1, 대표 결정 "비밀번호 허용").
 // 화면은 조용한 면 하나에 가운데 단추 하나("Face ID로 열기"처럼 기기 종류에 맞춘 문구). 앱 이름·자물쇠는 두지 않는다.
-// 첫 실행만 다르다: 스플래시와 같은 표시 + 앱 이름 + 이 앱이 해 주는 일 한 줄, 아래 tint 면에 열쇠 안내, 바닥에 [시작하기].
+// 첫 실행만 다르다(온보딩 다음 단계 4/5): 표시 + "이 폰에만 있는 열쇠를 만들어요" + 풀이, 아래 tint 면에 열쇠 사실 두 줄, 바닥에 단계 점 + [열쇠 만들기]. 다음은 PC와 연결(5/5).
 // 생체가 실패하면 OS가 기본 대체("암호 입력")를 띄우고, 취소해 돌아오면 같은 화면에 한 줄 + [다시 시도] + 회색 [폰 암호로 열기].
 // 생체를 등록하지 않은 폰은 처음부터 [폰 암호로 열기]가 기본 단추. 폰 암호가 없는 폰은 여전히 열 수 없다. 잠금 끄기는 없다.
 // 잠금 해제와 승인 서명은 별개다: 승인 시트의 [승인하고 발급]은 매번 생체만 + 하드웨어 키 서명(폰 암호 대체 없음).
@@ -11,9 +11,10 @@ import { bioName, unlockLabel } from '../biometryLabel';
 import { KeyringError, createDevice, resetDevice, unlock, type DeviceKeys, type KeyringErrorCode } from '../keyring';
 import markDark from '../../assets/splash-icon-dark.png';
 import markLight from '../../assets/splash-icon.png';
-import { BRAND } from '../config';
 import { radius, space, usePalette } from '../theme';
-import { Button, Screen, T } from '../ui/kit';
+import { Button, Check, Screen, T } from '../ui/kit';
+import { STEP_KEY } from '../ui/StepDots';
+import { OnboardingStep } from './OnboardingScreen';
 
 const PASSCODE = '폰 암호로 열기';
 
@@ -34,7 +35,7 @@ export interface LockPreview {
   err?: KeyringErrorCode | null;
 }
 
-export function LockScreen({ firstRun, onUnlocked, onReset, preview }: { firstRun: boolean; onUnlocked: (k: DeviceKeys, created: boolean) => void; onReset: () => void; preview?: LockPreview }) {
+export function LockScreen({ firstRun, onUnlocked, onReset, preview, onBack }: { firstRun: boolean; onUnlocked: (k: DeviceKeys, created: boolean) => void; onReset: () => void; preview?: LockPreview; /** 첫 실행: 온보딩 마지막 장으로 돌아가기 */ onBack?: () => void }) {
   const bio = useBioInfo(preview?.bio);
   const [err, setErr] = useState<KeyringErrorCode | null>(preview?.err ?? null);
   // 개발 빌드만 원인 문구를 함께 보인다(값·키는 들어 있지 않다)
@@ -89,7 +90,7 @@ export function LockScreen({ firstRun, onUnlocked, onReset, preview }: { firstRu
     </View>
   );
 
-  if (firstRun) return <FirstRun bio={bio} noBio={noBio} err={errBlock} busy={busy} onStart={() => open(noBio)} />;
+  if (firstRun) return <FirstRun bio={bio} noBio={noBio} err={errBlock} busy={busy} onStart={() => open(noBio)} onBack={onBack} />;
 
   return (
     <Screen scroll={false} testID="lock-screen">
@@ -127,41 +128,40 @@ export function LockScreen({ firstRun, onUnlocked, onReset, preview }: { firstRu
  * 처음 연 화면: 이 앱이 무엇을 해 주는지 먼저, 열쇠 안내는 그 아래 보조로.
  * 위: 스플래시 표시 + 이름 + 한 줄 가치 + 한 줄 풀이. 아래: tint 면 열쇠 안내 → [시작하기].
  */
-function FirstRun({ bio, noBio, err, busy, onStart }: { bio: BioInfo | null; noBio: boolean; err: ReactNode; busy: boolean; onStart: () => void }) {
+function FirstRun({ bio, noBio, err, busy, onStart, onBack }: { bio: BioInfo | null; noBio: boolean; err: ReactNode; busy: boolean; onStart: () => void; onBack?: () => void }) {
   const p = usePalette();
   const dark = useColorScheme() === 'dark';
   // 열 때 무엇으로 확인하는지(생체 없는 폰은 폰 암호만)
   const how = !bio || noBio ? '폰 암호' : `${bioName(bio.kind)}나 폰 암호`;
   return (
-    <Screen
-      scroll={false}
+    <OnboardingStep
       testID="lock-screen"
-      footer={<Button testID="unlock" label="시작하기" onPress={onStart} busy={busy} />}
-    >
-      <View style={st.first} testID="lock-first">
-        <View style={st.hero}>
+      step={STEP_KEY}
+      onBack={onBack}
+      title="이 폰에만 있는 열쇠를 만들어요"
+      body="내 PC와 이 폰이 서로를 알아보고, 둘 사이 내용을 잠그는 데 써요."
+      action={<Button testID="unlock" label="열쇠 만들기" onPress={onStart} busy={busy} />}
+      art={
+        <View style={st.keyArt} testID="lock-first">
           <Image source={dark ? MARK.dark : MARK.light} style={st.mark} accessibilityIgnoresInvertColors accessible={false} />
-          <View style={{ gap: space.s2, alignItems: 'center' }}>
-            <T v="title" role="header" center>
-              {BRAND}
-            </T>
-            <T v="body" center testID="lock-value">
-              홈택스 세금계산서를{'\u00A0'}폰으로 확인하고{'\u00A0'}승인해요
-            </T>
-            <T v="sub" c="ink2" center>
-              홈택스 일은 내 PC가 하고, 사장님은 폰에서 결과를 보고 승인만 하면 돼요.
-            </T>
+          <View style={[st.key, { backgroundColor: p.canvas, borderColor: p.line }]} testID="lock-key-note">
+            <View style={st.keyRow}>
+              <Check color={p.ink2} />
+              <T v="sub" c="ink2" style={{ flex: 1 }}>
+                폰 밖으로 나가지 않고 백업되지 않아요
+              </T>
+            </View>
+            <View style={st.keyRow}>
+              <Check color={p.ink2} />
+              <T v="sub" c="ink2" style={{ flex: 1 }}>
+                앞으로 앱을 열 때 {how}로 확인해요
+              </T>
+            </View>
           </View>
+          {err}
         </View>
-        {err}
-        <View style={[st.key, { backgroundColor: p.tint }]} testID="lock-key-note">
-          <T v="subStrong">이 폰에만 있는 열쇠를 만들어요</T>
-          <T v="sub" c="ink2">
-            열쇠는 폰 밖으로 나가지 않고 백업되지 않아요. 앞으로 앱을 열 때 {how}로 확인해요.
-          </T>
-        </View>
-      </View>
-    </Screen>
+      }
+    />
   );
 }
 
@@ -169,8 +169,8 @@ const st = StyleSheet.create({
   wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.s5, paddingHorizontal: space.s3, paddingBottom: space.s7 },
   actions: { alignSelf: 'stretch', alignItems: 'center', gap: space.s2 },
   btn: { alignSelf: 'stretch' },
-  first: { flex: 1, paddingHorizontal: space.s5, paddingBottom: space.s4, gap: space.s5 },
-  hero: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.s5, paddingHorizontal: space.s3 },
+  keyArt: { alignItems: 'center', gap: space.s5 },
   mark: { width: MARK_SIZE, height: MARK_SIZE },
-  key: { borderRadius: radius.lg, padding: space.s4, gap: space.s1 },
+  key: { alignSelf: 'stretch', borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: space.s4, gap: space.s2 },
+  keyRow: { flexDirection: 'row', alignItems: 'center', gap: space.s3 },
 });
