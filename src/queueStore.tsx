@@ -118,16 +118,7 @@ export function QueueProvider({
   const [simpleId, setSimpleId] = useState<string | null>(null);
   const [usedLocal, setUsed] = useState(0);
   const used = approval.usedToday + usedLocal;
-  // PC가 새 승인 요청을 보내면 그 일의 시트를 띄운다(요청마다 한 번. 닫은 시트를 다시 띄우지 않는다)
-  const shown = useRef(new Set<string>()).current;
-  useEffect(() => {
-    for (const j of jobs) {
-      if (!j.id.startsWith('cmd-') || j.state !== 'approval' || !j.gate || shown.has(j.gate.reqId)) continue;
-      shown.add(j.gate.reqId);
-      // 열려 있던 시트의 일이 요청을 잃었으면(PC가 거뒀거나 승인 단계를 지남) 그 자리는 빈 것으로 본다
-      if (j.gate.exp > Date.now()) setSheetId((cur) => (cur && jobs.some((x) => x.id === cur && x.gate) ? cur : j.id));
-    }
-  }, [jobs, shown]);
+  // 새 승인 요청은 시트를 띄우지 않고 첫 화면 대화의 카드에서 승인한다(notify/PushHost가 그 카드로 데려간다)
   const [focusId, setFocusId] = useState<string | null>(initialFocus);
   const [cps, setCps] = useState<Counterparty[]>(initialCps);
   const [pickId, setPickId] = useState<string | null>(pick);

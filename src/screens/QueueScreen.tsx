@@ -13,6 +13,7 @@ import { useSession } from '../session';
 import { radius, space, usePalette } from '../theme';
 import { Button, Empty, Group, Row, Screen, T, tap, won } from '../ui/kit';
 import { SwipeAway } from '../ui/SwipeAway';
+import { CardApprove } from './CardApprove';
 
 const NB = ' ';
 
@@ -236,7 +237,9 @@ function JobCard({ job, state, onAction }: { job: Job; state: JobState; onAction
           </Pressable>
         )}
       </View>
-      {approve && button && (
+      {button?.key === 'approve' && job.id.startsWith('cmd-') && job.gate ? (
+        <CardApprove job={job} gate={job.gate} onDetail={() => onAction('approve')} />
+      ) : approve && button && (
         <View style={st.actions}>
           <Button small label={label ?? ''} onPress={() => onAction(button.key)} testID={`job-${job.id}-${button.key}`} />
         </View>

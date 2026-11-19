@@ -2,7 +2,7 @@
 //   - 토큰: PC와 붙어 있고 OS 허용과 설정 스위치가 켜져 있으면 기기 토큰을 올린다. 지난번과 같은 토큰이면 올리지 않는다.
 //     스위치를 끄거나 OS에서 끄면 지운다(PC 연결 해제 때는 screens/leavePhone.ts가 지운다).
 //   - 허용: 첫 발급을 맡긴 뒤 한 번만 앱 안 시트로 묻고, 좋다고 하면 OS 창을 띄운다. 거절하면 다시 묻지 않는다(설정에 스위치).
-//   - 누름: approve는 PC와 붙어 승인 시트를, 시트가 안 오면(게이트가 닫혔다) 그 실행의 지금 상태를. update는 맡긴 일 목록.
+//   - 누름: approve는 PC와 붙어 첫 화면 대화의 승인 카드로(카드에서 바로 승인), 요청이 안 오면(게이트가 닫혔다) 그 실행의 지금 상태를. update는 맡긴 일 목록.
 //   - 앱이 앞에 있을 때 온 깨우기는 배너 없이 바로 sync(). 세션이 붙으면 알림 센터의 깨우기 알림을 지운다.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Pressable, StyleSheet, View } from 'react-native';
@@ -22,11 +22,13 @@ import { LOCAL_APPROVE, SHEET_WAIT_MS, askDue, latestEntrusted, newGates, pushPl
 /** 맡긴 직후 화면이 바뀌는 사이에 끼지 않게 조금 뒤에 묻는다 */
 const ASK_DELAY_MS = 700;
 
-export function PushHost({ onQueue, onRun, askPreview }: {
+export function PushHost({ onQueue, onRun, onCard, askPreview }: {
   /** 맡긴 일 목록(밀린 일)으로 */
   onQueue: () => void;
   /** q.focus 실행의 진행 화면으로 */
   onRun: () => void;
+  /** 승인 대기 카드로(첫 화면 대화, 카드에서 바로 승인) */
+  onCard: (jobId: string) => void;
   /** 갤러리: 허용 묻는 시트를 바로 보인다 */
   askPreview?: boolean;
 }) {
@@ -40,8 +42,8 @@ export function PushHost({ onQueue, onRun, askPreview }: {
   const again = useRef(false);
   /** approve를 눌러 승인 시트를 기다리는 중(sync가 끝난 뒤 SHEET_WAIT_MS) */
   const [waitSheet, setWaitSheet] = useState<number | null>(null);
-  const live = useRef({ s, q, onQueue, onRun });
-  live.current = { s, q, onQueue, onRun };
+  const live = useRef({ s, q, onQueue, onRun, onCard });
+  live.current = { s, q, onQueue, onRun, onCard };
 
   const pair = s.data.pair;
   const online = s.pc === 'online';
@@ -142,7 +144,7 @@ export function PushHost({ onQueue, onRun, askPreview }: {
     const { q: cq, onRun: toRun, onQueue: toQueue } = live.current;
     if (gated) {
       setWaitSheet(null);
-      if (cq.sheetJob?.id !== gated.id) cq.openSheet(gated.id);
+      live.current.onCard(gated.id);
       return;
     }
     const t = setTimeout(() => {
@@ -163,7 +165,7 @@ export function PushHost({ onQueue, onRun, askPreview }: {
       if (st !== 'active') return;
       const { q: cq } = live.current;
       const g = cq.jobs.find((j) => j.id.startsWith('cmd-') && j.gate && j.state === 'approval' && j.gate.exp > Date.now());
-      if (g && !cq.sheetJob) cq.openSheet(g.id);
+      if (g && !cq.sheetJob) live.current.onCard(g.id);
     });
     return () => sub.remove();
   }, [askPreview]);
@@ -178,7 +180,7 @@ export function PushHost({ onQueue, onRun, askPreview }: {
     if (AppState.currentState === 'active') {
       const fresh = newGates(q.jobs, shownFg.current, now);
       for (const j of fresh) shownFg.current.add(j.gate!.reqId);
-      if (fresh[0] && !q.sheetJob) q.openSheet(fresh[0].id);
+      if (fresh[0] && !q.sheetJob) live.current.onCard(fresh[0].id);
       return;
     }
     const fresh = newGates(q.jobs, toldBg.current, now);
@@ -187,7 +189,7 @@ export function PushHost({ onQueue, onRun, askPreview }: {
     if (!wakeOn(live.current.s.data.notify)) return;
     // identifier를 서버 깨우기의 접힘 ID와 같게: PC 깨우기가 뒤따라 와도 알림이 하나만 남는다
     void notifyNow({ title: '승인을 기다리는 발급이 있어요', body: '눌러서 승인하거나 거절해 주세요' }, { open: LOCAL_APPROVE, jobId: fresh[0]!.id }, 'sax-wake-approve');
-  }, [q.jobs, q.sheetJob, q.openSheet, askPreview]);
+  }, [q.jobs, q.sheetJob, askPreview]);
 
   // 허용 묻기: 첫 발급을 맡긴 뒤 한 번
   const entrusted = (s.data.cmds ?? []).length;

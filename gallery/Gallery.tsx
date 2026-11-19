@@ -266,6 +266,9 @@ const CMD = (o: Partial<PhoneCmd> = {}): PhoneCmd => ({
   cmdId: 'G1', req: { counterpartyRef: 'cp_gana', supply: 1_230_000, tax: 123_000, item: '식자재', day: iso(today) }, cpName: '가나식자재', total: 1_353_000,
   createdAt: now - 90_000, sentAt: now - 88_000, ack: 'pc_only', runId: 'run1', at: now - 5_000, ...o,
 });
+/** 승인 대기(카드에서 바로 승인): PC가 되읽은 값과 같은 거래처, 합계 */
+const APPROVE_CMD = () =>
+  CMD({ phase: 'approve', ack: 'accepted', cpName: '서울청과', total: 880_000, gate: { ...gate({ left: 8 * 60_000 }), stepId: 's21' } });
 const pcRun = (o: Partial<PhoneCmd>) => ({
   session: fake({ ...copyData(), cmds: [CMD(o)] }, 'online'), focus: 'cmd-G1', node: <RunScreen onDone={noop} onDoc={noop} onRecords={noop} now={now} />,
 });
@@ -460,6 +463,16 @@ const SCREENS: Record<
   'run-pc-refused': () => pcRun({ ack: 'rejected', reason: 'counterparty_unknown', runId: undefined }),
   'run-pc-busy': () => pcRun({ ack: 'rejected', reason: 'pc_busy', runId: undefined }),
   'run-pc-old': () => pcRun({ ack: undefined, pcOld: true, runId: undefined }),
+  'home-chat-pc-approve': () => ({
+    session: fake({ ...copyData(), cmds: [APPROVE_CMD()] }, 'online'),
+    approval: HW,
+    node: <Main chat={CHAT} live />,
+  }),
+  'queue-approve-card': () => ({
+    session: fake({ ...copyData(), cmds: [APPROVE_CMD()] }, 'online'),
+    approval: HW,
+    node: <QueueScreen onDone={noop} onConnection={noop} onOpen={noop} now={now} />,
+  }),
   'home-chat-pc-run': () => ({
     session: fake({ ...copyData(), cmds: [CMD({ phase: 'approve' })] }, 'online'),
     notes: [{ kind: 'run', id: 'run-cmd-G1', at: now - 90_000, jobId: 'cmd-G1' }],

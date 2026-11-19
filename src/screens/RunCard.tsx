@@ -10,7 +10,8 @@ import { REJECT_LINE } from '../phoneCmd';
 import type { Job } from '../queue';
 import { ACTION_LABEL, AUTH_APPS, STEPS, STEP_LABEL, STOP_COPY, actionsOf, chipOf, elapsed, groupApprovalNo, mmss, pcTurnOf, stepOf, type IssueResult, type RunAction, type RunView } from '../run';
 import { radius, space, usePalette } from '../theme';
-import { Button, Check, Chevron, Pill, StatusDot, T, success, won } from '../ui/kit';
+import { Check, Chevron, Pill, StatusDot, T, success, won } from '../ui/kit';
+import { CardApprove } from './CardApprove';
 
 
 /** PC가 맡은 일의 로그인 차례(폰에서 할 수 있는 일이 있다) */
@@ -49,7 +50,7 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
   onAction?: (a: RunAction) => void;
   onDoc?: () => void;
   onShare?: () => void;
-  /** 이 폰으로 승인할 요청이 열려 있을 때 [승인 열기](승인 시트) */
+  /** 이 폰으로 승인할 요청이 열려 있을 때: 카드에서 바로 승인, [자세히 보기]면 승인 시트 */
   onApprove?: () => void;
 }) {
   const p = usePalette();
@@ -90,7 +91,8 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
                 시간이 지났어요
               </T>
             )
-          ) : (
+          ) : compact ? null : (
+            // 대화 카드에는 지난 시간을 두지 않는다(대표 결정 2026-11-19: 시간이 바뀌면 어지럽다)
             <T v="meta" c="ink3" testID="run-elapsed">
               {elapsed(now - r.startedAt)}
             </T>
@@ -99,17 +101,7 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
       {/* 이유 없는 PC 멈춤은 어느 단계였는지 모르니 단계 막대를 두지 않는다 */}
       {r.kind !== 'done' && r.kind !== 'refused' && !(r.kind === 'stopped' && (r.reason === 'pcStopped' || r.reason === 'appOld')) && (compact ? <FoldSteps id={job.id} r={r} /> : <StepBar r={r} />)}
       <StateLines r={r} />
-      {onApprove && job.gate && job.state === 'approval' && job.gate.exp > now && (
-        <View style={st.approve} testID="run-approve">
-          <View style={{ flex: 1, gap: 2 }}>
-            <T v="subStrong">승인을 기다려요</T>
-            <T v="meta" c="ink3" style={{ fontVariant: ['tabular-nums'] }}>
-              {job.gate.exp - now > 60_000 ? `${Math.ceil((job.gate.exp - now) / 60_000)}분 남았어요` : '곧 닫혀요'}
-            </T>
-          </View>
-          <Button kind="approve" small label="승인 열기" onPress={onApprove} testID="run-approve-open" />
-        </View>
-      )}
+      {onApprove && job.gate && job.state === 'approval' && <CardApprove job={job} gate={job.gate} onDetail={onApprove} now={fixedNow} />}
       {r.kind === 'done' && <ResultRows result={r.result} />}
       {/* 폰 발급 명령은 지켜보기만 한다. 로그인 차례(간편인증·인증서로 다시·승인했어요)만 대화 카드에서 바로 한다 */}
       {compact && (!job.pcOnly || pcTurn(r)) && <CardActions r={r} now={now} onAction={onAction} onDoc={onDoc} onShare={onShare} />}
