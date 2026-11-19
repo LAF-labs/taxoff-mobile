@@ -72,7 +72,7 @@ export function statusLine(job: Job, state: JobState): string {
   if (job.wait === 'pcBusy') return '다른 일이 끝나면 할게요';
   if (job.wait === 'newDay' && job.waitDay) return `${Number(job.waitDay.slice(5, 7))}월 ${Number(job.waitDay.slice(8, 10))}일로 맡긴 일이에요. 오늘 날짜로 바꿔야 발급할 수 있어요`;
   if (r?.kind === 'refused') return REFUSED[r.reason];
-  if (r?.kind === 'stopped') return '중지됐어요';
+  if (r?.kind === 'stopped') return r.reason === 'appOld' ? 'PC 앱을 업데이트해 주세요' : '중지됐어요';
   if (state === 'needPc' && job.reason) return NEED_PC[job.reason];
   if (r?.kind === 'myTurn') return r.auth.method === 'cert' ? '인증서 비밀번호가 필요해요' : '간편인증을 승인해 주세요';
   if (r?.kind === 'inDoubt') return '발급됐는지 보고 있어요';
