@@ -368,3 +368,21 @@ describe('라이브 세션: 승인 요청을 받고 서명한 답을 보낸다(m
     assert.equal(jobOf(s.get()[0]!).state, 'approval');
   });
 });
+
+describe('라이브 세션: 답을 보내다 실패해도 세션이 죽지 않는다', () => {
+  it('봉투가 규칙에 맞지 않아 던지면 그 답을 버리고 승인 요청을 다시 보인다', async () => {
+    const now = Date.now();
+    const g = gateReq({ exp: now + 120_000 });
+    const c = answerGate(applyGate(cmd({ createdAt: now, sentAt: now, at: now }), g), { reqId: g.reqId, decision: 'approve', actionHash: g.actionHash, sig: 's' }, now);
+    const s = store([c]);
+    const m = mockChannel(() => []);
+    const send = m.ch.send;
+    m.ch.send = (type: string, body: unknown) => {
+      if (type === 'gate.response') throw new Error('schema');
+      return send(type, body);
+    };
+    assert.equal(await driveCmds(m.ch as never, [CAP.issue, CAP.approve], s.io, 400), 'timeout');
+    assert.equal(s.get()[0]!.answer, undefined);
+    assert.equal(openGate(s.get()[0]!)!.reqId, g.reqId);
+  });
+});

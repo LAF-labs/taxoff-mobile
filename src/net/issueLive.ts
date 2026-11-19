@@ -54,11 +54,22 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
     if (!approves) return;
     for (const c of io.cmds()) {
       const r = responseDue(c, now());
+      // 보내다 던지면: 채널이 닫혔으면 그대로 두고(다음 연결에 마감 전이면 다시 보낸다), 봉투가 규칙에 안 맞으면 그 답을 버린다
       if (r) {
-        ch.send('gate.response', r);
+        try {
+          ch.send('gate.response', r);
+        } catch {
+          if (ch.closed) return;
+          await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? { ...x, answer: undefined } : x)));
+          continue;
+        }
         await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? markAnswered(x, r.reqId, now()) : x)));
       } else if (c.refresh && c.runId) {
-        ch.send('gate.refresh', { runId: c.runId, reqId: c.refresh });
+        try {
+          ch.send('gate.refresh', { runId: c.runId, reqId: c.refresh });
+        } catch {
+          if (ch.closed) return;
+        }
         await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? { ...x, refresh: undefined } : x)));
       }
     }
