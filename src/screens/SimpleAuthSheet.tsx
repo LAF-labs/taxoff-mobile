@@ -5,7 +5,7 @@
 // 보내면 PC가 홈택스 간편인증 창을 채워 [인증 요청]을 누르고, 진행 카드가 "<앱>에서 승인해 주세요"로 바뀐다.
 // 고른 칸은 어둡게 칠하지 않는다(테두리와 체크만, 대표 지적 2026-11-19).
 import { useEffect, useRef, useState, type ComponentRef } from 'react';
-import { Pressable, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
+import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PASS_CARRIERS, SIMPLE_APPS, simpleAppOf } from '../run';
 import { draftOf, stepOk, stepsOf, toId, type SimpleDraft, type SimpleStep } from '../simpleAuth';
@@ -48,20 +48,29 @@ export function SimpleAuthSheet({ remembered, failed, onSend, onClose, start }: 
   const [draft, setDraft] = useState<SimpleDraft>(start?.draft ?? draftOf(remembered));
   const [step, setStep] = useState<SimpleStep>(start?.step ?? (known && !failed ? 'confirm' : 'app'));
   const input = useRef<ComponentRef<typeof TextInput>>(null);
+  // 단계가 바뀌면 같은 시트 안에서 내용만 옆으로 넘어간다(앞으로는 오른쪽에서, 뒤로는 왼쪽에서). 시트 높이는 그대로다.
+  const slide = useRef(new Animated.Value(0)).current;
+  const dir = useRef(1);
+  const go = (to: SimpleStep, back = false) => {
+    dir.current = back ? -1 : 1;
+    setStep(to);
+  };
   useEffect(() => {
-    if (step === 'name' || step === 'birth' || step === 'phone') setTimeout(() => input.current?.focus(), 250);
-  }, [step]);
+    slide.setValue(1);
+    Animated.timing(slide, { toValue: 0, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: Platform.OS !== 'web' }).start();
+    if (step === 'name' || step === 'birth' || step === 'phone') setTimeout(() => input.current?.focus(), 230);
+  }, [step, slide]);
 
   const order = stepsOf(draft);
   const idx = order.indexOf(step);
   const next = (d = draft) => {
     const o = stepsOf(d);
     const i = o.indexOf(step);
-    if (i >= 0 && i < o.length - 1) return setStep(o[i + 1]!);
+    if (i >= 0 && i < o.length - 1) return go(o[i + 1]!);
     const id = toId(d);
     if (id) onSend(id);
   };
-  const back = () => (idx > 0 ? setStep(order[idx - 1]!) : known && step !== 'confirm' ? setStep('confirm') : onClose());
+  const back = () => (idx > 0 ? go(order[idx - 1]!, true) : known && step !== 'confirm' ? go('confirm', true) : onClose());
 
   const pick = (choices: ReadonlyArray<{ code: string; name: string }>, value: string, set: (code: string) => SimpleDraft, testPrefix: string) => (
     <View style={st.grid} accessibilityRole="radiogroup">
@@ -179,7 +188,9 @@ export function SimpleAuthSheet({ remembered, failed, onSend, onClose, start }: 
   return (
     <View style={StyleSheet.absoluteFill} testID="simple-sheet">
       <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: p.scrim }]} onPress={onClose} accessibilityLabel="간편인증 닫기" accessibilityRole="button" />
-      <View style={[st.sheet, { backgroundColor: p.canvas, maxHeight: height * 0.9, paddingBottom: Math.max(inset.bottom, space.s4) }]} accessibilityViewIsModal>
+      {/* 시트 높이는 모든 단계에서 같다(대표 지시 2026-11-19). 키보드가 뜨면 시트째 올라간다. */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'position' : undefined} style={st.kav} pointerEvents="box-none">
+      <View style={[st.sheet, { backgroundColor: p.canvas, height: Math.min(SHEET_H + Math.max(inset.bottom, space.s4), height * 0.9), paddingBottom: Math.max(inset.bottom, space.s4) }]} accessibilityViewIsModal>
         <View style={[st.grabber, { backgroundColor: p.sunken }]} />
         <View style={st.head}>
           <Pressable onPress={back} hitSlop={12} accessibilityRole="button" accessibilityLabel={idx > 0 ? '이전 단계' : '닫기'} style={st.headBtn} testID="simple-back">
@@ -194,27 +205,40 @@ export function SimpleAuthSheet({ remembered, failed, onSend, onClose, start }: 
             </T>
           </View>
         </View>
-        <View style={st.body}>{body}</View>
+        <Animated.View
+          style={[
+            st.body,
+            { opacity: slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }), transform: [{ translateX: slide.interpolate({ inputRange: [0, 1], outputRange: [0, 28 * dir.current] }) }] },
+          ]}
+          key={step}
+        >
+          {body}
+        </Animated.View>
         {primary && (
           <View style={st.foot}>
             <Button label={primary.label} onPress={primary.go} disabled={!primary.on} testID="simple-next" />
-            {step === 'confirm' && <Button kind="quiet" label="다른 정보로" onPress={() => setStep('app')} testID="simple-other" />}
+            {step === 'confirm' && <Button kind="quiet" label="다른 정보로" onPress={() => go('app')} testID="simple-other" />}
           </View>
         )}
       </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
 
+/** 시트 높이(바닥 안전 영역 빼고): 가장 긴 단계(인증 앱 13개) 기준. 키보드가 떠도 위로 넘치지 않게 작게 잡는다. */
+const SHEET_H = 452;
+
 const st = StyleSheet.create({
-  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingTop: space.s2 },
+  kav: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  sheet: { borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingTop: space.s2 },
   grabber: { alignSelf: 'center', width: 36, height: 5, borderRadius: 3, marginBottom: space.s2 },
   head: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.s4, minHeight: 44 },
   headBtn: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
-  body: { paddingHorizontal: space.s5, paddingTop: space.s2, paddingBottom: space.s4, gap: space.s4 },
+  body: { flex: 1, paddingHorizontal: space.s5, paddingTop: space.s2, paddingBottom: space.s3, gap: space.s3 },
   foot: { paddingHorizontal: space.s5, gap: space.s1 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s2 },
-  choice: { minHeight: 52, width: '31.5%', alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, paddingHorizontal: space.s2 },
+  choice: { minHeight: 48, width: '31.5%', alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, paddingHorizontal: space.s2 },
   check: { position: 'absolute', top: 6, right: 8 },
   input: { borderBottomWidth: 1.5 },
   summary: { borderRadius: radius.lg, padding: space.s4, gap: space.s1 },
