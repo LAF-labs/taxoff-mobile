@@ -5,7 +5,7 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Device from 'expo-device';
 import { useEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
 import { MobilePairing, b64, fromB64, softNoiseStatic, type MobilePairFailure, type MobilePairResult } from '@sax/remote';
 import { BRAND, DEV_LOCAL, accountKeys, relayAllowlist } from '../config';
 import { inflight } from '../inflight';
@@ -13,8 +13,10 @@ import { devFetchQr } from '../net/account';
 import { identityLines } from '../pairing/identity';
 import { relayFor } from '../net/pc';
 import { useSession } from '../session';
-import { radius, space, usePalette } from '../theme';
-import { Button, Group, Notice, Screen, StatusDot, T } from '../ui/kit';
+import { radius, space, usePalette, useReducedMotion } from '../theme';
+import { Button, Group, Notice, Screen, StatusDot, T, success } from '../ui/kit';
+import { STEP_PAIR } from '../ui/StepDots';
+import { OnboardingStep, StepHint } from './OnboardingScreen';
 
 type Phase = 'scan' | 'warn' | 'confirm' | 'working' | 'sas' | 'done' | 'failed';
 
@@ -33,11 +35,16 @@ const FAIL: Record<MobilePairFailure | 'relay' | 'save', string> = {
   save: '연결 정보를 이 폰에 저장하지 못했어요. PC에서 [새 QR]을 눌러 다시 연결해 주세요.',
 };
 
-export function PairScreen({ onDone }: { onDone: () => void }) {
+export interface PairOnboarding {
+  /** 뒤로(‹·왼쪽 가장자리 쓸기): 온보딩 마지막 장으로. 열쇠는 이미 있으니 [다음]은 다시 이 화면으로 온다 */
+  onBack: () => void;
+}
+
+export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () => void; /** 첫 실행 온보딩의 마지막 단계(5/5)로 쓸 때 */ onboarding?: PairOnboarding; /** 갤러리: 이 단계로 그린다(연결 없음) */ previewPhase?: 'scan' | 'done' }) {
   const s = useSession();
   const p = usePalette();
   const [perm, requestPerm] = useCameraPermissions();
-  const [phase, setPhase] = useState<Phase>('scan');
+  const [phase, setPhase] = useState<Phase>(previewPhase ?? 'scan');
   const [fail, setFail] = useState<keyof typeof FAIL | null>(null);
   const [sas, setSas] = useState<string | null>(null);
   const pairing = useRef<MobilePairing | null>(null);
@@ -124,7 +131,7 @@ export function PairScreen({ onDone }: { onDone: () => void }) {
 
   const stop = () => {
     pendingRef.current = null;
-    onDone();
+    (onboarding?.onBack ?? onDone)();
   };
 
   async function save(r: MobilePairResult) {
@@ -155,12 +162,60 @@ export function PairScreen({ onDone }: { onDone: () => void }) {
     void s.sync();
   }
 
+  const camera = perm?.granted ? (
+    <View style={[st.scanner, { backgroundColor: p.camera }]}>
+      <CameraView style={StyleSheet.absoluteFill} facing="back" barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={(e) => void onQr(e.data)} />
+      <View pointerEvents="none" style={st.reticle}>
+        {(['tl', 'tr', 'bl', 'br'] as const).map((c) => (
+          <View key={c} style={[st.corner, st[c], { borderColor: p.onCamera }]} />
+        ))}
+      </View>
+    </View>
+  ) : null;
+
+  if (phase === 'scan' && onboarding) {
+    return (
+      <OnboardingStep
+        testID="pair-scan"
+        step={STEP_PAIR}
+        onBack={onboarding.onBack}
+        title="마지막으로, PC와 연결해요"
+        body={`PC의 ${BRAND} 앱에서 설정 → 기기 연결 → [폰 연결]을 누르면 QR이 떠요. 그 QR을 여기에 비춰 주세요.`}
+        action={
+          perm?.granted ? (
+            DEV_LOCAL ? (
+              <Button testID="dev-qr" kind="secondary" label="개발: 더미 PC의 QR 받기" onPress={async () => void onQr(await devFetchQr())} />
+            ) : (
+              <StepHint testID="pair-hint">QR이 보이면 저절로 넘어가요</StepHint>
+            )
+          ) : (
+            <Button testID="pair-camera" label="카메라 켜기" onPress={() => void requestPerm()} />
+          )
+        }
+        art={
+          camera ?? (
+            <View style={[st.scanner, st.center, { backgroundColor: p.canvas, borderColor: p.line, borderWidth: StyleSheet.hairlineWidth, gap: space.s3, padding: space.s6 }]}>
+              <View style={st.reticleIdle}>
+                {(['tl', 'tr', 'bl', 'br'] as const).map((c) => (
+                  <View key={c} style={[st.corner, st[c], { borderColor: p.ink3 }]} />
+                ))}
+              </View>
+              <T v="sub" c="ink2" center>
+                QR을 찍으려면 카메라가 필요해요.{'\n'}찍은 화면은 저장하지 않아요.
+              </T>
+            </View>
+          )
+        }
+      />
+    );
+  }
+
   if (phase === 'scan') {
     return (
       <Screen title="PC와 연결" onBack={onDone} backLabel="취소" scroll={false} testID="pair-scan">
         <View style={{ gap: space.s2 }}>
           <T v="strong">PC 화면의 QR을 찍어 주세요</T>
-          <T v="sub" c="ink2">PC의 {BRAND} → 설정 → [폰 연결]을 누르면 QR이 떠요.</T>
+          <T v="sub" c="ink2">PC의 {BRAND} → 설정 → 기기 연결 → [폰 연결]을 누르면 QR이 떠요.</T>
         </View>
         {perm?.granted ? (
           <View style={[st.scanner, { backgroundColor: p.camera }]}>
@@ -241,7 +296,7 @@ export function PairScreen({ onDone }: { onDone: () => void }) {
 
   if (phase === 'sas' && sas) {
     return (
-      <Screen title="PC와 연결" testID="pair-sas" onBack={onDone} backLabel="취소">
+      <Screen title="PC와 연결" testID="pair-sas" onBack={onboarding?.onBack ?? onDone} backLabel="취소">
         <View style={{ gap: space.s2 }}>
           <T v="strong">PC 화면에 이 숫자를 입력하세요</T>
           <T v="sub" c="ink2">
@@ -257,6 +312,8 @@ export function PairScreen({ onDone }: { onDone: () => void }) {
       </Screen>
     );
   }
+
+  if (phase === 'done' && onboarding) return <PairedScene onStart={onDone} pcName={s.data.pair?.desktopName ?? null} />;
 
   if (phase === 'done') {
     return (
@@ -286,7 +343,7 @@ export function PairScreen({ onDone }: { onDone: () => void }) {
                 setPhase('scan');
               }}
             />
-            <Button kind="quiet" label="닫기" onPress={onDone} />
+            {!onboarding && <Button kind="quiet" label="닫기" onPress={onDone} />}
           </>
         }
       >
@@ -299,8 +356,51 @@ export function PairScreen({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <Screen title="PC와 연결" onBack={onDone} backLabel="취소" testID="pair-working">
+    <Screen title="PC와 연결" onBack={onboarding?.onBack ?? onDone} backLabel="취소" testID="pair-working">
       <StatusDot busy label="PC와 연결하는 중" />
+    </Screen>
+  );
+}
+
+/**
+ * 첫 실행 끝 장면: 체크가 그려지듯 커지고 물결이 한 번 퍼진 뒤 글이 떠오른다. [시작하기] → 홈.
+ * transform·opacity 네이티브 드라이버, 동작 줄이기면 바로 완성 상태.
+ */
+function PairedScene({ onStart, pcName }: { onStart: () => void; pcName: string | null }) {
+  const p = usePalette();
+  const reduce = useReducedMotion();
+  const pop = useRef(new Animated.Value(reduce ? 1 : 0)).current;
+  const ring = useRef(new Animated.Value(reduce ? 1 : 0)).current;
+  const text = useRef(new Animated.Value(reduce ? 1 : 0)).current;
+  useEffect(() => {
+    if (reduce) return;
+    success();
+    const a = Animated.parallel([
+      Animated.spring(pop, { toValue: 1, damping: 11, stiffness: 160, useNativeDriver: true }),
+      Animated.timing(ring, { toValue: 1, duration: 900, delay: 120, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.timing(text, { toValue: 1, duration: 420, delay: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]);
+    a.start();
+    return () => a.stop();
+  }, [pop, ring, text, reduce]);
+  return (
+    <Screen scroll={false} testID="pair-done" footer={<Button testID="pair-start" label="시작하기" onPress={onStart} />}>
+      <View style={st.doneWrap}>
+        <View style={st.doneMark}>
+          <Animated.View style={[st.doneRing, { borderColor: p.accent, opacity: ring.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] }), transform: [{ scale: ring.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1.9] }) }] }]} />
+          <Animated.View style={[st.doneDisc, { backgroundColor: p.accentSoft, opacity: pop, transform: [{ scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }, { rotate: pop.interpolate({ inputRange: [0, 1], outputRange: ['-45deg', '0deg'] }) }] }]}>
+            <View style={[st.doneCheck, { borderColor: p.accent }]} />
+          </Animated.View>
+        </View>
+        <Animated.View style={{ gap: space.s2, alignItems: 'center', opacity: text, transform: [{ translateY: text.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] }}>
+          <T v="title" role="header" center>
+            연결됐어요
+          </T>
+          <T v="sub" c="ink2" center>
+            {pcName ? `${pcName}와 이 폰이 이어졌어요. ` : ''}이제 폰에서 세금계산서를 확인하고 승인하고, 증빙을 찍어 보낼 수 있어요.
+          </T>
+        </Animated.View>
+      </View>
     </Screen>
   );
 }
@@ -309,6 +409,7 @@ const CORNER = 28;
 const st = StyleSheet.create({
   scanner: { width: '100%', aspectRatio: 1, borderRadius: radius.xl, overflow: 'hidden' },
   center: { alignItems: 'center', justifyContent: 'center' },
+  reticleIdle: { width: 96, height: 96, marginBottom: space.s2 },
   reticle: { position: 'absolute', top: '18%', left: '18%', right: '18%', bottom: '18%' },
   corner: { position: 'absolute', width: CORNER, height: CORNER, borderColor: '#fff' },
   tl: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 10 },
@@ -317,4 +418,9 @@ const st = StyleSheet.create({
   br: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 10 },
   sasBox: { alignItems: 'center', paddingVertical: space.s7, borderRadius: radius.lg },
   kv: { paddingHorizontal: space.s4, paddingVertical: space.s3, gap: 2 },
+  doneWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.s6, paddingHorizontal: space.s3, paddingBottom: space.s7 },
+  doneMark: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center' },
+  doneRing: { position: 'absolute', width: 96, height: 96, borderRadius: 48, borderWidth: 2 },
+  doneDisc: { width: 96, height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center' },
+  doneCheck: { width: 34, height: 18, borderLeftWidth: 5, borderBottomWidth: 5, transform: [{ rotate: '-45deg' }], marginTop: -8 },
 });
