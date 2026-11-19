@@ -14,15 +14,15 @@
 //   깊이는 원근(perspective는 transform 맨 앞)·크기·흐림 정도와 은은한 경계선으로만 낸다.
 // - 잔잔한 반복(떠 있기·빛·물결)은 지금 장에서만 돌고, 넘기면 멈춘다.
 // - 동작 줄이기면 움직임 없이 완성 상태.
-import { useEffect, useMemo, useRef, useState, type ComponentRef, type ReactElement } from 'react';
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, View, useColorScheme, useWindowDimensions, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { useEffect, useMemo, useRef, useState, type ComponentRef, type ReactElement, type ReactNode } from 'react';
+import { Animated, Easing, Image, PanResponder, Pressable, ScrollView, StyleSheet, View, useColorScheme, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import markDark from '../../assets/splash-icon-dark.png';
 import markLight from '../../assets/splash-icon.png';
 import { BRAND } from '../config';
 import { radius, space, usePalette, useReducedMotion, type Palette } from '../theme';
-import { Button, Check, T } from '../ui/kit';
-import { FIRST_RUN_STEPS } from '../ui/StepDots';
+import { Button, Check, Chevron, T } from '../ui/kit';
+import { FIRST_RUN_STEPS, StepDots } from '../ui/StepDots';
 
 type Anim = Animated.Value | Animated.AnimatedInterpolation<number> | Animated.AnimatedAddition;
 
@@ -65,7 +65,7 @@ export const ONBOARDING: Page[] = [
 
 const ONE = new Animated.Value(1);
 
-export function OnboardingScreen({ onDone, start = 0, fromSplash = false, revealed = true }: { onDone: () => void; /** 갤러리: 몇 번째 장부터 그릴지 */ start?: number; /** 스플래시 바로 뒤: 가운데 표시가 위 왼쪽 표시 자리로 날아가며 시작한다 */ fromSplash?: boolean; /** 스플래시가 걷혔는지. 걷히기 전에는 움직이지 않고 스플래시와 같은 모습으로 기다린다 */ revealed?: boolean }) {
+export function OnboardingScreen({ onDone, start = 0, fromSplash = false, revealed = true }: { onDone: () => void; /** 갤러리: 몇 번째 장부터 그릴지 */ start?: number; /** 스플래시 바로 뒤: 같은 모습의 덮개에서 시작해 제자리에서 바래며 첫 장이 들어온다 */ fromSplash?: boolean; /** 스플래시가 걷혔는지. 걷히기 전에는 움직이지 않고 스플래시와 같은 모습으로 기다린다 */ revealed?: boolean }) {
   const p = usePalette();
   const inset = useSafeAreaInsets();
   const reduce = useReducedMotion();
@@ -77,27 +77,37 @@ export function OnboardingScreen({ onDone, start = 0, fromSplash = false, reveal
   /** 처음 등장: -1 → 0. pos = x + lead·w 라서 첫 장도 넘겨 들어오는 것과 같은 길로 들어온다 */
   const lead = useRef(new Animated.Value(reduce ? 0 : -1)).current;
   const list = useRef<ComponentRef<typeof ScrollView>>(null);
-  const win = useWindowDimensions();
-  /** 스플래시 표시(가운데 96) → 위 왼쪽 표시(24) 이동: 0 → 1. 스플래시가 걷힌 첫 프레임에 같은 자리·같은 크기로 있다. */
-  const logo = useRef(new Animated.Value(fromSplash && !reduce ? 0 : 1)).current;
-  const [logoGone, setLogoGone] = useState(!fromSplash || reduce);
+  /**
+   * 스플래시 덮개(처음 설치 뒤 첫 실행만): 시스템 스플래시와 같은 바탕·같은 자리·같은 크기의 표시를 덮어 두고,
+   * 시스템 스플래시는 바로(바래지 않게) 걷는다. 표시가 숨 쉬듯 한 번 커졌다 돌아온 뒤(HOLD),
+   * 덮개가 제자리에서 바래고 표시는 살짝 커지며 사라지는 동안 첫 장이 넘겨 들어온다. 모두 opacity·transform.
+   */
+  const cover = useRef(new Animated.Value(fromSplash && !reduce ? 1 : 0)).current;
+  const breath = useRef(new Animated.Value(0)).current;
+  const [coverGone, setCoverGone] = useState(!fromSplash || reduce);
 
   useEffect(() => {
     if (reduce) {
       lead.setValue(0);
-      logo.setValue(1);
-      setLogoGone(true);
+      cover.setValue(0);
+      setCoverGone(true);
       return;
     }
     if (w === 0 || !revealed) return;
-    const a = Animated.parallel([
-      Animated.timing(logo, { toValue: 1, duration: 700, delay: 120, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
-      // 표시가 자리를 잡아 갈 때 그림이 넘겨 들어오듯 이어진다
-      Animated.timing(lead, { toValue: 0, duration: 900, delay: fromSplash ? 520 : 80, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    const out = Animated.parallel([
+      Animated.timing(cover, { toValue: 0, duration: 520, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      Animated.timing(lead, { toValue: 0, duration: 900, delay: 80, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]);
-    a.start(({ finished }) => finished && setLogoGone(true));
+    const a = fromSplash
+      ? Animated.sequence([
+          Animated.timing(breath, { toValue: 1, duration: SPLASH_BREATH_MS / 2, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(breath, { toValue: 0, duration: SPLASH_BREATH_MS / 2, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          out,
+        ])
+      : out;
+    a.start(({ finished }) => finished && setCoverGone(true));
     return () => a.stop();
-  }, [lead, logo, reduce, w, fromSplash, revealed]);
+  }, [lead, cover, breath, reduce, w, fromSplash, revealed]);
 
   const pos = useMemo(() => Animated.add(x, Animated.multiply(lead, w || 1)), [x, lead, w]);
 
@@ -153,7 +163,7 @@ export function OnboardingScreen({ onDone, start = 0, fromSplash = false, reveal
     <View style={[st.fill, { backgroundColor: p.canvas }]}>
     <SafeAreaView edges={['top', 'left', 'right']} style={[st.fill, { backgroundColor: p.canvas }]} testID="onboarding">
       <View style={st.top}>
-        <BrandMark logo={logo} />
+        <BrandMark />
         {!last ? (
           <Pressable testID="onboarding-skip" accessibilityRole="button" accessibilityLabel="건너뛰기" onPress={onDone} hitSlop={8} style={({ pressed }) => [st.skip, pressed && { backgroundColor: p.tint }]}>
             <T v="subStrong" c="ink2">
@@ -234,48 +244,129 @@ export function OnboardingScreen({ onDone, start = 0, fromSplash = false, reveal
         <Button testID="onboarding-next" label="다음" onPress={next} />
       </View>
     </SafeAreaView>
-      {/* 화면 전체 기준(안전 영역 밖): 스플래시 표시와 같은 자리에서 출발한다 */}
-      {!logoGone && (
-        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-          <SplashLogo logo={logo} win={win} top={inset.top} />
-        </View>
-      )}
+      {/* 화면 전체 기준(안전 영역 밖): 시스템 스플래시와 같은 모습에서 시작한다 */}
+      {!coverGone && <SplashCover cover={cover} breath={breath} />}
     </View>
   );
 }
 
-function BrandMark({ logo }: { logo: Animated.Value }) {
+export function BrandMark() {
   const dark = useColorScheme() === 'dark';
   return (
     <View style={st.brand} accessible accessibilityRole="header" accessibilityLabel={BRAND}>
-      {/* 날아오는 표시가 닿는 순간 이 표시로 바뀐다 */}
-      <Animated.Image source={dark ? markDark : markLight} style={[st.brandMark, { opacity: logo.interpolate({ inputRange: [0, 0.95, 1], outputRange: [0, 0, 1] }) }]} accessible={false} />
-      <Animated.View style={{ opacity: logo.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 0, 1] }), transform: [{ translateX: logo.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }] }}>
-        <T v="title">{BRAND}</T>
-      </Animated.View>
+      <Image source={dark ? markDark : markLight} style={st.brandMark} accessible={false} />
+      <T v="title">{BRAND}</T>
     </View>
   );
 }
 
-/** 스플래시와 같은 자리(화면 가운데)·같은 크기(96)의 표시. 위 왼쪽 표시 자리(가운데 32, inset+24)로 줄어들며 날아간다. */
-function SplashLogo({ logo, win, top }: { logo: Animated.Value; win: { width: number; height: number }; top: number }) {
+/** 표시가 한 번 숨 쉬는 시간(스플래시를 약 1.8~2초 보이게: 시스템 스플래시 0.3~0.5초 + 이것) */
+const SPLASH_BREATH_MS = 1500;
+
+/** 시스템 스플래시와 똑같은 덮개(바탕 canvas + 화면 가운데 96 표시). 바탕은 바래고, 표시는 숨 쉬다 살짝 커지며 사라진다. */
+function SplashCover({ cover, breath }: { cover: Animated.Value; breath: Animated.Value }) {
+  const p = usePalette();
   const dark = useColorScheme() === 'dark';
-  const dx = space.s5 + 12 - win.width / 2;
-  const dy = top + 24 - win.height / 2;
   return (
-    <Animated.Image
-      pointerEvents="none"
-      source={dark ? markDark : markLight}
-      accessible={false}
-      style={[
-        st.splashMark,
-        { left: win.width / 2 - 48, top: win.height / 2 - 48 },
-        {
-          opacity: logo.interpolate({ inputRange: [0, 0.95, 1], outputRange: [1, 1, 0] }),
-          transform: [{ translateX: logo.interpolate({ inputRange: [0, 1], outputRange: [0, dx] }) }, { translateY: logo.interpolate({ inputRange: [0, 1], outputRange: [0, dy] }) }, { scale: logo.interpolate({ inputRange: [0, 1], outputRange: [1, 0.25] }) }],
+    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, st.cover, { backgroundColor: p.canvas, opacity: cover }]} testID="splash-cover">
+      <Animated.Image
+        source={dark ? markDark : markLight}
+        accessible={false}
+        style={[
+          st.splashMark,
+          {
+            opacity: cover.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0.2, 1] }),
+            transform: [{ scale: Animated.add(breath.interpolate({ inputRange: [0, 1], outputRange: [1, 1.045] }), cover.interpolate({ inputRange: [0, 1], outputRange: [0.12, 0] })) }],
+          },
+        ]}
+      />
+    </Animated.View>
+  );
+}
+
+/**
+ * 온보딩 다음 단계(열쇠 만들기 4/5 · PC와 연결 5/5)의 틀. 앞 장과 같은 머리(표시+이름, 왼쪽 위 ‹ 뒤로)·
+ * 같은 그림 면(tint xl, 빛)·제목·풀이·단계 점·바닥 단추 자리를 쓴다. 들어올 때 앞 장을 넘긴 것처럼 그림 면이
+ * 원근 속에서 돌아 들어온다(네이티브). 왼쪽 가장자리에서 오른쪽으로 쓸면 뒤로(onBack).
+ */
+export function OnboardingStep({
+  step, onBack, art, title, body, action, testID,
+}: { step: number; onBack?: () => void; art: ReactNode; title: string; body: string; action: ReactNode; testID?: string }) {
+  const p = usePalette();
+  const inset = useSafeAreaInsets();
+  const reduce = useReducedMotion();
+  const e = useRef(new Animated.Value(reduce ? 1 : 0)).current;
+  useEffect(() => {
+    if (reduce) return;
+    const a = Animated.timing(e, { toValue: 1, duration: 620, easing: Easing.out(Easing.cubic), useNativeDriver: true });
+    a.start();
+    return () => a.stop();
+  }, [e, reduce]);
+  // 왼쪽 가장자리 쓸기 → 뒤로(iOS 뒤로 쓸기처럼)
+  const back = useRef(onBack);
+  back.current = onBack;
+  const pan = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (ev, g) => !!back.current && ev.nativeEvent.pageX - g.dx < 28 && g.dx > 12 && Math.abs(g.dy) < 30,
+        onPanResponderRelease: (_, g) => {
+          if (g.dx > 70) back.current?.();
         },
-      ]}
-    />
+      }),
+    [],
+  );
+  return (
+    <SafeAreaView edges={['top', 'left', 'right']} style={[st.fill, { backgroundColor: p.canvas }]} testID={testID} {...pan.panHandlers}>
+      <View style={st.top}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s1, marginLeft: onBack ? -space.s3 : 0 }}>
+          {onBack && (
+            <Pressable testID="step-back" accessibilityRole="button" accessibilityLabel="뒤로" onPress={onBack} hitSlop={8} style={({ pressed }) => [st.backBtn, pressed && { backgroundColor: p.tint }]}>
+              <Chevron dir="left" color={p.ink2} sizePx={10} />
+            </Pressable>
+          )}
+          <BrandMark />
+        </View>
+        <View style={st.skip} />
+      </View>
+      <ScrollView contentContainerStyle={st.page} showsVerticalScrollIndicator={false}>
+        <Animated.View
+          style={[
+            st.art,
+            { backgroundColor: p.tint },
+            !reduce && {
+              opacity: lerp(e, 0.6, 1),
+              transform: [{ perspective: 1000 }, { rotateY: lerp(e, '22deg', '0deg') }, { scale: lerp(e, 0.86, 1) }],
+            },
+          ]}
+        >
+          <Glow p={p} active reduce={reduce} />
+          {art}
+        </Animated.View>
+        <Animated.View style={[st.text, !reduce && { opacity: lerp(e, 0.3, 1), transform: [{ translateY: lerp(e, 10, 0) }] }]}>
+          <T v="title" role="header">
+            {title}
+          </T>
+          <T v="sub" c="ink2">
+            {body}
+          </T>
+        </Animated.View>
+      </ScrollView>
+      <View style={[st.footer, { paddingBottom: Math.max(inset.bottom, space.s4), backgroundColor: p.canvas }]}>
+        <StepDots index={step} />
+        {action}
+      </View>
+    </SafeAreaView>
+  );
+}
+
+/** 단추 자리에 놓는 안내 한 줄(누르는 것 없음, 단추와 같은 높이라 자리가 흔들리지 않는다) */
+export function StepHint({ children, testID }: { children: string; testID?: string }) {
+  return (
+    <View style={st.hint} testID={testID}>
+      <T v="sub" c="ink3" center>
+        {children}
+      </T>
+    </View>
   );
 }
 
@@ -542,7 +633,8 @@ const st = StyleSheet.create({
   top: { height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: space.s5, paddingRight: space.s2 },
   brand: { flexDirection: 'row', alignItems: 'center', gap: space.s2 },
   brandMark: { width: 24, height: 24 },
-  splashMark: { position: 'absolute', width: 96, height: 96 },
+  splashMark: { width: 96, height: 96 },
+  cover: { alignItems: 'center', justifyContent: 'center' },
   skip: { minWidth: 44, minHeight: 44, paddingHorizontal: space.s3, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   page: { flexGrow: 1, paddingHorizontal: space.s5, paddingTop: space.s3, paddingBottom: space.s4, gap: space.s6, justifyContent: 'center' },
   art: { borderRadius: radius.xl, padding: space.s4, justifyContent: 'center', minHeight: 300 },
@@ -567,6 +659,8 @@ const st = StyleSheet.create({
   safeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.s3 },
   checkWrap: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
   footer: { paddingHorizontal: space.s5, paddingTop: space.s3, gap: space.s4 },
+  backBtn: { width: 36, height: 44, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  hint: { height: 52, alignItems: 'center', justifyContent: 'center' },
   dots: { flexDirection: 'row', justifyContent: 'center', gap: space.s1, height: 6 },
   dotSlot: { width: 20, height: 6, alignItems: 'center', justifyContent: 'center' },
   dot: { position: 'absolute', width: 6, height: 6, borderRadius: 3 },

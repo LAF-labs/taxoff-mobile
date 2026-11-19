@@ -39,9 +39,6 @@ type Route = 'tabs' | MainRoute;
 
 // 시스템 스플래시(app.json, 바탕색 + 표시)를 첫 화면이 그려질 때까지 둔다. 빈 바탕 한 장이 끼지 않게.
 SplashScreen.preventAutoHideAsync().catch(() => {});
-/** 앱이 뜬 시각(스플래시를 첫 실행에 1초쯤 보이게 할 때 쓴다) */
-const startedAt = Date.now();
-const SPLASH_MIN_MS = 1000;
 
 export default function App() {
   const p = usePalette();
@@ -51,6 +48,8 @@ export default function App() {
   const [stack, setStack] = useState<Route[]>(['tabs']);
   /** 첫 실행 온보딩의 마지막 단계(PC와 연결)로 연 페어링 화면인지 */
   const [firstPair, setFirstPair] = useState(false);
+  /** 열쇠·PC 연결 단계에서 뒤로 왔을 때 온보딩 마지막 장을 다시 보인다(다음을 누르면 그 단계로 돌아간다) */
+  const [review, setReview] = useState(false);
   /** 스플래시가 걷혔는지(온보딩 표시 이동은 그 뒤에 시작한다) */
   const [splashGone, setSplashGone] = useState(false);
   const [tab, setTab] = useState<Tab>('home');
@@ -117,6 +116,9 @@ export default function App() {
   if (bootErr) body = <View style={st.center}><T c="attention">보호된 저장 공간을 열 수 없어요. 앱을 다시 설치해 주세요.</T></View>;
   // 부팅 중에는 스플래시가 덮고 있다(아래 hideAsync). 바탕만 같은 색으로 깔아 둔다.
   else if (!boot) body = <View style={[st.fill, { backgroundColor: p.canvas }]} />;
+  else if (review)
+    // 뒤로: 온보딩 마지막 장(보안)부터. [다음]·[건너뛰기]는 온 단계(열쇠 만들기 또는 PC와 연결)로 돌아간다. 열쇠는 다시 만들지 않는다
+    body = <OnboardingScreen start={2} onDone={() => setReview(false)} />;
   else if (!unlocked && !boot.hasDevice && !boot.onboarded)
     body = (
       <OnboardingScreen
@@ -128,7 +130,7 @@ export default function App() {
         }}
       />
     );
-  else if (!unlocked) body = <LockScreen firstRun={!boot.hasDevice} onUnlocked={(k, created) => void onUnlocked(k, created)} onReset={() => setBoot({ hasDevice: false, onboarded: true })} />;
+  else if (!unlocked) body = <LockScreen firstRun={!boot.hasDevice} onUnlocked={(k, created) => void onUnlocked(k, created)} onReset={() => setBoot({ hasDevice: false, onboarded: true })} onBack={!boot.hasDevice ? () => setReview(true) : undefined} />;
   else {
     const route = stack[stack.length - 1] ?? 'tabs';
     const go = (r: MainRoute) => {
@@ -153,12 +155,7 @@ export default function App() {
             }}
             onboarding={
               firstPair
-                ? {
-                    onLater: () => {
-                      setFirstPair(false);
-                      home();
-                    },
-                  }
+                ? { onBack: () => setReview(true) }
                 : undefined
             }
           />
@@ -214,17 +211,18 @@ export default function App() {
   const fresh = !!boot && !boot.hasDevice && !boot.onboarded;
   useEffect(() => {
     // 첫 화면(잠금·첫 실행·오류)이 그려진 다음 프레임에 스플래시를 걷는다.
-    // 처음 설치한 뒤 첫 실행만 표시를 1초쯤 보여 준 뒤 걷는다(온보딩이 같은 자리의 표시에서 이어 받는다).
+    // 처음 설치한 뒤 첫 실행은 온보딩의 스플래시 덮개가 표시를 1.5초 더 숨 쉬게 보인다(합쳐 약 1.8~2초).
     if (!ready) return;
     let id = 0;
-    const wait = fresh ? Math.max(0, SPLASH_MIN_MS - (Date.now() - startedAt)) : 0;
+    // 첫 실행: 온보딩이 같은 모습의 덮개(표시가 숨 쉬는 스플래시)를 이미 그려 두었으니 시스템 스플래시는 바래지 않고 바로 걷는다
+    if (fresh) SplashScreen.setOptions({ fade: false, duration: 0 });
     const t = setTimeout(() => {
       id = requestAnimationFrame(() => {
         SplashScreen.hideAsync()
           .catch(() => {})
           .finally(() => setSplashGone(true));
       });
-    }, wait);
+    }, 0);
     return () => {
       clearTimeout(t);
       cancelAnimationFrame(id);

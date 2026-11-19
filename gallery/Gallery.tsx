@@ -492,8 +492,8 @@ const SCREENS: Record<
   'onboarding-what': () => ({ session: fake(emptyData(), 'unpaired'), node: <OnboardingScreen onDone={noop} start={1} /> }),
   'onboarding-safe': () => ({ session: fake(emptyData(), 'unpaired'), node: <OnboardingScreen onDone={noop} start={2} /> }),
   /** 온보딩 5/5: PC와 연결(카메라 권한 전), 연결 끝 장면 */
-  'onboarding-pair': () => ({ session: fake(emptyData(), 'unpaired'), node: <PairScreen onDone={noop} onboarding={{ onLater: noop }} /> }),
-  'onboarding-paired': () => ({ session: fake(paired(), 'online'), node: <PairScreen onDone={noop} onboarding={{ onLater: noop }} previewPhase="done" /> }),
+  'onboarding-pair': () => ({ session: fake(emptyData(), 'unpaired'), node: <PairScreen onDone={noop} onboarding={{ onBack: noop }} /> }),
+  'onboarding-paired': () => ({ session: fake(paired(), 'online'), node: <PairScreen onDone={noop} onboarding={{ onBack: noop }} previewPhase="done" /> }),
   'lock-first-run': () => ({ session: fake(emptyData(), 'unpaired'), node: <LockScreen firstRun onUnlocked={noop} onReset={noop} preview={{ bio: FACE }} /> }),
   /** 첫 실행, 생체를 등록하지 않은 폰: 열쇠 안내가 "폰 암호로 확인해요"로 바뀐다 */
   'lock-first-run-no-bio': () => ({ session: fake(emptyData(), 'unpaired'), node: <LockScreen firstRun onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'none', enrolled: false } }} /> }),

@@ -13,7 +13,8 @@ import markDark from '../../assets/splash-icon-dark.png';
 import markLight from '../../assets/splash-icon.png';
 import { radius, space, usePalette } from '../theme';
 import { Button, Check, Screen, T } from '../ui/kit';
-import { STEP_KEY, StepDots } from '../ui/StepDots';
+import { STEP_KEY } from '../ui/StepDots';
+import { OnboardingStep } from './OnboardingScreen';
 
 const PASSCODE = '폰 암호로 열기';
 
@@ -34,7 +35,7 @@ export interface LockPreview {
   err?: KeyringErrorCode | null;
 }
 
-export function LockScreen({ firstRun, onUnlocked, onReset, preview }: { firstRun: boolean; onUnlocked: (k: DeviceKeys, created: boolean) => void; onReset: () => void; preview?: LockPreview }) {
+export function LockScreen({ firstRun, onUnlocked, onReset, preview, onBack }: { firstRun: boolean; onUnlocked: (k: DeviceKeys, created: boolean) => void; onReset: () => void; preview?: LockPreview; /** 첫 실행: 온보딩 마지막 장으로 돌아가기 */ onBack?: () => void }) {
   const bio = useBioInfo(preview?.bio);
   const [err, setErr] = useState<KeyringErrorCode | null>(preview?.err ?? null);
   // 개발 빌드만 원인 문구를 함께 보인다(값·키는 들어 있지 않다)
@@ -89,7 +90,7 @@ export function LockScreen({ firstRun, onUnlocked, onReset, preview }: { firstRu
     </View>
   );
 
-  if (firstRun) return <FirstRun bio={bio} noBio={noBio} err={errBlock} busy={busy} onStart={() => open(noBio)} />;
+  if (firstRun) return <FirstRun bio={bio} noBio={noBio} err={errBlock} busy={busy} onStart={() => open(noBio)} onBack={onBack} />;
 
   return (
     <Screen scroll={false} testID="lock-screen">
@@ -127,52 +128,40 @@ export function LockScreen({ firstRun, onUnlocked, onReset, preview }: { firstRu
  * 처음 연 화면: 이 앱이 무엇을 해 주는지 먼저, 열쇠 안내는 그 아래 보조로.
  * 위: 스플래시 표시 + 이름 + 한 줄 가치 + 한 줄 풀이. 아래: tint 면 열쇠 안내 → [시작하기].
  */
-function FirstRun({ bio, noBio, err, busy, onStart }: { bio: BioInfo | null; noBio: boolean; err: ReactNode; busy: boolean; onStart: () => void }) {
+function FirstRun({ bio, noBio, err, busy, onStart, onBack }: { bio: BioInfo | null; noBio: boolean; err: ReactNode; busy: boolean; onStart: () => void; onBack?: () => void }) {
   const p = usePalette();
   const dark = useColorScheme() === 'dark';
   // 열 때 무엇으로 확인하는지(생체 없는 폰은 폰 암호만)
   const how = !bio || noBio ? '폰 암호' : `${bioName(bio.kind)}나 폰 암호`;
   return (
-    <Screen
-      scroll={false}
+    <OnboardingStep
       testID="lock-screen"
-      footer={
-        <>
-          <StepDots index={STEP_KEY} testID="lock-steps" />
-          <View style={{ height: space.s2 }} />
-          <Button testID="unlock" label="열쇠 만들기" onPress={onStart} busy={busy} />
-        </>
-      }
-    >
-      <View style={st.first} testID="lock-first">
-        <View style={st.hero}>
+      step={STEP_KEY}
+      onBack={onBack}
+      title="이 폰에만 있는 열쇠를 만들어요"
+      body="내 PC와 이 폰이 서로를 알아보고, 둘 사이 내용을 잠그는 데 써요."
+      action={<Button testID="unlock" label="열쇠 만들기" onPress={onStart} busy={busy} />}
+      art={
+        <View style={st.keyArt} testID="lock-first">
           <Image source={dark ? MARK.dark : MARK.light} style={st.mark} accessibilityIgnoresInvertColors accessible={false} />
-          <View style={{ gap: space.s2, alignItems: 'center' }}>
-            <T v="title" role="header" center testID="lock-value">
-              이 폰에만 있는 열쇠를 만들어요
-            </T>
-            <T v="sub" c="ink2" center>
-              내 PC와 이 폰이 서로를 알아보고, 둘 사이 내용을 잠그는 데 써요.
-            </T>
+          <View style={[st.key, { backgroundColor: p.canvas, borderColor: p.line }]} testID="lock-key-note">
+            <View style={st.keyRow}>
+              <Check color={p.ink2} />
+              <T v="sub" c="ink2" style={{ flex: 1 }}>
+                폰 밖으로 나가지 않고 백업되지 않아요
+              </T>
+            </View>
+            <View style={st.keyRow}>
+              <Check color={p.ink2} />
+              <T v="sub" c="ink2" style={{ flex: 1 }}>
+                앞으로 앱을 열 때 {how}로 확인해요
+              </T>
+            </View>
           </View>
+          {err}
         </View>
-        {err}
-        <View style={[st.key, { backgroundColor: p.tint }]} testID="lock-key-note">
-          <View style={st.keyRow}>
-            <Check color={p.ink2} />
-            <T v="sub" c="ink2" style={{ flex: 1 }}>
-              폰 밖으로 나가지 않고 백업되지 않아요
-            </T>
-          </View>
-          <View style={st.keyRow}>
-            <Check color={p.ink2} />
-            <T v="sub" c="ink2" style={{ flex: 1 }}>
-              앞으로 앱을 열 때 {how}로 확인해요
-            </T>
-          </View>
-        </View>
-      </View>
-    </Screen>
+      }
+    />
   );
 }
 
@@ -180,9 +169,8 @@ const st = StyleSheet.create({
   wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.s5, paddingHorizontal: space.s3, paddingBottom: space.s7 },
   actions: { alignSelf: 'stretch', alignItems: 'center', gap: space.s2 },
   btn: { alignSelf: 'stretch' },
-  first: { flex: 1, paddingHorizontal: space.s5, paddingBottom: space.s4, gap: space.s5 },
-  hero: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.s5, paddingHorizontal: space.s3 },
+  keyArt: { alignItems: 'center', gap: space.s5 },
   mark: { width: MARK_SIZE, height: MARK_SIZE },
-  key: { borderRadius: radius.lg, padding: space.s4, gap: space.s2 },
+  key: { alignSelf: 'stretch', borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: space.s4, gap: space.s2 },
   keyRow: { flexDirection: 'row', alignItems: 'center', gap: space.s3 },
 });

@@ -15,7 +15,8 @@ import { relayFor } from '../net/pc';
 import { useSession } from '../session';
 import { radius, space, usePalette, useReducedMotion } from '../theme';
 import { Button, Group, Notice, Screen, StatusDot, T, success } from '../ui/kit';
-import { STEP_PAIR, StepDots } from '../ui/StepDots';
+import { STEP_PAIR } from '../ui/StepDots';
+import { OnboardingStep, StepHint } from './OnboardingScreen';
 
 type Phase = 'scan' | 'warn' | 'confirm' | 'working' | 'sas' | 'done' | 'failed';
 
@@ -35,8 +36,8 @@ const FAIL: Record<MobilePairFailure | 'relay' | 'save', string> = {
 };
 
 export interface PairOnboarding {
-  /** [나중에 할게요]: 연결 없이 홈으로(홈의 [PC와 연결]로 언제든 다시) */
-  onLater: () => void;
+  /** 뒤로(‹·왼쪽 가장자리 쓸기): 온보딩 마지막 장으로. 열쇠는 이미 있으니 [다음]은 다시 이 화면으로 온다 */
+  onBack: () => void;
 }
 
 export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () => void; /** 첫 실행 온보딩의 마지막 단계(5/5)로 쓸 때 */ onboarding?: PairOnboarding; /** 갤러리: 이 단계로 그린다(연결 없음) */ previewPhase?: 'scan' | 'done' }) {
@@ -130,7 +131,7 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
 
   const stop = () => {
     pendingRef.current = null;
-    (onboarding?.onLater ?? onDone)();
+    (onboarding?.onBack ?? onDone)();
   };
 
   async function save(r: MobilePairResult) {
@@ -161,28 +162,60 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
     void s.sync();
   }
 
+  const camera = perm?.granted ? (
+    <View style={[st.scanner, { backgroundColor: p.camera }]}>
+      <CameraView style={StyleSheet.absoluteFill} facing="back" barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={(e) => void onQr(e.data)} />
+      <View pointerEvents="none" style={st.reticle}>
+        {(['tl', 'tr', 'bl', 'br'] as const).map((c) => (
+          <View key={c} style={[st.corner, st[c], { borderColor: p.onCamera }]} />
+        ))}
+      </View>
+    </View>
+  ) : null;
+
+  if (phase === 'scan' && onboarding) {
+    return (
+      <OnboardingStep
+        testID="pair-scan"
+        step={STEP_PAIR}
+        onBack={onboarding.onBack}
+        title="마지막으로, PC와 연결해요"
+        body={`PC의 ${BRAND} 앱에서 설정 → [폰 연결]을 누르면 QR이 떠요. 그 QR을 여기에 비춰 주세요.`}
+        action={
+          perm?.granted ? (
+            DEV_LOCAL ? (
+              <Button testID="dev-qr" kind="secondary" label="개발: 더미 PC의 QR 받기" onPress={async () => void onQr(await devFetchQr())} />
+            ) : (
+              <StepHint testID="pair-hint">QR이 보이면 저절로 넘어가요</StepHint>
+            )
+          ) : (
+            <Button testID="pair-camera" label="카메라 켜기" onPress={() => void requestPerm()} />
+          )
+        }
+        art={
+          camera ?? (
+            <View style={[st.scanner, st.center, { backgroundColor: p.canvas, borderColor: p.line, borderWidth: StyleSheet.hairlineWidth, gap: space.s3, padding: space.s6 }]}>
+              <View style={st.reticleIdle}>
+                {(['tl', 'tr', 'bl', 'br'] as const).map((c) => (
+                  <View key={c} style={[st.corner, st[c], { borderColor: p.ink3 }]} />
+                ))}
+              </View>
+              <T v="sub" c="ink2" center>
+                QR을 찍으려면 카메라가 필요해요.{'\n'}찍은 화면은 저장하지 않아요.
+              </T>
+            </View>
+          )
+        }
+      />
+    );
+  }
+
   if (phase === 'scan') {
     return (
-      <Screen
-        title={onboarding ? undefined : 'PC와 연결'}
-        onBack={onboarding ? undefined : onDone}
-        backLabel="취소"
-        scroll={false}
-        testID="pair-scan"
-        footer={
-          onboarding ? (
-            <>
-              <StepDots index={STEP_PAIR} testID="pair-steps" />
-              <Button testID="pair-later" kind="quiet" label="나중에 할게요" onPress={onboarding.onLater} />
-            </>
-          ) : undefined
-        }
-      >
+      <Screen title="PC와 연결" onBack={onDone} backLabel="취소" scroll={false} testID="pair-scan">
         <View style={{ gap: space.s2 }}>
-          <T v="strong">{onboarding ? '마지막으로, PC와 연결해요' : 'PC 화면의 QR을 찍어 주세요'}</T>
-          <T v="sub" c="ink2">
-            {onboarding ? `PC 앱에서 설정 → [폰 연결]을 눌러 QR을 띄운 뒤, 여기 카메라로 찍어 주세요.` : `PC의 ${BRAND} → 설정 → [폰 연결]을 누르면 QR이 떠요.`}
-          </T>
+          <T v="strong">PC 화면의 QR을 찍어 주세요</T>
+          <T v="sub" c="ink2">PC의 {BRAND} → 설정 → [폰 연결]을 누르면 QR이 떠요.</T>
         </View>
         {perm?.granted ? (
           <View style={[st.scanner, { backgroundColor: p.camera }]}>
@@ -263,7 +296,7 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
 
   if (phase === 'sas' && sas) {
     return (
-      <Screen title="PC와 연결" testID="pair-sas" onBack={onboarding?.onLater ?? onDone} backLabel="취소">
+      <Screen title="PC와 연결" testID="pair-sas" onBack={onboarding?.onBack ?? onDone} backLabel="취소">
         <View style={{ gap: space.s2 }}>
           <T v="strong">PC 화면에 이 숫자를 입력하세요</T>
           <T v="sub" c="ink2">
@@ -310,7 +343,7 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
                 setPhase('scan');
               }}
             />
-            <Button kind="quiet" label={onboarding ? '나중에 할게요' : '닫기'} onPress={onboarding?.onLater ?? onDone} />
+            {!onboarding && <Button kind="quiet" label="닫기" onPress={onDone} />}
           </>
         }
       >
@@ -323,7 +356,7 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
   }
 
   return (
-    <Screen title="PC와 연결" onBack={onboarding?.onLater ?? onDone} backLabel="취소" testID="pair-working">
+    <Screen title="PC와 연결" onBack={onboarding?.onBack ?? onDone} backLabel="취소" testID="pair-working">
       <StatusDot busy label="PC와 연결하는 중" />
     </Screen>
   );
@@ -376,6 +409,7 @@ const CORNER = 28;
 const st = StyleSheet.create({
   scanner: { width: '100%', aspectRatio: 1, borderRadius: radius.xl, overflow: 'hidden' },
   center: { alignItems: 'center', justifyContent: 'center' },
+  reticleIdle: { width: 96, height: 96, marginBottom: space.s2 },
   reticle: { position: 'absolute', top: '18%', left: '18%', right: '18%', bottom: '18%' },
   corner: { position: 'absolute', width: CORNER, height: CORNER, borderColor: '#fff' },
   tl: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 10 },
