@@ -4,7 +4,6 @@ import { StyleSheet, View } from 'react-native';
 import { clock } from '../chat';
 import { STEP_LABEL } from '../run';
 import { REASON_LINE, STATE_LINE, STATE_NAME, actionFor, groupJobs, type Job, type JobAction, type JobState } from '../queue';
-import { REJECT_LINE } from '../phoneCmd';
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
 import { space } from '../theme';
@@ -70,8 +69,6 @@ function JobRow({ job, state, onAction }: { job: Job; state: JobState; onAction:
       ? `${REASON_LINE[job.reason]} · PC에서 해 주세요`
       : r?.kind === 'inDoubt'
         ? `확인 중 · 발급목록 조회 ${r.tries}회째`
-        : r?.kind === 'refused'
-          ? REJECT_LINE[r.reason]
         : r?.kind === 'myTurn'
           ? '내 차례 · 폰이나 PC에서 확인해 주세요'
           : r?.kind === 'stopped'
