@@ -397,6 +397,10 @@ const SCREENS: Record<
   'run-pc-refused': () => pcRun({ ack: 'rejected', reason: 'counterparty_unknown', runId: undefined }),
   'run-pc-busy': () => pcRun({ ack: 'rejected', reason: 'pc_busy', runId: undefined }),
   'run-pc-old': () => pcRun({ ack: undefined, pcOld: true, runId: undefined }),
+  'home-chat-pc-approve': () => ({
+    session: fake({ ...copyData(), cmds: [CMD({ phase: 'approve', ack: 'accepted', gate: { ...gate({ left: 8 * 60_000 }), stepId: 's21' } })] }, 'online'),
+    node: <Main chat={CHAT} live />,
+  }),
   'home-chat-pc-run': () => ({
     session: fake({ ...copyData(), cmds: [CMD({ phase: 'approve' })] }, 'online'),
     notes: [{ kind: 'run', id: 'run-cmd-G1', at: now - 90_000, jobId: 'cmd-G1' }],
