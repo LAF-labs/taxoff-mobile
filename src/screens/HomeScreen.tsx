@@ -9,6 +9,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { chatFromData, clockRange, metaOf, type ChatCard, type ChatItem } from '../chat';
 import { useOfflineChat, type OfflineChatView } from '../offline/useOfflineChat';
+import type { PhoneScreen } from '@sax/chat-core';
 import { BRAND } from '../config';
 import { queueCounts } from '../queue';
 import { useQueue } from '../queueStore';
@@ -193,6 +194,13 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
               ))}
             </View>
           )}
+          {paired && canSend && !offline.busy && (offline.screens?.length ?? 0) > 0 && (
+            <View style={st.replies} testID="chat-screens">
+              {offline.screens!.map((x) => (
+                <Button key={x} kind="secondary" small label={SCREEN_LABEL[x]} onPress={() => go(x)} testID={`chat-open-${x}`} />
+              ))}
+            </View>
+          )}
           {/* 폰이 답할 때는 빈 대화 안내가 같은 말을 하므로 대화가 있을 때만 한 줄 */}
           {paired && off && !phoneAnswers && <Notice tone="quiet" testID="pc-off-note">PC가 꺼져 있어요. 시키신 일은 PC를 켜면 시작해요</Notice>}
           {paired && off && phoneAnswers && items.length > 0 && <Notice tone="quiet" testID="pc-off-note">PC가 꺼져 있어 폰이 대신 답해요. 발급은 PC를 켜면 시작해요</Notice>}
@@ -271,6 +279,9 @@ function TopFade() {
     </View>
   );
 }
+
+/** 모델이 연 화면(open_screen) 단추 이름 */
+const SCREEN_LABEL: Record<PhoneScreen, string> = { capture: '증빙 찍기', cash: '현금 매출 적기', bizreg: '사업자등록증 찍기', issue: '세금계산서 발급' };
 
 /** 이 폰이 대화를 부를 수 없을 때 한 줄 */
 export const CANT_SEND_TEXT = '이 폰에서는 아직 대화를 보낼 수 없어요. 앱을 다시 열거나 설정에서 PC 연결을 확인해 주세요.';

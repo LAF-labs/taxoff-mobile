@@ -28,7 +28,7 @@ export const DEVICES_SUSPENDED = (): AccountDevice[] => [
 
 // 폰 직접 대화 견본(PC가 꺼져 있을 때 폰이 답한다, ADR-047). 문구는 코어(vendor/sax-chat-core PHONE_ERROR_TEXT)와 같다.
 const MIN = 60_000;
-export function phoneChat(state: 'empty' | 'typing' | 'reply' | 'failed' | 'limit' | 'card' | 'ask', base = Date.now()): OfflineChatView {
+export function phoneChat(state: 'empty' | 'typing' | 'reply' | 'failed' | 'limit' | 'card' | 'ask' | 'screen' | 'lunch', base = Date.now()): OfflineChatView {
   const t = (m: number) => base - m * MIN;
   const ask: ChatItem = { kind: 'msg', id: 'p1', from: 'me', at: t(6), text: '동네마트에 세금계산서 발급해 줘' };
   const reply: ChatItem[] = [
@@ -68,6 +68,23 @@ export function phoneChat(state: 'empty' | 'typing' | 'reply' | 'failed' | 'limi
               draft: { id: 'd-sample', counterpartyId: 'dm', amount: 320_000, vat: null, item: '생활용품' },
             },
           },
+        ],
+      };
+    case 'screen':
+      return {
+        ...base0,
+        items: [
+          { kind: 'msg', id: 's1', from: 'me', at: t(1), text: '아까 받은 영수증 올릴게' },
+          { kind: 'msg', id: 's2', from: 'pc', via: 'phone', at: t(1), text: '아래 단추로 바로 찍을 수 있어요. 찍으면 PC로 보내 둘게요.' },
+        ],
+        screens: ['capture'],
+      };
+    case 'lunch':
+      return {
+        ...base0,
+        items: [
+          { kind: 'msg', id: 'l1', from: 'me', at: t(1), text: '오늘 점심 뭐 먹을까?' },
+          { kind: 'msg', id: 'l2', from: 'pc', via: 'phone', at: t(1), text: '날이 쌀쌀하니 뜨끈한 순댓국 어떠세요? 든든해서 오후까지 버티기 좋아요.' },
         ],
       };
     case 'ask':
