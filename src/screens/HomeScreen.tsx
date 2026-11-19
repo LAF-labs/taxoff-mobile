@@ -449,7 +449,7 @@ function Item({ it, group, onRetry, retryOff, openDrafts, onIssue }: { it: Exclu
 }
 
 /**
- * 답을 기다리는 동안: 상대 쪽 말풍선 안에 점 셋이 차례로 떠오르는 움직임(글자 없이).
+ * 답을 기다리는 동안: 상대 쪽 말풍선 안에서 점 셋이 차례로 살짝 오르내리며 색이 진해졌다 옅어진다(글자 없이).
  * 동작 줄이기 설정이면 점 셋을 가만히 둔다. 화면 읽기에는 "답을 기다리고 있어요"로 읽힌다.
  */
 function Typing() {
@@ -458,7 +458,8 @@ function Typing() {
   const dots = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
   useEffect(() => {
     if (reduce) return;
-    const native = Platform.OS !== 'web';
+    // 색을 바꾸려면 네이티브 구동을 쓸 수 없다(점 셋뿐이라 부담 없음)
+    const native = false;
     const loop = Animated.loop(
       Animated.stagger(
         160,
@@ -482,10 +483,10 @@ function Typing() {
             key={i}
             style={[
               st.dot,
-              { backgroundColor: p.ink3 },
               {
-                opacity: d.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }),
-                transform: [{ translateY: d.interpolate({ inputRange: [0, 1], outputRange: [0, -3] }) }],
+                // 오를 때 옅은 회색에서 진한 회색으로 바뀌고 내려오며 돌아온다
+                backgroundColor: d.interpolate({ inputRange: [0, 1], outputRange: [p.ink4, p.ink2] }),
+                transform: [{ translateY: d.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }],
               },
             ]}
           />
