@@ -7,6 +7,8 @@ export interface ChatCard {
   title: string;
   rows: Array<{ label: string; value: string; strong?: boolean }>;
   note?: string;
+  /** 폰 대화가 만든 세금계산서 카드면 그 초안. 열린 카드에는 [발급 맡기기]가 붙는다. */
+  draft?: { id: string; counterpartyId: string; amount: number; vat: 'separate' | 'included' | null; item: string | null };
 }
 
 export type ChatItem =

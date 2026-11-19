@@ -59,7 +59,20 @@ export interface QueueStore {
   /** 발급 작성이 열릴 때 골라 둘 거래처 */
   pickId: string | null;
   setPick: (id: string) => void;
+  /** 대화 카드에서 [발급 맡기기]로 열 때 발급 작성에 채워 둘 값(거래처는 pickId) */
+  prefill: IssuePrefill | null;
+  setPrefill: (p: IssuePrefill | null) => void;
   clearPick: () => void;
+}
+
+/** 대화 카드(폰 대화 코어의 초안) → 발급 작성 */
+export interface IssuePrefill {
+  /** 말한 금액(원). vat가 included면 합계, 아니면 공급가 */
+  amount: number;
+  vat: 'separate' | 'included' | null;
+  item: string | null;
+  /** 폰 대화 카드 id. 발급을 맡기면 그 카드를 맡김으로 바꾼다 */
+  draftId?: string;
 }
 
 /** 번들 견본 서류(다음 PR에서 PC가 보낸 암호 파일을 풀어 쓴다) */
@@ -92,6 +105,7 @@ export function QueueProvider({
   const [focusId, setFocusId] = useState<string | null>(initialFocus);
   const [cps, setCps] = useState<Counterparty[]>(initialCps);
   const [pickId, setPickId] = useState<string | null>(pick);
+  const [prefill, setPrefill] = useState<IssuePrefill | null>(null);
   const setRun = (id: string, f: (r: RunView | undefined, j: Job) => RunView, extra: Partial<Job> = {}) => patch(id, (j) => ({ ...j, ...extra, run: f(j.run, j) }));
   // 일별 타이머: 같은 일의 흐름을 다시 시작하면 앞 흐름을 지운다(겹치지 않게). 저장소가 사라질 때도 지운다.
   const timers = useRef(jobTimers()).current;
@@ -217,6 +231,8 @@ export function QueueProvider({
       pickId,
       setPick: (id) => setPickId(id),
       clearPick: () => setPickId(null),
+      prefill,
+      setPrefill,
       focus: jobs.find((j) => j.id === focusId) ?? null,
       setFocus: (id) => setFocusId(id),
       rerequest: (id) => {
@@ -224,7 +240,7 @@ export function QueueProvider({
         patch(id, (x) => (x.gate ? { ...x, gate: { ...x.gate, challenge: b64(randomBytes(32)), exp: Date.now() + GATE_TTL_MS } } : x));
       },
     }),
-    [jobs, last, notes, sheetId, used, focusId, cps, pickId, approval.attest, approval.iosAllowed, simulate, sess],
+    [jobs, last, notes, sheetId, used, focusId, cps, pickId, prefill, approval.attest, approval.iosAllowed, simulate, sess],
   );
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

@@ -28,7 +28,7 @@ export const DEVICES_SUSPENDED = (): AccountDevice[] => [
 
 // 폰 직접 대화 견본(PC가 꺼져 있을 때 폰이 답한다, ADR-047). 문구는 코어(vendor/sax-chat-core PHONE_ERROR_TEXT)와 같다.
 const MIN = 60_000;
-export function phoneChat(state: 'empty' | 'typing' | 'reply' | 'failed' | 'limit', base = Date.now()): OfflineChatView {
+export function phoneChat(state: 'empty' | 'typing' | 'reply' | 'failed' | 'limit' | 'card' | 'ask', base = Date.now()): OfflineChatView {
   const t = (m: number) => base - m * MIN;
   const ask: ChatItem = { kind: 'msg', id: 'p1', from: 'me', at: t(6), text: '동네마트에 세금계산서 발급해 줘' };
   const reply: ChatItem[] = [
@@ -52,6 +52,32 @@ export function phoneChat(state: 'empty' | 'typing' | 'reply' | 'failed' | 'limi
           { ...ask, id: 'pf', state: 'failed' },
           { kind: 'note', id: 'pn', at: t(6) + 1, text: '연결이 잠깐 끊겨서 보내지 못했어요. 다시 보내 주세요.', failed: { retry: '동네마트에 세금계산서 발급해 줘' } },
         ],
+      };
+    case 'card':
+      return {
+        ...base0,
+        items: [
+          { kind: 'msg', id: 'c1', from: 'me', at: t(2), text: '동네마트 32만원 끊어줘' },
+          { kind: 'msg', id: 'c2', from: 'pc', via: 'phone', at: t(2), text: '동네마트 성수점 카드를 만들었어요. 맞으면 [발급 맡기기]를 눌러 주세요.' },
+          {
+            kind: 'msg', id: 'c3', from: 'pc', via: 'phone', at: t(2),
+            card: {
+              title: '동네마트 성수점 세금계산서',
+              rows: [{ label: '금액', value: '320,000원', strong: true }, { label: '부가세', value: '정하지 않음' }, { label: '품목', value: '생활용품' }],
+              note: '맡기면 PC가 바로 준비해요',
+              draft: { id: 'd-sample', counterpartyId: 'dm', amount: 320_000, vat: null, item: '생활용품' },
+            },
+          },
+        ],
+      };
+    case 'ask':
+      return {
+        ...base0,
+        items: [
+          { kind: 'msg', id: 'a1', from: 'me', at: t(1), text: '5만원 끊어줘' },
+          { kind: 'msg', id: 'a2', from: 'pc', via: 'phone', at: t(1), text: '어느 거래처인가요? 거래처 목록에서 골라 주세요.' },
+        ],
+        chips: [{ label: '동네마트 성수점', text: '동네마트 성수점' }, { label: '가나식자재', text: '가나식자재' }, { label: '한빛인쇄', text: '한빛인쇄' }],
       };
     case 'limit':
       return {

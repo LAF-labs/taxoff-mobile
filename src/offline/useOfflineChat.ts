@@ -13,6 +13,8 @@ export interface OfflineChatView {
   items: ChatItem[];
   busy: boolean;
   chips: OfflineReply['chips'];
+  /** 아직 맡기지 않은 카드 id(이 카드에만 [발급 맡기기]가 붙는다). 없으면 모든 카드를 연 것으로 본다(갤러리). */
+  openDrafts?: ReadonlySet<string>;
   send(text: string): Promise<void>;
   /** 못 보낸 말을 다시 보낸다(그 말과 이유 줄은 지우고 새로 보낸다) */
   retry(noteId: string): Promise<void>;
@@ -32,6 +34,7 @@ export function useOfflineChat(): OfflineChatView {
   useEffect(() => setPcOnline(() => pcRef.current === 'online'), []);
   const chat = useMemo(() => (pair ? offlineChat(pair, s.keys, () => chatCopyOf(copyRef.current)) : null), [pair, s.keys]);
   const [log, setLog] = useState<ChatItem[]>([]);
+  const [openDrafts, setOpenDrafts] = useState<ReadonlySet<string>>(new Set());
   const [extra, setExtra] = useState<ChatItem[]>([]);
   const [chips, setChips] = useState<OfflineReply['chips']>([]);
   const [busy, setBusy] = useState(false);
@@ -43,7 +46,10 @@ export function useOfflineChat(): OfflineChatView {
   useEffect(() => {
     if (!chat) return;
     let live = true;
-    const read = () => void chat.items().then((x) => live && setLog(x), () => undefined);
+    const read = () => {
+      void chat.items().then((x) => live && setLog(x), () => undefined);
+      void chat.core.drafts().then((ds) => live && setOpenDrafts(new Set(ds.filter((d) => d.state === 'open').map((d) => d.id))), () => undefined);
+    };
     read();
     const off = chat.subscribe(read);
     return () => {
@@ -71,6 +77,7 @@ export function useOfflineChat(): OfflineChatView {
         const r = await chat.send(text);
         setExtra((x) => [...x, ...r.items, ...(r.unavailable ? fail(r.unavailable.text, r.unavailable.retry) : [])]);
         setChips(r.chips);
+        if (r.drafts.length) setOpenDrafts((o) => new Set([...o, ...r.drafts.filter((d) => d.state === 'open').map((d) => d.id)]));
       } catch {
         setExtra((x) => [...x, ...fail(SEND_FAILED_TEXT, true)]);
       } finally {
@@ -95,5 +102,5 @@ export function useOfflineChat(): OfflineChatView {
     [extra, send],
   );
 
-  return { available: !!chat, items: [...log, ...extra, ...(pending ? [pending] : [])], busy, chips, send, retry };
+  return { available: !!chat, items: [...log, ...extra, ...(pending ? [pending] : [])], busy, chips, openDrafts, send, retry };
 }

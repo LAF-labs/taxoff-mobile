@@ -50,6 +50,7 @@ export function cardOf(s: Exclude<PhoneShow, { type: 'screen' }>, pcOnline = fal
         { label: '부가세', value: d.vat ? VAT[d.vat]! : '정하지 않음' },
         { label: '품목', value: d.item ?? '정하지 않음' },
       ],
+      draft: { id: d.id, counterpartyId: d.counterpartyId, amount: d.amount, vat: d.vat, item: d.item },
       note: pcOnline ? (d.state === 'entrusted' ? 'PC가 준비하고 있어요' : '맡기면 PC가 바로 준비해요') : d.state === 'entrusted' ? 'PC를 켜면 시작해요' : '맡기면 PC를 켰을 때 시작해요',
     };
   }
