@@ -99,7 +99,10 @@ describe('폰 대화(PC 꺼짐): 고정 사본 → 가짜 게이트웨이', () =
     assert.match(text, /앱 판단: 세금계산서 발급 요청/);
     const card = r.items.find((x) => x.kind === 'msg' && x.card);
     assert.ok(card && card.kind === 'msg');
-    assert.equal(card.card?.note, '맡기면 PC가 바로 준비해요');
+    assert.equal(card.card?.note, '발급하기를 누르면 PC가 바로 준비해요');
+    // 부가세를 말하지 않았으면 별도로 둔다(카드에 "정하지 않음"을 쓰지 않는다)
+    if (card.card?.draft?.vat !== undefined) assert.notEqual(card.card.draft.vat, null);
+    assert.ok(!JSON.stringify(card.card).includes('정하지 않음'));
   });
 
   it('카드 만들기: 게이트웨이에는 가린 글과 기기 인증 헤더만 가고, 답과 카드가 홈 대화 줄이 된다', async () => {

@@ -14,10 +14,14 @@ import { BRAND } from '../config';
 import { queueCounts } from '../queue';
 import { useQueue } from '../queueStore';
 import { RunCard } from './RunCard';
+import { useEntrust } from '../entrust';
+import { counterpartiesOf } from '../net/pcCopy';
+import { splitAmount, type VatMode } from '../issue';
+import { masked } from '../ui/field';
 import { useSession } from '../session';
 import type { PcStatus } from '../net/pc';
 import { MAX_FONT_SCALE, TextSizeContext, radius, size, space, textScale, type, usePalette, useReducedMotion } from '../theme';
-import { Button, Check, Chevron, Pill, T, ago, tap, type Tone } from '../ui/kit';
+import { Button, Check, Chevron, Pill, Seg, T, ago, tap, won, type Tone } from '../ui/kit';
 
 export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'devices' | 'issue' | 'queue' | 'run' | 'doc' | 'bizreg' | 'recv' | 'pay' | 'mark';
 
@@ -79,11 +83,23 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
     setMenu(false);
     go(to);
   };
-  /** 대화 카드 [발급 맡기기]: 카드 값을 채운 발급 작성을 연다(맡기기·승인은 거기서) */
-  const issueFrom = (d: NonNullable<ChatCard['draft']>) => {
-    q.setPick(d.counterpartyId);
-    q.setPrefill({ amount: d.amount, vat: d.vat, item: d.item, draftId: d.id });
-    go('issue');
+  const entrust = useEntrust();
+  /**
+   * 대화 카드 [발급하기]: 카드 값(고쳤으면 고친 값)으로 바로 PC에 맡긴다. 승인은 PC 승인 바에서 한다.
+   * PC 사본에 그 거래처가 없거나, 휴·폐업으로 조회됐거나, PC가 오래 꺼져 있으면 값을 채운 발급 작성을 연다(경고와 확인은 거기서).
+   */
+  const issueFrom = async (d: NonNullable<ChatCard['draft']>): Promise<boolean> => {
+    const cp = s.data.pcCopy ? counterpartiesOf(s.data.pcCopy).find((c) => c.id === d.counterpartyId) : undefined;
+    const open = () => {
+      q.setPick(d.counterpartyId);
+      q.setPrefill({ amount: d.amount, vat: d.vat, item: d.item, draftId: d.id });
+      go('issue');
+      return true;
+    };
+    if (!cp || !s.data.pair || s.pc === 'stale' || cp.status?.kind === 'closed') return open();
+    const a = splitAmount(d.amount, d.vat === 'included' ? 'incl' : 'excl');
+    if (a.supply <= 0) return open();
+    return entrust({ cp, supply: a.supply, total: a.total, item: d.item ?? '', draftId: d.id });
   };
   const list = useRef<ComponentRef<typeof ScrollView>>(null);
   const off = s.pc === 'offline' || s.pc === 'queued';
@@ -373,7 +389,7 @@ function RunItem({ jobId, go }: { jobId: string; go: (to: HomeRoute) => void }) 
   );
 }
 
-function Item({ it, group, onRetry, retryOff, openDrafts, onIssue }: { it: Exclude<ChatItem, { kind: 'run' }>; group: { first: boolean; last: boolean }; onRetry: (noteId: string) => void; retryOff?: boolean; openDrafts?: ReadonlySet<string>; onIssue: (d: NonNullable<ChatCard['draft']>) => void }) {
+function Item({ it, group, onRetry, retryOff, openDrafts, onIssue }: { it: Exclude<ChatItem, { kind: 'run' }>; group: { first: boolean; last: boolean }; onRetry: (noteId: string) => void; retryOff?: boolean; openDrafts?: ReadonlySet<string>; onIssue: OnIssue }) {
   const p = usePalette();
   if (it.kind === 'merged') {
     return (
@@ -538,28 +554,140 @@ function Starter({ phoneAnswers, onPick }: { phoneAnswers: boolean; onPick: (tex
   );
 }
 
-function Card({ card, onIssue }: { card: ChatCard; onIssue?: (d: NonNullable<ChatCard['draft']>) => void }) {
+type Draft = NonNullable<ChatCard['draft']>;
+type OnIssue = (d: Draft) => Promise<boolean>;
+
+function Card({ card, onIssue }: { card: ChatCard; onIssue?: OnIssue }) {
   const p = usePalette();
+  if (card.draft) return <DraftCard card={card} draft={card.draft} onIssue={onIssue} />;
   return (
-    <View style={[st.card, { backgroundColor: p.tint, alignSelf: 'stretch' }]} testID="chat-card">
+    <View style={[st.card, { backgroundColor: p.tint }]} testID="chat-card">
       <T v="subStrong">{card.title}</T>
       {card.rows.map((r, i) => (
-        <View key={i} style={st.cardRow}>
-          <T v="sub" c="ink2" style={{ flexShrink: 1 }}>
-            {r.label}
-          </T>
-          <T v={r.strong ? 'figure' : 'value'} style={{ flexShrink: 0, textAlign: 'right' }}>
-            {r.value}
-          </T>
-        </View>
+        <CardRow key={i} label={r.label} value={r.value} strong={r.strong} />
       ))}
       {card.note && (
         <T v="meta" c="ink3">
           {card.note}
         </T>
       )}
-      {card.draft && onIssue && (
-        <Button testID="card-issue" small label="발급 맡기기" onPress={() => onIssue(card.draft!)} style={{ alignSelf: 'flex-start', marginTop: space.s1 }} />
+    </View>
+  );
+}
+
+function CardRow({ label, value, strong, children }: { label: string; value?: string; strong?: boolean; children?: React.ReactNode }) {
+  return (
+    <View style={st.cardRow}>
+      <T v="sub" c="ink2" style={{ flexShrink: 1 }}>
+        {label}
+      </T>
+      {children ?? (
+        <T v={strong ? 'figure' : 'value'} style={{ flexShrink: 0, textAlign: 'right' }}>
+          {value}
+        </T>
+      )}
+    </View>
+  );
+}
+
+const VAT_OPTIONS = [
+  { key: 'excl' as const, label: '별도' },
+  { key: 'incl' as const, label: '포함' },
+];
+
+/**
+ * 세금계산서 카드: 금액, 부가세(기본 별도), 합계, 품목. 아래 [발급하기] [수정].
+ * [수정]을 누르면 그 자리에서 금액과 품목은 입력 칸, 부가세는 [별도|포함]으로 바뀌고 단추는 [취소] [완료]가 된다.
+ * 맡긴 카드(onIssue 없음)는 값만 보인다.
+ */
+function DraftCard({ card, draft, onIssue }: { card: ChatCard; draft: Draft; onIssue?: OnIssue }) {
+  const p = usePalette();
+  const [val, setVal] = useState({ amount: draft.amount, vat: (draft.vat === 'included' ? 'incl' : 'excl') as VatMode, item: draft.item ?? '' });
+  const [edit, setEdit] = useState<null | { amount: string; vat: VatMode; item: string }>(null);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const shown = edit ? { amount: Number(edit.amount.replace(/\D/g, '')), vat: edit.vat, item: edit.item } : val;
+  const a = splitAmount(shown.amount, shown.vat);
+  const startEdit = () => setEdit({ amount: masked('won', String(val.amount)), vat: val.vat, item: val.item });
+  const done = () => {
+    if (!edit) return;
+    setVal({ amount: Number(edit.amount.replace(/\D/g, '')), vat: edit.vat, item: edit.item.trim() });
+    setEdit(null);
+  };
+  const issue = async () => {
+    if (!onIssue || busy) return;
+    setBusy(true);
+    setFailed(false);
+    const ok = await onIssue({ ...draft, amount: val.amount, vat: val.vat === 'incl' ? 'included' : 'separate', item: val.item || null });
+    setBusy(false);
+    if (!ok) setFailed(true);
+  };
+  const inputStyle = [st.cardInput, { backgroundColor: p.canvas, color: p.ink, borderColor: p.line }];
+  return (
+    <View style={[st.card, { backgroundColor: p.tint }]} testID="chat-card">
+      <T v="subStrong">{card.title}</T>
+      {edit ? (
+        <>
+          <CardRow label={edit.vat === 'incl' ? '합계 금액' : '공급가액'}>
+            <TextInput
+              testID="card-amount"
+              value={edit.amount}
+              onChangeText={(v) => setEdit({ ...edit, amount: masked('won', v) })}
+              keyboardType="number-pad"
+              accessibilityLabel="금액"
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
+              style={[type.value, ...inputStyle, { textAlign: 'right' }]}
+            />
+          </CardRow>
+          <CardRow label="부가세">
+            <Seg testID="card-vat" options={VAT_OPTIONS} value={edit.vat} onChange={(v) => setEdit({ ...edit, vat: v })} style={[st.cardSeg, { backgroundColor: p.sunken }]} />
+          </CardRow>
+          <CardRow label="품목">
+            <TextInput
+              testID="card-item"
+              value={edit.item}
+              onChangeText={(v) => setEdit({ ...edit, item: v })}
+              placeholder="적지 않아도 돼요"
+              placeholderTextColor={p.ink4}
+              accessibilityLabel="품목"
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
+              style={[type.value, ...inputStyle, { textAlign: 'right' }]}
+            />
+          </CardRow>
+          <CardRow label="합계" value={won(a.total)} strong />
+        </>
+      ) : (
+        <>
+          <CardRow label="공급가액" value={won(a.supply)} />
+          <CardRow label={`부가세 ${shown.vat === 'incl' ? '포함' : '별도'}`} value={won(a.tax)} />
+          <CardRow label="합계" value={won(a.total)} strong />
+          {shown.item !== '' && <CardRow label="품목" value={shown.item} />}
+        </>
+      )}
+      {card.note && !edit && (
+        <T v="meta" c="ink3">
+          {card.note}
+        </T>
+      )}
+      {failed && (
+        <T v="meta" c="attention" testID="card-failed">
+          폰에 저장하지 못해 맡기지 않았어요. 다시 눌러 주세요
+        </T>
+      )}
+      {onIssue && (
+        <View style={st.cardButtons}>
+          {edit ? (
+            <>
+              <Button testID="card-cancel" small kind="secondary" label="취소" onPress={() => setEdit(null)} style={{ backgroundColor: p.canvas }} />
+              <Button testID="card-done" small label="완료" onPress={done} disabled={splitAmount(Number(edit.amount.replace(/\D/g, '')), edit.vat).supply <= 0} />
+            </>
+          ) : (
+            <>
+              <Button testID="card-issue" small label="발급하기" onPress={() => void issue()} busy={busy} disabled={busy || a.supply <= 0} />
+              <Button testID="card-edit" small kind="secondary" label="수정" onPress={startEdit} disabled={busy} style={{ backgroundColor: p.canvas }} />
+            </>
+          )}
+        </View>
       )}
     </View>
   );
@@ -658,14 +786,18 @@ const st = StyleSheet.create({
   msg: { gap: space.s1, alignSelf: 'stretch' },
   /** 같은 쪽이 잇달아 한 말: 묶음 사이(16)보다 훨씬 붙인다(4) */
   follow: { marginTop: -(space.s4 - space.s1) },
-  mine: { alignItems: 'flex-end', paddingLeft: '18%' },
-  theirs: { alignItems: 'flex-start', paddingRight: '18%' },
+  mine: { alignItems: 'flex-end' },
+  theirs: { alignItems: 'flex-start' },
   /** Muse: 높이 44, 옆 15, 둥글기 22, 점 지름 8 간격 4 */
   typing: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 44, paddingHorizontal: 15, borderRadius: 22 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   /** Muse: 둥글기 22, 최소 높이 44, 옆 15 위아래 11 */
-  bubble: { borderRadius: 22, minHeight: 44, maxWidth: 520, paddingHorizontal: 15, paddingVertical: 11, justifyContent: 'center' },
-  card: { borderRadius: radius.lg, padding: space.s4, gap: space.s2 },
+  bubble: { borderRadius: 22, minHeight: 44, maxWidth: '82%', paddingHorizontal: 15, paddingVertical: 11, justifyContent: 'center' },
+  /** 카드는 말풍선보다 넓게, 대화 폭을 다 쓴다 */
+  card: { alignSelf: 'stretch', borderRadius: radius.lg, padding: space.s4, gap: space.s2 },
+  cardInput: { width: 180, flexShrink: 1, minHeight: 40, paddingHorizontal: space.s3, paddingVertical: 8, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth },
+  cardSeg: { width: 180, flexShrink: 1 },
+  cardButtons: { flexDirection: 'row', gap: space.s2, marginTop: space.s1 },
   cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: space.s3 },
   note: { flexDirection: 'row', gap: space.s2, alignItems: 'flex-start' },
   failed: { borderRadius: radius.lg, paddingHorizontal: space.s4, paddingVertical: space.s3, gap: space.s2 },

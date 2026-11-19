@@ -47,11 +47,12 @@ export function cardOf(s: Exclude<PhoneShow, { type: 'screen' }>, pcOnline = fal
       title: `${s.counterparty} 세금계산서`,
       rows: [
         { label: '금액', value: won(d.amount), strong: true },
-        { label: '부가세', value: d.vat ? VAT[d.vat]! : '정하지 않음' },
-        { label: '품목', value: d.item ?? '정하지 않음' },
+        // 부가세를 말하지 않았으면 별도(공급가액에 10%를 더한다). 카드의 [수정]에서 포함으로 바꿀 수 있다.
+        { label: '부가세', value: VAT[d.vat ?? 'separate']! },
+        ...(d.item ? [{ label: '품목', value: d.item }] : []),
       ],
-      draft: { id: d.id, counterpartyId: d.counterpartyId, amount: d.amount, vat: d.vat, item: d.item },
-      note: pcOnline ? (d.state === 'entrusted' ? 'PC가 준비하고 있어요' : '맡기면 PC가 바로 준비해요') : d.state === 'entrusted' ? 'PC를 켜면 시작해요' : '맡기면 PC를 켰을 때 시작해요',
+      draft: { id: d.id, counterpartyId: d.counterpartyId, amount: d.amount, vat: d.vat ?? 'separate', item: d.item },
+      note: pcOnline ? (d.state === 'entrusted' ? 'PC가 준비하고 있어요' : '발급하기를 누르면 PC가 바로 준비해요') : d.state === 'entrusted' ? 'PC를 켜면 시작해요' : '발급하기를 누르면 PC를 켰을 때 시작해요',
     };
   }
   return {
