@@ -17,7 +17,7 @@ import { RunCard } from './RunCard';
 import { useSession } from '../session';
 import type { PcStatus } from '../net/pc';
 import { MAX_FONT_SCALE, radius, size, space, textScale, type, usePalette } from '../theme';
-import { Button, Check, Chevron, Notice, Pill, StatusDot, T, ago, tap, type Tone } from '../ui/kit';
+import { Button, Check, Chevron, Pill, StatusDot, T, ago, tap, type Tone } from '../ui/kit';
 
 export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'devices' | 'issue' | 'queue' | 'run' | 'doc' | 'bizreg' | 'recv' | 'pay' | 'mark';
 
@@ -66,7 +66,6 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
   const s = useSession();
   const p = usePalette();
   const paired = !!s.data.pair;
-  const line = homeLine(s.pc, s.data.lastSeenPc);
   const q = useQueue();
   const qc = queueCounts(q.jobs, Date.now());
   const t = todo ?? { approvals: qc.approvals, backlog: qc.backlog + s.pending.receipts + s.pending.cash };
@@ -122,46 +121,36 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={[st.fill, { backgroundColor: p.canvas }]} testID="home">
       <KeyboardAvoidingView style={st.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* 머리 한 줄: 지금 할 일(누르면 지금 할 일 화면) + ⋮(설정). 연결 전에는 앱 이름. */}
         <View style={st.top}>
-          <T v="title" role="header">
-            {BRAND}
-          </T>
+          {paired ? (
+            <TodoLine todo={t} onPress={() => go('queue')} />
+          ) : (
+            <View style={{ flex: 1, paddingLeft: space.s1 }}>
+              <T v="title" role="header">
+                {BRAND}
+              </T>
+            </View>
+          )}
           <Pressable
             testID="go-settings"
             accessibilityRole="button"
             accessibilityLabel="설정"
+            hitSlop={4}
             onPress={() => go('settings')}
             style={({ pressed }) => [st.topBtn, pressed && { backgroundColor: p.tint }]}
           >
-            <T v="subStrong" c="ink2">
-              설정
-            </T>
+            <Kebab color={p.ink2} />
           </Pressable>
         </View>
-
-        <View style={st.lines}>
-          {paired ? (
-            <Pressable
-              testID="pc-status"
-              accessibilityRole="button"
-              accessibilityLabel={`${line.label}. 연결 상태 보기`}
-              onPress={() => go('connection')}
-              style={({ pressed }) => [st.pcLine, pressed && { backgroundColor: p.tint }]}
-            >
-              <View style={{ flex: 1 }}>
-                <StatusDot tone={line.tone} label={line.label} busy={line.busy} v="sub" />
-              </View>
-              <Chevron color={p.ink4} />
-            </Pressable>
-          ) : (
-            <View style={st.pcLine}>
-              <View style={{ flex: 1 }}>
-                <StatusDot tone="quiet" label={line.label} v="sub" testID="pc-status" />
-              </View>
-            </View>
-          )}
-          {paired && <TodoLine todo={t} onPress={() => go('queue')} />}
-        </View>
+        {/* PC가 켜져 있으면 아무것도 두지 않는다. 꺼져 있으면 바 아래 가운데 회색 한 줄(누르면 연결 상태). */}
+        {paired && s.pc !== 'online' && (
+          <Pressable testID="pc-status" accessibilityRole="button" accessibilityLabel={`${pcHint(s.pc)}. 연결 상태 보기`} onPress={() => go('connection')} style={st.pcHint}>
+            <T v="meta" c={s.pc === 'stale' ? 'attention' : 'ink3'} center>
+              {pcHint(s.pc)}
+            </T>
+          </Pressable>
+        )}
 
         <View style={st.fill}>
         <ScrollView
@@ -202,9 +191,6 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
             </View>
           )}
           {/* 폰이 답할 때는 빈 대화 안내가 같은 말을 하므로 대화가 있을 때만 한 줄 */}
-          {paired && off && !phoneAnswers && <Notice tone="quiet" testID="pc-off-note">PC가 꺼져 있어요. 시키신 일은 PC를 켜면 시작해요</Notice>}
-          {paired && off && phoneAnswers && items.length > 0 && <Notice tone="quiet" testID="pc-off-note">PC가 꺼져 있어 폰이 대신 답해요. 발급은 PC를 켜면 시작해요</Notice>}
-          {paired && s.pc === 'stale' && <Notice testID="pc-stale-note">PC가 일주일 넘게 꺼져 있어요. PC를 켜 두거나 다시 연결해 주세요</Notice>}
         </ScrollView>
         <TopFade />
         </View>
@@ -285,6 +271,29 @@ const SCREEN_LABEL: Record<PhoneScreen, string> = { capture: '증빙 찍기', ca
 
 /** 이 폰이 대화를 부를 수 없을 때 한 줄 */
 export const CANT_SEND_TEXT = '이 폰에서는 아직 대화를 보낼 수 없어요. 앱을 다시 열거나 설정에서 PC 연결을 확인해 주세요.';
+
+/** 머리 바 아래 회색 한 줄(PC가 켜져 있지 않을 때만) */
+export function pcHint(pc: PcStatus): string {
+  switch (pc) {
+    case 'connecting':
+      return 'PC를 찾고 있어요';
+    case 'stale':
+      return 'PC가 오래 꺼져 있어요 · 켜 두거나 연결을 확인해 주세요';
+    default:
+      return 'PC가 꺼져 있어요 · 맡긴 일은 PC가 켜지면 실행돼요';
+  }
+}
+
+/** 글꼴 없이 그린 세로 점 셋(⋮) */
+function Kebab({ color }: { color: string }) {
+  return (
+    <View style={{ gap: 3, alignItems: 'center' }}>
+      {[0, 1, 2].map((i) => (
+        <View key={i} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: color }} />
+      ))}
+    </View>
+  );
+}
 
 const at = (it: ChatItem) => (it.kind === 'merged' ? it.from : it.at);
 
@@ -555,11 +564,12 @@ function Chip({ label, onPress, testID }: { label: string; onPress: () => void; 
 
 const st = StyleSheet.create({
   fill: { flex: 1 },
-  top: { minHeight: size.header, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: space.s5, paddingRight: space.s2 },
+  top: { minHeight: size.header, flexDirection: 'row', alignItems: 'center', gap: space.s2, paddingLeft: space.s4, paddingRight: space.s2, paddingTop: space.s1 },
+  pcHint: { paddingHorizontal: space.s5, paddingTop: space.s1, paddingBottom: space.s1, minHeight: 28, justifyContent: 'center' },
   topBtn: { minWidth: size.hit, minHeight: size.hit, paddingHorizontal: space.s3, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   lines: { paddingHorizontal: space.s5, gap: space.s2, paddingBottom: space.s2 },
   pcLine: { minHeight: size.hit, flexDirection: 'row', alignItems: 'center', gap: space.s3, marginHorizontal: -space.s2, paddingHorizontal: space.s2, borderRadius: radius.md },
-  todo: { minHeight: size.row, flexDirection: 'row', alignItems: 'center', gap: space.s3, paddingHorizontal: space.s4, paddingVertical: space.s2, borderRadius: radius.lg },
+  todo: { flex: 1, minHeight: size.hit, flexDirection: 'row', alignItems: 'center', gap: space.s3, paddingHorizontal: space.s4, paddingVertical: space.s2, borderRadius: radius.lg },
   fade: { position: 'absolute', top: 0, left: 0, right: 0 },
   chat: { paddingHorizontal: space.s5, paddingTop: space.s3, paddingBottom: space.s4, gap: space.s4, flexGrow: 1, justifyContent: 'flex-end' },
   msg: { gap: space.s1 },

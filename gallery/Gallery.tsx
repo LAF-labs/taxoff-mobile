@@ -131,7 +131,7 @@ const chatOn = (d: number): ChatItem[] => [
 const CHAT = chatOn(0);
 const CHAT_OFFLINE: ChatItem[] = [
   ...CHAT,
-  { kind: 'msg', id: 'c5', from: 'me', at: at(11, 40), text: '동네마트에 오늘 날짜로 세금계산서 발급해 줘. 공급가액 320,000원', state: 'waiting' },
+  { kind: 'msg', id: 'c5', from: 'me', at: at(11, 40), text: '동네마트에 오늘 날짜로 세금계산서 발급해 줘. 공급가액 320,000원' },
 ];
 const CHAT_MERGED: ChatItem[] = [
   ...chatOn(1),
