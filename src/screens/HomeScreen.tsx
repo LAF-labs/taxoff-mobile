@@ -438,7 +438,7 @@ function Item({ it, group, onRetry, retryOff, openDrafts, onIssue }: { it: Exclu
   return (
     <View style={[st.msg, !group.first && st.follow, me ? st.mine : st.theirs]} testID={`chat-${it.from}`}>
       {it.text !== undefined && (
-        <View style={[st.bubble, { backgroundColor: me ? p.bubbleMe : p.bubbleThem }, !me && st.bubbleThem, corners]} testID="chat-bubble">
+        <View style={[st.bubble, { backgroundColor: me ? p.bubbleMe : p.bubbleThem }, corners]} testID="chat-bubble">
           <T style={me ? { color: p.onBubbleMe } : undefined}>{it.text}</T>
         </View>
       )}
@@ -809,12 +809,11 @@ const st = StyleSheet.create({
   mine: { alignItems: 'flex-end' },
   theirs: { alignItems: 'flex-start' },
   /** Muse: 높이 44, 옆 15, 둥글기 22, 점 지름 8 간격 4 */
-  /** Muse: 앱 말풍선은 글 길이와 상관없이 대화 폭을 다 쓴다(내 말은 글 폭만큼) */
-  bubbleThem: { alignSelf: 'stretch', maxWidth: '100%' },
   typing: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 44, paddingHorizontal: 15, borderRadius: 22 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   /** Muse: 둥글기 22, 최소 높이 44, 옆 15 위아래 11 */
-  bubble: { borderRadius: 22, minHeight: 44, maxWidth: '82%', paddingHorizontal: 15, paddingVertical: 11, justifyContent: 'center' },
+  /** 말풍선은 양쪽 다 글 폭만큼, 반대편에 조금 여백을 남긴다(Muse 폰 앱). 카드만 대화 폭을 다 쓴다. */
+  bubble: { borderRadius: 22, minHeight: 44, maxWidth: '90%', paddingHorizontal: 15, paddingVertical: 11, justifyContent: 'center' },
   /** 카드는 말풍선보다 넓게, 대화 폭을 다 쓴다 */
   card: { alignSelf: 'stretch', borderRadius: radius.lg, padding: space.s4, gap: space.s2 },
   /** 세금계산서 카드는 줄 높이(44)가 간격을 맡는다 */
