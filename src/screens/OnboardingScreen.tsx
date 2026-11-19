@@ -4,16 +4,35 @@
 // - 글은 모두 사실만: 보안 장의 각 줄은 코드에 있는 동작이다(키 ThisDeviceOnly·백업 제외, 릴레이는 내용을 못 봄,
 //   승인은 매번 생체, 홈택스 비밀번호·인증서는 PC 금고). iPhone은 하드웨어 키 증명이 없어 "하드웨어"라고 쓰지 않는다.
 // - 큰 글씨로 강조하지 않는다(design.md): 제목 17/600, 예쁨은 그림(실제 화면을 줄인 모형)과 움직임으로.
-// - 3D 모션: 넘길 때 그림 면이 원근 속에서 돌고(rotateY·scale), 장 안의 겹은 저마다 깊이가 달라 따로 떠오르고(rotateX·스프링)
-//   잔잔히 떠 있다(사인 반복). 모두 transform·opacity만 써서 네이티브 드라이버로 돈다(60fps). 동작 줄이기면 모두 멈춘 완성 상태.
-import { useEffect, useRef, useState, type ComponentRef, type ReactElement } from 'react';
+//
+// 3D 모션(끊김·가려짐 없이):
+// - 장 안의 모든 등장은 "넘기는 위치"(pos = 스크롤 x + 처음 등장용 lead)에 묶은 보간이다. 시간으로 따로 돌지 않으므로
+//   넘기는 중에도 다음 장의 겹이 손가락을 따라 이미 들어오고 있다(빈 장이 보이지 않는다). 되돌리면 그대로 되감긴다.
+//   [다음]은 scrollTo 애니메이션이라 같은 길을 탄다. 첫 장은 lead(-1 → 0)가 한 번 밀어 준다.
+// - 모두 transform·opacity, 네이티브 드라이버. 매 프레임 JS 일 없음(장 번호는 반쯤 넘겼을 때 한 번만 바뀐다).
+// - 움직이는 겹에는 그림자·잘라내기(overflow)를 두지 않는다(iOS가 매 프레임 화면 밖 렌더를 다시 해서 끊긴다).
+//   깊이는 원근(perspective는 transform 맨 앞)·크기·흐림 정도와 은은한 경계선으로만 낸다.
+// - 잔잔한 반복(떠 있기·빛·물결)은 지금 장에서만 돌고, 넘기면 멈춘다.
+// - 동작 줄이기면 움직임 없이 완성 상태.
+import { useEffect, useMemo, useRef, useState, type ComponentRef, type ReactElement } from 'react';
 import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, View, useColorScheme, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import markDark from '../../assets/splash-icon-dark.png';
 import markLight from '../../assets/splash-icon.png';
 import { BRAND } from '../config';
-import { motion, radius, space, usePalette, useReducedMotion, type Palette } from '../theme';
+import { radius, space, usePalette, useReducedMotion, type Palette } from '../theme';
 import { Button, Check, T } from '../ui/kit';
+
+type Anim = Animated.Value | Animated.AnimatedInterpolation<number> | Animated.AnimatedAddition;
+
+interface ArtProps {
+  p: Palette;
+  /** 이 장이 지금 장인지(잔잔한 반복만 이것으로 켠다) */
+  active: boolean;
+  reduce: boolean;
+  /** 이 장의 진행 0(옆) → 1(가운데)에 묶은 보간을 만든다. from·to는 0~1 구간(겹마다 늦게 들어오게) */
+  at: (from: number, to: number) => Anim;
+}
 
 interface Page {
   key: string;
@@ -43,6 +62,8 @@ export const ONBOARDING: Page[] = [
   },
 ];
 
+const ONE = new Animated.Value(1);
+
 export function OnboardingScreen({ onDone, start = 0 }: { onDone: () => void; /** 갤러리: 몇 번째 장부터 그릴지 */ start?: number }) {
   const p = usePalette();
   const inset = useSafeAreaInsets();
@@ -50,32 +71,68 @@ export function OnboardingScreen({ onDone, start = 0 }: { onDone: () => void; /*
   const [w, setW] = useState(0);
   const [h, setH] = useState(0);
   const [page, setPage] = useState(start);
+  const pageRef = useRef(start);
   const x = useRef(new Animated.Value(0)).current;
+  /** 처음 등장: -1 → 0. pos = x + lead·w 라서 첫 장도 넘겨 들어오는 것과 같은 길로 들어온다 */
+  const lead = useRef(new Animated.Value(reduce ? 0 : -1)).current;
   const list = useRef<ComponentRef<typeof ScrollView>>(null);
-  // 스플래시에서 넘어올 때 툭 바뀌지 않게 살짝 떠오른다(동작 줄이기면 바로)
-  const enter = useRef(new Animated.Value(reduce ? 1 : 0)).current;
+
   useEffect(() => {
-    Animated.timing(enter, { toValue: 1, duration: reduce ? 0 : motion.slow + 80, useNativeDriver: true }).start();
-  }, [enter, reduce]);
+    if (reduce || w === 0) return lead.setValue(0);
+    const a = Animated.timing(lead, { toValue: 0, duration: 900, delay: 80, easing: Easing.out(Easing.cubic), useNativeDriver: true });
+    a.start();
+    return () => a.stop();
+  }, [lead, reduce, w]);
+
+  const pos = useMemo(() => Animated.add(x, Animated.multiply(lead, w || 1)), [x, lead, w]);
 
   const onLayout = (e: LayoutChangeEvent) => {
-    const nw = e.nativeEvent.layout.width;
-    setH(e.nativeEvent.layout.height);
+    const { width: nw, height: nh } = e.nativeEvent.layout;
+    if (nh !== h) setH(nh);
     if (nw === w) return;
     setW(nw);
-    x.setValue(page * nw);
-    requestAnimationFrame(() => list.current?.scrollTo({ x: page * nw, animated: false }));
+    x.setValue(pageRef.current * nw);
+    requestAnimationFrame(() => list.current?.scrollTo({ x: pageRef.current * nw, animated: false }));
   };
-  const onEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (w > 0) setPage(Math.round(e.nativeEvent.contentOffset.x / w));
+  const go = (n: number) => {
+    if (n === pageRef.current) return;
+    pageRef.current = n;
+    setPage(n);
+  };
+  // 장 번호는 넘기기가 끝났을 때만 바꾼다(손가락이 움직이는 동안 다시 그리지 않는다: 등장은 위치에 묶여 있어 필요 없다)
+  const onScroll = useMemo(() => Animated.event([{ nativeEvent: { contentOffset: { x } } }], { useNativeDriver: true }), [x]);
+  const settle = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (w > 0) go(Math.min(ONBOARDING.length - 1, Math.max(0, Math.round(e.nativeEvent.contentOffset.x / w))));
   };
   const last = page === ONBOARDING.length - 1;
   const next = () => {
     if (last) return onDone();
-    const n = page + 1;
-    setPage(n);
+    const n = pageRef.current + 1;
+    go(n);
     list.current?.scrollTo({ x: n * w, animated: !reduce });
   };
+
+  /**
+   * i번째 장의 진행: pos가 (i-1)w → iw 로 오면 0 → 1, iw → (i+1)w 로 떠나면 1 → 0. 겹마다 from·to로 늦게.
+   * 같은 구간은 한 번만 만든다(다시 그릴 때 네이티브 보간 노드를 새로 잇지 않게).
+   */
+  const ats = useMemo(
+    () =>
+      ONBOARDING.map((_, i) => {
+        const cache = new Map<string, Anim>();
+        return (from: number, to: number): Anim => {
+          if (reduce || w === 0) return ONE;
+          const key = `${from}:${to}`;
+          let v = cache.get(key);
+          if (!v) {
+            v = pos.interpolate({ inputRange: [(i - 1 + from) * w, (i - 1 + to) * w, (i + 1 - to) * w, (i + 1 - from) * w], outputRange: [0, 1, 1, 0], extrapolate: 'clamp' });
+            cache.set(key, v);
+          }
+          return v;
+        };
+      }),
+    [pos, w, reduce],
+  );
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={[st.fill, { backgroundColor: p.canvas }]} testID="onboarding">
@@ -92,62 +149,71 @@ export function OnboardingScreen({ onDone, start = 0 }: { onDone: () => void; /*
         )}
       </View>
 
-      <Animated.View style={[st.fill, { opacity: enter, transform: [{ translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] }]} onLayout={onLayout}>
+      <View style={st.fill} onLayout={onLayout}>
         <Animated.ScrollView
           ref={list}
           horizontal
           pagingEnabled
+          bounces={false}
+          decelerationRate="fast"
           showsHorizontalScrollIndicator={false}
           scrollEventThrottle={16}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { x } } }], { useNativeDriver: true })}
-          onMomentumScrollEnd={onEnd}
-          onScrollEndDrag={onEnd}
-          contentOffset={{ x: start * w, y: 0 }}
+          onScroll={onScroll}
+          onMomentumScrollEnd={settle}
+          onScrollEndDrag={settle}
           testID="onboarding-pages"
         >
           {w > 0 &&
-            ONBOARDING.map((pg, i) => (
-              <View key={pg.key} style={{ width: w, height: h }} testID={`onboarding-${pg.key}`} accessibilityElementsHidden={i !== page} importantForAccessibility={i === page ? 'auto' : 'no-hide-descendants'}>
-                <ScrollView contentContainerStyle={st.page} showsVerticalScrollIndicator={false}>
-                  {/* 넘길 때 그림 면이 원근 속에서 돌아 들어온다(3D 넘김). 글보다 덜 움직여 깊이감이 난다. 동작 줄이기면 그대로 */}
-                  <Animated.View
-                    style={[
-                      st.art,
-                      { backgroundColor: p.tint },
-                      !reduce && {
-                        opacity: x.interpolate({ inputRange: [(i - 1) * w, i * w, (i + 1) * w], outputRange: [0.35, 1, 0.35], extrapolate: 'clamp' }),
-                        transform: [
-                          { perspective: 1000 },
-                          { translateX: x.interpolate({ inputRange: [(i - 1) * w, i * w, (i + 1) * w], outputRange: [-w * 0.22, 0, w * 0.22] }) },
-                          { rotateY: x.interpolate({ inputRange: [(i - 1) * w, i * w, (i + 1) * w], outputRange: ['-32deg', '0deg', '32deg'], extrapolate: 'clamp' }) },
-                          { scale: x.interpolate({ inputRange: [(i - 1) * w, i * w, (i + 1) * w], outputRange: [0.84, 1, 0.84], extrapolate: 'clamp' }) },
-                        ],
-                      },
-                    ]}
-                  >
-                    <Glow p={p} active={i === page} reduce={reduce} />
-                    <pg.Art p={p} active={i === page} reduce={reduce} />
-                  </Animated.View>
-                  <Animated.View
-                    style={[
-                      st.text,
-                      !reduce && { opacity: x.interpolate({ inputRange: [(i - 0.6) * w, i * w, (i + 0.6) * w], outputRange: [0, 1, 0], extrapolate: 'clamp' }) },
-                    ]}
-                  >
-                    <T v="title" role="header">
-                      {pg.title}
-                    </T>
-                    <T v="sub" c="ink2">
-                      {pg.body}
-                    </T>
-                  </Animated.View>
-                </ScrollView>
-              </View>
-            ))}
+            ONBOARDING.map((pg, i) => {
+              const at = ats[i]!;
+              const near = at(0, 1);
+              const k = near as Animated.AnimatedInterpolation<number>;
+              return (
+                <View key={pg.key} style={{ width: w, height: h }} testID={`onboarding-${pg.key}`} accessibilityElementsHidden={i !== page} importantForAccessibility={i === page ? 'auto' : 'no-hide-descendants'}>
+                  <ScrollView contentContainerStyle={st.page} showsVerticalScrollIndicator={false} scrollEnabled={h > 0 && h < 640}>
+                    {/* 그림 면: 원근 속에서 돌아 들어온다. 안쪽(화면 가운데 쪽) 모서리가 뒤로 물러나게 돌려서 옆 장을 덮지 않는다. 옆 장도 흐리게만 */}
+                    <Animated.View
+                      renderToHardwareTextureAndroid
+                      style={[
+                        st.art,
+                        { backgroundColor: p.tint },
+                        !reduce && {
+                          opacity: k.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }),
+                          transform: [
+                            { perspective: 1000 },
+                            { rotateY: pos.interpolate({ inputRange: [(i - 1) * w, i * w, (i + 1) * w], outputRange: ['22deg', '0deg', '-22deg'], extrapolate: 'clamp' }) },
+                            { scale: k.interpolate({ inputRange: [0, 1], outputRange: [0.84, 1] }) },
+                          ],
+                        },
+                      ]}
+                    >
+                      <Glow p={p} active={i === page} reduce={reduce} />
+                      <pg.Art p={p} active={i === page} reduce={reduce} at={at} />
+                    </Animated.View>
+                    <Animated.View
+                      style={[
+                        st.text,
+                        !reduce && {
+                          opacity: lerp(at(0.35, 1), 0.3, 1),
+                          transform: [{ translateY: (at(0.35, 1) as Animated.AnimatedInterpolation<number>).interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }],
+                        },
+                      ]}
+                    >
+                      <T v="title" role="header">
+                        {pg.title}
+                      </T>
+                      <T v="sub" c="ink2">
+                        {pg.body}
+                      </T>
+                    </Animated.View>
+                  </ScrollView>
+                </View>
+              );
+            })}
         </Animated.ScrollView>
-      </Animated.View>
+      </View>
 
-      <View style={[st.footer, { paddingBottom: Math.max(inset.bottom, space.s4) }]}>
+      <View style={[st.footer, { paddingBottom: Math.max(inset.bottom, space.s4), backgroundColor: p.canvas }]}>
         <Dots x={x} w={w} n={ONBOARDING.length} page={page} reduce={reduce} />
         <Button testID="onboarding-next" label="다음" onPress={next} />
       </View>
@@ -165,16 +231,13 @@ function BrandMark() {
   );
 }
 
-/** 지금 장 표시: 고른 점은 길게(ink), 나머지는 짧게(ink4). 넘기는 손가락을 따라 늘었다 줄어든다. */
+/** 지금 장 표시: 고른 점은 길게(ink), 나머지는 짧게(ink4). 넘기는 손가락을 따라 늘었다 줄어든다(scaleX, 네이티브). */
 function Dots({ x, w, n, page, reduce }: { x: Animated.Value; w: number; n: number; page: number; reduce: boolean }) {
   const p = usePalette();
   return (
     <View style={st.dots} accessible accessibilityRole="text" accessibilityLabel={`${n}장 중 ${page + 1}장`} testID="onboarding-dots">
       {Array.from({ length: n }, (_, i) => {
-        const on = reduce || w === 0
-          ? i === page ? 1 : 0
-          : x.interpolate({ inputRange: [(i - 1) * w, i * w, (i + 1) * w], outputRange: [0, 1, 0], extrapolate: 'clamp' });
-        // 너비 대신 가로 늘림(scaleX): 넘기는 값이 네이티브에서 돌아 손가락을 바로 따른다
+        const on = reduce || w === 0 ? (i === page ? 1 : 0) : x.interpolate({ inputRange: [(i - 1) * w, i * w, (i + 1) * w], outputRange: [0, 1, 0], extrapolate: 'clamp' });
         const scaleX = typeof on === 'number' ? (on ? 1 : 0.3) : on.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] });
         return (
           <View key={i} style={st.dotSlot}>
@@ -187,26 +250,9 @@ function Dots({ x, w, n, page, reduce }: { x: Animated.Value; w: number; n: numb
   );
 }
 
-// ── 움직임 도구(모두 transform·opacity만, 네이티브 드라이버) ──
+// ── 움직임 도구 ──
 
-/** 장이 보이게 되면 0 → 1(스프링). 다른 장으로 가면 0으로 돌아가 다시 볼 때 또 등장한다. 동작 줄이기면 늘 1. */
-function useEnter(active: boolean, reduce: boolean, delay = 0): Animated.Value {
-  const v = useRef(new Animated.Value(reduce ? 1 : 0)).current;
-  useEffect(() => {
-    if (reduce) return v.setValue(1);
-    if (!active) {
-      v.stopAnimation();
-      v.setValue(0);
-      return;
-    }
-    const a = Animated.sequence([Animated.delay(delay), Animated.spring(v, { toValue: 1, damping: 14, stiffness: 120, mass: 0.9, useNativeDriver: true })]);
-    a.start();
-    return () => a.stop();
-  }, [active, reduce, delay, v]);
-  return v;
-}
-
-/** 잔잔한 반복(0 ↔ 1, 사인 곡선). 떠 있는 카드·빛에 쓴다. 보이는 장에서만 돈다. */
+/** 잔잔한 반복(0 ↔ 1, 사인 곡선). 지금 장에서만 돌고 넘기면 멈춘다. 네이티브 드라이버. */
 function useFloat(active: boolean, reduce: boolean, period = 3600, phase = 0): Animated.Value {
   const v = useRef(new Animated.Value(phase)).current;
   useEffect(() => {
@@ -219,54 +265,37 @@ function useFloat(active: boolean, reduce: boolean, period = 3600, phase = 0): A
   return v;
 }
 
-function lerp(v: Animated.Value, a: number, b: number): Animated.AnimatedInterpolation<number>;
-function lerp(v: Animated.Value, a: string, b: string): Animated.AnimatedInterpolation<string>;
-function lerp(v: Animated.Value, a: number | string, b: number | string) {
-  return v.interpolate({ inputRange: [0, 1], outputRange: [a, b] as never });
+function lerp(v: Anim, a: number, b: number): Animated.AnimatedInterpolation<number>;
+function lerp(v: Anim, a: string, b: string): Animated.AnimatedInterpolation<string>;
+function lerp(v: Anim, a: number | string, b: number | string) {
+  return (v as Animated.Value).interpolate({ inputRange: [0, 1], outputRange: [a, b] as never });
 }
 
-/** 떠 있는 겹의 그림자(그림 안에서만. 앱 화면의 카드에는 그림자를 쓰지 않는다) */
-const lift = (p: Palette, dark: boolean, depth = 1) => ({
-  shadowColor: dark ? '#000000' : p.ink,
-  shadowOpacity: (dark ? 0.45 : 0.1) * depth,
-  shadowRadius: 18 * depth,
-  shadowOffset: { width: 0, height: 10 * depth },
-  elevation: 4 * depth,
-});
-
-/** 그림 뒤 은은한 빛 두 개(천천히 떠돈다). 깊이감을 주는 맨 뒤 겹이다. */
-function Glow({ p, active, reduce }: ArtProps) {
+/** 그림 뒤 은은한 빛 두 개(면 안쪽에 들어가는 크기라 잘라내기 없이). 지금 장에서만 천천히 떠돈다. */
+function Glow({ p, active, reduce }: { p: Palette; active: boolean; reduce: boolean }) {
   const a = useFloat(active, reduce, 7000, 0);
   const b = useFloat(active, reduce, 9000, 0.6);
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <Animated.View style={[st.glow, { backgroundColor: p.accentSoft, top: -60, right: -50, transform: [{ translateX: lerp(a, -10, 18) }, { translateY: lerp(a, 0, 22) }, { scale: lerp(b, 1, 1.12) }] }]} />
-      <Animated.View style={[st.glow, st.glowSm, { backgroundColor: p.sunken, bottom: -50, left: -40, opacity: 0.7, transform: [{ translateX: lerp(b, 0, 16) }, { translateY: lerp(b, 8, -14) }] }]} />
+      <Animated.View style={[st.glow, { backgroundColor: p.accentSoft, top: space.s3, right: space.s3, transform: [{ translateX: lerp(a, 0, -14) }, { translateY: lerp(a, 0, 12) }] }]} />
+      <Animated.View style={[st.glow, st.glowSm, { backgroundColor: p.sunken, bottom: space.s3, left: space.s3, opacity: 0.55, transform: [{ translateX: lerp(b, 0, 12) }, { translateY: lerp(b, 0, -10) }] }]} />
     </View>
   );
 }
 
-interface ArtProps {
-  p: Palette;
-  active: boolean;
-  reduce: boolean;
-}
-
-// ── 그림: 실제 화면을 줄인 모형(같은 면·같은 색 규칙). 겹마다 깊이가 달라 따로 떠오르고 떠 있다. ──
+// ── 그림: 실제 화면을 줄인 모형(같은 면·같은 색 규칙). 겹마다 들어오는 구간이 달라 깊이가 난다. ──
 
 /** 1장: 내가 말하고 → PC가 홈택스에서 되읽은 카드 → [승인하고 발급](앱에서 유일한 파랑 채움, 그대로 보인다) */
-function ChatArt({ p, active, reduce }: ArtProps) {
-  const dark = useColorScheme() === 'dark';
-  const e1 = useEnter(active, reduce, 60);
-  const e2 = useEnter(active, reduce, 260);
-  const e3 = useEnter(active, reduce, 520);
-  const f1 = useFloat(active, reduce, 3800, 0);
-  const f2 = useFloat(active, reduce, 4400, 0.5);
+function ChatArt({ p, active, reduce, at }: ArtProps) {
+  const e1 = at(0.15, 0.7);
+  const e2 = at(0.3, 0.9);
+  const e3 = at(0.5, 1);
+  const f = useFloat(active, reduce, 4200, 0);
   const shine = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (reduce || !active) return;
     shine.setValue(0);
-    const a = Animated.loop(Animated.sequence([Animated.delay(1100), Animated.timing(shine, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }), Animated.delay(1600)]));
+    const a = Animated.loop(Animated.sequence([Animated.delay(1400), Animated.timing(shine, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }), Animated.delay(1800)]));
     a.start();
     return () => a.stop();
   }, [active, reduce, shine]);
@@ -275,9 +304,8 @@ function ChatArt({ p, active, reduce }: ArtProps) {
       <Animated.View
         style={[
           st.bubble,
-          { backgroundColor: p.canvas },
-          lift(p, dark, 0.6),
-          { opacity: e1, transform: [{ perspective: 800 }, { translateY: Animated.add(lerp(e1, 18, 0), lerp(f1, -3, 3)) }, { rotateX: lerp(e1, '35deg', '0deg') }, { translateX: lerp(f1, 0, -2) }] },
+          { backgroundColor: p.canvas, borderColor: p.line },
+          { opacity: lerp(e1, 0.35, 1), transform: [{ perspective: 800 }, { translateY: Animated.add(lerp(e1, 22, 0), lerp(f, 0, -3)) }, { translateX: lerp(e1, 30, 0) }, { rotateX: lerp(e1, '40deg', '0deg') }] },
         ]}
       >
         <T v="sub">동네마트에 32만원 발급해 줘</T>
@@ -285,16 +313,15 @@ function ChatArt({ p, active, reduce }: ArtProps) {
       <Animated.View
         style={[
           st.mockCard,
-          { backgroundColor: p.canvas },
-          lift(p, dark, 1),
+          { backgroundColor: p.canvas, borderColor: p.line },
           {
-            opacity: e2,
+            opacity: lerp(e2, 0.35, 1),
             transform: [
               { perspective: 900 },
-              { translateY: Animated.add(lerp(e2, 34, 0), lerp(f2, 3, -4)) },
-              { rotateX: Animated.add(lerp(e2, 22, 0), lerp(f2, 2, -2)).interpolate({ inputRange: [-90, 90], outputRange: ['-90deg', '90deg'] }) },
-              { rotateY: lerp(f2, '-2deg', '2deg') },
-              { scale: lerp(e2, 0.92, 1) },
+              { translateY: Animated.add(lerp(e2, 40, 0), lerp(f, 0, 4)) },
+              { rotateX: lerp(e2, '28deg', '0deg') },
+              { rotateY: lerp(f, '0deg', '2deg') },
+              { scale: lerp(e2, 0.9, 1) },
             ],
           },
         ]}
@@ -314,11 +341,11 @@ function ChatArt({ p, active, reduce }: ArtProps) {
           <T v="subStrong">합계</T>
           <T v="figure">352,000원</T>
         </View>
-        <Animated.View style={[st.mockApprove, { backgroundColor: p.accent, opacity: e3, transform: [{ scale: lerp(e3, 0.9, 1) }] }]}>
-          {/* 단추 위를 지나가는 빛 한 줄 */}
+        <Animated.View style={[st.mockApprove, { backgroundColor: p.accent, opacity: lerp(e3, 0.4, 1), transform: [{ scale: lerp(e3, 0.88, 1) }] }]}>
+          {/* 단추 안에서 커졌다 사라지는 빛(잘라내기 없이: 단추보다 작고 둥글다) */}
           <Animated.View
             pointerEvents="none"
-            style={[st.shine, { transform: [{ translateX: lerp(shine, -120, 360) }, { rotate: '18deg' }], opacity: shine.interpolate({ inputRange: [0, 0.15, 0.85, 1], outputRange: [0, 0.35, 0.35, 0] }) }]}
+            style={[st.shine, { opacity: shine.interpolate({ inputRange: [0, 0.2, 0.8, 1], outputRange: [0, 0.28, 0.28, 0] }), transform: [{ translateX: lerp(shine, -110, 110) }, { scaleX: 2.4 }] }]}
           />
           <T v="subStrong" style={{ color: p.onAccent }}>
             승인하고 발급
@@ -336,31 +363,29 @@ const FEATURES: Array<{ title: string; sub: string; glyph: 'doc' | 'camera' | 'c
   { title: '받을 돈·낼 돈 보기', sub: '이번 달 돈 흐름을 한눈에', glyph: 'chart' },
 ];
 
-/** 2장: 실제로 되는 일 넷. 줄이 차례로 위에서 뒤집히며 내려앉고, 그림 칸은 저마다 떠 있다. */
-function FeatureArt({ p, active, reduce }: ArtProps) {
+/** 2장: 실제로 되는 일 넷. 넘기는 만큼 줄이 차례로 뒤집히며 내려앉는다. 그림 칸은 저마다 떠 있다. */
+function FeatureArt({ p, active, reduce, at }: ArtProps) {
   return (
     <View style={[st.artInner, { gap: space.s2 }]}>
       {FEATURES.map((f, i) => (
-        <FeatureRow key={f.glyph} f={f} i={i} p={p} active={active} reduce={reduce} />
+        <FeatureRow key={f.glyph} f={f} i={i} p={p} active={active} reduce={reduce} at={at} />
       ))}
     </View>
   );
 }
 
-function FeatureRow({ f, i, p, active, reduce }: ArtProps & { f: (typeof FEATURES)[number]; i: number }) {
-  const dark = useColorScheme() === 'dark';
-  const e = useEnter(active, reduce, 80 + i * 110);
+function FeatureRow({ f, i, p, active, reduce, at }: ArtProps & { f: (typeof FEATURES)[number]; i: number }) {
+  const e = at(0.15 + i * 0.12, 0.6 + i * 0.12);
   const fl = useFloat(active, reduce, 3200 + i * 300, (i % 2) * 0.5);
   return (
     <Animated.View
       style={[
         st.feature,
-        { backgroundColor: p.canvas },
-        lift(p, dark, 0.45),
-        { opacity: e, transform: [{ perspective: 700 }, { rotateX: lerp(e, '-75deg', '0deg') }, { translateY: lerp(e, -14, 0) }, { scale: lerp(e, 0.96, 1) }] },
+        { backgroundColor: p.canvas, borderColor: p.line },
+        { opacity: lerp(e, 0.35, 1), transform: [{ perspective: 700 }, { translateX: lerp(e, 40, 0) }, { rotateY: lerp(e, '-35deg', '0deg') }, { scale: lerp(e, 0.94, 1) }] },
       ]}
     >
-      <Animated.View style={[st.glyphWrap, { backgroundColor: p.tint, transform: [{ translateY: lerp(fl, -2, 2) }, { rotate: lerp(fl, '-3deg', '3deg') }] }]}>
+      <Animated.View style={[st.glyphWrap, { backgroundColor: p.tint, transform: [{ translateY: lerp(fl, -2, 2) }] }]}>
         <Glyph kind={f.glyph} p={p} />
       </Animated.View>
       <View style={{ flex: 1, gap: 2 }}>
@@ -380,51 +405,46 @@ const SAFE: Array<{ title: string; sub: string }> = [
   { title: '이 폰의 열쇠는 폰 밖으로 나가지 않아요', sub: '백업되지 않고, 폰을 잃어버리면 PC에서 끊을 수 있어요' },
 ];
 
-/** 3장: 자물쇠가 돌아 들어와 철컥 잠기고(고리가 내려앉음), 둘레로 잔잔한 물결. 사실 네 줄이 차례로 체크된다. */
-function SafeArt({ p, active, reduce }: ArtProps) {
-  const dark = useColorScheme() === 'dark';
-  const spin = useEnter(active, reduce, 60);
-  const shut = useEnter(active, reduce, 620);
+/** 3장: 넘기는 만큼 자물쇠가 돌아 들어오고, 끝에서 고리가 내려앉아 잠긴다. 잠긴 뒤 둘레로 물결. 사실 네 줄이 차례로. */
+function SafeArt({ p, active, reduce, at }: ArtProps) {
+  const spin = at(0.1, 0.75);
+  const shut = at(0.7, 1);
   const fl = useFloat(active, reduce, 4200, 0);
   const ring = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (reduce || !active) return;
     ring.setValue(0);
-    const a = Animated.loop(Animated.sequence([Animated.delay(900), Animated.timing(ring, { toValue: 1, duration: 1800, easing: Easing.out(Easing.quad), useNativeDriver: true })]));
+    const a = Animated.loop(Animated.sequence([Animated.delay(700), Animated.timing(ring, { toValue: 1, duration: 1800, easing: Easing.out(Easing.quad), useNativeDriver: true })]));
     a.start();
     return () => a.stop();
   }, [active, reduce, ring]);
   return (
     <View style={[st.artInner, { gap: space.s3 }]}>
       <View style={st.lockStage} accessible={false}>
-        <Animated.View style={[st.ring, { borderColor: p.ink4, opacity: lerp(ring, 0.5, 0), transform: [{ scale: lerp(ring, 0.7, 1.6) }] }]} />
+        <Animated.View style={[st.ring, { borderColor: p.ink4, opacity: lerp(ring, 0.45, 0), transform: [{ scale: lerp(ring, 0.8, 1.5) }] }]} />
         <Animated.View
           style={[
             st.lockWrap,
-            {
-              opacity: spin,
-              transform: [{ perspective: 600 }, { translateY: lerp(fl, -3, 3) }, { rotateY: lerp(spin, '-200deg', '0deg') }, { rotateX: lerp(fl, '6deg', '-6deg') }, { scale: lerp(spin, 0.6, 1) }],
-            },
+            { opacity: lerp(spin, 0.3, 1), transform: [{ perspective: 600 }, { translateY: lerp(fl, -2, 2) }, { rotateY: lerp(spin, '-180deg', '0deg') }, { scale: lerp(spin, 0.7, 1) }] },
           ]}
         >
-          <Animated.View style={[st.shackle, { borderColor: p.ink, transform: [{ translateY: lerp(shut, -9, 0) }] }]} />
-          <View style={[st.lockBody, { backgroundColor: p.ink }, lift(p, dark, 0.8)]}>
+          <Animated.View style={[st.shackle, { borderColor: p.ink, transform: [{ translateY: lerp(shut, -8, 0) }] }]} />
+          <View style={[st.lockBody, { backgroundColor: p.ink }]}>
             <View style={[st.keyhole, { backgroundColor: p.tint }]} />
           </View>
         </Animated.View>
       </View>
       {SAFE.map((s, i) => (
-        <SafeRow key={s.title} s={s} i={i} p={p} active={active} reduce={reduce} />
+        <SafeRow key={s.title} s={s} e={at(0.35 + i * 0.1, 0.75 + i * 0.08)} p={p} />
       ))}
     </View>
   );
 }
 
-function SafeRow({ s, i, p, active, reduce }: ArtProps & { s: (typeof SAFE)[number]; i: number }) {
-  const e = useEnter(active, reduce, 820 + i * 140);
+function SafeRow({ s, e, p }: { s: (typeof SAFE)[number]; e: Anim; p: Palette }) {
   return (
-    <Animated.View style={[st.safeRow, { opacity: e, transform: [{ translateX: lerp(e, 14, 0) }] }]}>
-      <Animated.View style={[st.checkWrap, { backgroundColor: p.canvas, transform: [{ scale: lerp(e, 0.4, 1) }, { rotate: lerp(e, '-90deg', '0deg') }] }]}>
+    <Animated.View style={[st.safeRow, { opacity: lerp(e, 0.35, 1), transform: [{ translateX: lerp(e, 24, 0) }] }]}>
+      <Animated.View style={[st.checkWrap, { backgroundColor: p.canvas, transform: [{ scale: lerp(e, 0.5, 1) }, { rotate: lerp(e, '-90deg', '0deg') }] }]}>
         <Check color={p.ink} />
       </Animated.View>
       <View style={{ flex: 1, gap: 2 }}>
@@ -461,8 +481,8 @@ function Glyph({ kind, p }: { kind: 'doc' | 'camera' | 'cash' | 'chart'; p: Pale
     );
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 16 }}>
-      {[7, 12, 16].map((h) => (
-        <View key={h} style={{ width: 4, height: h, borderRadius: 1, backgroundColor: c }} />
+      {[7, 12, 16].map((hh) => (
+        <View key={hh} style={{ width: 4, height: hh, borderRadius: 1, backgroundColor: c }} />
       ))}
     </View>
   );
@@ -475,21 +495,21 @@ const st = StyleSheet.create({
   brandMark: { width: 24, height: 24 },
   skip: { minWidth: 44, minHeight: 44, paddingHorizontal: space.s3, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   page: { flexGrow: 1, paddingHorizontal: space.s5, paddingTop: space.s3, paddingBottom: space.s4, gap: space.s6, justifyContent: 'center' },
-  art: { borderRadius: radius.xl, padding: space.s4, justifyContent: 'center', minHeight: 300, overflow: 'hidden' },
-  glow: { position: 'absolute', width: 220, height: 220, borderRadius: 110, opacity: 0.9 },
-  glowSm: { width: 170, height: 170, borderRadius: 85 },
+  art: { borderRadius: radius.xl, padding: space.s4, justifyContent: 'center', minHeight: 300 },
+  glow: { position: 'absolute', width: 150, height: 150, borderRadius: 75, opacity: 0.9 },
+  glowSm: { width: 110, height: 110, borderRadius: 55 },
   artInner: { gap: space.s3 },
   text: { gap: space.s2, paddingHorizontal: space.s1 },
-  bubble: { alignSelf: 'flex-end', borderRadius: radius.lg, paddingHorizontal: space.s4, paddingVertical: space.s2 + 2, maxWidth: '85%' },
-  mockCard: { borderRadius: radius.lg, padding: space.s4, gap: space.s2 },
+  bubble: { alignSelf: 'flex-end', borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: space.s4, paddingVertical: space.s2 + 2, maxWidth: '85%' },
+  mockCard: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: space.s4, gap: space.s2 },
   mockRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   mockTotal: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: space.s2 },
-  mockApprove: { marginTop: space.s1, height: 44, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  shine: { position: 'absolute', left: 0, top: -20, width: 36, height: 90, backgroundColor: '#FFFFFF' },
-  feature: { flexDirection: 'row', alignItems: 'center', gap: space.s3, paddingVertical: space.s2 + 2, paddingHorizontal: space.s3, borderRadius: radius.lg },
+  mockApprove: { marginTop: space.s1, height: 44, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  shine: { position: 'absolute', width: 28, height: 28, borderRadius: 14, backgroundColor: '#FFFFFF' },
+  feature: { flexDirection: 'row', alignItems: 'center', gap: space.s3, paddingVertical: space.s2 + 2, paddingHorizontal: space.s3, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth },
   glyphWrap: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   lockStage: { height: 72, alignItems: 'center', justifyContent: 'center' },
-  ring: { position: 'absolute', width: 72, height: 72, borderRadius: 36, borderWidth: 2 },
+  ring: { position: 'absolute', width: 64, height: 64, borderRadius: 32, borderWidth: 2 },
   lockWrap: { alignItems: 'center' },
   shackle: { width: 26, height: 18, borderWidth: 4, borderBottomWidth: 0, borderTopLeftRadius: 13, borderTopRightRadius: 13, marginBottom: -1 },
   lockBody: { width: 40, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
