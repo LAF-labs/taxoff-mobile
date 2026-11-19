@@ -95,7 +95,7 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
           ))}
       </View>
       {/* 이유 없는 PC 멈춤은 어느 단계였는지 모르니 단계 막대를 두지 않는다 */}
-      {r.kind !== 'done' && r.kind !== 'refused' && !(r.kind === 'stopped' && r.reason === 'pcStopped') && (compact ? <FoldSteps id={job.id} r={r} /> : <StepBar r={r} />)}
+      {r.kind !== 'done' && r.kind !== 'refused' && !(r.kind === 'stopped' && (r.reason === 'pcStopped' || r.reason === 'appOld')) && (compact ? <FoldSteps id={job.id} r={r} /> : <StepBar r={r} />)}
       <StateLines r={r} />
       {r.kind === 'done' && <ResultRows result={r.result} />}
       {/* 폰 발급 명령은 지켜보기만 한다. 로그인 차례(간편인증·인증서로 다시·승인했어요)만 대화 카드에서 바로 한다 */}

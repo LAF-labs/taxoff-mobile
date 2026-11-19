@@ -6,7 +6,6 @@ import type { Job } from '../queue';
 import { pcTurnOf, type RunView } from '../run.ts';
 
 export type NotifyKind = 'myTurn' | 'done' | 'stopped' | 'verify' | 'refused';
-export type NotifyTopic = 'run' | 'money';
 
 export interface NotifyPrefs {
   /** 발급 진행(내 차례·끝남·멈춤) */

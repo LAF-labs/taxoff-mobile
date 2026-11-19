@@ -85,6 +85,10 @@ describe('cmd.ack · run.event → 진행 화면', () => {
     assert.deepEqual(stop('date_mismatch'), { kind: 'stopped', step: 'prepare', reason: 'pcStopped', startedAt: T0 });
     assert.deepEqual(runViewOf(applyEvent(base, { runId: 'run1', event: 'phase', at: T0 + 1, phase: 'verify', code: 'in_doubt', attempt: 1 })), { kind: 'inDoubt', tries: 1, startedAt: T0 });
     assert.match(STOP_COPY.pcStopped.line, /아무것도 발급하지 않았어요/);
+    // PC 앱 판이 낮아 시작하지 않았다: 이유를 말하고, PC 화면을 보라는 말은 하지 않는다
+    assert.deepEqual(stop('app_old'), { kind: 'stopped', step: 'prepare', reason: 'appOld', startedAt: T0 });
+    assert.match(STOP_COPY.appOld.line, /업데이트/);
+    assert.doesNotMatch(STOP_COPY.appOld.line + STOP_COPY.pcStopped.line, /PC 화면|PC에서 볼/);
   });
   it('PC 사람 차례(turn)는 "진행 중"이 아니라 내 차례로, 다음 사건이 오면 풀린다', () => {
     const base = applyAck(cmd({ sentAt: T0 }), { cmdId: cmd().cmdId, state: 'pc_only', runId: 'run1' });

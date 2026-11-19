@@ -189,8 +189,8 @@ export function runViewOf(c: PhoneCmd): RunView | null {
         },
       };
     case 'stopped':
-      // PC는 run.event code로 'in_doubt'만 보낸다. 코드가 없거나 모르는 코드면 이유 없이 멈춤(이유는 PC에서)
-      return { kind: 'stopped', step: 'prepare', reason: 'pcStopped', startedAt };
+      // PC는 run.event code로 'in_doubt'와 'app_old'(PC 앱 판이 낮음)만 알린다. 코드가 없거나 모르는 코드면 이유 없이 멈춤
+      return { kind: 'stopped', step: 'prepare', reason: c.code === 'app_old' ? 'appOld' : 'pcStopped', startedAt };
     default:
       return { kind: 'running', step: c.phase, startedAt, pcApproval: true };
   }

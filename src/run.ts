@@ -71,8 +71,8 @@ export const PC_TURN: Readonly<Record<string, { line: string; short: string }>> 
 const PC_TURN_DEFAULT = { line: '홈택스에서 예상하지 못한 화면이 나와 멈춰 있어요', short: '예상 밖 화면에서 멈췄어요' };
 export const pcTurnOf = (code?: string) => (code && Object.hasOwn(PC_TURN, code) ? PC_TURN[code]! : PC_TURN_DEFAULT);
 
-/** pcStopped: 폰 발급 명령을 PC가 멈춤(이유 코드 없음. 이유는 PC에서 본다) */
-export type StopReason = 'blocked' | 'unknownScreen' | 'dateMismatch' | 'inputMismatch' | 'totalMismatch' | 'otherLogin' | 'passwordError' | 'pcStopped';
+/** pcStopped: 폰 발급 명령을 PC가 멈춤(이유 코드 없음). appOld: PC 앱 판이 낮아 시작하지 않음(PC가 run.event code app_old로 알린다) */
+export type StopReason = 'blocked' | 'unknownScreen' | 'dateMismatch' | 'inputMismatch' | 'totalMismatch' | 'otherLogin' | 'passwordError' | 'pcStopped' | 'appOld';
 
 /** 폰에서 할 수 있는 다음 행동. 못 하는 것(브라우저로 가기·금고에서 확인)은 PC에서 열기 예약으로 바꾼다. */
 export type RunAction = 'retryPrepare' | 'reserveOnPc' | 'resendAuth' | 'retryCert' | 'simpleAuth' | 'authDone' | 'stop' | 'close' | 'openApp';
@@ -86,6 +86,7 @@ export const STOP_COPY: Record<StopReason, { line: string; action: 'retryPrepare
   otherLogin: { line: '다른 곳에서 홈택스에 로그인해 연결이 끊겼어요. 아무것도 발급하지 않았어요.', action: 'retryPrepare' },
   passwordError: { line: '홈택스에서 비밀번호가 맞지 않는대요. 저장해 둔 비밀번호는 지웠어요. 아무것도 발급하지 않았어요.', action: 'reserveOnPc' },
   pcStopped: { line: '멈췄어요. 아무것도 발급하지 않았어요.', action: 'reserveOnPc' },
+  appOld: { line: 'PC 앱 버전이 낮아 시작하지 않았어요. PC 앱을 업데이트하면 다시 할 수 있어요. 아무것도 발급하지 않았어요.', action: 'retryPrepare' },
 };
 
 export const ACTION_LABEL: Record<RunAction, string> = {
