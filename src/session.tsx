@@ -7,7 +7,7 @@ import { inflight } from './inflight';
 import type { DeviceKeys } from './keyring';
 import SaxNative from '../modules/sax-native/src/SaxNativeModule';
 import { deviceApprovalKey } from './approvalKey';
-import { syncWithPc, type PcStatus } from './net/pc';
+import { closeLive, syncWithPc, type PcStatus } from './net/pc';
 import { statusWhileSyncing } from './net/pcWhy';
 import { failed, netChanged, NET_SETTLE_MS, retryDelay, type NetShape } from './net/reconnect';
 import { FileOutbox } from './storage/outbox';
@@ -128,6 +128,8 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
     // 앱이 다시 앞으로 오면 주기를 기다리지 않고 바로 붙는다(잠자기·망 전환 뒤 반쯤 열린 연결 대신 새 연결)
     const sub = AppState.addEventListener('change', (st) => {
       if (st === 'active') void sync();
+      // 뒤로 가면 PC 연결을 닫는다: PC가 폰이 없다고 알아야 승인 요청을 서버 푸시로 알린다(net/pc.ts closeLive)
+      else if (st === 'background') closeLive();
     });
     // 망이 바뀌면(와이파이에서 LTE 등) 60초를 기다리지 않고 바로 다시 붙는다. 붙어 있던 세션은 멈춘다(반쯤 열린 연결에 매달리지 않게).
     let net: NetShape | null = null;
