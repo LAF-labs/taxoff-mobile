@@ -1,5 +1,5 @@
 repo: LAF-labs/tex
-commit: b3e3724157685bf827d9dd687a4dc36657fe1dea
+commit: 0c1d89874519bc90af58c403e3e831e869274a99
 paths: poc/packages/chat-core/src
 
 이 폴더는 tex 정본의 사본이다. 여기서 고치지 말고 tex에서 고친 뒤 pnpm sync:remote <tex 경로> chat-core로 다시 맞춘다.
