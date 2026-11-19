@@ -14,10 +14,10 @@ import { useSession } from '../session';
 import { radius, space, usePalette } from '../theme';
 import { Button, T } from '../ui/kit';
 import { wakeOn } from './events';
-import { askPermission, permission, type Permission } from './local';
+import { askPermission, notifyNow, permission, type Permission } from './local';
 import { PLATFORM, clearWakeNotifications, deviceToken, onTokenChange, onWakeReceived, onWakeTap, takeWake } from './push';
 import { pushClient } from './pushApi';
-import { SHEET_WAIT_MS, askDue, latestEntrusted, pushPlan, tokenHash, type WakeKind } from './wake';
+import { LOCAL_APPROVE, SHEET_WAIT_MS, askDue, latestEntrusted, newGates, pushPlan, tokenHash, type WakeKind } from './wake';
 
 /** 맡긴 직후 화면이 바뀌는 사이에 끼지 않게 조금 뒤에 묻는다 */
 const ASK_DELAY_MS = 700;
@@ -155,6 +155,17 @@ export function PushHost({ onQueue, onRun, askPreview }: {
     }, Math.max(0, waitSheet + SHEET_WAIT_MS - Date.now()));
     return () => clearTimeout(t);
   }, [waitSheet, gated]);
+
+  // 앱이 뒤에 있는데 승인 요청이 왔다(뒤로 간 직후 아직 붙어 있던 연결로): 폰이 직접 알린다. 앞에 있으면 시트가 바로 뜬다
+  const told = useRef(new Set<string>());
+  useEffect(() => {
+    if (askPreview) return;
+    const fresh = newGates(q.jobs, told.current, Date.now());
+    if (!fresh.length) return;
+    for (const j of fresh) told.current.add(j.gate!.reqId);
+    if (AppState.currentState === 'active' || !wakeOn(live.current.s.data.notify)) return;
+    void notifyNow({ title: '승인을 기다리는 발급이 있어요', body: '눌러서 승인하거나 거절해 주세요' }, { open: LOCAL_APPROVE, jobId: fresh[0]!.id });
+  }, [q.jobs, askPreview]);
 
   // 허용 묻기: 첫 발급을 맡긴 뒤 한 번
   const entrusted = (s.data.cmds ?? []).length;
