@@ -22,7 +22,7 @@ describe('돈 탭 표기(11 §3.4·§3.5)', () => {
   });
   it('확인 못 함은 0이 아니라 이유 한 줄', () => {
     const m = { hasAccounts: true, complete: false, missing: [{ accountId: 'x', last4: '1234', bank: '국민', coverTo: '2026-11-05' }] } as CashFlowMonth;
-    assert.equal(unsureLine(m, '2026-11-17'), `확인 못 함 · 국민${NB}1234 계좌 거래내역이 7일 넘게 오래됐어요`);
+    assert.equal(unsureLine(m, '2026-11-17'), `확인하지 못했어요. 국민${NB}1234 계좌 거래내역이 7일 넘게 오래됐어요`);
     assert.equal(unsureLine({ ...m, complete: true }, '2026-11-17'), null);
   });
   it('순서·7일 안·기한 줄', () => {

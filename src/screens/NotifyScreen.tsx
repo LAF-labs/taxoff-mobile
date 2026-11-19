@@ -52,8 +52,8 @@ export function NotifyScreen({ onDone, permPreview }: { onDone: () => void; perm
           off
             ? '폰 설정에서 택스오프 알림을 꺼 두셨어요. 앱을 열어 두면 화면 위에 알림이 떠요.'
             : perm === 'undetermined'
-              ? '허용하면 앱이 뒤에 있을 때도 알려 드려요. 잠금 화면에는 거래처·금액을 보이지 않아요.'
-              : '잠금 화면에는 거래처·금액을 보이지 않아요.'
+              ? '허용하면 앱이 뒤에 있을 때도 알려 드려요. 잠금 화면에는 거래처와 금액을 보이지 않아요.'
+              : '잠금 화면에는 거래처와 금액을 보이지 않아요.'
         }
       >
         <Row
@@ -72,8 +72,8 @@ export function NotifyScreen({ onDone, permPreview }: { onDone: () => void; perm
         title="받을 알림"
         note="발급 진행은 앱을 쓰는 중이거나 잠기기 전(뒤로 간 지 30초 안)에 알려 드려요. 앱을 오래 닫아 둬도 오는 알림은 준비하고 있어요."
       >
-        <Row label="발급 진행" sub="내 차례 · 발급 끝남 · 멈춤 · 확인 필요" accessory={sw('run')} />
-        <Row label="받을 돈·낼 돈 기한" sub="기한 지났거나 7일 안에 올 것이 있으면 아침 9시에" accessory={sw('money')} />
+        <Row label="발급 진행" sub="내 차례가 오거나 발급이 끝나면 알려요" accessory={sw('run')} />
+        <Row label="돈 기한" sub="받을 돈이나 낼 돈의 기한이 다가오면 아침 9시에 알려요" accessory={sw('money')} />
       </Group>
     </Screen>
   );

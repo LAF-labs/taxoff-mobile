@@ -82,7 +82,7 @@ export function MoneyScreen({ go }: { go: (to: HomeRoute) => void }) {
           <View style={[st.card, { backgroundColor: p.tint }]} testID="money-no-account">
             <T v="subStrong">계좌 연결은 PC에서 해요</T>
             <T v="sub" c="ink2">
-              연결하면 들어온 돈·나간 돈이 보여요. 지금 받을 돈은 세금계산서 기준이에요.
+              연결하면 들어온 돈과 나간 돈이 보여요. 지금 받을 돈은 세금계산서 기준이에요.
             </T>
           </View>
         ) : (
@@ -102,7 +102,7 @@ export function MoneyScreen({ go }: { go: (to: HomeRoute) => void }) {
           </View>
         )}
         <T v="meta" c="ink3" style={{ paddingHorizontal: space.s1 }} testID="money-basis">
-          {m.live ? `기준 ${when(m.snap.at)}${noAcct ? '' : ` · 계좌 ${m.snap.accounts}개`}` : `PC에서 마지막으로 받은 값이에요 · ${relWhen(m.snap.at)}`}
+          {m.live ? `${when(m.snap.at)} 기준이에요${noAcct ? '' : `. 계좌 ${m.snap.accounts}개를 봤어요`}` : `${relWhen(m.snap.at)}에 PC에서 마지막으로 받은 값이에요`}
         </T>
       </View>
 
@@ -126,14 +126,14 @@ export function MoneyScreen({ go }: { go: (to: HomeRoute) => void }) {
           </View>
           {(n30.noDuePay > 0 || n30.noDueRecv > 0) && (
             <T v="meta" c="ink3" style={{ paddingHorizontal: space.s1 }} testID="money-nodue">
-              {[n30.noDuePay > 0 && `기한 없는 낼 돈 ${n30.noDuePay}건`, n30.noDueRecv > 0 && `기한 없는 받을 돈 ${n30.noDueRecv}건`].filter(Boolean).join(' · ')}은 넣지 않았어요
+              {[n30.noDuePay > 0 && `기한 없는 낼 돈 ${n30.noDuePay}건`, n30.noDueRecv > 0 && `기한 없는 받을 돈 ${n30.noDueRecv}건`].filter(Boolean).join(', ')}은 넣지 않았어요
             </T>
           )}
         </View>
       )}
 
       <T v="meta" c="ink4" style={{ paddingHorizontal: space.s1 }}>
-        PC가 계산한 값이에요. 세무·회계 의견이 아니에요.
+        PC가 계산한 값이에요. 세무나 회계 의견이 아니에요.
       </T>
     </Screen>
   );
@@ -150,7 +150,7 @@ function CopyMoney({ money }: { money: NonNullable<PhoneCopyBody['money']> }) {
   const alert = cf?.alerts?.[0];
   const unsure = cf && (!cf.complete || cf.inTotal == null || cf.outTotal == null || cf.net == null);
   const missing = cf?.missing?.filter(Boolean) ?? [];
-  const unsureText = `확인 못 함 · ${missing.length ? `${missing.slice(0, 2).join(', ')}${missing.length > 2 ? ` 외 ${missing.length - 2}개` : ''} 계좌` : '일부 계좌'} 거래내역이 이 달을 다 덮지 못해요`;
+  const unsureText = `확인하지 못했어요. ${missing.length ? `${missing.slice(0, 2).join(', ')}${missing.length > 2 ? ` 외 ${missing.length - 2}개` : ''} 계좌` : '일부 계좌'} 거래내역이 이 달을 다 덮지 못해요`;
   const monthNo = cf ? Number(cf.month.slice(5, 7)) : null;
   const n30 = cf && (cf.in30 != null || cf.out30 != null);
   return (
@@ -162,7 +162,7 @@ function CopyMoney({ money }: { money: NonNullable<PhoneCopyBody['money']> }) {
           <View style={[st.card, { backgroundColor: p.tint }]} testID="money-no-account">
             <T v="subStrong">{noAcct ? '계좌 연결은 PC에서 해요' : '이번 달 흐름은 PC에서 아직 못 받았어요'}</T>
             <T v="sub" c="ink2">
-              {noAcct ? '연결하면 들어온 돈·나간 돈이 보여요. 지금 받을 돈은 세금계산서 기준이에요.' : '받을 돈·낼 돈 요약만 먼저 보여 드려요.'}
+              {noAcct ? '연결하면 들어온 돈과 나간 돈이 보여요. 지금 받을 돈은 세금계산서 기준이에요.' : '받을 돈과 낼 돈 요약만 먼저 보여 드려요.'}
             </T>
           </View>
         ) : (
@@ -181,7 +181,7 @@ function CopyMoney({ money }: { money: NonNullable<PhoneCopyBody['money']> }) {
           </View>
         )}
         <T v="meta" c="ink3" style={{ paddingHorizontal: space.s1 }} testID="money-basis">
-          {`PC에서 받은 값이에요${NB}· ${relWhen(money.asOf)}${money.accounts ? `${NB}· 계좌${NB}${money.accounts}개` : ''}`}
+          {`${relWhen(money.asOf)}에 PC에서 받은 값이에요${money.accounts ? `. 계좌${NB}${money.accounts}개를 봤어요` : ''}`}
         </T>
       </View>
 
@@ -209,7 +209,7 @@ function CopyMoney({ money }: { money: NonNullable<PhoneCopyBody['money']> }) {
       )}
 
       <T v="meta" c="ink4" style={{ paddingHorizontal: space.s1 }}>
-        PC가 계산한 값이에요. 세무·회계 의견이 아니에요.
+        PC가 계산한 값이에요. 세무나 회계 의견이 아니에요.
       </T>
     </Screen>
   );
@@ -273,7 +273,7 @@ function Line({ label, n, count, ink = 'ink', sub }: { label: string; n: number;
     <View style={st.line}>
       <View style={{ flex: 1, gap: 2 }}>
         <T v="sub" c={ink === 'attention' ? 'attention' : 'ink2'}>
-          {count !== undefined ? `${label}${NB}·${NB}${count}건` : label}
+          {count !== undefined ? `${label}${NB}${count}건` : label}
         </T>
         {sub && (
           <T v="meta" c="ink3">
