@@ -527,6 +527,7 @@ const SCREENS: Record<
     session: fake(paired(), 'online'),
     jobs: [
       { id: 'w1', title: '서울청과 세금계산서', amount: 880_000, createdAt: T0, state: 'phoneWaiting', wait: 'pcBusy', pcOnly: true },
+      { id: 'w2', title: '한빛인쇄 세금계산서', amount: 495_000, createdAt: T0, state: 'phoneWaiting', wait: 'newDay', waitDay: iso(new Date(now - DAY)), pcOnly: true },
       { ...runJob({ kind: 'refused', reason: 'counterparty_unknown', startedAt: T0 }, { state: 'needPc' }), pcOnly: true },
       { ...runJob({ kind: 'stopped', step: 'login', reason: 'pcStopped', startedAt: T0 }, { title: '새봄꽃집 세금계산서', amount: 330_000, state: 'needPc' }), id: 'r2', pcOnly: true },
       JOBS[3]!,

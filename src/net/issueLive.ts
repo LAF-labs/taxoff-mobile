@@ -44,7 +44,7 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
   };
   // PC가 다른 일 중이라 기다리는 명령은 다시 보낼 때가 된 것만 보낸다
   const retry = async (c: PhoneCmd) => {
-    await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? forRetry(x, now()) : x)));
+    await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? forRetry(x) : x)));
     const fresh = io.cmds().find((x) => x.cmdId === c.cmdId);
     if (fresh) await send(fresh);
   };

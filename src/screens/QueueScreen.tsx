@@ -70,6 +70,7 @@ const PLAIN: Record<JobState, string> = {
 export function statusLine(job: Job, state: JobState): string {
   const r: RunView | undefined = job.run;
   if (job.wait === 'pcBusy') return '다른 일이 끝나면 할게요';
+  if (job.wait === 'newDay' && job.waitDay) return `${Number(job.waitDay.slice(5, 7))}월 ${Number(job.waitDay.slice(8, 10))}일로 맡긴 일이에요. 오늘 날짜로 바꿔야 발급할 수 있어요`;
   if (r?.kind === 'refused') return REFUSED[r.reason];
   if (r?.kind === 'stopped') return '중지됐어요';
   if (state === 'needPc' && job.reason) return NEED_PC[job.reason];
@@ -92,7 +93,7 @@ export function QueueScreen({ onDone, onConnection, onOpen, now = Date.now() }: 
   const empty = groups.length === 0 && pending === 0;
   const done = groups.flatMap((g) => g.jobs.filter((j) => closed(j, g.state)).map((job) => ({ job, state: g.state })));
   const act = (j: Job, a: JobAction) => {
-    if (a === 'cancel' || a === 'retry' || a === 'dismiss') return q.act(j.id, a);
+    if (a === 'cancel' || a === 'retry' || a === 'dismiss' || a === 'redate') return q.act(j.id, a);
     if (a === 'approve' && j.gate) return q.openSheet(j.id);
     q.setFocus(j.id);
     onOpen(j, a);
@@ -197,8 +198,11 @@ function JobCard({ job, state, onAction }: { job: Job; state: JobState; onAction
   const dim = state === 'expired' || isClosed;
   const button = action && !isClosed && action.key !== 'progress' && action.key !== 'result' ? action : null;
   const canOpen = !!job.run || state === 'done';
-  const approve = button?.key === 'approve';
-  const label = approve ? '승인하기' : button?.label;
+  // 채운 단추(아래 줄): 승인하기, 오늘 날짜로 맡기기. 나머지는 상태 줄 끝 글자 단추
+  const approve = button?.key === 'approve' || button?.key === 'redate';
+  const label = button?.key === 'approve' ? '승인하기' : button?.label;
+  // 날짜를 바꿔야 하는 일은 취소도 할 수 있다
+  const side = approve ? (button?.key === 'redate' ? { key: 'cancel' as const, label: '취소' } : null) : button && label ? { key: button.key, label } : null;
 
   const body = (
     <>
@@ -217,24 +221,24 @@ function JobCard({ job, state, onAction }: { job: Job; state: JobState; onAction
           {line}
         </T>
         {/* 덜 중요한 동작(빼기·취소·다시 맡기기)은 상태 줄 끝 글자 단추. 승인만 채운 단추로 아래 줄에 */}
-        {button && label && !approve && (
+        {side && (
           <Pressable
-            testID={`job-${job.id}-${button.key}`}
+            testID={`job-${job.id}-${side.key}`}
             accessibilityRole="button"
-            accessibilityLabel={`${job.title} ${label}`}
+            accessibilityLabel={`${job.title} ${side.label}`}
             hitSlop={12}
-            onPress={() => onAction(button.key)}
+            onPress={() => onAction(side.key)}
             style={({ pressed }) => [st.textBtn, pressed && { backgroundColor: p.sunken }]}
           >
             <T v="subStrong" c="ink2">
-              {label}
+              {side.label}
             </T>
           </Pressable>
         )}
       </View>
       {approve && button && (
         <View style={st.actions}>
-          <Button small label="승인하기" onPress={() => onAction(button.key)} testID={`job-${job.id}-${button.key}`} />
+          <Button small label={label ?? ''} onPress={() => onAction(button.key)} testID={`job-${job.id}-${button.key}`} />
         </View>
       )}
     </>

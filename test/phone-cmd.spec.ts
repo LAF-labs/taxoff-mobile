@@ -21,7 +21,7 @@ const { driveCmds, trimCmds } = await import('../src/net/issueLive.ts');
 const { PHONE_CAPS } = await import('../src/net/pcCopy.ts');
 const { STOP_COPY } = await import('../src/run.ts');
 const { actionFor } = await import('../src/queue.ts');
-const { BUSY_GIVE_UP_MS, BUSY_RETRY_MS, REJECT_LINE, applyAck, applyEvent, busyWaiting, issueRequest, jobOf, kstDay, runViewOf, settled } = await import('../src/phoneCmd.ts');
+const { BUSY_GIVE_UP_MS, BUSY_RETRY_MS, REJECT_LINE, applyAck, applyEvent, busyWaiting, issueRequest, jobOf, kstDay, needsRedate, redate, retryDue, runViewOf, settled } = await import('../src/phoneCmd.ts');
 
 const T0 = Date.parse('2026-11-17T01:00:00Z');
 const cmd = (o: Partial<PhoneCmd> = {}): PhoneCmd => ({
@@ -220,13 +220,27 @@ describe('PC가 다른 일 중(pc_busy): 저절로 이어서 한다', () => {
     assert.equal(settled(c, T0 + BUSY_GIVE_UP_MS), true);
   });
   it('밀린 일에서는 기다리는 일, [취소]만 있다', () => {
-    const j = jobOf(applyAck(cmd({ sentAt: T0, createdAt: Date.now() }), { cmdId: cmd().cmdId, state: 'rejected', reason: 'pc_busy' }));
+    const j = jobOf(applyAck(cmd({ sentAt: T0, createdAt: Date.now(), req: issueRequest({ ref: 'cp_gana', supply: 1_230_005, item: '식자재' }) }), { cmdId: cmd().cmdId, state: 'rejected', reason: 'pc_busy' }));
     assert.equal(j.state, 'phoneWaiting');
     assert.equal(j.wait, 'pcBusy');
     assert.equal(j.run, undefined);
     assert.equal(actionFor(j, 'phoneWaiting')?.key, 'cancel');
+    const old = jobOf(applyAck(cmd({ sentAt: T0, createdAt: Date.now() }), { cmdId: cmd().cmdId, state: 'rejected', reason: 'pc_busy' }));
+    assert.equal(old.wait, 'newDay');
+    assert.equal(actionFor(old, 'phoneWaiting')?.key, 'redate');
   });
-  it('세션 중에 다시 보낼 때가 되면 같은 cmdId, 오늘 작성일자로 다시 보내고 이어서 끝난다', async () => {
+  it('기다리는 사이 날짜가 바뀌면 몰래 바꾸지 않고 확인을 기다린다. [오늘 날짜로 맡기기]를 눌러야 바꿔 다시 보낸다', () => {
+    const nextDay = T0 + 86_400_000;
+    const c = applyAck(cmd({ sentAt: T0 }), { cmdId: cmd().cmdId, state: 'rejected', reason: 'pc_busy' }, T0);
+    assert.equal(needsRedate(c, nextDay), true);
+    assert.equal(retryDue(c, nextDay), false);
+    assert.equal(c.req.day, kstDay(T0));
+    const r = redate(c, nextDay);
+    assert.equal(r.req.day, kstDay(nextDay));
+    assert.equal(needsRedate(r, nextDay), false);
+    assert.equal(retryDue(r, nextDay), true);
+  });
+  it('세션 중에 다시 보낼 때가 되면 같은 cmdId, 같은 입력으로 다시 보내고 이어서 끝난다', async () => {
     let clock = T0;
     const m = mockChannel((sent) =>
       sent.length === 1

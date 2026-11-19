@@ -42,12 +42,23 @@ export function busyWaiting(c: PhoneCmd, now = Date.now()): boolean {
   return !c.pcOld && c.ack === 'rejected' && c.reason === 'pc_busy' && now - c.createdAt < BUSY_GIVE_UP_MS;
 }
 
-/** 다시 보낼 때가 된 명령 */
-export const retryDue = (c: PhoneCmd, now = Date.now()): boolean => busyWaiting(c, now) && (c.retryAt ?? 0) <= now;
+/**
+ * 기다리는 사이 날짜가 바뀌었다(PC는 오늘 작성일자만 받는다). 작성일자는 세금계산서 내용이라 폰이 몰래 바꾸지 않는다:
+ * 다시 보내지 않고 사장님 확인([오늘 날짜로 맡기기])을 기다린다.
+ */
+export const needsRedate = (c: PhoneCmd, now = Date.now()): boolean => busyWaiting(c, now) && c.req.day !== kstDay(now);
 
-/** 다시 보내기 전에: 답을 지우고 작성일자를 오늘로(자정을 넘겼으면 PC가 input_invalid로 받지 않는다). 같은 cmdId를 쓴다(PC는 거절한 cmdId를 적어 두지 않는다). */
-export function forRetry(c: PhoneCmd, now = Date.now()): PhoneCmd {
-  return { ...c, ack: undefined, reason: undefined, retryAt: undefined, retries: (c.retries ?? 0) + 1, req: { ...c.req, day: kstDay(now) } };
+/** 다시 보낼 때가 된 명령(날짜가 바뀐 것은 확인 전까지 보내지 않는다) */
+export const retryDue = (c: PhoneCmd, now = Date.now()): boolean => busyWaiting(c, now) && !needsRedate(c, now) && (c.retryAt ?? 0) <= now;
+
+/** 다시 보내기 전에 답을 지운다. 같은 cmdId, 같은 입력(PC는 거절한 cmdId를 적어 두지 않는다). */
+export function forRetry(c: PhoneCmd): PhoneCmd {
+  return { ...c, ack: undefined, reason: undefined, retryAt: undefined, retries: (c.retries ?? 0) + 1 };
+}
+
+/** 사장님이 [오늘 날짜로 맡기기]를 눌렀을 때만: 작성일자를 오늘로 바꾸고 바로 다시 보낼 차례로 둔다. */
+export function redate(c: PhoneCmd, now = Date.now()): PhoneCmd {
+  return { ...c, req: { ...c.req, day: kstDay(now) }, retryAt: now };
 }
 
 /** 오늘(한국 시간) YYYY-MM-DD */
@@ -144,6 +155,7 @@ export function jobOf(c: PhoneCmd): Job {
   const title = `${c.cpName} 세금계산서`;
   const base = { id: `cmd-${c.cmdId}`, title, amount: c.total, createdAt: c.createdAt, pcOnly: true };
   // PC가 다른 일 중: 기다리는 일로 두고 저절로 다시 보낸다(취소할 수 있다, PC는 아무것도 시작하지 않았다)
+  if (needsRedate(c)) return { ...base, state: 'phoneWaiting', wait: 'newDay', waitDay: c.req.day };
   if (busyWaiting(c)) return { ...base, state: 'phoneWaiting', wait: 'pcBusy' };
   const run = runViewOf(c);
   if (!run) return { ...base, state: 'entrusted' };
