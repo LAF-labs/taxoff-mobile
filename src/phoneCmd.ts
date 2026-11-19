@@ -8,7 +8,7 @@
 import type { CmdAckBody, CmdAckState, CmdRejectReason, GateRequestBody, GateResponseBody, PhoneIssueRequest, RunEventBody, RunPhase, RunResult } from '@sax/remote';
 import type { PhoneGate } from './approval';
 import type { Job, NeedPcReason } from './queue';
-import type { RunView } from './run';
+import { PASS_CARRIERS, STEPS, simpleAppOf, type RunView, type Step } from './run.ts';
 
 export interface PhoneCmd {
   cmdId: string;
@@ -28,6 +28,22 @@ export interface PhoneCmd {
   /** 마지막 run.event 시각(PC 시계) */
   at?: number;
   code?: string;
+  /** PC가 사람 차례로 기다린다(run.event 'turn'). code가 그 까닭. 다음 사건이 오면 풀린다. */
+  turn?: boolean;
+  /** 사장님이 [인증서로 다시 시도]를 눌렀다(보낼 cmd.resume, 누른 시각). 보내면 resumeSentAt. 다음 사건이 오면 둘 다 지운다. */
+  resumeAt?: number;
+  resumeSentAt?: number;
+  /** PC가 연 간편인증 요청 자리(human.request manual simple_auth의 reqId) */
+  simpleReq?: string;
+  /** 보낼 간편인증 답(human.response value)과 보낸 시각. 다음 사건이 오면 지운다. */
+  simpleOut?: string;
+  simpleOutSentAt?: number;
+  /** 요청한 인증 앱 코드(승인 대기 화면 글자) */
+  simpleApp?: string;
+  /** 바로 앞 간편인증 요청이 안 됐다(PC login.simple_failed) */
+  simpleFailed?: boolean;
+  /** PC가 알려 준 승인 마감(run.event deadline) */
+  deadline?: number;
   attempt?: number;
   result?: RunResult;
   /** PC가 보낸 승인 요청(gate.request). 승인 단계를 지나면 지운다. */
@@ -119,6 +135,24 @@ export function applyEvent(c: PhoneCmd, e: RunEventBody): PhoneCmd {
     next.gate = undefined;
     next.refresh = undefined;
   }
+  next.turn = e.event === 'turn' ? true : undefined;
+  next.deadline = e.deadline;
+  // 간편인증: 보낸 답이 있었으면 이 사건이 그 결과다. 실패면 고르기로 돌아가고 그 사실을 보인다
+  if (next.simpleOutSentAt !== undefined) {
+    next.simpleOut = undefined;
+    next.simpleOutSentAt = undefined;
+  }
+  next.simpleFailed = e.code === 'login.simple_failed' ? true : e.code?.startsWith('login.simple_sent') ? false : next.simpleFailed;
+  if (e.code === 'login.simple_failed') next.code = 'login.simple_auth';
+  const sent = /^login\.simple_sent\.([a-z]{2,10})$/.exec(e.code ?? '');
+  if (sent) next.simpleApp = sent[1];
+  // 차례를 떠나면 요청 자리도 닫힌다
+  if (!next.turn) next.simpleReq = undefined;
+  // 다시 시도를 보낸 뒤 온 사건(새 실행의 진행이든 그대로 차례든)이면 누름을 끝낸다
+  if (next.resumeSentAt !== undefined) {
+    next.resumeAt = undefined;
+    next.resumeSentAt = undefined;
+  }
   if (e.attempt !== undefined) next.attempt = e.attempt;
   if (e.result) next.result = e.result;
   return next;
@@ -189,11 +223,11 @@ export function settled(c: PhoneCmd, now = Date.now()): boolean {
 export const REJECT_LINE: Record<CmdRejectReason | 'pc_old', string> = {
   playbook_unavailable: 'PC에 발급 절차가 아직 준비되지 않았어요. 아무것도 발급하지 않았어요.',
   input_invalid: 'PC가 이 내용을 받지 않았어요. 금액과 품목을 다시 확인해 주세요.',
-  counterparty_unknown: 'PC에서 이 거래처를 찾지 못했어요. PC의 거래처 목록을 확인해 주세요.',
+  counterparty_unknown: '이 거래처를 찾지 못했어요. 거래처를 다시 골라 주세요.',
   duplicate: '같은 일을 이미 PC에 맡겼어요. 진행은 지금 할 일에서 볼 수 있어요.',
   pc_busy: 'PC가 다른 일을 하고 있어요. 끝나면 다시 맡겨 주세요.',
   hometax_paused: '홈택스가 잠시 접속을 막아서 PC가 발급을 쉬고 있어요. 아무것도 발급하지 않았어요.',
-  pc_old: 'PC 앱을 새 버전으로 올리면 폰에서 맡길 수 있어요.',
+  pc_old: 'PC 앱이 오래된 버전이라 폰에서 맡길 수 없어요.',
 };
 
 /** 진행 화면 모델. 보내지 못했거나 PC가 아직 답하지 않았으면 null(맡김). */
@@ -203,6 +237,18 @@ export function runViewOf(c: PhoneCmd): RunView | null {
   if (c.ack === 'rejected') return { kind: 'refused', reason: c.reason ?? 'input_invalid', startedAt };
   // 보냈지만 아직 답이 없으면 준비 중(맡김으로 두면 폰에서 취소할 수 있어 PC와 어긋난다)
   if (!c.ack) return c.sentAt ? { kind: 'running', step: 'prepare', startedAt, pcApproval: true } : null;
+  // [인증서로 다시 시도]·간편인증 답을 보냈고 PC 답을 기다린다: 로그인 중으로 보인다
+  if (c.turn && (c.resumeAt !== undefined || c.simpleOut !== undefined)) return { kind: 'running', step: 'login', startedAt, pcApproval: true };
+  // PC가 간편인증 요청을 보냈다: 인증 앱 승인 대기(남은 시간)
+  if (c.turn && c.code?.startsWith('login.simple_sent')) {
+    const a = simpleAppOf(c.simpleApp ?? '');
+    return { kind: 'myTurn', step: 'login', auth: { method: 'simple', app: a?.app ?? '인증 앱', pc: true, ...(c.deadline ? { deadline: c.deadline } : {}) }, startedAt };
+  }
+  // PC가 사람 차례로 기다린다(예: 공동인증서 로그인이 안 돼 간편인증 화면을 열어 둠). "진행 중"으로 두지 않는다.
+  if (c.turn && c.phase && c.phase !== 'done' && c.phase !== 'stopped') {
+    const step = (STEPS as readonly string[]).includes(c.phase) ? (c.phase as Step) : 'login';
+    return { kind: 'myTurn', step, auth: { method: 'pc', ...(c.code ? { code: c.code } : {}), ...(c.simpleReq ? { canSimple: true } : {}), ...(c.simpleFailed ? { failed: true } : {}) }, startedAt };
+  }
   if (c.code === 'in_doubt') return c.phase === 'stopped' ? { kind: 'verify', startedAt } : { kind: 'inDoubt', tries: Math.max(1, c.attempt ?? 1), startedAt };
   switch (c.phase) {
     case undefined:
@@ -223,8 +269,8 @@ export function runViewOf(c: PhoneCmd): RunView | null {
         },
       };
     case 'stopped':
-      // PC는 run.event code로 'in_doubt'만 보낸다. 코드가 없거나 모르는 코드면 이유 없이 멈춤(이유는 PC에서)
-      return { kind: 'stopped', step: 'prepare', reason: 'pcStopped', startedAt };
+      // PC는 run.event code로 'in_doubt'와 'app_old'(PC 앱 판이 낮음)만 알린다. 코드가 없거나 모르는 코드면 이유 없이 멈춤
+      return { kind: 'stopped', step: 'prepare', reason: c.code === 'app_old' ? 'appOld' : 'pcStopped', startedAt };
     case 'approve':
       // 승인을 보냈으면 발급 단계로 보인다(결과는 PC가 알려 준다). 폰 승인 요청을 받았으면 PC 승인 바 안내를 뺀다
       if (c.answer?.sentAt && c.answer.decision === 'approve') return { kind: 'running', step: 'issue', startedAt };
@@ -232,6 +278,35 @@ export function runViewOf(c: PhoneCmd): RunView | null {
     default:
       return { kind: 'running', step: c.phase, startedAt, pcApproval: true };
   }
+}
+
+/** 폰 [인증서로 다시 시도]를 받을 수 있는 차례(PC가 공동인증서 로그인 실패로 기다린다) */
+export const canRetryCert = (c: PhoneCmd): boolean => !!c.turn && c.code === 'login.simple_auth' && !!c.runId && c.resumeAt === undefined;
+
+/** [인증서로 다시 시도]를 누름: 다음 라이브 세션에서 cmd.resume을 보낸다 */
+export function askRetryCert(c: PhoneCmd, now = Date.now()): PhoneCmd {
+  return canRetryCert(c) ? { ...c, resumeAt: now, resumeSentAt: undefined } : c;
+}
+
+/** PC가 연 간편인증 요청 자리를 붙인다(human.request manual simple_auth). 같은 runId만. */
+export function applyHumanRequest(c: PhoneCmd, b: { runId?: unknown; reqId?: unknown; kind?: unknown; prompt?: unknown }): PhoneCmd {
+  if (!c.runId || b.runId !== c.runId || b.kind !== 'manual' || b.prompt !== 'simple_auth' || typeof b.reqId !== 'string') return c;
+  return { ...c, simpleReq: b.reqId };
+}
+
+/** 간편인증 요청 값(human.response value, 64자 안). 이름에 ':'는 넣지 않는다. */
+export function simpleRequestValue(id: { provider: string; name: string; birth: string; phone: string; carrier?: string }): string | null {
+  const name = id.name.trim().replace(/:/g, '');
+  const pass = id.provider === 'pass';
+  if (pass ? !PASS_CARRIERS.some((c) => c.code === id.carrier) : id.carrier !== undefined) return null;
+  const v = `sa1:req:${id.provider}${pass ? `-${id.carrier}` : ''}:${id.birth}:${id.phone}:${name}`;
+  return simpleAppOf(id.provider) && /^\d{8}$/.test(id.birth) && /^01\d{8,9}$/.test(id.phone) && name && v.length <= 64 ? v : null;
+}
+
+/** 간편인증 요청을 보낼 차례로 둔다(request) 또는 [승인했어요](done) */
+export function askSimple(c: PhoneCmd, value: string, app?: string): PhoneCmd {
+  if (!c.turn || !c.simpleReq) return c;
+  return { ...c, simpleOut: value, simpleOutSentAt: undefined, ...(app ? { simpleApp: app } : {}) };
 }
 
 /** 밀린 일·대화 카드가 보는 일 한 건 */

@@ -9,20 +9,22 @@ import type { DeviceKeys } from '../keyring';
 import type { PairState } from '../storage/state';
 import { ROOT, writeProtected } from '../storage/files';
 import { OfflineChat } from './chat';
+import { chatDataFor, chatWrapOf, type ChatWrap } from './chatKey';
 import type { PhoneCopy } from '@sax/chat-core';
 
 const AD = utf8('SAX-mobile-chat-v1');
 const FILE = new File(ROOT, 'chat.bin');
+/** 대화에 붙은 카드·표(코어 기록에는 글만 있다). 앱을 껐다 켜도 남도록 따로 봉인해 둔다. */
+const SHOWN = new File(ROOT, 'chat-shown.bin');
 
-/** 기록은 페어링 하나에 묶는다: 다른 PC와 다시 연결하면 옛 대화를 컨텍스트로 쓰지 않는다. */
-function sealedStore(fileKey: Uint8Array, pairId: string) {
+/** 기록은 계정과 PC에 묶는다: QR로 다시 연결해도 같은 계정의 같은 PC면 이어지고, 다른 PC나 다른 계정이면 옛 대화를 쓰지 않는다(chatKey.ts). */
+function sealedStore(fileKey: Uint8Array, pair: PairState, file: File) {
   let writing: Promise<void> = Promise.resolve();
   return {
     async load(): Promise<string | null> {
-      if (!FILE.exists) return null;
+      if (!file.exists) return null;
       try {
-        const w = JSON.parse(fromUtf8(xOpen(fileKey, await FILE.bytes(), AD))) as { pairId?: unknown; data?: unknown };
-        return w.pairId === pairId && typeof w.data === 'string' ? w.data : null;
+        return chatDataFor(JSON.parse(fromUtf8(xOpen(fileKey, await file.bytes(), AD))) as ChatWrap, pair);
       } catch {
         // 깨진 기록은 버리고 새로 시작한다(대화 기록은 PC에도 있다)
         return null;
@@ -30,13 +32,13 @@ function sealedStore(fileKey: Uint8Array, pairId: string) {
     },
     save(data: string): Promise<void> {
       const e = currentEpoch();
-      const box = xSeal(liveKey(fileKey), utf8(JSON.stringify({ pairId, data })), AD);
+      const box = xSeal(liveKey(fileKey), utf8(JSON.stringify(chatWrapOf(pair, data))), AD);
       const mine = inflight(() =>
         writing
           .catch(() => undefined)
           .then(() => {
             sameEpoch(e);
-            return writeProtected(FILE, box);
+            return writeProtected(file, box);
           }),
       );
       writing = mine.catch(() => undefined);
@@ -74,7 +76,8 @@ export function offlineChat(pair: PairState, keys: DeviceKeys, copy: () => Phone
         return { status: r.status, text: () => r.text() };
       },
       authHeaders: (method, url) => auth(method, url),
-      store: sealedStore(keys.fileKey, pair.pairId),
+      store: sealedStore(keys.fileKey, pair, FILE),
+      shownStore: sealedStore(keys.fileKey, pair, SHOWN),
       copy,
       now: Date.now,
       newId: () => ulid(),

@@ -16,17 +16,66 @@ export const STEP_LABEL: Record<Step, string> = {
 /** 폰에서 열 수 있는 인증 앱(이름 → 앱 주소). 여기 없는 앱은 여는 단추를 두지 않는다. */
 export const AUTH_APPS: Readonly<Record<string, string>> = {
   카카오뱅크: 'kakaobank://',
+  카카오톡: 'kakaotalk://',
   토스: 'supertoss://',
 };
 
-/** deadline: PC가 알려 준 간편인증 마감(ms). 있으면 경과 대신 남은 시간을 보인다. */
-export type Auth = { method: 'simple'; app: string; deadline?: number } | { method: 'cert' };
+/**
+ * 폰에서 시작하는 간편인증의 인증 앱(홈택스 개인용 간편인증 창과 같은 것, PC 엔진 run/simple-auth.ts OACX_PROVIDERS와 같은 코드).
+ * name은 화면 글자, app은 승인 앱 이름(AUTH_APPS에 있으면 여는 단추). 카카오톡·네이버·토스·PASS를 앞에 둔다(대표 2026-11-19). PASS는 통신사를 같이 고른다.
+ */
+export const SIMPLE_APPS: ReadonlyArray<{ code: string; name: string; app: string }> = [
+  { code: 'kakao', name: '카카오톡', app: '카카오톡' },
+  { code: 'naver', name: '네이버', app: '네이버' },
+  { code: 'toss', name: '토스', app: '토스' },
+  { code: 'pass', name: 'PASS', app: 'PASS' },
+  { code: 'kakaobank', name: '카카오뱅크', app: '카카오뱅크' },
+  { code: 'kb', name: 'KB국민', app: 'KB스타뱅킹' },
+  { code: 'shinhan', name: '신한', app: '신한 SOL' },
+  { code: 'woori', name: '우리', app: '우리WON' },
+  { code: 'hana', name: '하나', app: '하나원큐' },
+  { code: 'nh', name: 'NH', app: 'NH스마트뱅킹' },
+  { code: 'ibk', name: 'IBK', app: 'i-ONE Bank' },
+  { code: 'samsung', name: '삼성패스', app: '삼성패스' },
+  { code: 'banksalad', name: '뱅크샐러드', app: '뱅크샐러드' },
+];
+/** PASS 통신사(홈택스 창 값을 소문자로) */
+export const PASS_CARRIERS: ReadonlyArray<{ code: string; name: string }> = [
+  { code: 's', name: 'SKT' },
+  { code: 'k', name: 'KT' },
+  { code: 'l', name: 'LGU+' },
+  { code: 'sa', name: 'SKT 알뜰폰' },
+  { code: 'ka', name: 'KT 알뜰폰' },
+  { code: 'la', name: 'LGU+ 알뜰폰' },
+];
+export const simpleAppOf = (code: string) => SIMPLE_APPS.find((a) => a.code === code) ?? null;
 
-/** pcStopped: 폰 발급 명령을 PC가 멈춤(이유 코드 없음. 이유는 PC에서 본다) */
-export type StopReason = 'blocked' | 'unknownScreen' | 'dateMismatch' | 'inputMismatch' | 'totalMismatch' | 'otherLogin' | 'passwordError' | 'pcStopped';
+/**
+ * deadline: PC가 알려 준 간편인증 마감(ms). 있으면 경과 대신 남은 시간을 보인다.
+ * pc: 폰이 PC에 맡긴 일의 간편인증(PC가 홈택스 창을 채워 요청했다). 승인 뒤 [승인했어요]로 PC가 이어서 한다.
+ * pc 방식(공동인증서 실패 차례): canSimple이면 폰에서 간편인증을 시작할 수 있다(PC가 요청 자리를 열었다). failed면 바로 앞 요청이 안 됐다.
+ */
+export type Auth = { method: 'simple'; app: string; deadline?: number; pc?: boolean } | { method: 'cert' } | { method: 'pc'; code?: string; canSimple?: boolean; failed?: boolean };
+
+/**
+ * PC가 사람 차례로 멈춘 까닭(run.event 'turn'의 code, PC 엔진 코드)별 한 줄. line은 진행 카드, short는 밀린 일·알림.
+ * 폰에서는 할 수 없는 일이라(홈택스 창은 PC에 있다) 할 일을 PC 기준으로 말한다. 모르는 코드는 기본 줄.
+ */
+export const PC_TURN: Readonly<Record<string, { line: string; short: string }>> = {
+  'login.simple_auth': { line: '공동인증서 로그인이 두 번 안 됐어요', short: '공동인증서 로그인이 안 됐어요' },
+  'cert.pick_needed': { line: '인증서가 여러 개라 어느 것으로 로그인할지 정해야 해요. 아무것도 발급하지 않았어요', short: '쓸 인증서를 정해야 해요' },
+  'portal.captcha': { line: '홈택스가 자동입력방지 문자를 물어서 로그인 앞에서 기다리고 있어요', short: '홈택스 로그인 앞에서 기다려요' },
+  'portal.mfa_pending': { line: '홈택스가 추가 인증을 요구해서 로그인 앞에서 기다리고 있어요', short: '홈택스 추가 인증을 기다려요' },
+  'issue.locked_elsewhere': { line: '다른 PC에서 발급 중이에요. 그 발급이 끝나면 이어서 해요', short: '다른 PC의 발급을 기다려요' },
+};
+const PC_TURN_DEFAULT = { line: '홈택스에서 예상하지 못한 화면이 나와 멈춰 있어요', short: '예상 밖 화면에서 멈췄어요' };
+export const pcTurnOf = (code?: string) => (code && Object.hasOwn(PC_TURN, code) ? PC_TURN[code]! : PC_TURN_DEFAULT);
+
+/** pcStopped: 폰 발급 명령을 PC가 멈춤(이유 코드 없음). appOld: PC 앱 판이 낮아 시작하지 않음(PC가 run.event code app_old로 알린다) */
+export type StopReason = 'blocked' | 'unknownScreen' | 'dateMismatch' | 'inputMismatch' | 'totalMismatch' | 'otherLogin' | 'passwordError' | 'pcStopped' | 'appOld';
 
 /** 폰에서 할 수 있는 다음 행동. 못 하는 것(브라우저로 가기·금고에서 확인)은 PC에서 열기 예약으로 바꾼다. */
-export type RunAction = 'retryPrepare' | 'reserveOnPc' | 'resendAuth' | 'stop' | 'close' | 'openApp';
+export type RunAction = 'retryPrepare' | 'reserveOnPc' | 'resendAuth' | 'retryCert' | 'simpleAuth' | 'authDone' | 'stop' | 'close' | 'openApp';
 
 export const STOP_COPY: Record<StopReason, { line: string; action: 'retryPrepare' | 'reserveOnPc' }> = {
   blocked: { line: '홈택스가 잠시 접속을 막아서 24시간 동안 쉬어요. 아무것도 발급하지 않았어요.', action: 'reserveOnPc' },
@@ -35,14 +84,18 @@ export const STOP_COPY: Record<StopReason, { line: string; action: 'retryPrepare
   inputMismatch: { line: '홈택스 화면 값이 준비한 값과 달라 승인을 열지 않았어요. 아무것도 발급하지 않았어요.', action: 'retryPrepare' },
   totalMismatch: { line: '홈택스 화면의 공급가액과 세액을 더한 값이 합계와 달라 승인을 열지 않았어요. 아무것도 발급하지 않았어요.', action: 'retryPrepare' },
   otherLogin: { line: '다른 곳에서 홈택스에 로그인해 연결이 끊겼어요. 아무것도 발급하지 않았어요.', action: 'retryPrepare' },
-  passwordError: { line: '홈택스에서 비밀번호가 맞지 않는대요. PC의 금고에 저장한 비밀번호를 확인해 주세요. 아무것도 발급하지 않았어요.', action: 'reserveOnPc' },
-  pcStopped: { line: '멈췄어요. 아무것도 발급하지 않았어요. 이유는 PC에서 볼 수 있어요.', action: 'reserveOnPc' },
+  passwordError: { line: '홈택스에서 비밀번호가 맞지 않는대요. 저장해 둔 비밀번호는 지웠어요. 아무것도 발급하지 않았어요.', action: 'reserveOnPc' },
+  pcStopped: { line: '멈췄어요. 아무것도 발급하지 않았어요.', action: 'reserveOnPc' },
+  appOld: { line: 'PC 앱 버전이 낮아 시작하지 않았어요. PC 앱을 업데이트하면 다시 할 수 있어요. 아무것도 발급하지 않았어요.', action: 'retryPrepare' },
 };
 
 export const ACTION_LABEL: Record<RunAction, string> = {
   retryPrepare: '다시 준비',
   reserveOnPc: 'PC에서 열기 예약',
   resendAuth: '다시 요청',
+  retryCert: '인증서로 다시 시도',
+  simpleAuth: '간편인증으로 로그인',
+  authDone: '승인했어요',
   stop: '중지',
   close: '닫기',
   openApp: '',
@@ -119,6 +172,13 @@ export function actionsOf(r: RunView, now = Date.now()): RunAction[] {
       return r.step === 'issue' || r.step === 'verify' || r.step === 'approve' ? ['close'] : ['stop'];
     case 'myTurn':
       if (r.auth.method === 'cert') return ['reserveOnPc', 'stop'];
+      // PC가 맡은 일의 사람 차례: 폰에서 할 수 있는 일이 없다(홈택스 창은 PC에)
+      if (r.auth.method === 'pc') return r.auth.code === 'login.simple_auth' ? (r.auth.canSimple ? ['simpleAuth', 'retryCert'] : ['retryCert', 'close']) : ['close'];
+      // PC가 맡은 일의 간편인증: 승인 뒤 [승인했어요]. 시간이 지났으면 다시 요청하거나 인증서로
+      if (r.auth.pc) {
+        if (r.auth.deadline !== undefined && r.auth.deadline <= now) return ['resendAuth', 'retryCert'];
+        return Object.hasOwn(AUTH_APPS, r.auth.app) ? ['authDone', 'openApp', 'resendAuth'] : ['authDone', 'resendAuth'];
+      }
       // 간편인증 시간이 지났으면 [다시 요청]이 기본 행동이다
       if (r.auth.deadline !== undefined && r.auth.deadline <= now) return ['resendAuth', 'stop'];
       return Object.hasOwn(AUTH_APPS, r.auth.app) ? ['openApp', 'resendAuth', 'stop'] : ['resendAuth', 'stop'];

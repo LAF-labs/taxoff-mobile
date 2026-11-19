@@ -80,12 +80,17 @@ export function useOfflineChat(): OfflineChatView {
       };
       try {
         const r = await chat.send(text);
-        setExtra((x) => [...x, ...r.items, ...(r.unavailable ? fail(r.unavailable.text, r.unavailable.retry) : [])]);
+        const failed = r.unavailable ? fail(r.unavailable.text, r.unavailable.retry) : [];
+        // 못 보낸 말과 이유 줄도 남긴다: 앱을 껐다 켜도 [다시 보내기]가 보이게
+        if (failed.length) void chat.keep(failed);
+        setExtra((x) => [...x, ...r.items, ...failed]);
         setChips(r.chips);
         setScreens(r.screens);
         if (r.drafts.length) setOpenDrafts((o) => new Set([...o, ...r.drafts.filter((d) => d.state === 'open').map((d) => d.id)]));
       } catch {
-        setExtra((x) => [...x, ...fail(SEND_FAILED_TEXT, true)]);
+        const failed = fail(SEND_FAILED_TEXT, true);
+        void chat.keep(failed);
+        setExtra((x) => [...x, ...failed]);
       } finally {
         setPending(null);
         sending.current = false;
@@ -97,16 +102,24 @@ export function useOfflineChat(): OfflineChatView {
 
   const retry = useCallback(
     async (noteId: string) => {
-      const i = extra.findIndex((x) => x.id === noteId);
-      const n = extra[i];
-      if (!n || n.kind !== 'note' || !n.failed?.retry || sending.current) return;
+      // 남겨 둔 줄(log)과 이번 실행에서 만든 줄(extra)을 같이 본다
+      const all = [...log, ...extra.filter((x) => !log.some((l) => l.id === x.id))];
+      const i = all.findIndex((x) => x.id === noteId);
+      const n = all[i];
+      if (!chat || !n || n.kind !== 'note' || !n.failed?.retry || sending.current) return;
       const text = n.failed.retry;
       // 이유 줄과 바로 앞의 못 보낸 내 말을 지운다
-      setExtra((x) => x.filter((y, j) => y.id !== noteId && !(j === i - 1 && y.kind === 'msg' && y.state === 'failed')));
+      const prev = all[i - 1];
+      const gone = [noteId, ...(prev && prev.kind === 'msg' && prev.state === 'failed' ? [prev.id] : [])];
+      setExtra((x) => x.filter((y) => !gone.includes(y.id)));
+      setLog((l) => l.filter((y) => !gone.includes(y.id)));
+      await chat.forget(gone);
       await send(text);
     },
-    [extra, send],
+    [chat, log, extra, send],
   );
 
-  return { available: !!chat, items: [...log, ...extra, ...(pending ? [pending] : [])], busy, chips, openDrafts, screens, send, retry };
+  // 남겨 둔 카드·표(log)와 방금 받은 것(extra)이 같은 줄이면 한 번만 보인다
+  const shownIds = new Set(log.map((x) => x.id));
+  return { available: !!chat, items: [...log, ...extra.filter((x) => !shownIds.has(x.id)), ...(pending ? [pending] : [])], busy, chips, openDrafts, screens, send, retry };
 }
