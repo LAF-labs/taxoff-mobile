@@ -168,16 +168,25 @@ export function PushHost({ onQueue, onRun, askPreview }: {
     return () => sub.remove();
   }, [askPreview]);
 
-  // 앱이 뒤에 있는데 승인 요청이 왔다(뒤로 간 직후 아직 붙어 있던 연결로): 폰이 직접 알린다. 앞에 있으면 시트가 바로 뜬다
-  const told = useRef(new Set<string>());
+  // 승인 요청이 왔다. 앞에 있으면 그 요청의 시트를 한 번 연다(뒤에서 받은 적이 있어도). 뒤에 있으면(뒤로 간 직후 아직 붙어 있던
+  // 연결로 받았다) 폰이 직접 알린다. 누르면 잠금 뒤 승인 시트로 간다(push.ts tapKindOf).
+  const toldBg = useRef(new Set<string>());
+  const shownFg = useRef(new Set<string>());
   useEffect(() => {
     if (askPreview) return;
-    const fresh = newGates(q.jobs, told.current, Date.now());
+    const now = Date.now();
+    if (AppState.currentState === 'active') {
+      const fresh = newGates(q.jobs, shownFg.current, now);
+      for (const j of fresh) shownFg.current.add(j.gate!.reqId);
+      if (fresh[0] && !q.sheetJob) q.openSheet(fresh[0].id);
+      return;
+    }
+    const fresh = newGates(q.jobs, toldBg.current, now);
     if (!fresh.length) return;
-    for (const j of fresh) told.current.add(j.gate!.reqId);
-    if (AppState.currentState === 'active' || !wakeOn(live.current.s.data.notify)) return;
+    for (const j of fresh) toldBg.current.add(j.gate!.reqId);
+    if (!wakeOn(live.current.s.data.notify)) return;
     void notifyNow({ title: '승인을 기다리는 발급이 있어요', body: '눌러서 승인하거나 거절해 주세요' }, { open: LOCAL_APPROVE, jobId: fresh[0]!.id });
-  }, [q.jobs, askPreview]);
+  }, [q.jobs, q.sheetJob, q.openSheet, askPreview]);
 
   // 허용 묻기: 첫 발급을 맡긴 뒤 한 번
   const entrusted = (s.data.cmds ?? []).length;
