@@ -6,7 +6,7 @@
 // - 시작 확인이 있으면 바닥 주요 단추 [모두 시작]. 비었으면 "밀린 일이 없어요".
 import { Pressable, StyleSheet, View } from 'react-native';
 import { clock } from '../chat';
-import type { RefuseReason, RunView, Step } from '../run';
+import { pcTurnOf, type RefuseReason, type RunView, type Step } from '../run';
 import { actionFor, groupJobs, type Job, type JobAction, type JobState, type NeedPcReason } from '../queue';
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
@@ -74,7 +74,7 @@ export function statusLine(job: Job, state: JobState): string {
   if (r?.kind === 'refused') return REFUSED[r.reason];
   if (r?.kind === 'stopped') return r.reason === 'appOld' ? 'PC 앱을 업데이트해 주세요' : '중지됐어요';
   if (state === 'needPc' && job.reason) return NEED_PC[job.reason];
-  if (r?.kind === 'myTurn') return r.auth.method === 'cert' ? '인증서 비밀번호가 필요해요' : '간편인증을 승인해 주세요';
+  if (r?.kind === 'myTurn') return r.auth.method === 'cert' ? '인증서 비밀번호가 필요해요' : r.auth.method === 'pc' ? pcTurnOf(r.auth.code).short : '간편인증을 승인해 주세요';
   if (r?.kind === 'inDoubt') return '발급됐는지 보고 있어요';
   if (state === 'running' && r?.kind === 'running') return RUNNING[r.step];
   return PLAIN[state];

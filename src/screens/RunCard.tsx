@@ -8,10 +8,13 @@ import { useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { REJECT_LINE } from '../phoneCmd';
 import type { Job } from '../queue';
-import { ACTION_LABEL, AUTH_APPS, STEPS, STEP_LABEL, STOP_COPY, actionsOf, chipOf, elapsed, groupApprovalNo, mmss, stepOf, type IssueResult, type RunAction, type RunView } from '../run';
+import { ACTION_LABEL, AUTH_APPS, STEPS, STEP_LABEL, STOP_COPY, actionsOf, chipOf, elapsed, groupApprovalNo, mmss, pcTurnOf, stepOf, type IssueResult, type RunAction, type RunView } from '../run';
 import { radius, space, usePalette } from '../theme';
 import { Check, Chevron, Pill, StatusDot, T, success, won } from '../ui/kit';
 
+
+/** PC가 맡은 일의 로그인 차례(폰에서 할 수 있는 일이 있다) */
+const pcTurn = (r: RunView) => r.kind === 'myTurn' && (r.auth.method === 'pc' || (r.auth.method === 'simple' && !!r.auth.pc));
 
 export function actionLabel(a: RunAction, r: RunView): string {
   if (a === 'openApp' && r.kind === 'myTurn' && r.auth.method === 'simple') return `${r.auth.app} 열기`;
@@ -95,7 +98,8 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
       {r.kind !== 'done' && r.kind !== 'refused' && !(r.kind === 'stopped' && (r.reason === 'pcStopped' || r.reason === 'appOld')) && (compact ? <FoldSteps id={job.id} r={r} /> : <StepBar r={r} />)}
       <StateLines r={r} />
       {r.kind === 'done' && <ResultRows result={r.result} />}
-      {compact && !job.pcOnly && <CardActions r={r} now={now} onAction={onAction} onDoc={onDoc} onShare={onShare} />}
+      {/* 폰 발급 명령은 지켜보기만 한다. 로그인 차례(간편인증·인증서로 다시·승인했어요)만 대화 카드에서 바로 한다 */}
+      {compact && (!job.pcOnly || pcTurn(r)) && <CardActions r={r} now={now} onAction={onAction} onDoc={onDoc} onShare={onShare} />}
     </View>
   );
   if (!compact || !onOpen) return body;
@@ -199,7 +203,7 @@ function StateLines({ r }: { r: RunView }) {
     case 'myTurn':
       return (
         <T v="sub" c="attention" testID="run-my-turn">
-          {r.auth.method === 'simple' ? `${r.auth.app} 앱에서 승인해 주세요` : '인증서 비밀번호는 PC에서만 입력할 수 있어요'}
+          {r.auth.method === 'simple' ? `${r.auth.app} 앱에서 승인해 주세요` : r.auth.method === 'pc' ? pcTurnOf(r.auth.code).line : '인증서 비밀번호가 필요해요'}
         </T>
       );
     case 'stopped':

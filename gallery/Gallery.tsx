@@ -25,6 +25,7 @@ import { buildGate, type GateField, type PhoneGate } from '../src/approval';
 import { useEffect } from 'react';
 import { useQueue } from '../src/queueStore';
 import { RunScreen } from '../src/screens/RunScreen';
+import { SimpleAuthSheet, draftOf } from '../src/screens/SimpleAuthSheet';
 import { BizRegScreen, type BizRegPreview } from '../src/screens/BizRegScreen';
 import { PDF_LINE } from '../src/capture/pick';
 import { MoneyProvider, type MarkState, type MoneyStatus } from '../src/moneyStore';
@@ -267,6 +268,16 @@ const CMD = (o: Partial<PhoneCmd> = {}): PhoneCmd => ({
 const pcRun = (o: Partial<PhoneCmd>) => ({
   session: fake({ ...copyData(), cmds: [CMD(o)] }, 'online'), focus: 'cmd-G1', node: <RunScreen onDone={noop} onDoc={noop} onRecords={noop} now={now} />,
 });
+const simpleSheet = (start?: Parameters<typeof SimpleAuthSheet>[0]['start'], remembered?: Parameters<typeof SimpleAuthSheet>[0]['remembered'], failed?: boolean) => ({
+  session: fake({ ...copyData(), cmds: [CMD({ phase: 'login', turn: true, code: 'login.simple_auth', simpleReq: '01JD0000000000000000000000' })] }, 'online'),
+  notes: [{ kind: 'run' as const, id: 'run-cmd-G1', at: now - 90_000, jobId: 'cmd-G1' }],
+  node: (
+    <>
+      <Main chat={CHAT} live />
+      <SimpleAuthSheet remembered={remembered} failed={failed} onSend={noop} onClose={noop} start={start} />
+    </>
+  ),
+});
 const docCase = (state: DocState, result = RES) => ({
   session: fake(paired(), state.kind === 'pcOff' ? 'offline' : 'online'), jobs: [runJob({ kind: 'done', result, startedAt: T0 })], focus: 'r1', node: <DocScreen onDone={noop} state={state} />,
 });
@@ -423,6 +434,27 @@ const SCREENS: Record<
   'run-pc-approve': () => pcRun({ phase: 'approve' }),
   'run-pc-in-doubt': () => pcRun({ phase: 'verify', code: 'in_doubt', attempt: 2 }),
   'run-pc-stopped': () => pcRun({ phase: 'stopped' }),
+  // PC가 사람 차례로 멈춤(run.event 'turn'): 공동인증서 로그인이 안 돼 간편인증 화면을 열어 둠, 모르는 까닭
+  'run-pc-turn-simple': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_auth' }),
+  'run-pc-turn-other': () => pcRun({ phase: 'readback', turn: true, code: 'turn.other' }),
+  // 폰에서 간편인증: 고르기(인증서로 다시·간편인증), 승인 대기(남은 시간), 시간 지남, 앞 요청 실패
+  'run-pc-turn-choice': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_auth', simpleReq: '01JD0000000000000000000000' }),
+  // 간편인증 시트: 채팅 화면 위에서 한 단계씩(앱 → 통신사 → 이름 → 생년월일 → 휴대폰), 앞서 쓴 값이면 확인 한 장
+  'simple-sheet-app': () => simpleSheet({ step: 'app' }),
+  'simple-sheet-carrier': () => simpleSheet({ step: 'carrier', draft: { ...draftOf(null), provider: 'pass' } }),
+  'simple-sheet-name': () => simpleSheet({ step: 'name', draft: { ...draftOf(null), provider: 'kakao', name: '김가' } }),
+  'simple-sheet-phone': () => simpleSheet({ step: 'phone', draft: { ...draftOf(null), provider: 'kakao', name: '김가나', birth: '1984-03-12', phone: '010-1234-56' } }),
+  'simple-sheet-confirm': () => simpleSheet(undefined, { provider: 'kakao', name: '김가나', birth: '19840312', phone: '01012345678' }),
+  'simple-sheet-failed': () => simpleSheet({ step: 'app', draft: { ...draftOf(null), provider: 'kakao' } }, null, true),
+  'run-pc-turn-choice-failed': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_auth', simpleReq: '01JD0000000000000000000000', simpleFailed: true }),
+  'run-pc-simple-wait': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_sent.kakao', simpleApp: 'kakao', simpleReq: '01JD0000000000000000000000', deadline: now + 248_000 }),
+  'run-pc-simple-timeout': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_sent.kakao', simpleApp: 'kakao', simpleReq: '01JD0000000000000000000000', deadline: now - 1_000 }),
+  'home-chat-pc-turn': () => ({
+    session: fake({ ...copyData(), cmds: [CMD({ phase: 'login', turn: true, code: 'login.simple_auth', simpleReq: '01JD0000000000000000000000' })] }, 'online'),
+    notes: [{ kind: 'run', id: 'run-cmd-G1', at: now - 90_000, jobId: 'cmd-G1' }],
+    node: <Main chat={CHAT} live />,
+  }),
+  'queue-pc-turn': () => ({ session: fake({ ...copyData(), cmds: [CMD({ phase: 'login', turn: true, code: 'login.simple_auth' })] }, 'online'), node: <QueueScreen onDone={noop} onConnection={noop} onOpen={noop} now={now} /> }),
   'run-pc-done': () => pcRun({ phase: 'done', result: { approvalNo: '20261117-41000000-12345678', total: 1_353_000, emailSent: true } }),
   'run-pc-refused': () => pcRun({ ack: 'rejected', reason: 'counterparty_unknown', runId: undefined }),
   'run-pc-busy': () => pcRun({ ack: 'rejected', reason: 'pc_busy', runId: undefined }),
