@@ -455,6 +455,8 @@ const SCREENS: Record<
   // PC가 켜져 있어도 폰 대화로 보낸다: "세금계산서"라는 말 없이 "끊어줘"만으로 카드가 뜨고 [발급 맡기기]가 붙는다
   'home-phone-card': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('card')} /> }),
   'home-phone-ask': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('ask')} /> }),
+  'home-phone-screen': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('screen')} /> }),
+  'home-phone-lunch': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('lunch')} /> }),
   'home-plus-menu': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('card')} menu /> }),
   'home-phone-limit': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('limit')} /> }),
   /** 처음 연결한 뒤 대화가 아직 없는 홈(앱이 이 폰 기록으로 만든 대화) */
