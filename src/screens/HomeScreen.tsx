@@ -4,10 +4,10 @@
 //   대화(PC 답은 글자, 카드 답은 tint 면, 내 말은 오른쪽 tint 말풍선, 폰에서 나눈 구간 머리)
 //   바닥: 입력 줄 하나. 왼쪽 [+]가 빠른 일(세금계산서 발급·증빙 찍기·현금 매출)을 펼치고, 오른쪽 작은 원이 보내기다. 키보드가 올라오면 함께 올라간다.
 // 적은 말은 PC가 켜져 있든 꺼져 있든 이 폰이 게이트웨이로 직접 보낸다(ADR-047 결정 6, 대화는 기기마다 따로). 발급은 카드에서 PC에 맡긴다.
-import { useContext, useEffect, useRef, useState, type ComponentRef } from 'react';
+import { Fragment, useContext, useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { bubbleGroup, chatFromData, clock, clockRange, stateOf, whoOf, type ChatCard, type ChatItem } from '../chat';
+import { bubbleGroup, chatFromData, clockRange, stampBefore, stateOf, type ChatCard, type ChatItem } from '../chat';
 import { useOfflineChat, type OfflineChatView } from '../offline/useOfflineChat';
 import type { PhoneScreen } from '@sax/chat-core';
 import { BRAND } from '../config';
@@ -169,13 +169,19 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
           ) : items.length === 0 ? (
             <Starter phoneAnswers={phoneAnswers} onPick={pick} />
           ) : (
-            items.map((it, i) =>
-              it.kind === 'run' ? (
-                <RunItem key={it.id} jobId={it.jobId} go={go} />
-              ) : (
-                <Item key={it.id} it={it} group={bubbleGroup(items, i)} onRetry={(id) => void offline.retry(id)} retryOff={offline.busy} openDrafts={offline.openDrafts} onIssue={issueFrom} />
-              ),
-            )
+            items.map((it, i) => {
+              const stamp = stampBefore(items, i);
+              return (
+                <Fragment key={it.id}>
+                  {stamp !== null && <Stamp text={stamp} first={i === 0} />}
+                  {it.kind === 'run' ? (
+                    <RunItem jobId={it.jobId} go={go} />
+                  ) : (
+                    <Item it={it} group={bubbleGroup(items, i)} onRetry={(id) => void offline.retry(id)} retryOff={offline.busy} openDrafts={offline.openDrafts} onIssue={issueFrom} />
+                  )}
+                </Fragment>
+              );
+            })
           )}
           {paired && canSend && offline.busy && <Typing />}
           {paired && canSend && !offline.busy && offline.chips.length > 0 && (
@@ -367,7 +373,7 @@ function RunItem({ jobId, go }: { jobId: string; go: (to: HomeRoute) => void }) 
   );
 }
 
-function Item({ it, group, onRetry, retryOff, openDrafts, onIssue }: { it: Exclude<ChatItem, { kind: 'run' }>; group: { first: boolean; time: boolean }; onRetry: (noteId: string) => void; retryOff?: boolean; openDrafts?: ReadonlySet<string>; onIssue: (d: NonNullable<ChatCard['draft']>) => void }) {
+function Item({ it, group, onRetry, retryOff, openDrafts, onIssue }: { it: Exclude<ChatItem, { kind: 'run' }>; group: { first: boolean; last: boolean }; onRetry: (noteId: string) => void; retryOff?: boolean; openDrafts?: ReadonlySet<string>; onIssue: (d: NonNullable<ChatCard['draft']>) => void }) {
   const p = usePalette();
   if (it.kind === 'merged') {
     return (
@@ -408,91 +414,106 @@ function Item({ it, group, onRetry, retryOff, openDrafts, onIssue }: { it: Exclu
     );
   }
   const me = it.from === 'me';
-  const who = whoOf(it);
   const state = stateOf(it);
-  // 시각은 말풍선 밖 아래 귀퉁이(카카오톡처럼): 내 말은 왼쪽 아래, 상대 말은 오른쪽 아래. 상태는 시각 위에 한 줄.
-  const stamp = group.time && (
-    <View style={[st.stamp, me && { alignItems: 'flex-end' }]} testID="chat-time">
+  // 묶음 안에서 이어 붙은 귀퉁이만 6(Muse): 상대 말은 왼쪽, 내 말은 오른쪽
+  const side = me ? 'Right' : 'Left';
+  const corners = { [`borderTop${side}Radius`]: group.first ? 22 : 6, [`borderBottom${side}Radius`]: group.last ? 22 : 6 };
+  return (
+    <View style={[st.msg, !group.first && st.follow, me ? st.mine : st.theirs]} testID={`chat-${it.from}`}>
+      {it.text !== undefined && (
+        <View style={[st.bubble, { backgroundColor: me ? p.bubbleMe : p.bubbleThem }, corners]} testID="chat-bubble">
+          <T style={me ? { color: p.onBubbleMe } : undefined}>{it.text}</T>
+        </View>
+      )}
+      {it.card && <Card card={it.card} onIssue={it.card.draft && (!openDrafts || openDrafts.has(it.card.draft.id)) ? onIssue : undefined} />}
       {state !== '' && (
-        <T v="meta" c={it.state === 'failed' ? 'attention' : 'ink3'} style={me ? { textAlign: 'right' } : undefined}>
+        <T v="meta" c={it.state === 'failed' ? 'attention' : 'ink3'} style={{ textAlign: 'right' }} testID="chat-state">
           {state}
         </T>
       )}
-      <T v="meta" c="ink4">
-        {clock(it.at)}
-      </T>
-    </View>
-  );
-  // 말풍선 꼬리 대신 묶음 첫 말의 바깥 위 귀퉁이만 덜 둥글게
-  const tail = group.first ? (me ? { borderTopRightRadius: 6 } : { borderTopLeftRadius: 6 }) : null;
-  return (
-    <View style={[st.msg, !group.first && st.follow, me ? st.mine : st.theirs]} testID={`chat-${it.from}`}>
-      {!me && group.first && (
-        <T v="meta" c="ink3" style={st.who} testID="chat-who">
-          {who}
-        </T>
-      )}
-      <View style={[st.line, me && { justifyContent: 'flex-end' }]}>
-        {me && stamp}
-        <View style={[st.body, me ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' }, it.card && st.bodyCard]}>
-          {it.text !== undefined && (
-            <View style={[st.bubble, { backgroundColor: me ? p.ink : p.tint }, tail]} testID="chat-bubble">
-              <T c={me ? 'onInk' : 'ink'}>{it.text}</T>
-            </View>
-          )}
-          {it.card && <Card card={it.card} onIssue={it.card.draft && (!openDrafts || openDrafts.has(it.card.draft.id)) ? onIssue : undefined} />}
-        </View>
-        {!me && stamp}
-      </View>
     </View>
   );
 }
 
+/** 시각 줄(Muse): 가운데 작은 한 줄. 대화 첫 줄은 위를 더 띄운다(40). */
+function Stamp({ text, first }: { text: string; first: boolean }) {
+  const p = usePalette();
+  return (
+    <T v="meta" center style={[{ color: p.stamp }, first && { marginTop: space.s7 - space.s4 }]} testID="chat-stamp">
+      {text}
+    </T>
+  );
+}
+
 /**
- * 답을 기다리는 동안: 상대 쪽 말풍선 안에서 점 셋이 차례로 살짝 오르내리며 색이 진해졌다 옅어진다(글자 없이).
- * 동작 줄이기 설정이면 점 셋을 가만히 둔다. 화면 읽기에는 "답을 기다리고 있어요"로 읽힌다.
+ * 답을 기다리는 동안(Muse 12.1과 같은 움직임, 글자 없이): 상대 말풍선 안 점 셋.
+ * 점마다 1초 주기로 2pt 오르내리고(0, 150, 300ms 늦게), 진한 점이 400ms마다 다음 점으로 옮겨 간다(색 바뀜 200ms).
+ * 보낸 뒤 180ms 기다렸다가 8pt 아래에서 300ms 동안 떠오르며 나타난다. 동작 줄이기 설정이면 움직이지 않는다.
  */
+const DOT_DELAY = [0, 150, 300];
+const DOT_UP = Easing.bezier(0, 0, 0.2, 1);
+const DOT_DOWN = Easing.bezier(0.8, 0, 1, 1);
 function Typing() {
   const p = usePalette();
   const reduce = useReducedMotion();
-  const dots = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
+  const appear = useRef(new Animated.Value(reduce ? 1 : 0)).current;
+  const lift = useRef(DOT_DELAY.map(() => new Animated.Value(1))).current;
+  const tone = useRef(DOT_DELAY.map((_, i) => new Animated.Value(i === 0 ? 1 : 0))).current;
+  const [dark, setDark] = useState(0);
   useEffect(() => {
-    if (reduce) return;
-    // 색을 바꾸려면 네이티브 구동을 쓸 수 없다(점 셋뿐이라 부담 없음)
-    const native = false;
-    const loop = Animated.loop(
-      Animated.stagger(
-        160,
-        dots.map((d) =>
+    if (reduce) {
+      appear.setValue(1);
+      return;
+    }
+    // 색을 함께 움직이므로 모두 JS 구동(점 셋뿐이라 부담 없음)
+    const show = Animated.timing(appear, { toValue: 1, delay: 180, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false });
+    const bounce = lift.map((v, i) => {
+      v.setValue(0);
+      return Animated.sequence([
+        Animated.delay(DOT_DELAY[i]!),
+        Animated.loop(
           Animated.sequence([
-            Animated.timing(d, { toValue: 1, duration: 300, easing: Easing.out(Easing.quad), useNativeDriver: native }),
-            Animated.timing(d, { toValue: 0, duration: 300, easing: Easing.in(Easing.quad), useNativeDriver: native }),
-            Animated.delay(320),
+            Animated.timing(v, { toValue: 1, duration: 500, easing: DOT_DOWN, useNativeDriver: false }),
+            Animated.timing(v, { toValue: 0, duration: 500, easing: DOT_UP, useNativeDriver: false }),
           ]),
         ),
-      ),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [reduce, dots]);
+      ]);
+    });
+    show.start();
+    bounce.forEach((a) => a.start());
+    const tick = setInterval(() => setDark((d) => (d + 1) % 3), 400);
+    return () => {
+      show.stop();
+      bounce.forEach((a) => a.stop());
+      clearInterval(tick);
+    };
+  }, [reduce, appear, lift]);
+  useEffect(() => {
+    tone.forEach((v, i) => Animated.timing(v, { toValue: i === dark ? 1 : 0, duration: 200, useNativeDriver: false }).start());
+  }, [dark, tone]);
   return (
-    <View style={[st.msg, st.theirs]} testID="chat-typing" accessible accessibilityRole="progressbar" accessibilityLabel="답을 기다리고 있어요">
-      <View style={[st.typing, { backgroundColor: p.tint }]}>
-        {dots.map((d, i) => (
+    <Animated.View
+      style={[st.msg, st.theirs, { opacity: appear, transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] }]}
+      testID="chat-typing"
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel="답을 기다리고 있어요"
+    >
+      <View style={[st.typing, { backgroundColor: p.bubbleThem }]}>
+        {DOT_DELAY.map((_, i) => (
           <Animated.View
             key={i}
             style={[
               st.dot,
               {
-                // 오를 때 옅은 회색에서 진한 회색으로 바뀌고 내려오며 돌아온다
-                backgroundColor: d.interpolate({ inputRange: [0, 1], outputRange: [p.ink4, p.ink2] }),
-                transform: [{ translateY: d.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }],
+                backgroundColor: tone[i]!.interpolate({ inputRange: [0, 1], outputRange: [p.typingDotDim, p.typingDot] }),
+                transform: [{ translateY: lift[i]!.interpolate({ inputRange: [0, 1], outputRange: [-2, 0] }) }],
               },
             ]}
           />
         ))}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -637,16 +658,13 @@ const st = StyleSheet.create({
   msg: { gap: space.s1, alignSelf: 'stretch' },
   /** 같은 쪽이 잇달아 한 말: 묶음 사이(16)보다 훨씬 붙인다(4) */
   follow: { marginTop: -(space.s4 - space.s1) },
-  mine: { alignItems: 'flex-end' },
-  theirs: { alignItems: 'flex-start' },
-  who: { paddingLeft: space.s1 },
-  line: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'flex-end', gap: space.s2 },
-  body: { maxWidth: '80%', flexShrink: 1, gap: space.s1 },
-  bodyCard: { flexGrow: 1 },
-  stamp: { flexShrink: 0, paddingBottom: 1 },
-  typing: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 40, paddingHorizontal: space.s4, borderRadius: 20 },
+  mine: { alignItems: 'flex-end', paddingLeft: '18%' },
+  theirs: { alignItems: 'flex-start', paddingRight: '18%' },
+  /** Muse: 높이 44, 옆 15, 둥글기 22, 점 지름 8 간격 4 */
+  typing: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 44, paddingHorizontal: 15, borderRadius: 22 },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  bubble: { borderRadius: 20, paddingHorizontal: space.s4, paddingVertical: space.s2 + 1 },
+  /** Muse: 둥글기 22, 최소 높이 44, 옆 15 위아래 11 */
+  bubble: { borderRadius: 22, minHeight: 44, maxWidth: 520, paddingHorizontal: 15, paddingVertical: 11, justifyContent: 'center' },
   card: { borderRadius: radius.lg, padding: space.s4, gap: space.s2 },
   cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: space.s3 },
   note: { flexDirection: 'row', gap: space.s2, alignItems: 'flex-start' },
