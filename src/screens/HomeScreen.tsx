@@ -65,7 +65,7 @@ const KEEP_POSITION = { minIndexForVisible: 0, autoscrollToTopThreshold: FOLLOW_
 /** 끝에서 이만큼 올라가 있으면 맨 아래로 단추(화살표)를 띄운다(Mattermost CONTENT_OFFSET_THRESHOLD 160). 새 말이 왔으면 글자 [새 답]. */
 const SHOW_END_PX = 160;
 
-export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen = false, focusAfter }: { go: (to: HomeRoute) => void; chat?: ChatItem[]; todo?: Todo; draft?: string; /** 갤러리: 폰 대화 상태를 정해 그린다(네트워크 없음) */ phone?: OfflineChatView; /** 갤러리: [+] 메뉴를 펼친 채로 */ menu?: boolean; /** 시험용 빌드(갤러리): 이 ms 뒤 입력 칸에 들어가 키보드를 띄우고 3초 뒤 내린다(시뮬레이터 녹화) */ focusAfter?: number }) {
+export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen = false, focusAfter, onIssue }: { go: (to: HomeRoute) => void; /** [+] → 세금계산서 발급: 대화 위 발급 시트를 연다(없으면 발급 화면으로) */ onIssue?: () => void; chat?: ChatItem[]; todo?: Todo; draft?: string; /** 갤러리: 폰 대화 상태를 정해 그린다(네트워크 없음) */ phone?: OfflineChatView; /** 갤러리: [+] 메뉴를 펼친 채로 */ menu?: boolean; /** 시험용 빌드(갤러리): 이 ms 뒤 입력 칸에 들어가 키보드를 띄우고 3초 뒤 내린다(시뮬레이터 녹화) */ focusAfter?: number }) {
   const s = useSession();
   const p = usePalette();
   // 글자 크기 설정이 바뀌면 입력 칸(textScale.web)도 다시 그린다
@@ -309,7 +309,16 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
           <View style={[st.bottom, { borderTopColor: p.line, backgroundColor: p.canvas }]}>
             {menu && (
               <View style={[st.menu, { backgroundColor: p.tint }]} testID="quick-menu">
-                <MenuRow label="세금계산서 발급" hint="거래처와 금액을 골라 PC에 맡겨요" onPress={() => quick('issue')} testID="chip-issue" />
+                <MenuRow
+                  label="세금계산서 발급"
+                  hint="거래처와 금액을 골라 PC에 맡겨요"
+                  onPress={() => {
+                    if (!onIssue) return quick('issue');
+                    setMenu(false);
+                    onIssue();
+                  }}
+                  testID="chip-issue"
+                />
                 <MenuRow label="증빙 찍기" hint="영수증이나 종이 세금계산서를 찍어 PC로 보내요" onPress={() => quick('capture')} testID="go-capture" />
                 <MenuRow label="현금 매출 적기" hint="현금으로 받은 돈을 적어 둬요" onPress={() => quick('cash')} testID="go-cash" />
               </View>

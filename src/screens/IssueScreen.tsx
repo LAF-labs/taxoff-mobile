@@ -9,9 +9,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { clock } from '../chat';
 import { findDuplicate, recentCounterparties, searchCounterparties, splitAmount, type Counterparty, type IssuedToday, type VatMode } from '../issue';
-import type { Job } from '../queue';
 import { counterpartiesOf } from '../net/pcCopy';
-import { useEntrust } from '../entrust';
+import { useIssueSubmit, useViaPc } from '../issueSubmit';
 import { kstDay } from '../phoneCmd';
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
@@ -49,7 +48,8 @@ export function IssueScreen({
 }) {
   const s = useSession();
   const queue = useQueue();
-  const entrust = useEntrust();
+  const submitIssue = useIssueSubmit();
+  const isViaPc = useViaPc();
   // 저장소에 거래처가 없으면 PC가 넘긴 사본(AppData.pcCopy)의 거래처를 쓴다. 사본도 없으면 지금처럼 빈 목록.
   const copy = s.data.pcCopy ?? null;
   const fromCopy = useMemo(() => (copy ? counterpartiesOf(copy) : null), [copy]);
@@ -103,7 +103,7 @@ export function IssueScreen({
   const online = s.pc === 'online';
   const stale = s.pc === 'stale';
   // PC 사본에서 고른 거래처면 폰 발급 명령(cmd.run)으로 맡긴다: 거래처는 ref만, 승인은 PC 승인 바, 작성일자는 오늘(한국 시간)
-  const viaPc = !!cp && !manual && !!fromCopy?.some((c) => c.id === cp.id) && !!s.data.pair;
+  const viaPc = !manual && isViaPc(cp);
   const ready = !!who && (cp ? true : bizNo.replace(/\D/g, '').length === 10) && a.supply > 0 && /^\d{4}-\d{2}-\d{2}$/.test(day) && !dup && !closed;
 
   let notice = null;
@@ -137,25 +137,13 @@ export function IssueScreen({
   const inexactAsNotice = !!inexactLine && !notice;
   if (inexactAsNotice) notice = <Notice testID="issue-inexact">{inexactLine}</Notice>;
 
-  const submitToPc = async () => {
-    if (!cp || saving) return;
+  const submit = async () => {
+    if (saving) return;
     setSaving(true);
     setSaveFailed(false);
-    const ok = await entrust({ cp, supply: a.supply, total: a.total, item, draftId: pre?.draftId });
+    const ok = await submitIssue({ cp: manual ? null : cp, name, bizNo, item, day, a, draftId: pre?.draftId });
     setSaving(false);
     if (!ok) return setSaveFailed(true);
-    onSubmitted();
-  };
-
-  const submit = () => {
-    if (viaPc) return void submitToPc();
-    const job: Job = { id: `job-${Date.now()}`, title: `${who} 세금계산서`, amount: a.total, createdAt: Date.now(), state: online ? 'running' : 'entrusted' };
-    // PC가 되읽을 값(시연 저장소가 승인 요청을 만들 때만 쓴다). 금액은 원 단위 숫자 글자.
-    const readback = {
-      counterpartBizNo: cp?.bizNo ?? bizNo, counterpartName: who, counterpartEmail: '', itemName: item, itemCount: '1',
-      supplyAmount: String(a.supply), taxAmount: String(a.tax), totalAmount: String(a.total), issueDate: day, remark: '', receiptType: '청구',
-    };
-    queue.add({ ...job }, online ? `${job.title} ${won(a.total)}을 홈택스에서 준비하고 있어요` : `${job.title} ${won(a.total)}을 맡겼어요. PC 켜지면 준비해요`, online ? { supplierBizNo: '', supplierName: '', ...readback } : undefined);
     onSubmitted();
   };
 
@@ -180,7 +168,7 @@ export function IssueScreen({
           발급 승인은 PC가 받아요
         </T>
       )}
-      <Button testID="issue-submit" label={viaPc ? (online ? '발급 맡기기' : 'PC 켜지면 맡기기') : online ? '홈택스에서 준비' : 'PC 켜지면 준비하기'} onPress={submit} disabled={!ready || saving} />
+      <Button testID="issue-submit" label={viaPc ? (online ? '발급 맡기기' : 'PC 켜지면 맡기기') : online ? '홈택스에서 준비' : 'PC 켜지면 준비하기'} onPress={() => void submit()} disabled={!ready || saving} />
     </>
   );
 

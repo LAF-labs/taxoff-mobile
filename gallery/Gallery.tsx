@@ -19,6 +19,7 @@ import { OnboardingScreen } from '../src/screens/OnboardingScreen';
 import type { BioInfo } from '../src/biometry';
 import { QueueScreen } from '../src/screens/QueueScreen';
 import { IssueScreen, type IssuePreview } from '../src/screens/IssueScreen';
+import type { IssueSheetPreview } from '../src/screens/IssueSheet';
 import { QueueProvider, type ApprovalSettings } from '../src/queueStore';
 import { ApprovalHost } from '../src/screens/ApprovalHost';
 import { buildGate, type GateField, type PhoneGate } from '../src/approval';
@@ -99,6 +100,22 @@ const COPY: PhoneCopyBody = {
   },
 };
 const copyData = (c: PhoneCopyBody | null = COPY): AppData => ({ ...paired(), pcCopy: c });
+/** 발급 시트(대화 [+]): PC가 넘긴 거래처 장부 사본. PC 순서(최근 발급 → 자주 발급 → 상호) 그대로다. */
+const lastOn = (days: number, supply: number, item: string) => ({ supply, vatMode: 'excl' as const, item, day: iso(new Date(now - days * DAY)) });
+const COPY_MANY: PhoneCopyBody = {
+  asOf: COPY_AT,
+  counterparties: [
+    { ref: 'cp_gana', name: '가나식자재', bizNo: '123-45-67891', last: lastOn(1, 1_230_000, '식자재') },
+    { ref: 'cp_dong', name: '동네마트 성수점', bizNo: '220-81-11111', last: lastOn(3, 480_000, '포장 용기') },
+    { ref: 'cp_hanbit', name: '한빛인쇄', bizNo: '105-22-33445', last: lastOn(3, 450_000, '전단 인쇄') },
+    { ref: 'cp_seoul', name: '서울청과', bizNo: '211-09-87654', last: lastOn(9, 2_750_000, '과일 납품') },
+    { ref: 'cp_mirae', name: '미래포장', bizNo: '314-86-11223', last: lastOn(15, 2_000_000, '포장재') },
+    { ref: 'cp_green', name: '그린위생', bizNo: '128-17-99001', last: lastOn(40, 150_000, '방역') },
+    { ref: 'cp_dongmart2', name: '동네마트 왕십리점', bizNo: '220-81-22222' },
+    { ref: 'cp_spring', name: '새봄꽃집', bizNo: '402-11-55667' },
+  ],
+};
+const issueSheet = (issue: IssueSheetPreview, c: PhoneCopyBody = COPY_MANY, pc: PcStatus = 'online') => ({ session: fake(copyData(c), pc), node: <Main live chat={[]} phone={phoneChat('card')} issue={issue} /> });
 const COPY_UNSURE: PhoneCopyBody = {
   ...COPY,
   money: {
@@ -180,9 +197,9 @@ function LongChat() {
 
 
 /** 탭 화면을 가짜 세션으로 그린다. 탭은 눌러서 바꿀 수 있다. */
-function Main({ start = 'home', chat, live, phone, menu, focusAfter }: { start?: Tab; chat?: ChatItem[]; /** 지금 할 일 건수를 가짜 밀린 일에서 센다 */ live?: boolean; phone?: OfflineChatView; menu?: boolean; focusAfter?: number }) {
+function Main({ start = 'home', chat, live, phone, menu, focusAfter, issue }: { start?: Tab; chat?: ChatItem[]; /** 지금 할 일 건수를 가짜 밀린 일에서 센다 */ live?: boolean; phone?: OfflineChatView; menu?: boolean; focusAfter?: number; issue?: IssueSheetPreview }) {
   const [tab, setTab] = useState<Tab>(start);
-  return <MainScreen tab={tab} onTab={setTab} go={noop} chat={chat} todo={chat && !live ? TODO : undefined} phone={phone} menu={menu} focusAfter={focusAfter} />;
+  return <MainScreen tab={tab} onTab={setTab} go={noop} chat={chat} todo={chat && !live ? TODO : undefined} phone={phone} menu={menu} focusAfter={focusAfter} issue={issue} />;
 }
 const read = parsePaperInvoice(SAMPLE_INVOICE, today)!;
 
@@ -493,6 +510,17 @@ const SCREENS: Record<
   'home-phone-ask': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('ask')} /> }),
   'home-phone-screen': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('screen')} /> }),
   'home-phone-lunch': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('lunch')} /> }),
+  'issue-sheet': () => issueSheet({}),
+  'issue-sheet-search': () => issueSheet({ query: '동네' }),
+  'issue-sheet-none': () => issueSheet({ query: '한강상회' }),
+  'issue-sheet-empty': () => issueSheet({}, { asOf: COPY_AT, counterparties: [] }),
+  'issue-sheet-focus': () => issueSheet({ focus: true }),
+  'issue-sheet-search-focus': () => issueSheet({ query: '동네', focus: true }),
+  'issue-sheet-kb': () => issueSheet({ query: '동네', kb: 336 }),
+  'issue-sheet-name': () => issueSheet({ step: 'name' }),
+  'issue-sheet-amount': () => issueSheet({ step: 'amount', cpId: 'cp_gana' }),
+  'issue-sheet-confirm': () => issueSheet({ step: 'confirm', cpId: 'cp_gana' }),
+  'issue-sheet-confirm-off': () => issueSheet({ step: 'confirm', cpId: 'cp_gana' }, COPY_MANY, 'offline'),
   'home-plus-menu': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('card')} menu /> }),
   'home-phone-limit': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('limit')} /> }),
   /** 처음 연결한 뒤 대화가 아직 없는 홈(앱이 이 폰 기록으로 만든 대화) */

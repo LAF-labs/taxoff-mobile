@@ -11,6 +11,8 @@ import type { OfflineChatView } from '../offline/useOfflineChat';
 import { HomeScreen, type HomeRoute, type Todo } from './HomeScreen';
 import { MoneyScreen } from './MoneyScreen';
 import { RecordsScreen } from './RecordsScreen';
+import { IssueSheet, type IssueSheetPreview } from './IssueSheet';
+import type { Counterparty } from '../issue';
 
 export type Tab = 'home' | 'money' | 'records';
 export type MainRoute = HomeRoute;
@@ -22,19 +24,33 @@ const TABS: Array<{ key: Tab; label: string; a11y: string }> = [
 ];
 
 export function MainScreen({
-  tab, onTab, go, chat, todo, draft, phone, menu, focusAfter,
-}: { tab: Tab; onTab: (t: Tab) => void; go: (to: MainRoute) => void; chat?: ChatItem[]; todo?: Todo; draft?: string; phone?: OfflineChatView; /** 갤러리: [+] 메뉴를 펼친 채로 */ menu?: boolean; /** 갤러리: 키보드 녹화 */ focusAfter?: number }) {
+  tab, onTab, go, chat, todo, draft, phone, menu, focusAfter, issue: issuePreview, issueCps,
+}: { tab: Tab; onTab: (t: Tab) => void; go: (to: MainRoute) => void; chat?: ChatItem[]; todo?: Todo; draft?: string; phone?: OfflineChatView; /** 갤러리: [+] 메뉴를 펼친 채로 */ menu?: boolean; /** 갤러리: 키보드 녹화 */ focusAfter?: number; /** 갤러리: 발급 시트를 연 채로 */ issue?: IssueSheetPreview; issueCps?: Counterparty[] }) {
   const kb = useKeyboardShown();
+  // [+] → 세금계산서 발급은 대화 위 시트로 연다(탭 줄까지 덮는다)
+  const [issueOpen, setIssueOpen] = useState(!!issuePreview);
   // 홈(대화)은 탭 줄을 숨기지 않는다: 숨기면 키보드가 오르는 도중 화면 높이가 한 번 더 바뀌어 입력 줄과 대화가 튄다.
   // 키보드가 탭 줄을 덮고, 홈의 KeyboardAvoidingView가 탭 줄 위로 겹친 만큼만 올린다.
   return (
     <View style={st.fill}>
       <View style={st.fill}>
-        {tab === 'home' && <HomeScreen go={go} chat={chat} todo={todo} draft={draft} phone={phone} menu={menu} focusAfter={focusAfter} />}
+        {tab === 'home' && <HomeScreen go={go} chat={chat} todo={todo} draft={draft} phone={phone} menu={menu} focusAfter={focusAfter} onIssue={() => setIssueOpen(true)} />}
         {tab === 'money' && <MoneyScreen go={go} />}
         {tab === 'records' && <RecordsScreen go={go} />}
       </View>
       {(tab === 'home' || !kb) && <TabBar tab={tab} onTab={onTab} />}
+      {issueOpen && (
+        <IssueSheet
+          preview={issuePreview}
+          counterparties={issueCps}
+          onClose={() => setIssueOpen(false)}
+          onSubmitted={() => setIssueOpen(false)}
+          onCapture={() => {
+            setIssueOpen(false);
+            go('bizreg');
+          }}
+        />
+      )}
     </View>
   );
 }
