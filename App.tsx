@@ -1,4 +1,4 @@
-// tex 폰 앱(Phase 1, ADR-034 · 기획 v2 앱 틀): 잠금(P-01) → 탭(홈 대화 · 돈 · 기록) → 연결(S-03)·설정·연결 상태(P-06)·촬영(P-08)·현금매출(P-09).
+// tex 폰 앱(Phase 1, ADR-034 · 기획 v2 앱 틀): 첫 실행 온보딩(한 번) → 잠금(P-01) → 탭(홈 대화 · 돈 · 기록) → 연결(S-03)·설정·연결 상태(P-06)·촬영(P-08)·현금매출(P-09).
 // 잠금: 앱을 열 때 생체, 백그라운드 30초 뒤 다시 잠그고 메모리 키를 지운다. 앱 전환기 미리보기는 가린다.
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -9,7 +9,7 @@ import { LOCK_AFTER_MS, LOCK_DRAIN_MS } from './src/config';
 import { drained, endEpoch } from './src/inflight';
 import { clearDeviceToken } from './src/net/devauth';
 import { closeOfflineChat } from './src/offline/device';
-import { ensureFreshInstall, forget, type DeviceKeys } from './src/keyring';
+import { ensureFreshInstall, forget, markOnboarded, type DeviceKeys } from './src/keyring';
 import { sweepCaptureTemps } from './src/storage/files';
 import { CaptureScreen } from './src/screens/CaptureScreen';
 import { CashScreen } from './src/screens/CashScreen';
@@ -17,6 +17,7 @@ import { ConnectionScreen } from './src/screens/ConnectionScreen';
 import { DevicesScreen } from './src/screens/DevicesScreen';
 import { IssueScreen } from './src/screens/IssueScreen';
 import { LockScreen } from './src/screens/LockScreen';
+import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { MainScreen, type MainRoute, type Tab } from './src/screens/MainScreen';
 import { PairScreen } from './src/screens/PairScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
@@ -41,7 +42,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function App() {
   const p = usePalette();
-  const [boot, setBoot] = useState<{ hasDevice: boolean } | null>(null);
+  const [boot, setBoot] = useState<{ hasDevice: boolean; onboarded: boolean } | null>(null);
   const [unlocked, setUnlocked] = useState<{ keys: DeviceKeys; data: AppData } | null>(null);
   /** 화면 쌓기: 맨 아래는 늘 탭. 뒤로는 하나 내린다. */
   const [stack, setStack] = useState<Route[]>(['tabs']);
@@ -96,7 +97,7 @@ export default function App() {
     } catch {
       // 상태 파일 봉인이 깨졌으면 빈 상태로 시작한다(페어링을 다시 한다)
     }
-    setBoot({ hasDevice: true });
+    setBoot({ hasDevice: true, onboarded: true });
     setUnlocked({ keys, data });
   };
 
@@ -104,7 +105,16 @@ export default function App() {
   if (bootErr) body = <View style={st.center}><T c="attention">보호된 저장 공간을 열 수 없어요. 앱을 다시 설치해 주세요.</T></View>;
   // 부팅 중에는 스플래시가 덮고 있다(아래 hideAsync). 바탕만 같은 색으로 깔아 둔다.
   else if (!boot) body = <View style={[st.fill, { backgroundColor: p.canvas }]} />;
-  else if (!unlocked) body = <LockScreen firstRun={!boot.hasDevice} onUnlocked={(k) => void onUnlocked(k)} onReset={() => setBoot({ hasDevice: false })} />;
+  else if (!unlocked && !boot.hasDevice && !boot.onboarded)
+    body = (
+      <OnboardingScreen
+        onDone={() => {
+          void markOnboarded();
+          setBoot({ hasDevice: false, onboarded: true });
+        }}
+      />
+    );
+  else if (!unlocked) body = <LockScreen firstRun={!boot.hasDevice} onUnlocked={(k) => void onUnlocked(k)} onReset={() => setBoot({ hasDevice: false, onboarded: true })} />;
   else {
     const route = stack[stack.length - 1] ?? 'tabs';
     const go = (r: MainRoute) => {
@@ -148,7 +158,7 @@ export default function App() {
             onPair={() => go('pair')}
             onReset={() => {
               lock();
-              setBoot({ hasDevice: false });
+              setBoot({ hasDevice: false, onboarded: true });
             }}
           />
         )}
@@ -158,7 +168,7 @@ export default function App() {
             onRepair={() => go('pair')}
             onReset={() => {
               lock();
-              setBoot({ hasDevice: false });
+              setBoot({ hasDevice: false, onboarded: true });
             }}
           />
         )}

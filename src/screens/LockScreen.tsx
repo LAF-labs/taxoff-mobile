@@ -1,6 +1,6 @@
 // P-01 잠금: 앱을 열 때와 백그라운드 30초 뒤. 해제 = 키 항목 읽기(keyring.unlock), 생체 또는 폰 암호(D08 §3.1, 대표 결정 "비밀번호 허용").
 // 화면은 조용한 면 하나에 가운데 단추 하나("Face ID로 열기"처럼 기기 종류에 맞춘 문구). 앱 이름·자물쇠는 두지 않는다.
-// 첫 실행만 다르다: 스플래시와 같은 표시 + 앱 이름 + 이 앱이 해 주는 일 한 줄, 아래 tint 면에 열쇠 안내, 바닥에 [시작하기].
+// 첫 실행만 다르다(온보딩 다음 장): 표시 + "이 폰에만 있는 열쇠를 만들어요" + 풀이, 아래 tint 면에 열쇠 사실 두 줄, 바닥에 [시작하기].
 // 생체가 실패하면 OS가 기본 대체("암호 입력")를 띄우고, 취소해 돌아오면 같은 화면에 한 줄 + [다시 시도] + 회색 [폰 암호로 열기].
 // 생체를 등록하지 않은 폰은 처음부터 [폰 암호로 열기]가 기본 단추. 폰 암호가 없는 폰은 여전히 열 수 없다. 잠금 끄기는 없다.
 // 잠금 해제와 승인 서명은 별개다: 승인 시트의 [승인하고 발급]은 매번 생체만 + 하드웨어 키 서명(폰 암호 대체 없음).
@@ -11,9 +11,8 @@ import { bioName, unlockLabel } from '../biometryLabel';
 import { KeyringError, createDevice, resetDevice, unlock, type DeviceKeys, type KeyringErrorCode } from '../keyring';
 import markDark from '../../assets/splash-icon-dark.png';
 import markLight from '../../assets/splash-icon.png';
-import { BRAND } from '../config';
 import { radius, space, usePalette } from '../theme';
-import { Button, Screen, T } from '../ui/kit';
+import { Button, Check, Screen, T } from '../ui/kit';
 
 const PASSCODE = '폰 암호로 열기';
 
@@ -142,23 +141,28 @@ function FirstRun({ bio, noBio, err, busy, onStart }: { bio: BioInfo | null; noB
         <View style={st.hero}>
           <Image source={dark ? MARK.dark : MARK.light} style={st.mark} accessibilityIgnoresInvertColors accessible={false} />
           <View style={{ gap: space.s2, alignItems: 'center' }}>
-            <T v="title" role="header" center>
-              {BRAND}
-            </T>
-            <T v="body" center testID="lock-value">
-              홈택스 세금계산서를{'\u00A0'}폰으로 확인하고{'\u00A0'}승인해요
+            <T v="title" role="header" center testID="lock-value">
+              이 폰에만 있는 열쇠를 만들어요
             </T>
             <T v="sub" c="ink2" center>
-              홈택스 일은 내 PC가 하고, 사장님은 폰에서 결과를 보고 승인만 하면 돼요.
+              내 PC와 이 폰이 서로를 알아보고, 둘 사이 내용을 잠그는 데 써요.
             </T>
           </View>
         </View>
         {err}
         <View style={[st.key, { backgroundColor: p.tint }]} testID="lock-key-note">
-          <T v="subStrong">이 폰에만 있는 열쇠를 만들어요</T>
-          <T v="sub" c="ink2">
-            열쇠는 폰 밖으로 나가지 않고 백업되지 않아요. 앞으로 앱을 열 때 {how}로 확인해요.
-          </T>
+          <View style={st.keyRow}>
+            <Check color={p.ink2} />
+            <T v="sub" c="ink2" style={{ flex: 1 }}>
+              폰 밖으로 나가지 않고 백업되지 않아요
+            </T>
+          </View>
+          <View style={st.keyRow}>
+            <Check color={p.ink2} />
+            <T v="sub" c="ink2" style={{ flex: 1 }}>
+              앞으로 앱을 열 때 {how}로 확인해요
+            </T>
+          </View>
         </View>
       </View>
     </Screen>
@@ -172,5 +176,6 @@ const st = StyleSheet.create({
   first: { flex: 1, paddingHorizontal: space.s5, paddingBottom: space.s4, gap: space.s5 },
   hero: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.s5, paddingHorizontal: space.s3 },
   mark: { width: MARK_SIZE, height: MARK_SIZE },
-  key: { borderRadius: radius.lg, padding: space.s4, gap: space.s1 },
+  key: { borderRadius: radius.lg, padding: space.s4, gap: space.s2 },
+  keyRow: { flexDirection: 'row', alignItems: 'center', gap: space.s3 },
 });

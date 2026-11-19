@@ -16,6 +16,8 @@ export class ProtectionError extends Error {
 export interface InstallMarker {
   installedAt: number;
   deviceId?: string;
+  /** 첫 실행 온보딩을 넘긴 시각(건너뛰기·시작하기). 있으면 다시 보이지 않는다. */
+  onboardedAt?: number;
 }
 
 export function installMarker(): InstallMarker | null {
