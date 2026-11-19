@@ -4,7 +4,7 @@
 //   cardHash     = SHA-256(CBOR([[key, value], …]))            fields 배열 전체(키·값·순서)
 //   readbackHash = SHA-256(JCS{readback key: value})
 //   actionHash   = SHA-256(CBOR{cardHash, readbackHash, authorizes[], packageDigest, intentId})  해시는 바이트열로
-import { CTX, concat, encodeCbor, fromB64, fromHex, jcs, sha256Hash, toHex, utf8 } from '../vendor/sax-remote/src/index.ts';
+import { CTX, approveMessage as wireApproveMessage, encodeCbor, fromB64, fromHex, jcs, sha256Hash, toHex, utf8 } from '../vendor/sax-remote/src/index.ts';
 
 /** remote-envelope gate.request의 fields 한 칸(와이어 이름 key·value). */
 export interface GateField {
@@ -164,8 +164,11 @@ export function showValue(key: string, v: string): string {
 
 // ---- 시트 상태 ----
 
-/** hw: 하드웨어 키 생성 증명됨(Android StrongBox 등) · ios_app_attest: 앱 무결성만(iPhone) · none: 승인 기기로 못 씀 */
-export type AttestState = 'hw' | 'ios_app_attest' | 'none';
+/**
+ * hw: 하드웨어 키 생성 증명됨(Android StrongBox 등) · ios_se: iPhone Secure Enclave 키를 PC가 받음(증명 없음, ADR-052)
+ * ios_app_attest: 앱 무결성만(iPhone) · none: 승인 기기로 못 씀
+ */
+export type AttestState = 'hw' | 'ios_se' | 'ios_app_attest' | 'none';
 
 export type SheetStop =
   /** PC가 보낸 값으로 다시 계산한 해시가 맞지 않음 */
@@ -205,7 +208,7 @@ export function sheetState(g: PhoneGate, c: SheetContext): SheetState {
   const r = readGate(g);
   if (r.unknown.length > 0) return { kind: 'stopped', stop: 'unknown' };
   if (c.attest === 'none') return { kind: 'stopped', stop: 'noKey' };
-  if (c.attest === 'ios_app_attest' && !c.iosAllowed) return { kind: 'stopped', stop: 'iosDenied' };
+  if ((c.attest === 'ios_app_attest' || c.attest === 'ios_se') && !c.iosAllowed) return { kind: 'stopped', stop: 'iosDenied' };
   if (r.first) return { kind: 'stopped', stop: 'first' };
   if (c.usedToday >= (c.dailyLimit ?? DAILY_LIMIT)) return { kind: 'stopped', stop: 'limit' };
   const leftMs = g.exp - c.now;
@@ -228,11 +231,11 @@ export function mmss(ms: number): string {
 // ---- 응답 ----
 
 /**
- * gate.response 서명 입력: SAX-approve-v1 ‖ pair_id ‖ reqId ‖ challenge ‖ actionHash ‖ decision (D03 §3, D08 §6).
- * 칸 사이 구분·길이 접두는 D08 §6 정본과 PC 검증기로 대조해야 한다(이 PR은 가짜 키라 PC가 검증하지 않는다).
+ * gate.response 서명 대상(컨텍스트 제외): CBOR([pairId, reqId, challenge(32B), actionHash(32B), decision]).
+ * PC 검증기와 같은 함수(@sax/remote approveMessage, ADR-052 결정 4)다. 키는 SAX-approve-v1 ‖ 이 바이트를 SHA-256으로 해시해 서명한다.
  */
 export function approveMessage(pairId: string, reqId: string, challenge: string, action: string, decision: 'approve' | 'deny'): Uint8Array {
-  return concat(utf8(pairId), utf8(reqId), fromB64(challenge), hashBytes(action), utf8(decision));
+  return wireApproveMessage({ pairId, reqId, challenge: fromB64(challenge), actionHash: action, decision });
 }
 export const APPROVE_CTX = CTX.approve;
 

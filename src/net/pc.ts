@@ -5,7 +5,7 @@
 // PC가 꺼져 있거나 이 폰을 거부하면 라이브는 구분 없이 실패한다(PC는 무응답으로 거부한다). 보낸 뒤에는 연결을 닫는다.
 import {
   CAP, QUEUE, flushOutbox, fromB64, monotonicClock, openMobileSession, queueOutbox, relayOrigin, relayQueue, softNoiseStatic, softSigner, verifyQBundle,
-  wsRelayClient, VM_PURPOSES, type FlushResult, type Link, type QueueSendResult, type WebSocketLike,
+  wsRelayClient, VM_PURPOSES, type FlushResult, type Link, type PhoneCopyBody, type QueueSendResult, type WebSocketLike,
 } from '@sax/remote';
 import { APP_VERSION, DEV_RELAY_HOST, DEV_STACK } from '../config';
 import { deviceAuthFor, fetchJson, type Htm } from './devauth';
@@ -14,6 +14,8 @@ import type { FileOutbox } from '../storage/outbox';
 import type { AppData } from '../storage/state';
 import { PHONE_CAPS, newerCopy, receiveCopy } from './pcCopy';
 import { driveCmds, trimCmds } from './issueLive';
+import { enrollPx } from './pxLive';
+import type { PxDevice } from '../approvalKey';
 import { causeOf, pushWhy, whyCode } from './pcWhy';
 
 /** queued: PC는 꺼져 있고 릴레이 큐에 맡겼다. stale: PC가 오래 꺼져 있어 유효한 번들이 없다(맡길 수 없다). */
@@ -28,6 +30,8 @@ export interface SyncDeps {
   onLive?: () => void;
   /** 잠그면 거짓 */
   alive?: () => boolean;
+  /** 하드웨어 승인 키(ADR-052). 없으면(옛 빌드·Android) approve.v1을 알리지 않는다: PC는 늘 PC 승인으로 둔다. */
+  px?: PxDevice | null;
 }
 
 export interface SyncResult {
@@ -103,7 +107,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
       pairId: pair.pairId,
       noise,
       desktopStatic: fromB64(pair.desktopStatic),
-      hello: { appVersion: APP_VERSION, deviceListVersion: d.data().seenListVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash, ...PHONE_CAPS] },
+      hello: { appVersion: APP_VERSION, deviceListVersion: d.data().seenListVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash, ...PHONE_CAPS, ...(d.px ? [CAP.approve] : [])] },
       nextTimestamp: () => (used = clock()),
       responseTimeoutMs: 8000,
     });
@@ -116,6 +120,10 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
     // PC는 세션을 열자마자 사본을 보낸다. 보관함을 비우기 전에 받는다(비우는 동안 온 다른 봉투는 버려진다).
     const copy = await receiveCopy(s.channel, s.peerHello.capabilities).catch(() => null);
     if (copy) await d.update((x) => ({ ...x, pcCopy: newerCopy(x.pcCopy, copy) }));
+    // 승인 키를 알린다(명령을 보내기 전에: PC가 이 폰을 승인 기기로 알아야 cmd.ack가 accepted로 온다)
+    const onCopy = (c: PhoneCopyBody) => d.update((x) => ({ ...x, pcCopy: newerCopy(x.pcCopy, c) }));
+    const px = await enrollPx(s.channel, s.peerHello.capabilities, { pairId: pair.pairId, deviceId: d.keys.deviceId, vm: d.keys.vm, px: d.px ?? null, onCopy }).catch(() => null);
+    if (px) await d.update((x) => ({ ...x, px }));
     const flushed = await flushOutbox(s.channel, d.outbox);
     if (flushed.sent.length) {
       const sent = new Set(flushed.sent);
@@ -129,7 +137,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
     await driveCmds(s.channel, s.peerHello.capabilities, {
       cmds: () => d.data().cmds ?? [],
       save: (f) => d.update((x) => ({ ...x, cmds: trimCmds(f(x.cmds ?? [])) })),
-      onCopy: (c) => d.update((x) => ({ ...x, pcCopy: newerCopy(x.pcCopy, c) })),
+      onCopy,
       alive: d.alive,
     });
     s.channel.close();
