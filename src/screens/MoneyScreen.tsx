@@ -80,7 +80,7 @@ export function MoneyScreen({ go }: { go: (to: HomeRoute) => void }) {
       <View style={{ gap: space.s2 }}>
         {noAcct ? (
           <View style={[st.card, { backgroundColor: p.tint }]} testID="money-no-account">
-            <T v="subStrong">계좌 연결은 PC에서 해요</T>
+            <T v="subStrong">연결된 계좌가 아직 없어요</T>
             <T v="sub" c="ink2">
               연결하면 들어온 돈과 나간 돈이 보여요. 지금 받을 돈은 세금계산서 기준이에요.
             </T>
@@ -160,7 +160,7 @@ function CopyMoney({ money }: { money: NonNullable<PhoneCopyBody['money']> }) {
       <View style={{ gap: space.s2 }}>
         {noAcct || !cf ? (
           <View style={[st.card, { backgroundColor: p.tint }]} testID="money-no-account">
-            <T v="subStrong">{noAcct ? '계좌 연결은 PC에서 해요' : '이번 달 흐름은 PC에서 아직 못 받았어요'}</T>
+            <T v="subStrong">{noAcct ? '연결된 계좌가 아직 없어요' : '이번 달 흐름은 아직 못 받았어요'}</T>
             <T v="sub" c="ink2">
               {noAcct ? '연결하면 들어온 돈과 나간 돈이 보여요. 지금 받을 돈은 세금계산서 기준이에요.' : '받을 돈과 낼 돈 요약만 먼저 보여 드려요.'}
             </T>
@@ -188,7 +188,7 @@ function CopyMoney({ money }: { money: NonNullable<PhoneCopyBody['money']> }) {
       <SideCard testID="money-recv" title="받을 돈" s={money.receivable} unpaidWord="안 받음" />
       <SideCard testID="money-pay" title="낼 돈" s={money.payable} unpaidWord="안 냄" />
       <T v="meta" c="ink3" style={{ paddingHorizontal: space.s1 }} testID="money-list-on-pc">
-        건별 목록은 PC에서 볼 수 있어요
+        건별 목록은 아직 폰에서 볼 수 없어요
       </T>
 
       {!noAcct && n30 && (

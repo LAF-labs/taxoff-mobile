@@ -20,7 +20,7 @@ const NB = ' ';
 const SECTION: Record<JobState, string> = {
   confirmStart: '시작할 일',
   approval: '승인할 일',
-  needPc: 'PC에서 할 일',
+  needPc: 'PC가 맡는 일',
   verify: '확인할 일',
   running: '하고 있는 일',
   entrusted: 'PC가 켜지면 할 일',
@@ -49,8 +49,8 @@ const RUNNING: Record<Step, string> = {
 };
 
 const NEED_PC: Record<NeedPcReason, string> = {
-  firstCounterparty: '처음 거래하는 곳은 PC에서 승인해요',
-  dailyLimit: '오늘 폰 승인을 다 썼어요. PC에서 승인해요',
+  firstCounterparty: '처음 거래하는 곳은 폰으로 승인할 수 없어요',
+  dailyLimit: '오늘 폰 승인을 다 썼어요. 내일 0시에 다시 생겨요',
   notApprover: '이 폰은 아직 승인 기기가 아니에요',
 };
 
@@ -60,7 +60,7 @@ const PLAIN: Record<JobState, string> = {
   confirmStart: '시작하면 PC가 바로 해요',
   running: 'PC가 홈택스에서 하고 있어요',
   approval: '승인하면 바로 발급해요',
-  needPc: 'PC 앞에서 해 주세요',
+  needPc: 'PC가 맡는 일이에요',
   verify: '홈택스에서 발급됐는지 확인해 주세요',
   expired: '3일이 지나 취소됐어요',
   done: '발급했어요',
@@ -74,7 +74,7 @@ export function statusLine(job: Job, state: JobState): string {
   if (r?.kind === 'refused') return REFUSED[r.reason];
   if (r?.kind === 'stopped') return '중지됐어요';
   if (state === 'needPc' && job.reason) return NEED_PC[job.reason];
-  if (r?.kind === 'myTurn') return r.auth.method === 'cert' ? '공동인증서 비밀번호를 기다려요' : r.auth.method === 'pc' ? pcTurnOf(r.auth.code).short : '간편인증을 승인해 주세요';
+  if (r?.kind === 'myTurn') return r.auth.method === 'cert' ? '인증서 비밀번호가 필요해요' : r.auth.method === 'pc' ? pcTurnOf(r.auth.code).short : '간편인증을 승인해 주세요';
   if (r?.kind === 'inDoubt') return '발급됐는지 보고 있어요';
   if (state === 'running' && r?.kind === 'running') return RUNNING[r.step];
   return PLAIN[state];

@@ -10,10 +10,9 @@ import { StyleSheet, TextInput, View } from 'react-native';
 import { clock } from '../chat';
 import { findDuplicate, recentCounterparties, searchCounterparties, splitAmount, type Counterparty, type IssuedToday, type VatMode } from '../issue';
 import type { Job } from '../queue';
-import { ulid } from '@sax/remote';
-import { chatCopyOf, counterpartiesOf } from '../net/pcCopy';
-import { offlineChat } from '../offline/device';
-import { issueRequest, kstDay, type PhoneCmd } from '../phoneCmd';
+import { counterpartiesOf } from '../net/pcCopy';
+import { useEntrust } from '../entrust';
+import { kstDay } from '../phoneCmd';
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
 import { MAX_FONT_SCALE, radius, size, space, textScale, type, usePalette } from '../theme';
@@ -50,6 +49,7 @@ export function IssueScreen({
 }) {
   const s = useSession();
   const queue = useQueue();
+  const entrust = useEntrust();
   // 저장소에 거래처가 없으면 PC가 넘긴 사본(AppData.pcCopy)의 거래처를 쓴다. 사본도 없으면 지금처럼 빈 목록.
   const copy = s.data.pcCopy ?? null;
   const fromCopy = useMemo(() => (copy ? counterpartiesOf(copy) : null), [copy]);
@@ -127,9 +127,9 @@ export function IssueScreen({
       </View>
     );
   } else if (viaPc) notice = null;
-  else if (firstTime) notice = <Notice testID="issue-first">처음 거래하는 곳이라 발급 승인은 PC에서 해요</Notice>;
+  else if (firstTime) notice = <Notice testID="issue-first">처음 거래하는 곳이라 폰으로는 승인할 수 없어요</Notice>;
   else if (approvalsLeft <= 1)
-    notice = <Notice testID="issue-limit">{approvalsLeft === 0 ? '오늘 폰 승인을 다 썼어요. 발급 승인은 PC에서 해요' : `오늘 폰 승인은 ${approvalsLeft}건 남았어요`}</Notice>;
+    notice = <Notice testID="issue-limit">{approvalsLeft === 0 ? '오늘 폰 승인을 다 썼어요. 내일 0시에 다시 생겨요' : `오늘 폰 승인은 ${approvalsLeft}건 남았어요`}</Notice>;
 
   // 부가세 포함 합계를 세액 규칙(10% 버림)으로 정확히 못 만드는 값이면 아래로 맞추고 알린다.
   const entered = Number(amount.replace(/\D/g, ''));
@@ -139,24 +139,11 @@ export function IssueScreen({
 
   const submitToPc = async () => {
     if (!cp || saving) return;
-    const cmd: PhoneCmd = { cmdId: ulid(), req: issueRequest({ ref: cp.id, supply: a.supply, item }), cpName: cp.name, total: a.total, createdAt: Date.now() };
     setSaving(true);
     setSaveFailed(false);
-    // 보내기 전에 봉인 상태에 저장한다(다시 보낼 때 같은 cmdId). 저장하지 못하면 맡기지 않고 이 화면에 남는다.
-    try {
-      await s.update((d) => ({ ...d, cmds: [...(d.cmds ?? []), cmd] }));
-    } catch {
-      // 메모리에 먼저 들어간 명령을 빼서, 다음 저장이 맡기지 않은 명령을 적지 않게 한다
-      await s.update((d) => ({ ...d, cmds: (d.cmds ?? []).filter((c) => c.cmdId !== cmd.cmdId) })).catch(() => undefined);
-      setSaving(false);
-      setSaveFailed(true);
-      return;
-    }
+    const ok = await entrust({ cp, supply: a.supply, total: a.total, item, draftId: pre?.draftId });
     setSaving(false);
-    // 대화 카드에서 왔으면 그 카드를 맡김으로(폰 대화가 같은 카드를 다시 고치지 않게)
-    if (pre?.draftId && s.data.pair) void offlineChat(s.data.pair, s.keys, () => chatCopyOf(s.data.pcCopy))?.entrust(pre.draftId).catch(() => undefined);
-    queue.noteCmd(`cmd-${cmd.cmdId}`, online ? null : `${cp.name} 세금계산서 ${won(a.total)}을 맡겼어요. PC 켜지면 보내요`);
-    void s.sync();
+    if (!ok) return setSaveFailed(true);
     onSubmitted();
   };
 
@@ -190,7 +177,7 @@ export function IssueScreen({
       )}
       {viaPc && (
         <T v="meta" c="ink3" center testID="issue-pc-approve">
-          승인은 PC 승인 바에서 해요
+          발급 승인은 PC가 받아요
         </T>
       )}
       <Button testID="issue-submit" label={viaPc ? (online ? '발급 맡기기' : 'PC 켜지면 맡기기') : online ? '홈택스에서 준비' : 'PC 켜지면 준비하기'} onPress={submit} disabled={!ready || saving} />
@@ -294,7 +281,7 @@ function statusNote(status: Counterparty['status'], firstAsLine: boolean) {
   if (status?.kind === 'checking') parts.push(<StatusDot key="s" busy tone="quiet" v="meta" label="PC가 휴·폐업 여부를 확인해요" testID="issue-status-checking" />);
   if (status?.kind === 'waitPc') parts.push(<T key="s" v="meta" c="ink3" testID="issue-status-wait">PC가 켜지면 휴·폐업을 확인해요</T>);
   if (status?.kind === 'ok') parts.push(<T key="s" v="meta" c="ink3" testID="issue-status-ok">휴·폐업 조회 정상</T>);
-  if (firstAsLine) parts.push(<T key="f" v="meta" c="ink3">처음 거래하는 곳이라 승인은 PC에서 해요</T>);
+  if (firstAsLine) parts.push(<T key="f" v="meta" c="ink3">처음 거래하는 곳이라 폰으로는 승인할 수 없어요</T>);
   return parts.length ? <View style={{ gap: 2, paddingHorizontal: space.s1 }}>{parts}</View> : null;
 }
 

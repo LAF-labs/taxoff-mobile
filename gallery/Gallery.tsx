@@ -4,6 +4,7 @@
 import type { PhoneCopyBody } from '@sax/remote';
 import type { PhoneCmd } from '../src/phoneCmd';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { useState } from 'react';
 import { View } from 'react-native';
 import type { ChatItem } from '../src/chat';
@@ -138,21 +139,51 @@ const CHAT_OFFLINE: ChatItem[] = [
   ...CHAT,
   { kind: 'msg', id: 'c5', from: 'me', at: at(11, 40), text: '동네마트에 오늘 날짜로 세금계산서 발급해 줘. 공급가액 320,000원' },
 ];
+/** public/sample-invoice.jpg를 가로 16px로 줄인 흐린 미리보기(앱이 찍을 때 만드는 것과 같은 크기) */
+const SAMPLE_THUMB = { w: 1520, h: 1040, data: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAA0QDQAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb//gAPTGF2YzYzLjEuMTAyAP/bAEMACBAQExATFhYWFhYWGhgaGxsbGhoaGhsbGx0dHSIiIh0dHRsbHR0gICIiJSYlIyMiIyYmKCgoMDAuLjg4OkVFU//EAFQAAAMBAAAAAAAAAAAAAAAAAAABBAcBAQEAAAAAAAAAAAAAAAAAAAABEAEBAAMBAAAAAAAAAAAAAAAAAREh8EERAQEAAAAAAAAAAAAAAAAAAAAR/8AAEQgACwAQAwEiAAIRAAMRAP/aAAwDAQACEQMRAD8A2rEuy7xQEpH/2Q==' };
 const CHAT_MERGED: ChatItem[] = [
   ...chatOn(1),
   { kind: 'msg', id: 'm0', from: 'pc', at: at(18, 30, 1), text: '오늘 받은 종이 영수증 3장을 세무사 꾸러미에 넣었어요.' },
   { kind: 'merged', id: 'mg', from: at(8, 10), to: at(9, 40) },
-  { kind: 'msg', id: 'm1', from: 'me', at: at(8, 10), card: { title: '영수증 보냄', rows: [{ label: '동네마트 성수점', value: '12,800원' }] } },
+  { kind: 'msg', id: 'm1', from: 'me', at: at(8, 10), card: { title: '영수증 보냄', rows: [{ label: '동네마트 성수점', value: '12,800원' }], photo: { thumb: SAMPLE_THUMB } } },
   { kind: 'msg', id: 'm2', from: 'me', at: at(8, 12), text: '이거 식자재로 넣어 줘' },
   { kind: 'msg', id: 'm3', from: 'pc', at: at(9, 38), text: '식자재(매입)로 넣었어요. 이번 달 식자재 매입은 2,140,000원이에요.' },
   { kind: 'msg', id: 'm4', from: 'me', at: at(9, 40), text: '고마워' },
 ];
 const TODO = { approvals: 2, backlog: 1 };
 
+/**
+ * 긴 대화(스크롤 시험, 11-19): ?s=home-chat-long&n=200. n줄을 나와 PC가 번갈아 말한 기록으로 채운다.
+ * 시험 도구(scripts/scroll-shift-gallery.mjs)가 window.__galleryReply(글) / __galleryMine(글)로 새 말을 붙인다.
+ */
+const LONG_PC = ['네, 확인했어요.', '이번 달 발급은 14건이에요. 합계 8,420,000원이에요.', '가나식자재 입금이 평소보다 늦어요. 지난달에는 12일 걸렸는데 이번에는 31일째예요.', '영수증 3장을 세무사 꾸러미에 넣었어요.', '부가세 2기 확정 신고는 1월 25일까지예요.', '동네마트 세금계산서는 PC가 켜지면 바로 발급할게요.'];
+const LONG_ME = ['고마워', '이번 달 매출 알려줘', '가나식자재 돈 들어왔어?', '영수증 넣어 줘', '신고 언제까지야?', '동네마트 발급해 줘'];
+const longChat = (n: number): ChatItem[] =>
+  Array.from({ length: n }, (_, i) => {
+    const me = i % 2 === 0;
+    const k = Math.floor(i / 2) % 6;
+    return { kind: 'msg' as const, id: `L${i}`, from: me ? ('me' as const) : ('pc' as const), at: now - (n - i) * 3 * 60_000, text: `${me ? LONG_ME[k] : LONG_PC[k]} (${i + 1})` };
+  });
+function LongChat() {
+  const gq = new URLSearchParams(typeof location !== 'undefined' && location.search ? location.search : (process.env.EXPO_PUBLIC_GALLERY ?? ''));
+  const n = Number(gq.get('n')) || 24;
+  /** kb=ms: 그 뒤 키보드를 띄우고 3초 뒤 내린다(시뮬레이터 녹화용) */
+  const kb = gq.get('kb') ? Number(gq.get('kb')) : undefined;
+  const [items, setItems] = useState(() => longChat(n));
+  useEffect(() => {
+    const w = globalThis as unknown as Record<string, (t: string) => void>;
+    const add = (from: 'me' | 'pc') => (text: string) => setItems((x) => [...x, { kind: 'msg', id: `N${x.length}`, from, at: Date.now(), text }]);
+    w.__galleryReply = add('pc');
+    w.__galleryMine = add('me');
+  }, []);
+  return <Main chat={items} focusAfter={kb} />;
+}
+
+
 /** 탭 화면을 가짜 세션으로 그린다. 탭은 눌러서 바꿀 수 있다. */
-function Main({ start = 'home', chat, live, phone, menu }: { start?: Tab; chat?: ChatItem[]; /** 지금 할 일 건수를 가짜 밀린 일에서 센다 */ live?: boolean; phone?: OfflineChatView; menu?: boolean }) {
+function Main({ start = 'home', chat, live, phone, menu, focusAfter }: { start?: Tab; chat?: ChatItem[]; /** 지금 할 일 건수를 가짜 밀린 일에서 센다 */ live?: boolean; phone?: OfflineChatView; menu?: boolean; focusAfter?: number }) {
   const [tab, setTab] = useState<Tab>(start);
-  return <MainScreen tab={tab} onTab={setTab} go={noop} chat={chat} todo={chat && !live ? TODO : undefined} phone={phone} menu={menu} />;
+  return <MainScreen tab={tab} onTab={setTab} go={noop} chat={chat} todo={chat && !live ? TODO : undefined} phone={phone} menu={menu} focusAfter={focusAfter} />;
 }
 const read = parsePaperInvoice(SAMPLE_INVOICE, today)!;
 
@@ -478,6 +509,7 @@ const SCREENS: Record<
   'approval-in-doubt': () => sheetCase(gate(), { state: 'verify' }),
   'approval-long': () => sheetCase(gate({ rb: LONG })),
   'home-chat-online': () => ({ session: fake(paired(), 'online', { receipts: 1, cash: 0 }), node: <Main chat={CHAT} /> }),
+  'home-chat-long': () => ({ session: fake(paired(), 'online'), node: <LongChat /> }),
   'home-chat-offline': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * 3_600_000 }, 'offline', { receipts: 1, cash: 0 }), node: <Main chat={CHAT_OFFLINE} /> }),
   'home-chat-merged': () => ({ session: fake(paired(), 'online', { receipts: 1, cash: 0 }), node: <Main chat={CHAT_MERGED} /> }),
   'home-unpaired': () => ({ session: fake(emptyData(), 'unpaired'), node: <Main /> }),
@@ -631,7 +663,8 @@ const SCREENS: Record<
 
 export default function Gallery() {
   const p = usePalette();
-  const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
+  // 웹은 주소의 ?s=…, 시험용 iOS 빌드(GALLERY_NATIVE=1)는 EXPO_PUBLIC_GALLERY 값
+  const q = new URLSearchParams(typeof location !== 'undefined' && location.search ? location.search : (process.env.EXPO_PUBLIC_GALLERY ?? ''));
   const name = q.get('s') || 'home-chat-online';
   const fs = Math.min(Number(q.get('fs')) || 1, MAX_FONT_SCALE);
   textScale.web = fs;
@@ -641,6 +674,7 @@ export default function Gallery() {
   const h = Number(q.get('h')) || 852;
   return (
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: w, height: h }, insets: h < 700 ? { top: 20, left: 0, right: 0, bottom: 0 } : { top: 59, left: 0, right: 0, bottom: 34 } }}>
+      <KeyboardProvider>
       <View style={{ flex: 1, backgroundColor: p.canvas }}>
         <SessionContext.Provider value={session}>
           <TextSizeHost base={fs}>
@@ -653,6 +687,7 @@ export default function Gallery() {
           </TextSizeHost>
         </SessionContext.Provider>
       </View>
+      </KeyboardProvider>
     </SafeAreaProvider>
   );
 }

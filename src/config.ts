@@ -38,7 +38,7 @@ export const relayAllowlist = (): readonly string[] => DEV.relayAllowlist;
 export const LOCK_AFTER_MS = 30_000;
 /** 잠글 때 진행 중 저장·전송을 기다리는 최대 시간. 그 뒤에는 키를 지우고 남은 작업은 봉인하지 못하고 실패한다. */
 export const LOCK_DRAIN_MS = 15_000;
-/** 앱이 앞에 있는 동안 PC 연결을 다시 시도하는 간격. */
+/** 앱이 앞에 있는 동안 PC 연결을 다시 시도하는 간격. 실패 뒤 재시도(net/reconnect.ts)도 이보다 길게 기다리지 않는다. */
 export const RECONNECT_MS = 60_000;
 /** 사진 긴 변 상한(4 MiB 상한 안에 들도록). */
 export const PHOTO_MAX_EDGE = 2400;

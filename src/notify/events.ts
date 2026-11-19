@@ -59,7 +59,7 @@ function lineOf(job: Job, kind: NotifyKind): string {
   const r = job.run;
   if (kind === 'myTurn' && r?.kind === 'myTurn') {
     if (r.auth.method === 'pc') return `${job.title}. ${pcTurnOf(r.auth.code).short}`;
-    return r.auth.method === 'cert' ? `${job.title}. 공동인증서 비밀번호를 기다려요` : `${job.title}. 간편인증을 승인해 주세요`;
+    return r.auth.method === 'cert' ? `${job.title}. 인증서 비밀번호가 필요해요` : `${job.title}. 간편인증을 승인해 주세요`;
   }
   return job.title;
 }
