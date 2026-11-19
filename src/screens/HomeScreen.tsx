@@ -272,7 +272,7 @@ function Intro({ onPair }: { onPair: () => void }) {
     <View style={[st.card, { backgroundColor: p.tint }]} testID="unpaired">
       <T v="strong">먼저 PC와 연결해 주세요</T>
       <T v="sub" c="ink2">
-        PC의 {BRAND} → 설정 → [폰{'\u00A0'}연결]에 뜬 QR을 이 폰으로 찍으면 돼요. 한 번만 하면 돼요.
+        PC의 {BRAND} → 설정 → 기기{'\u00A0'}연결에서 [폰{'\u00A0'}연결]을 누르면 뜨는 QR을 이 폰으로 찍으면 돼요. 한 번만 하면 돼요.
       </T>
       <T v="sub" c="ink2">
         연결하면 여기서 PC에 일을 시키고, 종이 증빙을 찍고, 현금 매출을 적을 수 있어요.

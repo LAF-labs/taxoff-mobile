@@ -180,7 +180,7 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
         step={STEP_PAIR}
         onBack={onboarding.onBack}
         title="마지막으로, PC와 연결해요"
-        body={`PC의 ${BRAND} 앱에서 설정 → [폰 연결]을 누르면 QR이 떠요. 그 QR을 여기에 비춰 주세요.`}
+        body={`PC의 ${BRAND} 앱에서 설정 → 기기 연결 → [폰 연결]을 누르면 QR이 떠요. 그 QR을 여기에 비춰 주세요.`}
         action={
           perm?.granted ? (
             DEV_LOCAL ? (
@@ -215,7 +215,7 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
       <Screen title="PC와 연결" onBack={onDone} backLabel="취소" scroll={false} testID="pair-scan">
         <View style={{ gap: space.s2 }}>
           <T v="strong">PC 화면의 QR을 찍어 주세요</T>
-          <T v="sub" c="ink2">PC의 {BRAND} → 설정 → [폰 연결]을 누르면 QR이 떠요.</T>
+          <T v="sub" c="ink2">PC의 {BRAND} → 설정 → 기기 연결 → [폰 연결]을 누르면 QR이 떠요.</T>
         </View>
         {perm?.granted ? (
           <View style={[st.scanner, { backgroundColor: p.camera }]}>
