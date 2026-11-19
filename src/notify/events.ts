@@ -13,8 +13,11 @@ export interface NotifyPrefs {
   run: boolean;
   /** 받을 돈·낼 돈 기한(아침 9시) */
   money: boolean;
+  /** 앱을 닫아 둬도 오는 알림(PC가 서버 푸시로 깨운다: 승인할 일, 맡긴 일 소식). 예전 저장본에는 없다: 없으면 켜짐 */
+  wake?: boolean;
 }
-export const DEFAULT_PREFS: NotifyPrefs = { run: true, money: true };
+export const DEFAULT_PREFS: NotifyPrefs = { run: true, money: true, wake: true };
+export const wakeOn = (p: NotifyPrefs | undefined): boolean => p?.wake !== false;
 
 export interface RunEvent {
   jobId: string;

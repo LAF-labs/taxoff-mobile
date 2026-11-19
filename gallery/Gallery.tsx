@@ -11,6 +11,7 @@ import { SessionContext, type Session } from '../src/session';
 import { MainScreen, type Tab } from '../src/screens/MainScreen';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
 import { Banner } from '../src/notify/NotifyHost';
+import { AskSheet } from '../src/notify/PushHost';
 import { TextSizeHost } from '../src/ui/TextSizeHost';
 import { LockScreen } from '../src/screens/LockScreen';
 import { PairScreen } from '../src/screens/PairScreen';
@@ -508,6 +509,16 @@ const SCREENS: Record<
       <>
         <Main start="records" />
         <Banner ev={{ jobId: 'j', kind: 'myTurn', title: '내 차례예요', line: '가나식자재 세금계산서 · 폰에서 간편인증을 승인해 주세요', os: { title: '', body: '' } }} onPress={noop} onClose={noop} />
+      </>
+    ),
+  }),
+  // 첫 발급을 맡긴 뒤 한 번 묻는 알림 허용(ADR-053)
+  'push-ask': () => ({
+    session: fake(paired(), 'online'),
+    node: (
+      <>
+        <Main start="home" />
+        <AskSheet onYes={noop} onNo={noop} />
       </>
     ),
   }),

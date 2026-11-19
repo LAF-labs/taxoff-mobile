@@ -1,10 +1,11 @@
-// OS 알림(기기 안에서만 만드는 로컬 알림). 서버 푸시(APNs·FCM)는 아직 쓰지 않는다: 푸시 디스패처(tex poc/services/push)가
-// 배포되기 전이고, Phase 1에서는 실제 푸시를 보내지 않는다. 그래서 여기서 만드는 알림은 둘뿐이다.
+// OS 알림. 앱이 만드는 로컬 알림은 둘이다.
 //   1) 앱이 잠깐 뒤로 가 있을 때(잠기기 전 30초) PC가 알려 준 발급 진행
 //   2) 받을 돈·낼 돈 기한 아침 알림(마지막으로 받은 PC 값 기준, 다음 오전 9시 한 번)
+// 앱이 닫혀 있을 때는 PC가 서버 푸시로 깨운다(ADR-053, notify/push.ts). 그 글은 앱 번들 현지화에 있다.
 // 웹(갤러리)에는 OS 알림이 없다.
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import { wakeKindOf } from './wake';
 
 const native = Platform.OS === 'ios' || Platform.OS === 'android';
 const MONEY_ID = 'tex-money-morning';
@@ -13,12 +14,15 @@ const ANDROID_CHANNEL = 'tex-default';
 export type Permission = 'granted' | 'denied' | 'undetermined';
 
 let configured = false;
-/** 앱이 앞에 있을 때는 OS 배너를 띄우지 않는다(앱 안 배너가 대신한다). 알림 센터 목록에는 남긴다. */
+/**
+ * 앱이 앞에 있을 때는 OS 배너를 띄우지 않는다(앱 안 배너가 대신한다). 로컬 알림은 알림 센터 목록에 남긴다.
+ * 깨우기 푸시는 목록에도 남기지 않는다: 앱이 바로 PC와 붙어 내용을 받는다(PushHost가 sync).
+ */
 export function configureNotifications(): void {
   if (!native || configured) return;
   configured = true;
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({ shouldShowBanner: false, shouldShowList: true, shouldPlaySound: false, shouldSetBadge: false }),
+    handleNotification: async (n) => ({ shouldShowBanner: false, shouldShowList: !wakeKindOf(n), shouldPlaySound: false, shouldSetBadge: false }),
   });
   if (Platform.OS === 'android') {
     Notifications.setNotificationChannelAsync(ANDROID_CHANNEL, { name: '택스오프', importance: Notifications.AndroidImportance.DEFAULT }).catch(() => {});
