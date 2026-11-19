@@ -21,7 +21,7 @@ const { driveCmds, trimCmds } = await import('../src/net/issueLive.ts');
 const { PHONE_CAPS } = await import('../src/net/pcCopy.ts');
 const { PC_TURN, STOP_COPY, actionsOf, pcTurnOf } = await import('../src/run.ts');
 const { actionFor } = await import('../src/queue.ts');
-const { BUSY_GIVE_UP_MS, BUSY_RETRY_MS, REJECT_LINE, applyAck, applyEvent, askRetryCert, canRetryCert, busyWaiting, issueRequest, jobOf, kstDay, needsRedate, redate, retryDue, runViewOf, settled } = await import('../src/phoneCmd.ts');
+const { BUSY_GIVE_UP_MS, BUSY_RETRY_MS, REJECT_LINE, applyAck, applyEvent, applyHumanRequest, askRetryCert, askSimple, canRetryCert, simpleRequestValue, busyWaiting, issueRequest, jobOf, kstDay, needsRedate, redate, retryDue, runViewOf, settled } = await import('../src/phoneCmd.ts');
 
 const T0 = Date.parse('2026-11-17T01:00:00Z');
 const cmd = (o: Partial<PhoneCmd> = {}): PhoneCmd => ({
@@ -198,6 +198,44 @@ describe('라이브 세션 구동(mock)', () => {
     assert.deepEqual(m.sent.filter((x) => x.type === 'cmd.resume').map((x) => x.body), [{ runId: 'run1' }]);
     assert.equal(s.get()[0]!.resumeAt, undefined);
     assert.equal(s.get()[0]!.turn, undefined);
+  });
+  it('폰에서 간편인증: PC가 연 요청 자리에 값을 보내고, 승인 대기(남은 시간)에서 [승인했어요]를 보낸다. 못 하면 고르기로 돌아간다', async () => {
+    const base = applyEvent(applyAck(cmd({ sentAt: T0 }), { cmdId: cmd().cmdId, state: 'pc_only', runId: 'run1' }), { runId: 'run1', event: 'turn', at: T0 + 1, phase: 'login', code: 'login.simple_auth' });
+    const noReq = runViewOf(base)!;
+    assert.deepEqual(actionsOf(noReq), ['retryCert', 'close'], '요청 자리가 없으면(옛 PC) 간편인증 단추가 없다');
+    const withReq = applyHumanRequest(base, { runId: 'run1', reqId: 'REQ1', kind: 'manual', prompt: 'simple_auth' });
+    assert.equal(applyHumanRequest(base, { runId: 'other', reqId: 'X', kind: 'manual', prompt: 'simple_auth' }).simpleReq, undefined);
+    assert.deepEqual(actionsOf(runViewOf(withReq)!), ['simpleAuth', 'retryCert']);
+    const v = simpleRequestValue({ provider: 'kakao', name: '홍길동', birth: '19900101', phone: '01012345678' })!;
+    assert.equal(v, 'sa1:req:kakao:19900101:01012345678:홍길동');
+    assert.equal(simpleRequestValue({ provider: 'pass', name: '홍길동', birth: '19900101', phone: '01012345678' }), null);
+    const asked = askSimple(withReq, v, 'kakao');
+    assert.equal(runViewOf(asked)!.kind, 'running', '보내는 동안은 로그인 중');
+    const s = store([asked]);
+    const deadline = T0 + 300_000;
+    const m = mockChannel((sent) => {
+      const last = sent.at(-1)!;
+      if (last.type === 'human.response' && (last.body as { value: string }).value.startsWith('sa1:req')) return [env('run.event', { runId: 'run1', event: 'turn', at: T0 + 5, phase: 'login', code: 'login.simple_sent.kakao', deadline })];
+      if (last.type === 'human.response') return [env('run.event', { runId: 'run1', event: 'phase', at: T0 + 9, phase: 'readback' }), env('run.event', { runId: 'run1', event: 'end', at: T0 + 10, phase: 'stopped', code: 'not_issued' })];
+      return [env('cmd.ack', { cmdId: cmd().cmdId, state: 'rejected', reason: 'duplicate', runId: 'run1' })];
+    });
+    // 첫 세션: 요청 값 보냄 → 승인 대기
+    const io = { ...s.io };
+    let step = 0;
+    const r1 = await driveCmds(m.ch as never, [CAP.issue], { ...io, alive: () => step++ < 6 }, 5000);
+    assert.equal(r1, 'closed');
+    const wait = s.get()[0]!;
+    assert.deepEqual(runViewOf(wait), { kind: 'myTurn', step: 'login', auth: { method: 'simple', app: '카카오톡', pc: true, deadline }, startedAt: T0 });
+    assert.deepEqual(actionsOf(runViewOf(wait)!, T0 + 10), ['authDone', 'openApp', 'resendAuth']);
+    assert.deepEqual(actionsOf(runViewOf(wait)!, deadline + 1), ['resendAuth', 'retryCert']);
+    // [승인했어요]
+    await s.io.save((cs) => cs.map((c) => askSimple(c, 'sa1:done')));
+    assert.equal(await driveCmds(m.ch as never, [CAP.issue], s.io, 5000), 'settled');
+    assert.deepEqual(m.sent.filter((x) => x.type === 'human.response').map((x) => (x.body as { value: string; reqId: string }).reqId), ['REQ1', 'REQ1']);
+    // 못 함: 고르기로 돌아가고 실패를 보인다
+    const failed = applyEvent(asked, { runId: 'run1', event: 'turn', at: T0 + 20, phase: 'login', code: 'login.simple_failed' });
+    const fv = runViewOf({ ...failed, simpleOutSentAt: undefined, simpleOut: undefined })!;
+    assert.equal(fv.kind === 'myTurn' && fv.auth.method === 'pc' && fv.auth.failed, true);
   });
   it('PC가 issue.v1을 모르면 보내지 않고 새 버전 안내', async () => {
     const m = mockChannel(() => []);

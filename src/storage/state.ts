@@ -56,6 +56,16 @@ export interface RecentRecord {
   state: 'pending' | 'queued' | 'sent';
 }
 
+/** 간편인증 본인 정보(홈택스 개인용 간편인증 창과 같은 칸) */
+export interface SimpleId {
+  provider: string;
+  name: string;
+  /** YYYYMMDD */
+  birth: string;
+  /** 숫자만 */
+  phone: string;
+}
+
 export interface AppData {
   v: 1;
   pair: PairState | null;
@@ -80,6 +90,8 @@ export interface AppData {
   pcLog?: PcWhy[];
   /** 알림 고르기(설정 > 알림). 없으면 모두 켜짐(notify/events DEFAULT_PREFS). OS 허용은 따로 OS가 갖는다. */
   notify?: NotifyPrefs;
+  /** 폰에서 시작하는 간편인증에 쓴 값(인증 앱·이름·생년월일·휴대폰 번호). 봉인 상태 파일에만 두고, 다음에 같은 차례가 오면 미리 채운다. */
+  simpleId?: SimpleId | null;
   /** 앱 안 글자 크기(설정 > 화면). 없으면 중간 */
   textSize?: TextSize;
 }

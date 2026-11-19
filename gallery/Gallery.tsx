@@ -24,6 +24,8 @@ import { buildGate, type GateField, type PhoneGate } from '../src/approval';
 import { useEffect } from 'react';
 import { useQueue } from '../src/queueStore';
 import { RunScreen } from '../src/screens/RunScreen';
+import { SimpleAuthForm, draftOf } from '../src/screens/SimpleAuthForm';
+import { Button as KitButton, Screen as KitScreen } from '../src/ui/kit';
 import { BizRegScreen, type BizRegPreview } from '../src/screens/BizRegScreen';
 import { PDF_LINE } from '../src/capture/pick';
 import { MoneyProvider, type MarkState, type MoneyStatus } from '../src/moneyStore';
@@ -395,6 +397,14 @@ const SCREENS: Record<
   // PC가 사람 차례로 멈춤(run.event 'turn'): 공동인증서 로그인이 안 돼 간편인증 화면을 열어 둠, 모르는 까닭
   'run-pc-turn-simple': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_auth' }),
   'run-pc-turn-other': () => pcRun({ phase: 'readback', turn: true, code: 'turn.other' }),
+  // 폰에서 간편인증: 고르기(인증서로 다시·간편인증), 승인 대기(남은 시간), 시간 지남, 앞 요청 실패
+  'run-pc-turn-choice': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_auth', simpleReq: '01JD0000000000000000000000' }),
+  'simple-form-empty': () => ({ session: fake(paired(), 'online'), node: <KitScreen title="간편인증" onBack={noop} footer={<><KitButton label="승인 요청 보내기" onPress={noop} /><KitButton kind="quiet" label="취소" onPress={noop} /></>}><SimpleAuthForm draft={draftOf(null)} onChange={noop} errors={{}} /></KitScreen> }),
+  'simple-form-filled': () => ({ session: fake(paired(), 'online'), node: <KitScreen title="간편인증" onBack={noop} footer={<><KitButton label="승인 요청 보내기" onPress={noop} /><KitButton kind="quiet" label="취소" onPress={noop} /></>}><SimpleAuthForm draft={draftOf({ provider: 'kakao', name: '김가나', birth: '19840312', phone: '01012345678' })} onChange={noop} errors={{}} /></KitScreen> }),
+  'simple-form-errors': () => ({ session: fake(paired(), 'online'), node: <KitScreen title="간편인증" onBack={noop} footer={<KitButton label="승인 요청 보내기" onPress={noop} />}><SimpleAuthForm draft={{ provider: '', name: '김가나', birth: '1984-13', phone: '010-12' }} onChange={noop} errors={{ provider: '인증 앱을 골라 주세요', birth: '생년월일 8자리를 넣어 주세요(예: 1990-01-01)', phone: '휴대폰 번호를 넣어 주세요' }} failed /></KitScreen> }),
+  'run-pc-turn-choice-failed': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_auth', simpleReq: '01JD0000000000000000000000', simpleFailed: true }),
+  'run-pc-simple-wait': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_sent.kakao', simpleApp: 'kakao', simpleReq: '01JD0000000000000000000000', deadline: now + 248_000 }),
+  'run-pc-simple-timeout': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_sent.kakao', simpleApp: 'kakao', simpleReq: '01JD0000000000000000000000', deadline: now - 1_000 }),
   'home-chat-pc-turn': () => ({
     session: fake({ ...copyData(), cmds: [CMD({ phase: 'login', turn: true, code: 'login.simple_auth' })] }, 'online'),
     notes: [{ kind: 'run', id: 'run-cmd-G1', at: now - 90_000, jobId: 'cmd-G1' }],
