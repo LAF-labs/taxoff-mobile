@@ -185,7 +185,8 @@ export function PushHost({ onQueue, onRun, askPreview }: {
     if (!fresh.length) return;
     for (const j of fresh) toldBg.current.add(j.gate!.reqId);
     if (!wakeOn(live.current.s.data.notify)) return;
-    void notifyNow({ title: '승인을 기다리는 발급이 있어요', body: '눌러서 승인하거나 거절해 주세요' }, { open: LOCAL_APPROVE, jobId: fresh[0]!.id });
+    // identifier를 서버 깨우기의 접힘 ID와 같게: PC 깨우기가 뒤따라 와도 알림이 하나만 남는다
+    void notifyNow({ title: '승인을 기다리는 발급이 있어요', body: '눌러서 승인하거나 거절해 주세요' }, { open: LOCAL_APPROVE, jobId: fresh[0]!.id }, 'sax-wake-approve');
   }, [q.jobs, q.sheetJob, q.openSheet, askPreview]);
 
   // 허용 묻기: 첫 발급을 맡긴 뒤 한 번

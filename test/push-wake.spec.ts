@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { replaying, tapping } from '../src/net/hold.ts';
 import { forgetPushToken, pushClient, PushError } from '../src/notify/pushApi.ts';
 import { apnsToken, askDue, latestEntrusted, newGates, pushPlan, pushPlatform, tapKindOf, tokenHash, wakeKindOf } from '../src/notify/wake.ts';
 import type { Job } from '../src/queue.ts';
@@ -133,5 +134,23 @@ describe('앱이 뒤에 있을 때 받은 승인 요청', () => {
     assert.equal(tapKindOf(local({ open: 'approve', jobId: 'cmd-a' })), 'approve');
     assert.equal(tapKindOf(local({ open: 'run', jobId: 'cmd-a' })), null);
     assert.equal(tapKindOf(push({ aps: { alert: { 'loc-key': 'SAX_WAKE_UPDATE' } } })), 'update');
+  });
+});
+
+describe('세션이 붙은 직후의 봉투', () => {
+  type E = { type: string; n: number };
+  const chan = (es: E[]) => ({ closed: false, recv: async (_ms: number) => es.shift() ?? null, hi() { return this.closed; } });
+  it('사본을 기다리는 동안 지나간 승인 요청을 모았다가 먼저 돌려준다', async () => {
+    const ch = chan([{ type: 'gate.request', n: 1 }, { type: 'ping', n: 2 }, { type: 'phone.copy', n: 3 }, { type: 'run.event', n: 4 }]);
+    const held: E[] = [];
+    const early = tapping(ch, held);
+    for (;;) if ((await early.recv(10))?.type === 'phone.copy') break;
+    assert.deepEqual(held.map((e) => e.n), [1]);
+    assert.equal(early.closed, false);
+    assert.equal(early.hi(), false);
+    const late = replaying(ch, held);
+    assert.equal((await late.recv(10))?.n, 1);
+    assert.equal((await late.recv(10))?.n, 4);
+    assert.equal(await late.recv(10), null);
   });
 });

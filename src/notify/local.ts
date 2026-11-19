@@ -53,11 +53,11 @@ export async function askPermission(): Promise<Permission> {
 }
 
 /** 지금 바로 한 번(앱이 뒤에 있을 때). 허용 안 됐으면 조용히 넘어간다. */
-export async function notifyNow(c: { title: string; body: string }, data: Record<string, string> = {}): Promise<void> {
+export async function notifyNow(c: { title: string; body: string }, data: Record<string, string> = {}, identifier?: string): Promise<void> {
   if (!native) return;
   try {
     if ((await permission()) !== 'granted') return;
-    await Notifications.scheduleNotificationAsync({ content: { title: c.title, body: c.body, data }, trigger: Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL } : null });
+    await Notifications.scheduleNotificationAsync({ ...(identifier ? { identifier } : {}), content: { title: c.title, body: c.body, data }, trigger: Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL } : null });
   } catch {
     // 알림은 덤이다. 실패해도 앱 동작은 그대로.
   }
