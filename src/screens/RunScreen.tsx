@@ -106,7 +106,8 @@ export function RunScreen({ onDone, onDoc, onRecords, now: fixedNow }: { onDone:
       <View style={{ gap: space.s3 }}>
         <RunCard job={job} now={fixedNow} />
         {/* 카드 아래 안내: 어디서 하고 있는지, 앱을 닫아도 되는지 */}
-        {(r.kind === 'running' || r.kind === 'myTurn' || r.kind === 'inDoubt') && (
+        {/* 내 차례에는 할 일만 보인다(안내를 겹쳐 쓰지 않는다, 대표 지적 2026-11-19) */}
+        {(r.kind === 'running' || r.kind === 'inDoubt') && (
           <View style={{ gap: 2, paddingHorizontal: space.s1 }} testID="run-hint">
             <T v="meta" c="ink3">
               {`${s.data.pair?.desktopName ?? '내 PC'}에서 하고 있어요`}

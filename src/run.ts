@@ -62,7 +62,7 @@ export type Auth = { method: 'simple'; app: string; deadline?: number; pc?: bool
  * 폰에서는 할 수 없는 일이라(홈택스 창은 PC에 있다) 할 일을 PC 기준으로 말한다. 모르는 코드는 기본 줄.
  */
 export const PC_TURN: Readonly<Record<string, { line: string; short: string }>> = {
-  'login.simple_auth': { line: '공동인증서로 홈택스에 두 번 로그인하지 못했어요. 아무것도 발급하지 않았어요', short: '공동인증서 로그인이 안 됐어요' },
+  'login.simple_auth': { line: '공동인증서 로그인이 두 번 안 됐어요', short: '공동인증서 로그인이 안 됐어요' },
   'cert.pick_needed': { line: '인증서가 여러 개라 어느 것으로 로그인할지 정해야 해요. 아무것도 발급하지 않았어요', short: '쓸 인증서를 정해야 해요' },
   'portal.captcha': { line: '홈택스가 자동입력방지 문자를 물어서 로그인 앞에서 기다리고 있어요', short: '홈택스 로그인 앞에서 기다려요' },
   'portal.mfa_pending': { line: '홈택스가 추가 인증을 요구해서 로그인 앞에서 기다리고 있어요', short: '홈택스 추가 인증을 기다려요' },
