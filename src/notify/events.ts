@@ -58,7 +58,7 @@ const COPY: Record<NotifyKind, { title: string; os: string }> = {
 function lineOf(job: Job, kind: NotifyKind): string {
   const r = job.run;
   if (kind === 'myTurn' && r?.kind === 'myTurn') {
-    return r.auth.method === 'cert' ? `${job.title}. 인증서 로그인은 PC에서 해 주세요` : `${job.title}. 간편인증을 승인해 주세요`;
+    return r.auth.method === 'cert' ? `${job.title}. 인증서 비밀번호가 필요해요` : `${job.title}. 간편인증을 승인해 주세요`;
   }
   return job.title;
 }
