@@ -8,10 +8,10 @@ import { T } from './kit';
 export { masked, type Mask } from './mask.ts';
 import { masked, type Mask } from './mask.ts';
 
-const KB: Record<Mask, KeyboardTypeOptions> = { won: 'number-pad', bizNo: 'number-pad', day: 'number-pad', text: 'default', email: 'email-address' };
+const KB: Record<Mask, KeyboardTypeOptions> = { won: 'number-pad', bizNo: 'number-pad', day: 'number-pad', text: 'default', email: 'email-address', phone: 'phone-pad' };
 /** 여러 줄 칸도 낱말 단위로 줄을 바꾼다(웹 textarea는 기본이 글자 단위) */
 const KEEP_ALL = { wordBreak: 'keep-all', overflowWrap: 'anywhere' };
-const MAXLEN: Record<Mask, number> = { won: 16, bizNo: 12, day: 10, text: 80, email: 120 };
+const MAXLEN: Record<Mask, number> = { won: 16, bizNo: 12, day: 10, text: 80, email: 120, phone: 13 };
 
 /**
  * 한 줄 칸(묶음 안 줄): 왼쪽 라벨(15 ink2), 오른쪽 값(17, 오른쪽 맞춤) + 단위.

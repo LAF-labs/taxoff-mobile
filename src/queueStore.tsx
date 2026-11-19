@@ -3,11 +3,12 @@
 // simulate(갤러리·시연 전용): PC가 켜져 맡긴 발급이 준비 → 홈택스 로그인 → 값 확인을 지나 "PC가 승인 요청함"이 되고 시트가 뜬다.
 //   승인하면 발급 → 확인 → 결과 카드. simulate='inDoubt'이면 발급 뒤 응답이 끊겨 확인 중(조회 n회째) → 확인 필요로 간다.
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { busyWaiting, jobOf, redate, settled } from './phoneCmd';
+import { answerGate, askRefresh, askRetryCert, askSimple, busyWaiting, deniedByPhone, jobOf, redate, settled, simpleRequestValue } from './phoneCmd';
+import type { SimpleId } from './storage/state';
 import { SessionContext } from './session';
 import { jobTimers } from './jobTimers';
 import { josa } from './ui/josa';
-import { GATE_TTL_MS, buildGate, type AttestState, type PhoneGate, type READBACK_KEYS } from './approval';
+import { DAILY_LIMIT, GATE_TTL_MS, buildGate, type AttestState, type PhoneGate, type READBACK_KEYS } from './approval';
 import type { ChatItem } from './chat';
 import { applyAction, startAll as startAllJobs, type DoneJob, type Job, type JobAction, type NeedPcReason } from './queue';
 import type { IssueResult, RunAction, RunView } from './run';
@@ -45,14 +46,19 @@ export interface QueueStore {
   sheetJob: Job | null;
   openSheet: (id: string) => void;
   closeSheet: () => void;
-  /** 승인: 진행 중으로(결과가 오기 전), 거절: 밀린 일에서 뺀다. */
-  decide: (id: string, decision: 'approve' | 'deny') => void;
+  /** 승인: 진행 중으로(결과가 오기 전), 거절: 밀린 일에서 뺀다. 폰 발급 명령(cmd-)은 서명한 답(signed)을 PC로 보낸다. */
+  decide: (id: string, decision: 'approve' | 'deny', signed?: { reqId: string; actionHash: string; sig: string }) => void;
   /** 폰에서 승인할 수 없어 PC 앞 필요로 둔다. */
   park: (id: string, reason: NeedPcReason) => void;
   /** 만료된 승인 요청을 PC에 다시 요청(시연에서는 새 마감으로 다시 온다). */
   rerequest: (id: string) => void;
   /** 진행 카드의 동작(다시 준비·다시 요청·중지·PC에서 열기 예약) */
   runAction: (id: string, action: RunAction) => void;
+  /** 폰에서 시작하는 간편인증 값 보내기(PC가 맡은 일). 값은 봉인 상태 파일에 남겨 다음에 미리 채운다. */
+  simpleAuth: (id: string, v: SimpleId) => void;
+  /** 간편인증 시트를 띄운 일(채팅·진행 화면 위 바텀시트) */
+  simpleJob: Job | null;
+  closeSimple: () => void;
   /** 진행·결과·서류 화면이 보는 일 */
   focus: Job | null;
   setFocus: (id: string | null) => void;
@@ -87,7 +93,7 @@ const Ctx = createContext<QueueStore | null>(null);
 const SIM_SUPPLIER = { supplierBizNo: '123-45-67890', supplierName: '택스오프상회' };
 
 export function QueueProvider({
-  initial = [], last = null, notes: initialNotes = [], approval = { attest: 'none', iosAllowed: true, usedToday: 0 }, sheet = null, simulate = false, focus: initialFocus = null, counterparties: initialCps = [], pick = null, children,
+  initial = [], last = null, notes: initialNotes = [], approval: approvalProp, sheet = null, simulate = false, focus: initialFocus = null, counterparties: initialCps = [], pick = null, children,
 }: {
   initial?: Job[]; last?: DoneJob | null; notes?: ChatItem[]; approval?: ApprovalSettings;
   /** 처음부터 열어 둘 승인 시트(갤러리) */
@@ -102,10 +108,21 @@ export function QueueProvider({
   // 폰 발급 명령(봉인 상태 파일)은 세션에서 읽어 일로 바꿔 붙인다. 갤러리 가짜 세션에도 있다.
   const sess = useContext(SessionContext);
   const cmds = sess?.data.cmds;
-  const jobs = useMemo(() => [...localJobs, ...(cmds ?? []).map(jobOf)], [localJobs, cmds]);
+  // 폰에서 거절해 그 답을 보낸 명령은 밀린 일에서 뺀다(PC가 그 실행을 멈춘다)
+  const jobs = useMemo(() => [...localJobs, ...(cmds ?? []).filter((c) => !deniedByPhone(c)).map(jobOf)], [localJobs, cmds]);
+  // 승인 설정: 갤러리는 값을 준다. 앱은 PC의 답으로 정한다(승인 키를 PC가 받았을 때만 승인 기기, 오늘 남은 횟수는 PC 사본).
+  const pxOk = sess?.data.px?.state === 'enrolled';
+  const left = sess?.data.pcCopy?.todayApprovalsLeft;
+  const approval = useMemo<ApprovalSettings>(
+    () => approvalProp ?? { attest: pxOk ? 'ios_se' : 'none', iosAllowed: true, usedToday: left === undefined ? 0 : Math.max(0, DAILY_LIMIT - left) },
+    [approvalProp, pxOk, left],
+  );
   const [notes, setNotes] = useState<ChatItem[]>(initialNotes);
   const [sheetId, setSheetId] = useState<string | null>(sheet);
-  const [used, setUsed] = useState(approval.usedToday);
+  const [simpleId, setSimpleId] = useState<string | null>(null);
+  const [usedLocal, setUsed] = useState(0);
+  const used = approval.usedToday + usedLocal;
+  // 새 승인 요청은 시트를 띄우지 않고 첫 화면 대화의 카드에서 승인한다(notify/PushHost가 그 카드로 데려간다)
   const [focusId, setFocusId] = useState<string | null>(initialFocus);
   const [cps, setCps] = useState<Counterparty[]>(initialCps);
   const [pickId, setPickId] = useState<string | null>(pick);
@@ -149,6 +166,8 @@ export function QueueProvider({
       markSent: (itemId) => setNotes((n) => n.map((x) => (x.id === itemId && x.kind === 'msg' && x.card ? { ...x, card: { ...x.card, sent: true } } : x))),
       approval: { ...approval, usedToday: used },
       sheetJob: jobs.find((j) => j.id === sheetId && j.gate) ?? null,
+      simpleJob: jobs.find((j) => j.id === simpleId) ?? null,
+      closeSimple: () => setSimpleId(null),
       noteCmd: (jobId, text) => {
         const now = Date.now();
         if (text === null) setNotes((n) => [...n, { kind: 'run', id: `run-${jobId}`, at: now, jobId }]);
@@ -188,9 +207,17 @@ export function QueueProvider({
       },
       openSheet: (id) => setSheetId(id),
       closeSheet: () => setSheetId(null),
-      decide: (id, decision) => {
+      decide: (id, decision, signed) => {
         const j = jobs.find((x) => x.id === id);
         setSheetId(null);
+        if (id.startsWith('cmd-')) {
+          // 폰 발급 명령: 서명한 답을 적어 두면 라이브 세션이 보낸다(net/issueLive.ts). 서명이 없으면 아무것도 하지 않는다
+          if (!signed) return;
+          const cmdId = id.slice(4);
+          void sess?.update((d) => ({ ...d, cmds: (d.cmds ?? []).map((c) => (c.cmdId === cmdId ? answerGate(c, { ...signed, decision }) : c)) })).then(() => sess.sync());
+          if (decision === 'deny') note(id, `${j?.title ?? '세금계산서'} 발급을 거절했어요`);
+          return;
+        }
         if (decision === 'approve') {
           setUsed((u) => u + 1);
           const startedAt = j?.run?.startedAt ?? Date.now();
@@ -218,9 +245,37 @@ export function QueueProvider({
       park: (id, reason) => {
         timers.clear(id);
         setSheetId(null);
+        // 폰 발급 명령: 폰에서 승인할 수 없는 요청은 그대로 둔다(PC 승인 바에서 한다)
+        if (id.startsWith('cmd-')) return;
         patch(id, (x) => ({ ...x, state: 'needPc', reason, gate: undefined }));
       },
+      simpleAuth: (id, v) => {
+        if (!id.startsWith('cmd-')) return;
+        const cmdId = id.slice(4);
+        const value = simpleRequestValue(v);
+        if (!value) return;
+        setSimpleId(null);
+        void sess?.update((d) => ({ ...d, simpleId: v, cmds: (d.cmds ?? []).map((c) => (c.cmdId === cmdId ? askSimple(c, value, v.provider) : c)) })).then(() => sess?.sync());
+      },
       runAction: (id, a) => {
+        if (a === 'simpleAuth') return setSimpleId(id);
+        if ((a === 'authDone' || a === 'resendAuth') && id.startsWith('cmd-')) {
+          // [승인했어요]: PC가 [인증 완료]를 누르고 이어서 한다. [다시 요청]: 지난 값으로 다시 보낸다
+          const cmdId = id.slice(4);
+          void sess
+            ?.update((d) => {
+              const value = a === 'authDone' ? 'sa1:done' : d.simpleId ? simpleRequestValue(d.simpleId) : null;
+              return value ? { ...d, cmds: (d.cmds ?? []).map((c) => (c.cmdId === cmdId ? askSimple(c, value) : c)) } : d;
+            })
+            .then(() => sess?.sync());
+          return;
+        }
+        if (a === 'retryCert' && id.startsWith('cmd-')) {
+          // PC가 공동인증서 로그인 실패로 기다리는 명령: 라이브 세션에서 cmd.resume을 보낸다(PC가 같은 값으로 인증서 로그인부터 다시)
+          const cmdId = id.slice(4);
+          void sess?.update((d) => ({ ...d, cmds: (d.cmds ?? []).map((c) => (c.cmdId === cmdId ? askRetryCert(c) : c)) })).then(() => sess?.sync());
+          return;
+        }
         const j = jobs.find((x) => x.id === id);
         if (!j?.run) return;
         const startedAt = j.run.startedAt;
@@ -253,11 +308,17 @@ export function QueueProvider({
       focus: jobs.find((j) => j.id === focusId) ?? null,
       setFocus: (id) => setFocusId(id),
       rerequest: (id) => {
+        if (id.startsWith('cmd-')) {
+          // 마감이 지난 요청을 PC에 다시 달라고 한다. 새 요청이 오면 시트가 새 마감으로 바뀐다
+          const cmdId = id.slice(4);
+          void sess?.update((d) => ({ ...d, cmds: (d.cmds ?? []).map((c) => (c.cmdId === cmdId ? askRefresh(c) : c)) })).then(() => sess.sync());
+          return;
+        }
         if (!simulate) return setSheetId(null);
         patch(id, (x) => (x.gate ? { ...x, gate: { ...x.gate, challenge: b64(randomBytes(32)), exp: Date.now() + GATE_TTL_MS } } : x));
       },
     }),
-    [jobs, last, notes, sheetId, used, focusId, cps, pickId, prefill, approval.attest, approval.iosAllowed, simulate, sess],
+    [jobs, last, notes, sheetId, simpleId, used, focusId, cps, pickId, prefill, approval, simulate, sess],
   );
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

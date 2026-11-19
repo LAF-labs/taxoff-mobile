@@ -20,6 +20,15 @@ declare class SaxNativeModule extends NativeModule<Record<string, never>> {
   vaultGet?(service: string, account: string, prompt: string, passcode: boolean): Promise<string | null>;
   vaultDelete?(service: string, account: string): Promise<void>;
   vaultPolicy?(): { accessible: string; auth: string };
+  /**
+   * 승인 키(Px, ADR-052): iOS Secure Enclave P-256, 서명할 때마다 생체 확인(biometryCurrentSet, 폰 암호 대체 없음).
+   * 공개키는 SEC1 비압축 65바이트(base64), 서명은 X9.62 DER(base64). pxSign은 사용자가 취소하면 null.
+   * 오류 message: px_unavailable · px_missing · biometry_lockout · px_sign_failed:<코드>. iOS 빌드에만 있다(Android는 다음).
+   */
+  pxPublic?(tag: string): Promise<string | null>;
+  pxCreate?(tag: string): Promise<string>;
+  pxSign?(tag: string, dataB64: string, prompt: string): Promise<string | null>;
+  pxDelete?(tag: string): Promise<void>;
   recognizeTextBoxes?(uri: string): Promise<Array<{ text: string; x: number; y: number; w: number; h: number; conf: number }>>;
 }
 

@@ -6,13 +6,14 @@
 // - 시작 확인이 있으면 바닥 주요 단추 [모두 시작]. 비었으면 "밀린 일이 없어요".
 import { Pressable, StyleSheet, View } from 'react-native';
 import { clock } from '../chat';
-import type { RefuseReason, RunView, Step } from '../run';
+import { pcTurnOf, type RefuseReason, type RunView, type Step } from '../run';
 import { actionFor, groupJobs, type Job, type JobAction, type JobState, type NeedPcReason } from '../queue';
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
 import { radius, space, usePalette } from '../theme';
 import { Button, Empty, Group, Row, Screen, T, tap, won } from '../ui/kit';
 import { SwipeAway } from '../ui/SwipeAway';
+import { CardApprove } from './CardApprove';
 
 const NB = ' ';
 
@@ -72,9 +73,9 @@ export function statusLine(job: Job, state: JobState): string {
   if (job.wait === 'pcBusy') return '다른 일이 끝나면 할게요';
   if (job.wait === 'newDay' && job.waitDay) return `${Number(job.waitDay.slice(5, 7))}월 ${Number(job.waitDay.slice(8, 10))}일로 맡긴 일이에요. 오늘 날짜로 바꿔야 발급할 수 있어요`;
   if (r?.kind === 'refused') return REFUSED[r.reason];
-  if (r?.kind === 'stopped') return '중지됐어요';
+  if (r?.kind === 'stopped') return r.reason === 'appOld' ? 'PC 앱을 업데이트해 주세요' : '중지됐어요';
   if (state === 'needPc' && job.reason) return NEED_PC[job.reason];
-  if (r?.kind === 'myTurn') return r.auth.method === 'cert' ? '인증서 비밀번호가 필요해요' : '간편인증을 승인해 주세요';
+  if (r?.kind === 'myTurn') return r.auth.method === 'cert' ? '인증서 비밀번호가 필요해요' : r.auth.method === 'pc' ? pcTurnOf(r.auth.code).short : '간편인증을 승인해 주세요';
   if (r?.kind === 'inDoubt') return '발급됐는지 보고 있어요';
   if (state === 'running' && r?.kind === 'running') return RUNNING[r.step];
   return PLAIN[state];
@@ -236,7 +237,9 @@ function JobCard({ job, state, onAction }: { job: Job; state: JobState; onAction
           </Pressable>
         )}
       </View>
-      {approve && button && (
+      {button?.key === 'approve' && job.id.startsWith('cmd-') && job.gate ? (
+        <CardApprove job={job} gate={job.gate} onDetail={() => onAction('approve')} />
+      ) : approve && button && (
         <View style={st.actions}>
           <Button small label={label ?? ''} onPress={() => onAction(button.key)} testID={`job-${job.id}-${button.key}`} />
         </View>

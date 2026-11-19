@@ -31,8 +31,19 @@ export function RunScreen({ onDone, onDoc, onRecords, now: fixedNow }: { onDone:
     if (a === 'stop') onDone();
   };
   let footer;
-  if (job.pcOnly) {
-    // 폰 발급 명령: 승인·중지·서류는 PC에서. 폰은 지켜보기만 한다.
+  if (job.pcOnly && r.kind === 'myTurn' && (r.auth.method === 'pc' || (r.auth.method === 'simple' && r.auth.pc)) && actionsOf(r, now)[0] !== 'close') {
+    // 폰 발급 명령이 로그인에서 기다린다: 폰에서 간편인증·[인증서로 다시 시도]·[승인했어요]
+    const [first, ...rest] = actionsOf(r, now);
+    footer = (
+      <>
+        <Button label={actionLabel(first!, r)} onPress={() => run(first!)} testID={`run-main-${first}`} />
+        {rest.slice(0, 2).map((a) => (
+          <Button key={a} kind="quiet" label={actionLabel(a, r)} onPress={() => run(a)} testID={`run-sub-${a}`} />
+        ))}
+      </>
+    );
+  } else if (job.pcOnly) {
+    // 폰 발급 명령: 승인·중지·서류는 PC가 맡는다. 폰은 지켜보기만 한다.
     footer = <Button kind="secondary" label="닫기" onPress={onDone} testID="run-main-close" />;
   } else if (r.kind === 'done') {
     footer = (
@@ -61,7 +72,8 @@ export function RunScreen({ onDone, onDoc, onRecords, now: fixedNow }: { onDone:
       <View style={{ gap: space.s3 }}>
         <RunCard job={job} now={fixedNow} />
         {/* 카드 아래 안내: 어디서 하고 있는지, 앱을 닫아도 되는지 */}
-        {(r.kind === 'running' || r.kind === 'myTurn' || r.kind === 'inDoubt') && (
+        {/* 내 차례에는 할 일만 보인다(안내를 겹쳐 쓰지 않는다, 대표 지적 2026-11-19) */}
+        {(r.kind === 'running' || r.kind === 'inDoubt') && (
           <View style={{ gap: 2, paddingHorizontal: space.s1 }} testID="run-hint">
             <T v="meta" c="ink3">
               {`${s.data.pair?.desktopName ?? '내 PC'}에서 하고 있어요`}

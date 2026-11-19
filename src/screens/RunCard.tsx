@@ -8,10 +8,14 @@ import { useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { REJECT_LINE } from '../phoneCmd';
 import type { Job } from '../queue';
-import { ACTION_LABEL, AUTH_APPS, STEPS, STEP_LABEL, STOP_COPY, actionsOf, chipOf, elapsed, groupApprovalNo, mmss, stepOf, type IssueResult, type RunAction, type RunView } from '../run';
+import { ACTION_LABEL, AUTH_APPS, STEPS, STEP_LABEL, STOP_COPY, actionsOf, chipOf, elapsed, groupApprovalNo, mmss, pcTurnOf, stepOf, type IssueResult, type RunAction, type RunView } from '../run';
 import { radius, space, usePalette } from '../theme';
 import { Check, Chevron, Pill, StatusDot, T, success, won } from '../ui/kit';
+import { CardApprove } from './CardApprove';
 
+
+/** PC가 맡은 일의 로그인 차례(폰에서 할 수 있는 일이 있다) */
+const pcTurn = (r: RunView) => r.kind === 'myTurn' && (r.auth.method === 'pc' || (r.auth.method === 'simple' && !!r.auth.pc));
 
 export function actionLabel(a: RunAction, r: RunView): string {
   if (a === 'openApp' && r.kind === 'myTurn' && r.auth.method === 'simple') return `${r.auth.app} 열기`;
@@ -36,7 +40,7 @@ export function useNow(fixed?: number, on = true): number {
   return fixed ?? now;
 }
 
-export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, onShare }: {
+export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, onShare, onApprove }: {
   job: Job;
   /** 갤러리: 시계를 멈춘다 */
   now?: number;
@@ -46,6 +50,8 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
   onAction?: (a: RunAction) => void;
   onDoc?: () => void;
   onShare?: () => void;
+  /** 이 폰으로 승인할 요청이 열려 있을 때: 카드에서 바로 승인, [자세히 보기]면 승인 시트 */
+  onApprove?: () => void;
 }) {
   const p = usePalette();
   const r = job.run;
@@ -78,24 +84,27 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
           (r.kind === 'myTurn' && r.auth.method === 'simple' && r.auth.deadline !== undefined ? (
             r.auth.deadline > now ? (
               <T v="meta" c="attention" testID="run-left" style={{ fontVariant: ['tabular-nums'] }}>
-                · 남은 시간 {mmss(r.auth.deadline - now)}
+                {mmss(r.auth.deadline - now)} 남았어요
               </T>
             ) : (
               <T v="meta" c="attention" testID="run-left">
-                · 시간이 지났어요
+                시간이 지났어요
               </T>
             )
-          ) : (
+          ) : compact ? null : (
+            // 대화 카드에는 지난 시간을 두지 않는다(대표 결정 2026-11-19: 시간이 바뀌면 어지럽다)
             <T v="meta" c="ink3" testID="run-elapsed">
-              · {elapsed(now - r.startedAt)}
+              {elapsed(now - r.startedAt)}
             </T>
           ))}
       </View>
       {/* 이유 없는 PC 멈춤은 어느 단계였는지 모르니 단계 막대를 두지 않는다 */}
-      {r.kind !== 'done' && r.kind !== 'refused' && !(r.kind === 'stopped' && r.reason === 'pcStopped') && (compact ? <FoldSteps id={job.id} r={r} /> : <StepBar r={r} />)}
+      {r.kind !== 'done' && r.kind !== 'refused' && !(r.kind === 'stopped' && (r.reason === 'pcStopped' || r.reason === 'appOld')) && (compact ? <FoldSteps id={job.id} r={r} /> : <StepBar r={r} />)}
       <StateLines r={r} />
+      {onApprove && job.gate && job.state === 'approval' && <CardApprove job={job} gate={job.gate} onDetail={onApprove} now={fixedNow} />}
       {r.kind === 'done' && <ResultRows result={r.result} />}
-      {compact && !job.pcOnly && <CardActions r={r} now={now} onAction={onAction} onDoc={onDoc} onShare={onShare} />}
+      {/* 폰 발급 명령은 지켜보기만 한다. 로그인 차례(간편인증·인증서로 다시·승인했어요)만 대화 카드에서 바로 한다 */}
+      {compact && (!job.pcOnly || pcTurn(r)) && <CardActions r={r} now={now} onAction={onAction} onDoc={onDoc} onShare={onShare} />}
     </View>
   );
   if (!compact || !onOpen) return body;
@@ -160,7 +169,7 @@ function FoldSteps({ id, r }: { id: string; r: RunView }) {
 }
 
 /**
- * 단계: 얇은 6칸 막대(지난 칸 ink3, 지금 칸 ink로 조금 두껍게, 남은 칸 sunken) + 아래 한 줄 "2/6 · 홈택스 로그인".
+ * 단계: 얇은 6칸 막대(지난 칸 ink3, 지금 칸 ink로 조금 두껍게, 남은 칸 sunken) + 아래 한 줄 "홈택스 로그인 2/6".
  * 파랑은 PC 켜짐·승인 단추에만 쓰므로 지금 칸은 ink와 두께로 강조한다. 어느 폭에서도 한 줄이다.
  */
 function StepBar({ r }: { r: RunView }) {
@@ -174,7 +183,7 @@ function StepBar({ r }: { r: RunView }) {
         ))}
       </View>
       <T v="sub" c="ink2" lines={1}>
-        {cur + 1}/{STEPS.length} · <T v="subStrong">{STEP_LABEL[STEPS[cur]!]}</T>
+        <T v="subStrong">{STEP_LABEL[STEPS[cur]!]}</T> {cur + 1}/{STEPS.length}
       </T>
     </View>
   );
@@ -199,7 +208,7 @@ function StateLines({ r }: { r: RunView }) {
     case 'myTurn':
       return (
         <T v="sub" c="attention" testID="run-my-turn">
-          {r.auth.method === 'simple' ? `${r.auth.app} 앱에서 승인해 주세요` : '인증서 비밀번호는 PC에서만 입력할 수 있어요'}
+          {r.auth.method === 'simple' ? `${r.auth.app} 앱에서 승인해 주세요` : r.auth.method === 'pc' ? pcTurnOf(r.auth.code).line : '인증서 비밀번호가 필요해요'}
         </T>
       );
     case 'stopped':
@@ -344,9 +353,10 @@ function CardActions({ r, now, onAction, onDoc, onShare }: { r: RunView; now: nu
 }
 
 const st = StyleSheet.create({
+  approve: { flexDirection: 'row', alignItems: 'center', gap: space.s3 },
   card: { borderRadius: radius.lg, padding: space.s4, gap: space.s2 },
   head: { flexDirection: 'row', alignItems: 'baseline', gap: space.s3 },
-  chipLine: { flexDirection: 'row', alignItems: 'center', gap: space.s1, flexWrap: 'wrap' },
+  chipLine: { flexDirection: 'row', alignItems: 'center', gap: space.s3, flexWrap: 'wrap' },
   doneChip: { flexDirection: 'row', alignItems: 'center', gap: space.s2 },
   bar: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: space.s1 },
   seg: { flex: 1, height: 4, borderRadius: 2 },

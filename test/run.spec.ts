@@ -92,3 +92,16 @@ describe('시연 타이머(일별)', () => {
     assert.deepEqual(log, ['y']);
   });
 });
+
+describe('간편인증 시트 단계', async () => {
+  const { stepsOf, toId, stepOk, draftOf } = await import('../src/simpleAuth.ts');
+  it('PASS면 통신사가 끼고, 모든 단계가 맞아야 보낸다', () => {
+    const d = { ...draftOf(null), provider: 'kakao', name: '홍길동', birth: '1990-01-01', phone: '010-1234-5678' };
+    assert.deepEqual(stepsOf(d), ['app', 'name', 'birth', 'phone']);
+    assert.deepEqual(toId(d), { provider: 'kakao', name: '홍길동', birth: '19900101', phone: '01012345678' });
+    assert.deepEqual(stepsOf({ ...d, provider: 'pass' }), ['app', 'carrier', 'name', 'birth', 'phone']);
+    assert.equal(toId({ ...d, provider: 'pass' }), null);
+    assert.deepEqual(toId({ ...d, provider: 'pass', carrier: 'ka' }), { provider: 'pass', carrier: 'ka', name: '홍길동', birth: '19900101', phone: '01012345678' });
+    assert.equal(stepOk('birth', { ...d, birth: '1990-13-01' }), false);
+  });
+});

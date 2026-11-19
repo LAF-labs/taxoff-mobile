@@ -1,11 +1,13 @@
 // 이 폰 연결 해제(PC 연결 화면과 연결된 기기 화면이 같이 쓴다, ADR-048 결정 6).
 // 서버에 먼저 알리고(leaveThisPhone), 닿든 못 닿든 이 폰의 열쇠와 자료를 지운다. 닿지 못했으면 PC에서 끊어 달라고 알린다.
+// 푸시 토큰을 먼저 지운다(ADR-053 결정 4). 못 지워도 나가기는 이어 간다: 서버가 기기를 끊을 때 토큰도 지운다.
 import { Alert } from 'react-native';
 import { devicesClient, leaveThisPhone } from '../devices';
 import type { DeviceKeys } from '../keyring';
 import { resetDevice } from '../keyring';
 import { accountOrigin } from '../net/account';
 import { clearDeviceToken, deviceAuthFor, fetchJson } from '../net/devauth';
+import { forgetPushToken, pushClient } from '../notify/pushApi';
 import type { AppData } from '../storage/state';
 
 export const LEAVE_TITLE = '이 폰 연결 해제';
@@ -20,7 +22,9 @@ export function confirmLeaveThisPhone(o: { pair: NonNullable<AppData['pair']>; k
       text: '해제',
       style: 'destructive',
       onPress: async () => {
-        const client = devicesClient(fetchJson, accountOrigin(), deviceAuthFor(o.pair.pairId, o.pair.cert, o.keys.vm));
+        const auth = deviceAuthFor(o.pair.pairId, o.pair.cert, o.keys.vm);
+        await forgetPushToken(() => pushClient(fetchJson, accountOrigin(), auth).remove());
+        const client = devicesClient(fetchJson, accountOrigin(), auth);
         const { told } = await leaveThisPhone({ leave: client.leave, reset: resetDevice });
         clearDeviceToken();
         if (told) o.onReset();

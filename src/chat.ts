@@ -1,5 +1,6 @@
 // 홈 대화(기획 v2): PC 에이전트와 나누는 하나의 대화. 이 PR은 화면만 바꾼다(새 프로토콜 없음).
 // 앱에서는 이 폰에 남은 기록(보낸 종이 증빙)과 이 폰에서 적은 말로만 줄을 만들고, PC 답은 갤러리 가짜 데이터에만 있다.
+import type { ReactionId } from '@sax/chat-core';
 import type { AppData, RecentRecord } from './storage/state';
 import type { Thumb } from './capture/thumb';
 
@@ -25,7 +26,7 @@ export type ChatItem =
    * 말 한 줄. from 'pc'는 상대 쪽(왼쪽), via 'phone'이면 PC가 꺼져 있어 이 폰이 답한 말이다.
    * state(내 말만): sent 보냄 · waiting PC 켜지면 보냄 · sending 보내는 중 · failed 못 보냄(아래 note에 이유와 [다시 보내기]).
    */
-  | { kind: 'msg'; id: string; from: 'pc' | 'me'; via?: 'phone'; at: number; text?: string; card?: ChatCard; state?: 'sent' | 'waiting' | 'sending' | 'failed' }
+  | { kind: 'msg'; id: string; from: 'pc' | 'me'; via?: 'phone'; at: number; text?: string; card?: ChatCard; state?: 'sent' | 'waiting' | 'sending' | 'failed'; /** 내 말에 앱이 단 반응(ADR-057, 판정이 고른 허용 목록 이름) */ reaction?: ReactionId }
   /** 폰에서 나눈 대화를 PC 대화에 합친 구간의 머리. from·to는 시각(ms). */
   | { kind: 'merged'; id: string; from: number; to: number }
   /** 폰에서 한 일의 확인 한 줄(예: 발급을 맡겼어요). 사라지는 토스트 대신 대화에 남긴다. */
@@ -90,6 +91,8 @@ const joins = (items: readonly ChatItem[], i: number, j: number): boolean => {
   const b = items[j];
   if (a?.kind !== 'msg' || b?.kind !== 'msg') return false;
   if (a.from !== b.from || (a.via ?? '') !== (b.via ?? '')) return false;
+  // 반응이 달린 말 뒤는 붙이지 않는다(알약이 다음 말풍선에 겹치지 않게, ADR-057)
+  if (a.reaction) return false;
   const later = Math.max(i, j);
   return Math.abs(b.at - a.at) <= GROUP_GAP_MS && stampBefore(items, later) === null;
 };

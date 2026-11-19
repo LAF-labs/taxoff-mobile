@@ -14,7 +14,10 @@ export const PROTOCOL_VERSION = 1;
 export const SUITES: HelloBody['suites'] = ['noise-25519-chachapoly-blake2b'];
 /** Phase 1 폰 기능 표시(hello.capabilities). receiptV2 = receipt.offer의 paperInvoice(종이 세금계산서, v1.7)를 받는다. */
 /** v1.8: issue = 폰 발급 명령(cmd.run hometax.invoice.issue)·cmd.ack·run.event 진행 칸, copy = phone.copy(ADR-046 결정 2·5). */
-export const CAP = { receipt: 'receipt.v1', receiptV2: 'receipt.v2', cash: 'cash.v1', issue: 'issue.v1', copy: 'copy.v1' } as const;
+/** v1.9: share = 계정 공유 기록 열쇠(share.key, ADR-048 결정 5)를 받는다(폰) / 준다(PC). */
+/** v1.10: approve = 폰 승인(px.enroll·px.ack·gate.request·gate.response·gate.refresh, ADR-052). 폰은 승인 키로 서명할 수 있을 때, PC는 중계·검증할 수 있을 때 알린다. */
+/** v1.11: sync = run.event.rev와 gate.resolved(폰과 PC 연결 끊김에 강하게)를 받는다(폰) / 보낸다(PC). */
+export const CAP = { receipt: 'receipt.v1', receiptV2: 'receipt.v2', cash: 'cash.v1', issue: 'issue.v1', copy: 'copy.v1', share: 'share.v1', approve: 'approve.v1', sync: 'sync.v1' } as const;
 const ZERO_HASH = '0'.repeat(64);
 
 export const sessionPrologue = (pairId: string): Uint8Array => concat(utf8(CTX.session), utf8(pairId));
@@ -125,13 +128,18 @@ export interface DesktopSessionOptions {
   minProtocol?: number;
   /** IK 뒤 hello 대기(기본 10초). */
   helloTimeoutMs?: number;
+  /**
+   * 이미 받은 msg1 프레임. 앞 세션의 수신 루프가 폰이 다시 접속해 보낸 새 IK를 받았으면 그것을 넘긴다
+   * (같은 우편함 연결 위에서 폰은 세션마다 새로 IK를 연다. 앞 세션이 그 프레임을 삼키면 폰은 응답을 받지 못한다).
+   */
+  first?: Uint8Array;
 }
 
 /** 폰의 msg1을 받아 검사한다. 거부는 무응답(null). */
 export async function acceptDesktopSession(link: Link, o: DesktopSessionOptions): Promise<SessionInfo | null> {
   attachQueue(link);
   try {
-    const f = await nextFrame(link, 30_000);
+    const f = o.first ?? (await nextFrame(link, 30_000));
     const p = f ? parseFrame(f) : null;
     if (!p || p.kind !== KIND.HS) return null;
     const hs = new Handshake({ pattern: 'IK', initiator: false, ctx: CTX.session, s: o.noise, prologue: sessionPrologue(o.pair.pairId) });
