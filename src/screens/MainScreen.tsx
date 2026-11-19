@@ -22,13 +22,13 @@ const TABS: Array<{ key: Tab; label: string; a11y: string }> = [
 ];
 
 export function MainScreen({
-  tab, onTab, go, chat, todo, draft, phone,
-}: { tab: Tab; onTab: (t: Tab) => void; go: (to: MainRoute) => void; chat?: ChatItem[]; todo?: Todo; draft?: string; phone?: OfflineChatView }) {
+  tab, onTab, go, chat, todo, draft, phone, menu,
+}: { tab: Tab; onTab: (t: Tab) => void; go: (to: MainRoute) => void; chat?: ChatItem[]; todo?: Todo; draft?: string; phone?: OfflineChatView; /** 갤러리: [+] 메뉴를 펼친 채로 */ menu?: boolean }) {
   const kb = useKeyboardShown();
   return (
     <View style={st.fill}>
       <View style={st.fill}>
-        {tab === 'home' && <HomeScreen go={go} chat={chat} todo={todo} draft={draft} phone={phone} />}
+        {tab === 'home' && <HomeScreen go={go} chat={chat} todo={todo} draft={draft} phone={phone} menu={menu} />}
         {tab === 'money' && <MoneyScreen go={go} />}
         {tab === 'records' && <RecordsScreen go={go} />}
       </View>

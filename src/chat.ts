@@ -7,6 +7,8 @@ export interface ChatCard {
   title: string;
   rows: Array<{ label: string; value: string; strong?: boolean }>;
   note?: string;
+  /** 폰 대화가 만든 세금계산서 카드면 그 초안. 열린 카드에는 [발급 맡기기]가 붙는다. */
+  draft?: { id: string; counterpartyId: string; amount: number; vat: 'separate' | 'included' | null; item: string | null };
 }
 
 export type ChatItem =
@@ -39,8 +41,9 @@ export function clockRange(from: number, to: number): string {
 
 /** 말 아래 작은 줄: 누가 · 언제 · (내 말이면) 어디까지 갔는지 */
 export function metaOf(it: Extract<ChatItem, { kind: 'msg' }>): string {
-  const who = it.from === 'me' ? '' : it.via === 'phone' ? '폰에서 답함 · ' : 'PC · ';
-  const state = it.from !== 'me' ? '' : { sent: '', waiting: ' · PC 켜지면 보내요', sending: ' · 보내는 중', failed: ' · 못 보냈어요' }[it.state ?? 'sent'];
+  // 가운데점(·)을 쓰지 않는다(문구 규칙): 누가는 앞에, 어디까지 갔는지는 시각 뒤에 띄어 쓴다
+  const who = it.from === 'me' ? '' : it.via === 'phone' ? '폰 ' : 'PC ';
+  const state = it.from !== 'me' ? '' : { sent: '', waiting: ' PC 켜지면 보내요', sending: ' 보내는 중', failed: ' 못 보냈어요' }[it.state ?? 'sent'];
   return `${who}${clock(it.at)}${state}`;
 }
 

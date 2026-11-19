@@ -11,7 +11,8 @@ import { clock } from '../chat';
 import { findDuplicate, recentCounterparties, searchCounterparties, splitAmount, type Counterparty, type IssuedToday, type VatMode } from '../issue';
 import type { Job } from '../queue';
 import { ulid } from '@sax/remote';
-import { counterpartiesOf } from '../net/pcCopy';
+import { chatCopyOf, counterpartiesOf } from '../net/pcCopy';
+import { offlineChat } from '../offline/device';
 import { issueRequest, kstDay, type PhoneCmd } from '../phoneCmd';
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
@@ -59,20 +60,23 @@ export function IssueScreen({
   const first = preview?.cpId ? counterparties.find((c) => c.id === preview.cpId) ?? null : picked;
   const [phase, setPhase] = useState<'pick' | 'form'>(preview?.phase ?? (picked ? 'form' : 'pick'));
   const [closedOk, setClosedOk] = useState(false);
+  // 대화 카드에서 연 경우: 카드의 금액·부가세·품목을 채워 둔다(거래처가 골라졌을 때만). 한 번 읽고 지운다.
+  const [pre] = useState(picked ? queue.prefill : null);
   useEffect(() => {
     if (queue.pickId) queue.clearPick();
+    if (queue.prefill) queue.setPrefill(null);
   }, []);
   const [cp, setCp] = useState<Counterparty | null>(first);
   const [manual, setManual] = useState(!!preview?.manual);
   const [name, setName] = useState('');
   const [bizNo, setBizNo] = useState('');
-  const [item, setItem] = useState(first?.lastItem ?? '');
+  const [item, setItem] = useState(pre?.item ?? first?.lastItem ?? '');
   const [day, setDay] = useState(localDay());
-  const [vat, setVat] = useState<VatMode>(preview?.vat ?? 'excl');
+  const [vat, setVat] = useState<VatMode>(preview?.vat ?? (pre?.vat === 'included' ? 'incl' : 'excl'));
   /** PC에 맡길 명령을 폰에 저장하는 중 · 저장 실패 */
   const [saving, setSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
-  const [amount, setAmount] = useState(preview?.amount ?? (first?.lastSupply ? masked('won', String(first.lastSupply)) : ''));
+  const [amount, setAmount] = useState(preview?.amount ?? (pre ? masked('won', String(pre.amount)) : first?.lastSupply ? masked('won', String(first.lastSupply)) : ''));
   const [dupOk, setDupOk] = useState(false);
 
   const pick = (c: Counterparty | null) => {
@@ -149,6 +153,8 @@ export function IssueScreen({
       return;
     }
     setSaving(false);
+    // 대화 카드에서 왔으면 그 카드를 맡김으로(폰 대화가 같은 카드를 다시 고치지 않게)
+    if (pre?.draftId && s.data.pair) void offlineChat(s.data.pair, s.keys, () => chatCopyOf(s.data.pcCopy))?.entrust(pre.draftId).catch(() => undefined);
     queue.noteCmd(`cmd-${cmd.cmdId}`, online ? null : `${cp.name} 세금계산서 ${won(a.total)}을 맡겼어요. PC 켜지면 보내요`);
     void s.sync();
     onSubmitted();
