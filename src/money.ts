@@ -177,7 +177,7 @@ export function sortOpen(list: ReceivableView[]): ReceivableView[] {
 
 /** 줄의 기한 표시 */
 export function dueLine(v: ReceivableView, kind: 'recv' | 'pay'): string {
-  if (v.status === 'unknown') return '입금 확인 못 함 · 거래내역이 오래됐어요';
+  if (v.status === 'unknown') return '거래내역이 오래돼 입금을 확인하지 못했어요';
   if (v.overdue && v.dueIn !== null) return `기한${NB}${-v.dueIn}일${NB}지남`;
   if (v.dueIn === 0) return '오늘까지';
   if (v.dueIn !== null) return `${v.dueIn}일${NB}남음`;
@@ -210,7 +210,7 @@ export function unsureLine(m: CashFlowMonth, today: string, staleDays = 7): stri
   const names = m.missing.map((x) => `${x.bank}${x.last4 ? `${NB}${x.last4}` : ''}`).filter(Boolean);
   const who = names.length ? `${names.slice(0, 2).join(', ')}${names.length > 2 ? ` 외 ${names.length - 2}개` : ''} 계좌` : '일부 계좌';
   const old = m.missing.some((x) => !x.coverTo || daysBetween(x.coverTo, today) > staleDays);
-  return `확인 못 함 · ${who} 거래내역이 ${old ? `${staleDays}일 넘게 오래됐어요` : '이 달을 다 덮지 못해요'}`;
+  return `확인하지 못했어요. ${who} 거래내역이 ${old ? `${staleDays}일 넘게 오래됐어요` : '이 달을 다 덮지 못해요'}`;
 }
 
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);

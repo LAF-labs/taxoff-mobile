@@ -40,6 +40,10 @@ export interface Job {
   run?: RunView;
   /** 폰 발급 명령(cmd.run, pc_only): 승인·중지·예약은 PC에서. 폰 진행 화면은 닫기만 둔다. */
   pcOnly?: boolean;
+  /** 기다리는 까닭. pcBusy: PC가 다른 일 중이라 끝나면 저절로 이어서 맡긴다. newDay: 기다리는 사이 날짜가 바뀌어 사장님 확인이 필요하다 */
+  wait?: 'pcBusy' | 'newDay';
+  /** newDay일 때 원래 작성일자(YYYY-MM-DD) */
+  waitDay?: string;
 }
 
 /** 다 끝난 일 한 줄(빈 화면에 보인다) */
@@ -82,7 +86,7 @@ export const REASON_LINE: Record<NeedPcReason, string> = {
 };
 
 /** 줄마다 하나뿐인 동작. 시작 확인은 바닥 [모두 시작]이 주요 동작이고, 줄에는 건별 [빼기](글자만)만 있다. */
-export type JobAction = 'cancel' | 'progress' | 'approve' | 'retry' | 'result' | 'dismiss';
+export type JobAction = 'cancel' | 'progress' | 'approve' | 'retry' | 'result' | 'dismiss' | 'redate';
 export const STATE_ACTION: Record<JobState, { key: JobAction; label: string } | null> = {
   entrusted: { key: 'cancel', label: '취소' },
   phoneWaiting: { key: 'cancel', label: '취소' },
@@ -101,6 +105,7 @@ export const STATE_ACTION: Record<JobState, { key: JobAction; label: string } | 
  */
 export function actionFor(job: Job, state: JobState): { key: JobAction; label: string } | null {
   if (state === 'needPc' && job.pcOnly && job.run) return { key: 'dismiss', label: '치우기' };
+  if (job.wait === 'newDay') return { key: 'redate', label: '오늘 날짜로 맡기기' };
   return STATE_ACTION[state];
 }
 

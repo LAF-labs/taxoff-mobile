@@ -4,6 +4,8 @@ import type { PhoneCopyBody } from '@sax/remote';
 import type { PhoneCmd } from '../phoneCmd';
 import type { PcWhy } from '../net/pcWhy';
 import type { PxState } from '../net/pxLive';
+import type { NotifyPrefs } from '../notify/events';
+import type { TextSize } from '../theme';
 import { File } from 'expo-file-system';
 import { fromUtf8, utf8, xOpen, xSeal, type DeviceListJson, type SignedCert } from '@sax/remote';
 import { currentEpoch, inflight, liveKey, sameEpoch } from '../inflight';
@@ -79,6 +81,10 @@ export interface AppData {
   pcLog?: PcWhy[];
   /** 승인 키를 PC가 받았는지(net/pxLive.ts, ADR-052). enrolled일 때만 이 폰에서 발급을 승인할 수 있다. 페어링을 끊으면 지운다. */
   px?: PxState;
+  /** 알림 고르기(설정 > 알림). 없으면 모두 켜짐(notify/events DEFAULT_PREFS). OS 허용은 따로 OS가 갖는다. */
+  notify?: NotifyPrefs;
+  /** 앱 안 글자 크기(설정 > 화면). 없으면 중간 */
+  textSize?: TextSize;
 }
 
 export const emptyData = (): AppData => ({ v: 1, pair: null, deviceList: null, seenListVersion: 0, ikTs: 0, lastSeenPc: null, cash: [], recent: [], queueSeq: 0, qbundleSeq: 0 });

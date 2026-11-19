@@ -5,7 +5,7 @@
 // - 폰 승인(v1.10, ADR-052): PC가 approve.v1을 알렸으면 gate.request를 받아 명령에 붙이고(승인 시트가 뜬다),
 //   사장님이 서명한 답(gate.response)과 [PC에 다시 요청](gate.refresh)을 이 세션으로 보낸다.
 import { CAP, issueCmd, type Channel, type CmdAckBody, type GateRequestBody, type PhoneCopyBody, type RunEventBody } from '@sax/remote';
-import { applyAck, applyEvent, applyGate, markAnswered, responseDue, settled, type PhoneCmd } from '../phoneCmd.ts';
+import { applyAck, applyEvent, applyGate, busyWaiting, forRetry, markAnswered, responseDue, retryDue, settled, type PhoneCmd } from '../phoneCmd.ts';
 
 export const WATCH_MS = 10 * 60_000;
 const TICK_MS = 2_000;
@@ -26,7 +26,7 @@ type Ch = Pick<Channel, 'send' | 'recv' | 'closed'>;
 
 export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, watchMs = WATCH_MS): Promise<'none' | 'pc_old' | 'settled' | 'closed' | 'timeout'> {
   const now = io.now ?? Date.now;
-  const open = io.cmds().filter((c) => !settled(c));
+  const open = io.cmds().filter((c) => !settled(c, now()));
   if (!open.length) return 'none';
   const ids = new Set<string>();
   if (!peerCaps.includes(CAP.issue)) {
@@ -46,7 +46,18 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
     }
     if (!c.sentAt) await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? { ...x, sentAt: now() } : x)));
   };
-  for (const c of open) await send(c);
+  // PC가 다른 일 중이라 기다리는 명령은 다시 보낼 때가 된 것만 보낸다
+  const retry = async (c: PhoneCmd) => {
+    await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? forRetry(x) : x)));
+    const fresh = io.cmds().find((x) => x.cmdId === c.cmdId);
+    if (fresh) await send(fresh);
+  };
+  for (const c of open) {
+    if (busyWaiting(c, now())) {
+      if (retryDue(c, now())) await retry(c);
+      else ids.add(c.cmdId);
+    } else await send(c);
+  }
   const deadline = t0 + watchMs;
   const approves = peerCaps.includes(CAP.approve);
   /** 사장님이 적어 둔 답과 다시 요청을 보낸다. 승인 봉투는 PC가 approve.v1을 알렸을 때만. */
@@ -77,8 +88,11 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
   for (;;) {
     await flushApprovals();
     // 지켜보는 동안 새로 맡긴 명령도 이 세션으로 보낸다
-    for (const c of io.cmds()) if (!ids.has(c.cmdId) && !settled(c)) await send(c);
-    if (io.cmds().filter((c) => ids.has(c.cmdId)).every(settled)) return 'settled';
+    for (const c of io.cmds()) {
+      if (retryDue(c, now())) await retry(c);
+      else if (!ids.has(c.cmdId) && !settled(c, now()) && !busyWaiting(c, now())) await send(c);
+    }
+    if (io.cmds().filter((c) => ids.has(c.cmdId)).every((c) => settled(c, now()))) return 'settled';
     if (ch.closed) return 'closed';
     if (io.alive && !io.alive()) return 'closed';
     const left = deadline - now();
@@ -88,7 +102,7 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
     if (!e) continue;
     if (e.type === 'cmd.ack') {
       const a = e.body as CmdAckBody;
-      await io.save((cs) => cs.map((c) => applyAck(c, a)));
+      await io.save((cs) => cs.map((c) => applyAck(c, a, now())));
     } else if (e.type === 'run.event') {
       const ev = e.body as RunEventBody;
       await io.save((cs) => cs.map((c) => applyEvent(c, ev)));
