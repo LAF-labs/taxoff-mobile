@@ -16,7 +16,6 @@ import { CaptureScreen } from './src/screens/CaptureScreen';
 import { CashScreen } from './src/screens/CashScreen';
 import { ConnectionScreen } from './src/screens/ConnectionScreen';
 import { DevicesScreen } from './src/screens/DevicesScreen';
-import { IssueScreen } from './src/screens/IssueScreen';
 import { LockScreen } from './src/screens/LockScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { MainScreen, type MainRoute, type Tab } from './src/screens/MainScreen';
@@ -179,7 +178,6 @@ export default function App() {
           />
         )}
         {route === 'doc' && <DocScreen onDone={back} />}
-        {route === 'issue' && <IssueScreen onDone={back} onCapture={() => go('bizreg')} onSubmitted={home} />}
         {route === 'recv' && <MoneyListScreen kind="recv" onDone={back} onMark={() => go('mark')} />}
         {route === 'pay' && <MoneyListScreen kind="pay" onDone={back} onMark={() => go('mark')} />}
         {route === 'mark' && <MarkReceivedScreen onDone={back} />}

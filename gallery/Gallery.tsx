@@ -19,7 +19,8 @@ import { OnboardingScreen } from '../src/screens/OnboardingScreen';
 import type { BioInfo } from '../src/biometry';
 import { QueueScreen } from '../src/screens/QueueScreen';
 import { IssueScreen, type IssuePreview } from '../src/screens/IssueScreen';
-import type { IssueSheetPreview } from '../src/screens/IssueSheet';
+import { counterpartiesOf } from '../src/net/pcCopy';
+import { issueCard, type IssuePick, type IssueSheetPreview } from '../src/screens/IssueSheet';
 import { QueueProvider, type ApprovalSettings } from '../src/queueStore';
 import { ApprovalHost } from '../src/screens/ApprovalHost';
 import { buildGate, type GateField, type PhoneGate } from '../src/approval';
@@ -115,7 +116,10 @@ const COPY_MANY: PhoneCopyBody = {
     { ref: 'cp_spring', name: '새봄꽃집', bizNo: '402-11-55667' },
   ],
 };
-const issueSheet = (issue: IssueSheetPreview, c: PhoneCopyBody = COPY_MANY, pc: PcStatus = 'online') => ({ session: fake(copyData(c), pc), node: <Main live chat={[]} phone={phoneChat('card')} issue={issue} /> });
+const issueSheet = (issue: IssueSheetPreview, c: PhoneCopyBody = COPY_MANY, pc: PcStatus = 'online') => ({ session: fake(copyData(c), pc), node: <Main live chat={[]} phone={phoneChat('empty')} issue={issue} /> });
+/** 시트에서 받는 곳을 고른 뒤: 대화에 뜬 세금계산서 카드 */
+const issueCardCase = (pick: IssuePick, pc: PcStatus = 'online') => ({ session: fake(copyData(COPY_MANY), pc), notes: [issueCard(pick, null, now - 30_000)], node: <Main live chat={[]} phone={phoneChat('empty')} /> });
+const cpOfCopy = (ref: string) => counterpartiesOf(COPY_MANY).find((c) => c.id === ref)!;
 const COPY_UNSURE: PhoneCopyBody = {
   ...COPY,
   money: {
@@ -518,9 +522,9 @@ const SCREENS: Record<
   'issue-sheet-search-focus': () => issueSheet({ query: '동네', focus: true }),
   'issue-sheet-kb': () => issueSheet({ query: '동네', kb: 336 }),
   'issue-sheet-name': () => issueSheet({ step: 'name' }),
-  'issue-sheet-amount': () => issueSheet({ step: 'amount', cpId: 'cp_gana' }),
-  'issue-sheet-confirm': () => issueSheet({ step: 'confirm', cpId: 'cp_gana' }),
-  'issue-sheet-confirm-off': () => issueSheet({ step: 'confirm', cpId: 'cp_gana' }, COPY_MANY, 'offline'),
+  'issue-sheet-bizno': () => issueSheet({ step: 'bizNo', name: '한강상회' }),
+  'issue-card': () => issueCardCase({ cp: cpOfCopy('cp_gana') }),
+  'issue-card-new': () => issueCardCase({ cp: null, name: '한강상회', bizNo: '107-12-34567' }),
   'home-plus-menu': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('card')} menu /> }),
   'home-phone-limit': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('limit')} /> }),
   /** 처음 연결한 뒤 대화가 아직 없는 홈(앱이 이 폰 기록으로 만든 대화) */

@@ -15,9 +15,10 @@ import { BRAND } from '../config';
 import { queueCounts } from '../queue';
 import { useQueue } from '../queueStore';
 import { RunCard } from './RunCard';
-import { useEntrust } from '../entrust';
+import { useIssueSubmit } from '../issueSubmit';
+import { kstDay } from '../phoneCmd';
 import { counterpartiesOf } from '../net/pcCopy';
-import { splitAmount, type VatMode } from '../issue';
+import { splitAmount, type Counterparty, type VatMode } from '../issue';
 import { masked } from '../ui/field';
 import { FlapText } from '../ui/FlapText';
 import { PhotoSlot } from '../ui/PhotoSlot';
@@ -82,23 +83,26 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
     setMenu(false);
     go(to);
   };
-  const entrust = useEntrust();
+  const submitIssue = useIssueSubmit();
+  /** 카드의 거래처: PC 사본, 그다음 이 폰에서 만든 거래처 */
+  const cpOf = (id: string): Counterparty | null => (id ? [...(s.data.pcCopy ? counterpartiesOf(s.data.pcCopy) : []), ...q.counterparties].find((c) => c.id === id) ?? null : null);
   /**
-   * 대화 카드 [발급하기]: 카드 값(고쳤으면 고친 값)으로 바로 PC에 맡긴다. 승인은 PC 승인 바에서 한다.
-   * PC 사본에 그 거래처가 없거나, 휴·폐업으로 조회됐거나, PC가 오래 꺼져 있으면 값을 채운 발급 작성을 연다(경고와 확인은 거기서).
+   * 대화 카드 [발급하기]: 카드 값(고쳤으면 고친 값)으로 맡긴다(issueSubmit). 승인은 PC 승인 바나 폰 승인에서 한다.
+   * 휴·폐업 경고와 PC가 오래 꺼진 때는 카드 안에서 말한다.
+   * 모델 카드의 거래처를 장부에서 찾지 못하면 [+] 발급 시트를 열어 고르게 한다(카드 값은 새 카드에 채운다).
    */
-  const issueFrom = async (d: NonNullable<ChatCard['draft']>): Promise<boolean> => {
-    const cp = s.data.pcCopy ? counterpartiesOf(s.data.pcCopy).find((c) => c.id === d.counterpartyId) : undefined;
-    const open = () => {
-      q.setPick(d.counterpartyId);
+  const issueFrom = async (d: Draft, itemId: string): Promise<boolean> => {
+    const cp = cpOf(d.counterpartyId);
+    if (!d.phone && !cp) {
       q.setPrefill({ amount: d.amount, vat: d.vat, item: d.item, draftId: d.id });
       go('issue');
       return true;
-    };
-    if (!cp || !s.data.pair || s.pc === 'stale' || cp.status?.kind === 'closed') return open();
+    }
     const a = splitAmount(d.amount, d.vat === 'included' ? 'incl' : 'excl');
-    if (a.supply <= 0) return open();
-    return entrust({ cp, supply: a.supply, total: a.total, item: d.item ?? '', draftId: d.id });
+    if (a.supply <= 0) return true;
+    const ok = await submitIssue({ cp, name: d.phone?.name ?? '', bizNo: d.phone?.bizNo ?? '', item: d.item ?? '', day: kstDay(), a, draftId: d.phone ? d.phone.draftId : d.id });
+    if (ok && d.phone) q.markSent(itemId);
+    return ok;
   };
   const list = useRef<FlatList<ChatItem>>(null);
   // ---- 읽던 자리 지키기(11-19): 뒤집힌 목록이라 y는 "가장 새 말에서 떨어진 거리"다 ----
@@ -294,7 +298,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
                   {it.kind === 'run' ? (
                     <RunItem jobId={it.jobId} go={go} />
                   ) : (
-                    <Item it={it} group={bubbleGroup(items, i)} onRetry={(id) => void offline.retry(id)} retryOff={offline.busy} openDrafts={offline.openDrafts} onIssue={issueFrom} />
+                    <Item it={it} group={bubbleGroup(items, i)} onRetry={(id) => void offline.retry(id)} retryOff={offline.busy} openDrafts={offline.openDrafts} onIssue={issueFrom} cpOf={cpOf} stale={s.pc === 'stale'} />
                   )}
                 </View>
               );
@@ -311,7 +315,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
               <View style={[st.menu, { backgroundColor: p.tint }]} testID="quick-menu">
                 <MenuRow
                   label="세금계산서 발급"
-                  hint="거래처와 금액을 골라 PC에 맡겨요"
+                  hint="거래처를 고르면 바로 써 드려요"
                   onPress={() => {
                     if (!onIssue) return quick('issue');
                     setMenu(false);
@@ -517,7 +521,7 @@ function RunItem({ jobId, go }: { jobId: string; go: (to: HomeRoute) => void }) 
   );
 }
 
-function Item({ it, group, onRetry, retryOff, openDrafts, onIssue }: { it: Exclude<ChatItem, { kind: 'run' }>; group: { first: boolean; last: boolean }; onRetry: (noteId: string) => void; retryOff?: boolean; openDrafts?: ReadonlySet<string>; onIssue: OnIssue }) {
+function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, cpOf, stale }: { it: Exclude<ChatItem, { kind: 'run' }>; group: { first: boolean; last: boolean }; onRetry: (noteId: string) => void; retryOff?: boolean; openDrafts?: ReadonlySet<string>; onIssue: OnIssue; cpOf: (id: string) => Counterparty | null; stale: boolean }) {
   const p = usePalette();
   if (it.kind === 'merged') {
     return (
@@ -569,7 +573,15 @@ function Item({ it, group, onRetry, retryOff, openDrafts, onIssue }: { it: Exclu
           <T style={me ? { color: p.onBubbleMe } : undefined}>{it.text}</T>
         </View>
       )}
-      {it.card && <Card card={it.card} onIssue={it.card.draft && (!openDrafts || openDrafts.has(it.card.draft.id)) ? onIssue : undefined} />}
+      {it.card && (
+        <Card
+          card={it.card}
+          // 이 폰이 띄운 카드는 맡기기 전까지, 모델 카드는 폰 대화가 열어 둔 동안 단추가 붙는다
+          onIssue={(it.card.draft?.phone ? !it.card.sent : it.card.draft && (!openDrafts || openDrafts.has(it.card.draft.id))) ? (d) => onIssue(d, it.id) : undefined}
+          cp={it.card.draft ? cpOf(it.card.draft.counterpartyId) : null}
+          stale={stale}
+        />
+      )}
       {state !== '' && (
         <T v="meta" c="ink3" style={{ textAlign: 'right' }} testID="chat-state">
           {state}
@@ -683,11 +695,12 @@ function Starter({ phoneAnswers, onPick }: { phoneAnswers: boolean; onPick: (tex
 }
 
 type Draft = NonNullable<ChatCard['draft']>;
-type OnIssue = (d: Draft) => Promise<boolean>;
+type OnIssue = (d: Draft, itemId: string) => Promise<boolean>;
+type OnCardIssue = (d: Draft) => Promise<boolean>;
 
-function Card({ card, onIssue }: { card: ChatCard; onIssue?: OnIssue }) {
+function Card({ card, onIssue, cp, stale }: { card: ChatCard; onIssue?: OnCardIssue; cp: Counterparty | null; stale: boolean }) {
   const p = usePalette();
-  if (card.draft) return <DraftCard card={card} draft={card.draft} onIssue={onIssue} />;
+  if (card.draft) return <DraftCard card={card} draft={card.draft} onIssue={onIssue} cp={cp} stale={stale} />;
   return (
     <View style={[st.card, { backgroundColor: p.tint }]} testID="chat-card">
       <T v="subStrong">{card.title}</T>
@@ -749,11 +762,15 @@ const VAT_OPTIONS = [
  * 세금계산서 카드: 금액, 부가세(기본 별도), 합계, 품목. 아래 [발급하기] [수정].
  * [수정]을 누르면 그 자리에서 금액과 품목은 입력 칸, 부가세는 [별도|포함]으로 바뀌고 단추는 [취소] [완료]가 된다.
  * 맡긴 카드(onIssue 없음)는 값만 보인다.
+ * [+] 발급 시트에서 띄운 카드도 같다. 금액이 없으면(처음 거래하는 곳) 수정 상태로 열고 금액 칸에 들어간다.
  */
-function DraftCard({ card, draft, onIssue }: { card: ChatCard; draft: Draft; onIssue?: OnIssue }) {
+function DraftCard({ card, draft, onIssue, cp, stale }: { card: ChatCard; draft: Draft; onIssue?: OnCardIssue; cp: Counterparty | null; stale: boolean }) {
   const p = usePalette();
   const [val, setVal] = useState({ amount: draft.amount, vat: (draft.vat === 'included' ? 'incl' : 'excl') as VatMode, item: draft.item ?? '' });
-  const [edit, setEdit] = useState<null | { amount: string; vat: VatMode; item: string }>(null);
+  const openEdit = !!onIssue && !!draft.phone?.edit;
+  const [edit, setEdit] = useState<null | { amount: string; vat: VatMode; item: string }>(openEdit ? { amount: draft.amount > 0 ? masked('won', String(draft.amount)) : '', vat: val.vat, item: val.item } : null);
+  // 휴·폐업으로 조회된 곳: 카드에 한 줄로 알리고 단추를 [그래도 발급]으로
+  const closed = cp?.status?.kind === 'closed' ? cp.status : null;
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const shown = edit ? { amount: Number(edit.amount.replace(/\D/g, '')), vat: edit.vat, item: edit.item } : val;
@@ -787,6 +804,9 @@ function DraftCard({ card, draft, onIssue }: { card: ChatCard; draft: Draft; onI
             onChangeText={(v) => setEdit({ ...edit, amount: masked('won', v) })}
             keyboardType="number-pad"
             accessibilityLabel="금액"
+            autoFocus={openEdit}
+            placeholder="0"
+            placeholderTextColor={p.ink4}
             maxFontSizeMultiplier={MAX_FONT_SCALE}
             style={[type.value, ...inputStyle, { textAlign: 'right' }]}
           />
@@ -825,6 +845,11 @@ function DraftCard({ card, draft, onIssue }: { card: ChatCard; draft: Draft; onI
           {card.note}
         </T>
       )}
+      {onIssue && !edit && (closed || stale) && (
+        <T v="meta" c="attention" testID={closed ? 'card-closed' : 'card-stale'}>
+          {closed ? `${closed.on}에 ${closed.what}한 곳으로 조회돼요` : 'PC를 켜면 맡길 수 있어요'}
+        </T>
+      )}
       {failed && (
         <T v="meta" c="attention" testID="card-failed">
           폰에 저장하지 못해 맡기지 않았어요. 다시 눌러 주세요
@@ -839,7 +864,14 @@ function DraftCard({ card, draft, onIssue }: { card: ChatCard; draft: Draft; onI
             </>
           ) : (
             <>
-              <Button testID="card-issue" label="발급하기" onPress={() => void issue()} busy={busy} disabled={busy || a.supply <= 0} style={st.cardBtn} />
+              <Button
+                testID="card-issue"
+                label={closed ? '그래도 발급' : '발급하기'}
+                onPress={() => void issue()}
+                busy={busy}
+                disabled={busy || stale || a.supply <= 0}
+                style={st.cardBtn}
+              />
               <Button testID="card-edit" kind="secondary" label="수정" onPress={startEdit} disabled={busy} style={[st.cardBtn, { backgroundColor: p.canvas }]} />
             </>
           )}

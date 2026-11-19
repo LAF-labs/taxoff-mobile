@@ -11,7 +11,10 @@ import type { OfflineChatView } from '../offline/useOfflineChat';
 import { HomeScreen, type HomeRoute, type Todo } from './HomeScreen';
 import { MoneyScreen } from './MoneyScreen';
 import { RecordsScreen } from './RecordsScreen';
-import { IssueSheet, type IssueSheetPreview } from './IssueSheet';
+import { IssueSheet, issueCard, type IssueSheetPreview } from './IssueSheet';
+import { useQueue } from '../queueStore';
+import { useSession } from '../session';
+import { counterpartiesOf } from '../net/pcCopy';
 import type { Counterparty } from '../issue';
 
 export type Tab = 'home' | 'money' | 'records';
@@ -27,24 +30,49 @@ export function MainScreen({
   tab, onTab, go, chat, todo, draft, phone, menu, focusAfter, issue: issuePreview, issueCps,
 }: { tab: Tab; onTab: (t: Tab) => void; go: (to: MainRoute) => void; chat?: ChatItem[]; todo?: Todo; draft?: string; phone?: OfflineChatView; /** 갤러리: [+] 메뉴를 펼친 채로 */ menu?: boolean; /** 갤러리: 키보드 녹화 */ focusAfter?: number; /** 갤러리: 발급 시트를 연 채로 */ issue?: IssueSheetPreview; issueCps?: Counterparty[] }) {
   const kb = useKeyboardShown();
-  // [+] → 세금계산서 발급은 대화 위 시트로 연다(탭 줄까지 덮는다)
+  const q = useQueue();
+  const s = useSession();
+  // [+] → 세금계산서 발급은 대화 위 시트로 연다(탭 줄까지 덮는다). 거래처를 고르면 대화에 그 카드를 띄운다.
   const [issueOpen, setIssueOpen] = useState(!!issuePreview);
+  // 다른 탭의 [세금계산서 발급]도 예전 발급 화면 대신 홈 대화 위 시트로 연다
+  const goMain = (to: MainRoute) => {
+    if (to !== 'issue') return go(to);
+    onTab('home');
+    setIssueOpen(true);
+  };
+  // 등록증을 찍어 막 만든 거래처(queue.pickId): 대화로 돌아오면 그 거래처의 카드를 띄운다
+  useEffect(() => {
+    if (!q.pickId) return;
+    const cp = [...q.counterparties, ...(s.data.pcCopy ? counterpartiesOf(s.data.pcCopy) : [])].find((c) => c.id === q.pickId);
+    if (!cp) return;
+    q.clearPick();
+    onTab('home');
+    q.addCard(issueCard({ cp }, q.prefill));
+    q.setPrefill(null);
+  }, [q.pickId]);
   // 홈(대화)은 탭 줄을 숨기지 않는다: 숨기면 키보드가 오르는 도중 화면 높이가 한 번 더 바뀌어 입력 줄과 대화가 튄다.
   // 키보드가 탭 줄을 덮고, 홈의 KeyboardAvoidingView가 탭 줄 위로 겹친 만큼만 올린다.
   return (
     <View style={st.fill}>
       <View style={st.fill}>
-        {tab === 'home' && <HomeScreen go={go} chat={chat} todo={todo} draft={draft} phone={phone} menu={menu} focusAfter={focusAfter} onIssue={() => setIssueOpen(true)} />}
-        {tab === 'money' && <MoneyScreen go={go} />}
-        {tab === 'records' && <RecordsScreen go={go} />}
+        {tab === 'home' && <HomeScreen go={goMain} chat={chat} todo={todo} draft={draft} phone={phone} menu={menu} focusAfter={focusAfter} onIssue={() => setIssueOpen(true)} />}
+        {tab === 'money' && <MoneyScreen go={goMain} />}
+        {tab === 'records' && <RecordsScreen go={goMain} />}
       </View>
       {(tab === 'home' || !kb) && <TabBar tab={tab} onTab={onTab} />}
       {issueOpen && (
         <IssueSheet
           preview={issuePreview}
           counterparties={issueCps}
-          onClose={() => setIssueOpen(false)}
-          onSubmitted={() => setIssueOpen(false)}
+          onClose={() => {
+            setIssueOpen(false);
+            q.setPrefill(null);
+          }}
+          onPick={(pick) => {
+            setIssueOpen(false);
+            q.addCard(issueCard(pick, q.prefill));
+            q.setPrefill(null);
+          }}
           onCapture={() => {
             setIssueOpen(false);
             go('bizreg');
