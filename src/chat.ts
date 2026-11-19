@@ -39,12 +39,33 @@ export function clockRange(from: number, to: number): string {
   return a.slice(0, 2) === b.slice(0, 2) ? `${a}~${b.slice(3)}` : `${a}~${b}`;
 }
 
-/** 말 아래 작은 줄: 누가 · 언제 · (내 말이면) 어디까지 갔는지 */
-export function metaOf(it: Extract<ChatItem, { kind: 'msg' }>): string {
-  // 가운데점(·)을 쓰지 않는다(문구 규칙): 누가는 앞에, 어디까지 갔는지는 시각 뒤에 띄어 쓴다
-  const who = it.from === 'me' ? '' : it.via === 'phone' ? '폰 ' : 'PC ';
-  const state = it.from !== 'me' ? '' : { sent: '', waiting: ' PC 켜지면 보내요', sending: ' 보내는 중', failed: ' 못 보냈어요' }[it.state ?? 'sent'];
-  return `${who}${clock(it.at)}${state}`;
+/** 말풍선 위 이름(상대 말의 묶음 첫 줄에만): PC가 답했는지 폰이 답했는지 */
+export function whoOf(it: Extract<ChatItem, { kind: 'msg' }>): string {
+  return it.from === 'me' ? '' : it.via === 'phone' ? '폰' : 'PC';
+}
+
+/** 내 말이 어디까지 갔는지(보냈으면 빈 글자). 시각 위에 작게 쓴다. */
+export function stateOf(it: Extract<ChatItem, { kind: 'msg' }>): string {
+  return it.from !== 'me' ? '' : { sent: '', waiting: 'PC 켜지면 보내요', sending: '보내는 중', failed: '못 보냈어요' }[it.state ?? 'sent'];
+}
+
+type Msg = Extract<ChatItem, { kind: 'msg' }>;
+const sameSide = (a: ChatItem | undefined, b: Msg): a is Msg => a?.kind === 'msg' && a.from === b.from && (a.via ?? '') === (b.via ?? '');
+const sameMinute = (a: number, b: number) => Math.floor(a / 60_000) === Math.floor(b / 60_000);
+
+/**
+ * 말풍선 묶음(카카오톡처럼): 같은 쪽이 잇달아 한 말은 붙여 그린다.
+ * first: 묶음의 첫 말(상대 쪽이면 이름을 위에 쓴다). time: 시각을 쓸지(같은 분 안에서 이어지면 마지막 말에만).
+ * 상태가 있는 내 말(보내는 중 등)은 늘 시각과 상태를 쓴다.
+ */
+export function bubbleGroup(items: readonly ChatItem[], i: number): { first: boolean; time: boolean } {
+  const it = items[i];
+  if (it?.kind !== 'msg') return { first: true, time: true };
+  const prev = items[i - 1];
+  const next = items[i + 1];
+  const first = !sameSide(prev, it);
+  const time = !(sameSide(next, it) && sameMinute(next.at, it.at)) || stateOf(it) !== '';
+  return { first, time };
 }
 
 const KIND: Record<RecentRecord['kind'], string> = { receipt: '영수증', tax_invoice: '종이 세금계산서', invoice: '종이 계산서' };

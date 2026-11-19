@@ -19,7 +19,7 @@ registerHooks({
 });
 
 const { OfflineChat, cardOf, itemOf } = await import('../src/offline/chat.ts');
-const { metaOf } = await import('../src/chat.ts');
+const { bubbleGroup, stateOf, whoOf } = await import('../src/chat.ts');
 const { phoneCopyFrom } = await import('../src/offline/copy.ts');
 const { maskingSelfCheck } = await import('../src/offline/selfcheck.ts');
 
@@ -159,17 +159,31 @@ describe('폰 대화(PC 꺼짐): 고정 사본 → 가짜 게이트웨이', () =
 
 describe('폰 대화 줄 표시', () => {
   const at = new Date(2026, 10, 18, 14, 5).getTime();
-  it('폰이 답한 말은 "폰", PC 답은 "PC"로 구분한다(가운데점 없이)', () => {
+  it('폰이 답한 말은 "폰", PC 답은 "PC"로 구분한다', () => {
     const a = itemOf({ id: 'a', from: 'assistant', at, text: '네' } as never);
     assert.equal(a.kind === 'msg' && a.via, 'phone');
-    assert.equal(metaOf(a as never), '폰 오후 2:05');
-    assert.equal(metaOf({ kind: 'msg', id: 'b', from: 'pc', at, text: '네' }), 'PC 오후 2:05');
+    assert.equal(whoOf(a as never), '폰');
+    assert.equal(whoOf({ kind: 'msg', id: 'b', from: 'pc', at, text: '네' }), 'PC');
+    assert.equal(whoOf({ kind: 'msg', id: 'c', from: 'me', at, text: '네' }), '');
   });
-  it('내 말은 어디까지 갔는지 붙인다(보내는 중, 못 보냄, PC 켜지면)', () => {
-    const me = (state: 'sending' | 'failed' | 'waiting' | 'sent') => metaOf({ kind: 'msg', id: 'm', from: 'me', at, text: 'x', state });
-    assert.equal(me('sending'), '오후 2:05 보내는 중');
-    assert.equal(me('failed'), '오후 2:05 못 보냈어요');
-    assert.equal(me('waiting'), '오후 2:05 PC 켜지면 보내요');
-    assert.equal(me('sent'), '오후 2:05');
+  it('내 말은 어디까지 갔는지 쓴다(보내는 중, 못 보냄, PC 켜지면)', () => {
+    const me = (state: 'sending' | 'failed' | 'waiting' | 'sent') => stateOf({ kind: 'msg', id: 'm', from: 'me', at, text: 'x', state });
+    assert.equal(me('sending'), '보내는 중');
+    assert.equal(me('failed'), '못 보냈어요');
+    assert.equal(me('waiting'), 'PC 켜지면 보내요');
+    assert.equal(me('sent'), '');
+  });
+  it('같은 쪽이 같은 분에 잇달아 한 말은 묶고 시각은 마지막 말에만 쓴다', () => {
+    const m = (id: string, from: 'me' | 'pc', min: number, extra = {}) => ({ kind: 'msg' as const, id, from, at: at + min * 60_000, text: id, ...extra });
+    const items = [m('a', 'pc', 0), m('b', 'pc', 0), m('c', 'pc', 1), m('d', 'me', 1), m('e', 'me', 1, { state: 'sending' as const }), m('f', 'pc', 1, { via: 'phone' as const })];
+    const g = items.map((_, i) => bubbleGroup(items, i));
+    assert.deepEqual(g.map((x) => x.first), [true, false, false, true, false, true]);
+    // b는 다음 말(c)과 분이 달라 시각을 쓴다. 보내는 중인 e는 상태와 시각을 늘 쓴다.
+    assert.deepEqual(g.map((x) => x.time), [false, true, true, false, true, true]);
+  });
+  it('폰 답과 PC 답은 같은 상대라도 묶지 않는다', () => {
+    const items = [{ kind: 'msg' as const, id: 'a', from: 'pc' as const, at, text: 'a' }, { kind: 'msg' as const, id: 'b', from: 'pc' as const, via: 'phone' as const, at, text: 'b' }];
+    assert.equal(bubbleGroup(items, 1).first, true);
+    assert.equal(bubbleGroup(items, 0).time, true);
   });
 });
