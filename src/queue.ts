@@ -82,7 +82,7 @@ export const REASON_LINE: Record<NeedPcReason, string> = {
 };
 
 /** 줄마다 하나뿐인 동작. 시작 확인은 바닥 [모두 시작]이 주요 동작이고, 줄에는 건별 [빼기](글자만)만 있다. */
-export type JobAction = 'cancel' | 'progress' | 'approve' | 'retry' | 'result';
+export type JobAction = 'cancel' | 'progress' | 'approve' | 'retry' | 'result' | 'dismiss';
 export const STATE_ACTION: Record<JobState, { key: JobAction; label: string } | null> = {
   entrusted: { key: 'cancel', label: '취소' },
   phoneWaiting: { key: 'cancel', label: '취소' },
@@ -94,6 +94,15 @@ export const STATE_ACTION: Record<JobState, { key: JobAction; label: string } | 
   expired: { key: 'retry', label: '다시 맡기기' },
   done: { key: 'result', label: '결과 보기' },
 };
+
+/**
+ * 줄의 동작. 폰 발급 명령(pcOnly)이 PC에서 거절되거나 중지돼 'PC 앞 필요'로 끝난 줄은 PC도 이미 놓은 일이라
+ * 폰에서 할 것이 없고 건수만 남는다. [치우기]로 목록에서 지운다(run이 있는 줄만: 아직 안 보낸 명령은 [취소]).
+ */
+export function actionFor(job: Job, state: JobState): { key: JobAction; label: string } | null {
+  if (state === 'needPc' && job.pcOnly && job.run) return { key: 'dismiss', label: '치우기' };
+  return STATE_ACTION[state];
+}
 
 /**
  * 아직 PC가 가져가지 않은 일(맡김·폰에 대기)이 72시간을 넘기면 만료.

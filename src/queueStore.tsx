@@ -3,7 +3,7 @@
 // simulate(갤러리·시연 전용): PC가 켜져 맡긴 발급이 준비 → 홈택스 로그인 → 값 확인을 지나 "PC가 승인 요청함"이 되고 시트가 뜬다.
 //   승인하면 발급 → 확인 → 결과 카드. simulate='inDoubt'이면 발급 뒤 응답이 끊겨 확인 중(조회 n회째) → 확인 필요로 간다.
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { jobOf } from './phoneCmd';
+import { jobOf, settled } from './phoneCmd';
 import { SessionContext } from './session';
 import { jobTimers } from './jobTimers';
 import { josa } from './ui/josa';
@@ -135,6 +135,12 @@ export function QueueProvider({
         else note(jobId, text);
       },
       act: (id, action) => {
+        if (action === 'dismiss' && id.startsWith('cmd-')) {
+          // 끝난(거절·중지) 명령만 목록에서 지운다. 아직 PC가 들고 있을 수 있는 명령은 건드리지 않는다
+          const cmdId = id.slice(4);
+          void sess?.update((d) => ({ ...d, cmds: (d.cmds ?? []).filter((c) => c.cmdId !== cmdId || !settled(c)) }));
+          return;
+        }
         if (action === 'cancel' && id.startsWith('cmd-')) {
           // 아직 보내지 않은 명령만 지운다(보낸 명령은 PC에서 멈춘다)
           const cmdId = id.slice(4);

@@ -500,6 +500,15 @@ const SCREENS: Record<
     node: <Main chat={CHAT} live />,
   }),
   'queue-mixed': () => ({ session: fake(paired(), 'online'), jobs: JOBS, node: <QueueScreen onDone={noop} onConnection={noop} onOpen={noop} now={now} /> }),
+  'queue-refused': () => ({
+    session: fake(paired(), 'online'),
+    jobs: [
+      { ...runJob({ kind: 'refused', reason: 'pc_busy', startedAt: T0 }, { state: 'needPc' }), pcOnly: true },
+      { ...runJob({ kind: 'stopped', step: 'login', reason: 'pcStopped', startedAt: T0 }, { title: '새봄꽃집 세금계산서', amount: 330_000, state: 'needPc' }), id: 'r2', pcOnly: true },
+      JOBS[3]!,
+    ],
+    node: <QueueScreen onDone={noop} onConnection={noop} onOpen={noop} now={now} />,
+  }),
   'queue-empty': () => ({ session: fake(paired(), 'online'), last: LAST_DONE, node: <QueueScreen onDone={noop} onConnection={noop} onOpen={noop} now={now} /> }),
   'issue-picker': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'pick' }) }),
   'issue-picker-empty': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'pick' }, []) }),

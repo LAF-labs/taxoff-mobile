@@ -20,6 +20,7 @@ const { CAP, checkIssueRequest } = await import('@sax/remote');
 const { driveCmds, trimCmds } = await import('../src/net/issueLive.ts');
 const { PHONE_CAPS } = await import('../src/net/pcCopy.ts');
 const { STOP_COPY } = await import('../src/run.ts');
+const { actionFor } = await import('../src/queue.ts');
 const { REJECT_LINE, applyAck, applyEvent, issueRequest, jobOf, kstDay, runViewOf, settled } = await import('../src/phoneCmd.ts');
 
 const T0 = Date.parse('2026-11-17T01:00:00Z');
@@ -188,5 +189,22 @@ describe('라이브 세션 구동(mock)', () => {
     const r = await driveCmds(m.ch as never, [CAP.issue], { ...s.io, alive: () => ++n < 3 }, 5000);
     assert.equal(r, 'closed');
     assert.equal(settled(s.get()[0]!), false);
+  });
+});
+
+describe('밀린 일: 거절·중지된 폰 발급 명령', () => {
+  it('끝난 거절·중지 줄은 [치우기]가 있다. 아직 안 보낸 명령은 [취소], 확인 필요는 [자세히]', () => {
+    const refused = jobOf(applyAck(cmd({ sentAt: T0 }), { cmdId: cmd().cmdId, state: 'rejected', reason: 'pc_busy' }));
+    assert.equal(refused.state, 'needPc');
+    assert.equal(actionFor(refused, 'needPc')?.key, 'dismiss');
+    const stopped = jobOf(applyEvent(applyAck(cmd({ sentAt: T0 }), { cmdId: cmd().cmdId, state: 'pc_only', runId: 'run1' }), { runId: 'run1', event: 'phase', at: T0 + 1, phase: 'stopped' }));
+    assert.equal(stopped.state, 'needPc');
+    assert.equal(actionFor(stopped, 'needPc')?.key, 'dismiss');
+    assert.equal(actionFor(jobOf(cmd()), 'entrusted')?.key, 'cancel');
+    const verify = jobOf(applyEvent(applyAck(cmd({ sentAt: T0 }), { cmdId: cmd().cmdId, state: 'pc_only', runId: 'run1' }), { runId: 'run1', event: 'phase', at: T0 + 1, phase: 'stopped', code: 'in_doubt' }));
+    assert.equal(actionFor(verify, 'verify')?.key, 'progress');
+  });
+  it('폰 승인 한도처럼 PC 앞에서 해야 하는 일(run 없음)에는 동작이 없다', () => {
+    assert.equal(actionFor({ id: 'j', title: 't', amount: 1, createdAt: T0, state: 'needPc', reason: 'dailyLimit' }, 'needPc'), null);
   });
 });
