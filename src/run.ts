@@ -22,12 +22,13 @@ export const AUTH_APPS: Readonly<Record<string, string>> = {
 
 /**
  * 폰에서 시작하는 간편인증의 인증 앱(홈택스 개인용 간편인증 창과 같은 것, PC 엔진 run/simple-auth.ts OACX_PROVIDERS와 같은 코드).
- * name은 화면 글자, app은 승인 앱 이름(AUTH_APPS에 있으면 여는 단추). 통신사PASS는 통신사 칸이 더 있어 아직 없다.
+ * name은 화면 글자, app은 승인 앱 이름(AUTH_APPS에 있으면 여는 단추). 카카오톡·네이버·토스·PASS를 앞에 둔다(대표 2026-11-19). PASS는 통신사를 같이 고른다.
  */
 export const SIMPLE_APPS: ReadonlyArray<{ code: string; name: string; app: string }> = [
   { code: 'kakao', name: '카카오톡', app: '카카오톡' },
   { code: 'naver', name: '네이버', app: '네이버' },
   { code: 'toss', name: '토스', app: '토스' },
+  { code: 'pass', name: 'PASS', app: 'PASS' },
   { code: 'kakaobank', name: '카카오뱅크', app: '카카오뱅크' },
   { code: 'kb', name: 'KB국민', app: 'KB스타뱅킹' },
   { code: 'shinhan', name: '신한', app: '신한 SOL' },
@@ -37,6 +38,15 @@ export const SIMPLE_APPS: ReadonlyArray<{ code: string; name: string; app: strin
   { code: 'ibk', name: 'IBK', app: 'i-ONE Bank' },
   { code: 'samsung', name: '삼성패스', app: '삼성패스' },
   { code: 'banksalad', name: '뱅크샐러드', app: '뱅크샐러드' },
+];
+/** PASS 통신사(홈택스 창 값을 소문자로) */
+export const PASS_CARRIERS: ReadonlyArray<{ code: string; name: string }> = [
+  { code: 's', name: 'SKT' },
+  { code: 'k', name: 'KT' },
+  { code: 'l', name: 'LGU+' },
+  { code: 'sa', name: 'SKT 알뜰폰' },
+  { code: 'ka', name: 'KT 알뜰폰' },
+  { code: 'la', name: 'LGU+ 알뜰폰' },
 ];
 export const simpleAppOf = (code: string) => SIMPLE_APPS.find((a) => a.code === code) ?? null;
 

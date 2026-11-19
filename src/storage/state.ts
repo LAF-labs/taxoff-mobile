@@ -64,6 +64,8 @@ export interface SimpleId {
   birth: string;
   /** 숫자만 */
   phone: string;
+  /** PASS만: 통신사(s·k·l·sa·ka·la) */
+  carrier?: string;
 }
 
 export interface AppData {

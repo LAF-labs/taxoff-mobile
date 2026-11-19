@@ -5,7 +5,7 @@
 // - 거래처는 PC 사본의 ref만 싣는다(사업자번호·이메일 원문 없음). 세액은 floor(공급가액/10), 작성일자는 오늘(한국 시간).
 import type { CmdAckBody, CmdAckState, CmdRejectReason, PhoneIssueRequest, RunEventBody, RunPhase, RunResult } from '@sax/remote';
 import type { Job } from './queue';
-import { STEPS, simpleAppOf, type RunView, type Step } from './run.ts';
+import { PASS_CARRIERS, STEPS, simpleAppOf, type RunView, type Step } from './run.ts';
 
 export interface PhoneCmd {
   cmdId: string;
@@ -211,9 +211,11 @@ export function applyHumanRequest(c: PhoneCmd, b: { runId?: unknown; reqId?: unk
 }
 
 /** 간편인증 요청 값(human.response value, 64자 안). 이름에 ':'는 넣지 않는다. */
-export function simpleRequestValue(id: { provider: string; name: string; birth: string; phone: string }): string | null {
+export function simpleRequestValue(id: { provider: string; name: string; birth: string; phone: string; carrier?: string }): string | null {
   const name = id.name.trim().replace(/:/g, '');
-  const v = `sa1:req:${id.provider}:${id.birth}:${id.phone}:${name}`;
+  const pass = id.provider === 'pass';
+  if (pass ? !PASS_CARRIERS.some((c) => c.code === id.carrier) : id.carrier !== undefined) return null;
+  const v = `sa1:req:${id.provider}${pass ? `-${id.carrier}` : ''}:${id.birth}:${id.phone}:${name}`;
   return simpleAppOf(id.provider) && /^\d{8}$/.test(id.birth) && /^01\d{8,9}$/.test(id.phone) && name && v.length <= 64 ? v : null;
 }
 

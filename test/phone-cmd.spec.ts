@@ -208,7 +208,9 @@ describe('라이브 세션 구동(mock)', () => {
     assert.deepEqual(actionsOf(runViewOf(withReq)!), ['simpleAuth', 'retryCert']);
     const v = simpleRequestValue({ provider: 'kakao', name: '홍길동', birth: '19900101', phone: '01012345678' })!;
     assert.equal(v, 'sa1:req:kakao:19900101:01012345678:홍길동');
-    assert.equal(simpleRequestValue({ provider: 'pass', name: '홍길동', birth: '19900101', phone: '01012345678' }), null);
+    assert.equal(simpleRequestValue({ provider: 'pass', name: '홍길동', birth: '19900101', phone: '01012345678' }), null, 'PASS는 통신사가 있어야 한다');
+    assert.equal(simpleRequestValue({ provider: 'pass', carrier: 'ka', name: '홍길동', birth: '19900101', phone: '01012345678' }), 'sa1:req:pass-ka:19900101:01012345678:홍길동');
+    assert.equal(simpleRequestValue({ provider: 'kakao', carrier: 's', name: '홍길동', birth: '19900101', phone: '01012345678' }), null);
     const asked = askSimple(withReq, v, 'kakao');
     assert.equal(runViewOf(asked)!.kind, 'running', '보내는 동안은 로그인 중');
     const s = store([asked]);
