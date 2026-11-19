@@ -74,7 +74,7 @@ export function statusLine(job: Job, state: JobState): string {
   if (r?.kind === 'refused') return REFUSED[r.reason];
   if (r?.kind === 'stopped') return '중지됐어요';
   if (state === 'needPc' && job.reason) return NEED_PC[job.reason];
-  if (r?.kind === 'myTurn') return r.auth.method === 'cert' ? 'PC에서 인증서로 로그인해 주세요' : r.auth.method === 'pc' ? pcTurnOf(r.auth.code).short : '간편인증을 승인해 주세요';
+  if (r?.kind === 'myTurn') return r.auth.method === 'cert' ? '공동인증서 비밀번호를 기다려요' : r.auth.method === 'pc' ? pcTurnOf(r.auth.code).short : '간편인증을 승인해 주세요';
   if (r?.kind === 'inDoubt') return '발급됐는지 보고 있어요';
   if (state === 'running' && r?.kind === 'running') return RUNNING[r.step];
   return PLAIN[state];

@@ -19,7 +19,7 @@ registerHooks({
 const { CAP, checkIssueRequest } = await import('@sax/remote');
 const { driveCmds, trimCmds } = await import('../src/net/issueLive.ts');
 const { PHONE_CAPS } = await import('../src/net/pcCopy.ts');
-const { STOP_COPY, actionsOf, pcTurnOf } = await import('../src/run.ts');
+const { PC_TURN, STOP_COPY, actionsOf, pcTurnOf } = await import('../src/run.ts');
 const { actionFor } = await import('../src/queue.ts');
 const { BUSY_GIVE_UP_MS, BUSY_RETRY_MS, REJECT_LINE, applyAck, applyEvent, busyWaiting, issueRequest, jobOf, kstDay, needsRedate, redate, retryDue, runViewOf, settled } = await import('../src/phoneCmd.ts');
 
@@ -93,8 +93,9 @@ describe('cmd.ack · run.event → 진행 화면', () => {
     assert.equal(jobOf(t).state, 'running');
     assert.equal(settled(t), false);
     assert.deepEqual(actionsOf(runViewOf(t)!), ['close']);
-    assert.match(pcTurnOf('login.simple_auth').line, /간편인증/);
-    assert.equal(pcTurnOf('모르는.코드').short, 'PC에서 확인이 필요해요');
+    assert.match(pcTurnOf('login.simple_auth').line, /공동인증서/);
+    for (const t of [...Object.values(PC_TURN), pcTurnOf()]) assert.doesNotMatch(t.line + t.short, /(?<!다른 )PC(에서| 화면| 홈택스| 창)/, '폰은 PC 화면으로 보내지 않는다');
+    assert.equal(pcTurnOf('모르는.코드').short, '예상 밖 화면에서 멈췄어요');
     const back = applyEvent(t, { runId: 'run1', event: 'phase', at: T0 + 2, phase: 'login' });
     assert.deepEqual(runViewOf(back), { kind: 'running', step: 'login', startedAt: T0, pcApproval: true });
   });

@@ -146,7 +146,7 @@ function StateLines({ r }: { r: RunView }) {
     case 'myTurn':
       return (
         <T v="sub" c="attention" testID="run-my-turn">
-          {r.auth.method === 'simple' ? `${r.auth.app} 앱에서 승인해 주세요` : r.auth.method === 'pc' ? pcTurnOf(r.auth.code).line : '인증서 비밀번호는 PC에서만 입력할 수 있어요'}
+          {r.auth.method === 'simple' ? `${r.auth.app} 앱에서 승인해 주세요` : r.auth.method === 'pc' ? pcTurnOf(r.auth.code).line : '공동인증서 비밀번호를 기다리고 있어요'}
         </T>
       );
     case 'stopped':

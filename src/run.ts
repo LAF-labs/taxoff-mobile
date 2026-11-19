@@ -27,13 +27,13 @@ export type Auth = { method: 'simple'; app: string; deadline?: number } | { meth
  * 폰에서는 할 수 없는 일이라(홈택스 창은 PC에 있다) 할 일을 PC 기준으로 말한다. 모르는 코드는 기본 줄.
  */
 export const PC_TURN: Readonly<Record<string, { line: string; short: string }>> = {
-  'login.simple_auth': { line: '공동인증서로 로그인하지 못했어요. PC 홈택스 화면에서 간편인증으로 로그인하면 이어서 해요', short: 'PC에서 간편인증으로 로그인해 주세요' },
-  'cert.pick_needed': { line: 'PC 홈택스 창에서 쓸 인증서를 한 번 골라 주세요. 다음부터는 자동으로 골라요', short: 'PC에서 인증서를 골라 주세요' },
-  'portal.captcha': { line: 'PC 홈택스 창에서 자동입력방지 문자를 넣어 주세요', short: 'PC에서 자동입력방지 문자를 넣어 주세요' },
-  'portal.mfa_pending': { line: 'PC 홈택스 창에서 추가 인증을 마쳐 주세요', short: 'PC에서 추가 인증을 마쳐 주세요' },
-  'issue.locked_elsewhere': { line: '다른 PC에서 발급 중이에요. 그 발급이 끝나면 이 PC에서 이어서 해요', short: '다른 PC의 발급을 기다려요' },
+  'login.simple_auth': { line: '공동인증서로 홈택스에 로그인하지 못했어요. 아무것도 발급하지 않았어요', short: '공동인증서 로그인이 안 됐어요' },
+  'cert.pick_needed': { line: '인증서가 여러 개라 어느 것으로 로그인할지 정해야 해요. 아무것도 발급하지 않았어요', short: '쓸 인증서를 정해야 해요' },
+  'portal.captcha': { line: '홈택스가 자동입력방지 문자를 물어서 로그인 앞에서 기다리고 있어요', short: '홈택스 로그인 앞에서 기다려요' },
+  'portal.mfa_pending': { line: '홈택스가 추가 인증을 요구해서 로그인 앞에서 기다리고 있어요', short: '홈택스 추가 인증을 기다려요' },
+  'issue.locked_elsewhere': { line: '다른 PC에서 발급 중이에요. 그 발급이 끝나면 이어서 해요', short: '다른 PC의 발급을 기다려요' },
 };
-const PC_TURN_DEFAULT = { line: 'PC 홈택스 창에서 확인이 필요해요. PC 화면의 안내를 따라 주세요', short: 'PC에서 확인이 필요해요' };
+const PC_TURN_DEFAULT = { line: '홈택스에서 예상하지 못한 화면이 나와 멈춰 있어요', short: '예상 밖 화면에서 멈췄어요' };
 export const pcTurnOf = (code?: string) => (code && Object.hasOwn(PC_TURN, code) ? PC_TURN[code]! : PC_TURN_DEFAULT);
 
 /** pcStopped: 폰 발급 명령을 PC가 멈춤(이유 코드 없음. 이유는 PC에서 본다) */
@@ -49,8 +49,8 @@ export const STOP_COPY: Record<StopReason, { line: string; action: 'retryPrepare
   inputMismatch: { line: '홈택스 화면 값이 준비한 값과 달라 승인을 열지 않았어요. 아무것도 발급하지 않았어요.', action: 'retryPrepare' },
   totalMismatch: { line: '홈택스 화면의 공급가액과 세액을 더한 값이 합계와 달라 승인을 열지 않았어요. 아무것도 발급하지 않았어요.', action: 'retryPrepare' },
   otherLogin: { line: '다른 곳에서 홈택스에 로그인해 연결이 끊겼어요. 아무것도 발급하지 않았어요.', action: 'retryPrepare' },
-  passwordError: { line: '홈택스에서 비밀번호가 맞지 않는대요. PC의 금고에 저장한 비밀번호를 확인해 주세요. 아무것도 발급하지 않았어요.', action: 'reserveOnPc' },
-  pcStopped: { line: '멈췄어요. 아무것도 발급하지 않았어요. 이유는 PC에서 볼 수 있어요.', action: 'reserveOnPc' },
+  passwordError: { line: '홈택스에서 비밀번호가 맞지 않는대요. 저장해 둔 비밀번호는 지웠어요. 아무것도 발급하지 않았어요.', action: 'reserveOnPc' },
+  pcStopped: { line: '멈췄어요. 아무것도 발급하지 않았어요.', action: 'reserveOnPc' },
 };
 
 export const ACTION_LABEL: Record<RunAction, string> = {
