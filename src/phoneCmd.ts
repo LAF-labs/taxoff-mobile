@@ -5,7 +5,7 @@
 // - 거래처는 PC 사본의 ref만 싣는다(사업자번호·이메일 원문 없음). 세액은 floor(공급가액/10), 작성일자는 오늘(한국 시간).
 import type { CmdAckBody, CmdAckState, CmdRejectReason, PhoneIssueRequest, RunEventBody, RunPhase, RunResult } from '@sax/remote';
 import type { Job } from './queue';
-import type { RunView } from './run';
+import { STEPS, type RunView, type Step } from './run.ts';
 
 export interface PhoneCmd {
   cmdId: string;
@@ -25,6 +25,8 @@ export interface PhoneCmd {
   /** 마지막 run.event 시각(PC 시계) */
   at?: number;
   code?: string;
+  /** PC가 사람 차례로 기다린다(run.event 'turn'). code가 그 까닭. 다음 사건이 오면 풀린다. */
+  turn?: boolean;
   attempt?: number;
   result?: RunResult;
   /** PC가 다른 일 중이라 거절(pc_busy)했을 때 다시 보낼 시각. 그 전까지는 기다리는 일로 보인다. */
@@ -91,6 +93,7 @@ export function applyEvent(c: PhoneCmd, e: RunEventBody): PhoneCmd {
   if (!next.ack || next.ack === 'rejected') next.ack = 'pc_only';
   if (e.phase) next.phase = e.phase;
   next.code = e.code;
+  next.turn = e.event === 'turn' ? true : undefined;
   if (e.attempt !== undefined) next.attempt = e.attempt;
   if (e.result) next.result = e.result;
   return next;
@@ -123,6 +126,11 @@ export function runViewOf(c: PhoneCmd): RunView | null {
   if (c.ack === 'rejected') return { kind: 'refused', reason: c.reason ?? 'input_invalid', startedAt };
   // 보냈지만 아직 답이 없으면 준비 중(맡김으로 두면 폰에서 취소할 수 있어 PC와 어긋난다)
   if (!c.ack) return c.sentAt ? { kind: 'running', step: 'prepare', startedAt, pcApproval: true } : null;
+  // PC가 사람 차례로 기다린다(예: 공동인증서 로그인이 안 돼 간편인증 화면을 열어 둠). "진행 중"으로 두지 않는다.
+  if (c.turn && c.phase && c.phase !== 'done' && c.phase !== 'stopped') {
+    const step = (STEPS as readonly string[]).includes(c.phase) ? (c.phase as Step) : 'login';
+    return { kind: 'myTurn', step, auth: { method: 'pc', ...(c.code ? { code: c.code } : {}) }, startedAt };
+  }
   if (c.code === 'in_doubt') return c.phase === 'stopped' ? { kind: 'verify', startedAt } : { kind: 'inDoubt', tries: Math.max(1, c.attempt ?? 1), startedAt };
   switch (c.phase) {
     case undefined:

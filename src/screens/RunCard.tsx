@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { REJECT_LINE } from '../phoneCmd';
 import type { Job } from '../queue';
-import { ACTION_LABEL, AUTH_APPS, STEPS, STEP_LABEL, STOP_COPY, actionsOf, chipOf, elapsed, groupApprovalNo, mmss, stepOf, type IssueResult, type RunAction, type RunView } from '../run';
+import { ACTION_LABEL, AUTH_APPS, STEPS, STEP_LABEL, STOP_COPY, actionsOf, chipOf, elapsed, groupApprovalNo, mmss, pcTurnOf, stepOf, type IssueResult, type RunAction, type RunView } from '../run';
 import { radius, space, usePalette } from '../theme';
 import { Check, Pill, StatusDot, T, success, won } from '../ui/kit';
 
@@ -146,7 +146,7 @@ function StateLines({ r }: { r: RunView }) {
     case 'myTurn':
       return (
         <T v="sub" c="attention" testID="run-my-turn">
-          {r.auth.method === 'simple' ? `${r.auth.app} 앱에서 승인해 주세요` : '인증서 비밀번호는 PC에서만 입력할 수 있어요'}
+          {r.auth.method === 'simple' ? `${r.auth.app} 앱에서 승인해 주세요` : r.auth.method === 'pc' ? pcTurnOf(r.auth.code).line : '인증서 비밀번호는 PC에서만 입력할 수 있어요'}
         </T>
       );
     case 'stopped':

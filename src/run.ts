@@ -20,7 +20,21 @@ export const AUTH_APPS: Readonly<Record<string, string>> = {
 };
 
 /** deadline: PC가 알려 준 간편인증 마감(ms). 있으면 경과 대신 남은 시간을 보인다. */
-export type Auth = { method: 'simple'; app: string; deadline?: number } | { method: 'cert' };
+export type Auth = { method: 'simple'; app: string; deadline?: number } | { method: 'cert' } | { method: 'pc'; code?: string };
+
+/**
+ * PC가 사람 차례로 멈춘 까닭(run.event 'turn'의 code, PC 엔진 코드)별 한 줄. line은 진행 카드, short는 밀린 일·알림.
+ * 폰에서는 할 수 없는 일이라(홈택스 창은 PC에 있다) 할 일을 PC 기준으로 말한다. 모르는 코드는 기본 줄.
+ */
+export const PC_TURN: Readonly<Record<string, { line: string; short: string }>> = {
+  'login.simple_auth': { line: '공동인증서로 로그인하지 못했어요. PC 홈택스 화면에서 간편인증으로 로그인하면 이어서 해요', short: 'PC에서 간편인증으로 로그인해 주세요' },
+  'cert.pick_needed': { line: 'PC 홈택스 창에서 쓸 인증서를 한 번 골라 주세요. 다음부터는 자동으로 골라요', short: 'PC에서 인증서를 골라 주세요' },
+  'portal.captcha': { line: 'PC 홈택스 창에서 자동입력방지 문자를 넣어 주세요', short: 'PC에서 자동입력방지 문자를 넣어 주세요' },
+  'portal.mfa_pending': { line: 'PC 홈택스 창에서 추가 인증을 마쳐 주세요', short: 'PC에서 추가 인증을 마쳐 주세요' },
+  'issue.locked_elsewhere': { line: '다른 PC에서 발급 중이에요. 그 발급이 끝나면 이 PC에서 이어서 해요', short: '다른 PC의 발급을 기다려요' },
+};
+const PC_TURN_DEFAULT = { line: 'PC 홈택스 창에서 확인이 필요해요. PC 화면의 안내를 따라 주세요', short: 'PC에서 확인이 필요해요' };
+export const pcTurnOf = (code?: string) => (code && Object.hasOwn(PC_TURN, code) ? PC_TURN[code]! : PC_TURN_DEFAULT);
 
 /** pcStopped: 폰 발급 명령을 PC가 멈춤(이유 코드 없음. 이유는 PC에서 본다) */
 export type StopReason = 'blocked' | 'unknownScreen' | 'dateMismatch' | 'inputMismatch' | 'totalMismatch' | 'otherLogin' | 'passwordError' | 'pcStopped';
@@ -119,6 +133,8 @@ export function actionsOf(r: RunView, now = Date.now()): RunAction[] {
       return r.step === 'issue' || r.step === 'verify' || r.step === 'approve' ? ['close'] : ['stop'];
     case 'myTurn':
       if (r.auth.method === 'cert') return ['reserveOnPc', 'stop'];
+      // PC가 맡은 일의 사람 차례: 폰에서 할 수 있는 일이 없다(홈택스 창은 PC에)
+      if (r.auth.method === 'pc') return ['close'];
       // 간편인증 시간이 지났으면 [다시 요청]이 기본 행동이다
       if (r.auth.deadline !== undefined && r.auth.deadline <= now) return ['resendAuth', 'stop'];
       return Object.hasOwn(AUTH_APPS, r.auth.app) ? ['openApp', 'resendAuth', 'stop'] : ['resendAuth', 'stop'];

@@ -19,7 +19,7 @@ registerHooks({
 const { CAP, checkIssueRequest } = await import('@sax/remote');
 const { driveCmds, trimCmds } = await import('../src/net/issueLive.ts');
 const { PHONE_CAPS } = await import('../src/net/pcCopy.ts');
-const { STOP_COPY } = await import('../src/run.ts');
+const { STOP_COPY, actionsOf, pcTurnOf } = await import('../src/run.ts');
 const { actionFor } = await import('../src/queue.ts');
 const { BUSY_GIVE_UP_MS, BUSY_RETRY_MS, REJECT_LINE, applyAck, applyEvent, busyWaiting, issueRequest, jobOf, kstDay, needsRedate, redate, retryDue, runViewOf, settled } = await import('../src/phoneCmd.ts');
 
@@ -85,6 +85,18 @@ describe('cmd.ack · run.event → 진행 화면', () => {
     assert.deepEqual(stop('date_mismatch'), { kind: 'stopped', step: 'prepare', reason: 'pcStopped', startedAt: T0 });
     assert.deepEqual(runViewOf(applyEvent(base, { runId: 'run1', event: 'phase', at: T0 + 1, phase: 'verify', code: 'in_doubt', attempt: 1 })), { kind: 'inDoubt', tries: 1, startedAt: T0 });
     assert.match(STOP_COPY.pcStopped.line, /아무것도 발급하지 않았어요/);
+  });
+  it('PC 사람 차례(turn)는 "진행 중"이 아니라 내 차례로, 다음 사건이 오면 풀린다', () => {
+    const base = applyAck(cmd({ sentAt: T0 }), { cmdId: cmd().cmdId, state: 'pc_only', runId: 'run1' });
+    const t = applyEvent(base, { runId: 'run1', event: 'turn', at: T0 + 1, phase: 'login', code: 'login.simple_auth' });
+    assert.deepEqual(runViewOf(t), { kind: 'myTurn', step: 'login', auth: { method: 'pc', code: 'login.simple_auth' }, startedAt: T0 });
+    assert.equal(jobOf(t).state, 'running');
+    assert.equal(settled(t), false);
+    assert.deepEqual(actionsOf(runViewOf(t)!), ['close']);
+    assert.match(pcTurnOf('login.simple_auth').line, /간편인증/);
+    assert.equal(pcTurnOf('모르는.코드').short, 'PC에서 확인이 필요해요');
+    const back = applyEvent(t, { runId: 'run1', event: 'phase', at: T0 + 2, phase: 'login' });
+    assert.deepEqual(runViewOf(back), { kind: 'running', step: 'login', startedAt: T0, pcApproval: true });
   });
   it('거절 이유는 한 줄 문구로, 같은 runId의 duplicate는 다시 붙기', () => {
     for (const reason of ['playbook_unavailable', 'input_invalid', 'counterparty_unknown', 'hometax_paused'] as const) {
