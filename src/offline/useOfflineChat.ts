@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatItem } from '../chat';
 import { useSession } from '../session';
 import type { OfflineReply } from './chat';
+import type { PhoneScreen } from '@sax/chat-core';
 import { offlineChat, setPcOnline } from './device';
 import { chatCopyOf } from '../net/pcCopy';
 
@@ -13,6 +14,10 @@ export interface OfflineChatView {
   items: ChatItem[];
   busy: boolean;
   chips: OfflineReply['chips'];
+  /** 아직 맡기지 않은 카드 id(이 카드에만 [발급 맡기기]가 붙는다). 없으면 모든 카드를 연 것으로 본다(갤러리). */
+  openDrafts?: ReadonlySet<string>;
+  /** 방금 답에서 모델이 연 앱 화면(open_screen). 답 아래 단추로 붙고 다음 말을 보내면 사라진다. */
+  screens?: PhoneScreen[];
   send(text: string): Promise<void>;
   /** 못 보낸 말을 다시 보낸다(그 말과 이유 줄은 지우고 새로 보낸다) */
   retry(noteId: string): Promise<void>;
@@ -32,8 +37,10 @@ export function useOfflineChat(): OfflineChatView {
   useEffect(() => setPcOnline(() => pcRef.current === 'online'), []);
   const chat = useMemo(() => (pair ? offlineChat(pair, s.keys, () => chatCopyOf(copyRef.current)) : null), [pair, s.keys]);
   const [log, setLog] = useState<ChatItem[]>([]);
+  const [openDrafts, setOpenDrafts] = useState<ReadonlySet<string>>(new Set());
   const [extra, setExtra] = useState<ChatItem[]>([]);
   const [chips, setChips] = useState<OfflineReply['chips']>([]);
+  const [screens, setScreens] = useState<PhoneScreen[]>([]);
   const [busy, setBusy] = useState(false);
   /** 지금 보내는 중인지(화면이 다시 그려지기 전에 두 번 눌려도 한 번만 보낸다) */
   const sending = useRef(false);
@@ -43,7 +50,10 @@ export function useOfflineChat(): OfflineChatView {
   useEffect(() => {
     if (!chat) return;
     let live = true;
-    const read = () => void chat.items().then((x) => live && setLog(x), () => undefined);
+    const read = () => {
+      void chat.items().then((x) => live && setLog(x), () => undefined);
+      void chat.core.drafts().then((ds) => live && setOpenDrafts(new Set(ds.filter((d) => d.state === 'open').map((d) => d.id))), () => undefined);
+    };
     read();
     const off = chat.subscribe(read);
     return () => {
@@ -58,6 +68,7 @@ export function useOfflineChat(): OfflineChatView {
       sending.current = true;
       setBusy(true);
       setChips([]);
+      setScreens([]);
       setPending({ kind: 'msg', id: 'off-pending', from: 'me', at: Date.now(), text, state: 'sending' });
       // 모델을 부르지 못한 턴은 코어가 기록하지 않는다: 내가 쓴 말은 화면에 남기고 이유 한 줄과 [다시 보내기]를 붙인다
       const fail = (why: string, retry: boolean): ChatItem[] => {
@@ -71,6 +82,8 @@ export function useOfflineChat(): OfflineChatView {
         const r = await chat.send(text);
         setExtra((x) => [...x, ...r.items, ...(r.unavailable ? fail(r.unavailable.text, r.unavailable.retry) : [])]);
         setChips(r.chips);
+        setScreens(r.screens);
+        if (r.drafts.length) setOpenDrafts((o) => new Set([...o, ...r.drafts.filter((d) => d.state === 'open').map((d) => d.id)]));
       } catch {
         setExtra((x) => [...x, ...fail(SEND_FAILED_TEXT, true)]);
       } finally {
@@ -95,5 +108,5 @@ export function useOfflineChat(): OfflineChatView {
     [extra, send],
   );
 
-  return { available: !!chat, items: [...log, ...extra, ...(pending ? [pending] : [])], busy, chips, send, retry };
+  return { available: !!chat, items: [...log, ...extra, ...(pending ? [pending] : [])], busy, chips, openDrafts, screens, send, retry };
 }
