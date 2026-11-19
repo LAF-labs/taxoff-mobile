@@ -438,7 +438,7 @@ function Item({ it, group, onRetry, retryOff, openDrafts, onIssue }: { it: Exclu
   return (
     <View style={[st.msg, !group.first && st.follow, me ? st.mine : st.theirs]} testID={`chat-${it.from}`}>
       {it.text !== undefined && (
-        <View style={[st.bubble, { backgroundColor: me ? p.bubbleMe : p.bubbleThem }, corners]} testID="chat-bubble">
+        <View style={[st.bubble, { backgroundColor: me ? p.bubbleMe : p.bubbleThem }, !me && st.bubbleThem, corners]} testID="chat-bubble">
           <T style={me ? { color: p.onBubbleMe } : undefined}>{it.text}</T>
         </View>
       )}
@@ -809,6 +809,8 @@ const st = StyleSheet.create({
   mine: { alignItems: 'flex-end' },
   theirs: { alignItems: 'flex-start' },
   /** Muse: 높이 44, 옆 15, 둥글기 22, 점 지름 8 간격 4 */
+  /** Muse: 앱 말풍선은 글 길이와 상관없이 대화 폭을 다 쓴다(내 말은 글 폭만큼) */
+  bubbleThem: { alignSelf: 'stretch', maxWidth: '100%' },
   typing: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 44, paddingHorizontal: 15, borderRadius: 22 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   /** Muse: 둥글기 22, 최소 높이 44, 옆 15 위아래 11 */
