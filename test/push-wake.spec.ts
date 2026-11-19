@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { forgetPushToken, pushClient, PushError } from '../src/notify/pushApi.ts';
-import { apnsToken, askDue, latestEntrusted, pushPlan, pushPlatform, tokenHash, wakeKindOf } from '../src/notify/wake.ts';
+import { apnsToken, askDue, latestEntrusted, newGates, pushPlan, pushPlatform, tapKindOf, tokenHash, wakeKindOf } from '../src/notify/wake.ts';
 import type { Job } from '../src/queue.ts';
 
 const TOK = 'ab'.repeat(32);
@@ -117,5 +117,21 @@ describe('푸시 토큰 서버 API', () => {
     assert.equal(await forgetPushToken(async () => {}), true);
     assert.equal(await forgetPushToken(async () => Promise.reject(new Error('x'))), false);
     assert.equal(await forgetPushToken(() => new Promise(() => {}), 20), false);
+  });
+});
+
+describe('앱이 뒤에 있을 때 받은 승인 요청', () => {
+  const gate = (reqId: string, exp: number) => ({ reqId, exp }) as never;
+  const j = (id: string, g?: unknown, state: Job['state'] = 'approval'): Job => ({ id, title: 't', amount: 1, createdAt: 0, state, gate: g as never });
+  it('폰이 맡긴 일의 새 승인 요청만, 마감 전, 한 번', () => {
+    const jobs = [j('cmd-a', gate('r1', 100)), j('cmd-b', gate('r2', 10)), j('local-1', gate('r3', 100)), j('cmd-c', gate('r4', 100), 'running'), j('cmd-d')];
+    assert.deepEqual(newGates(jobs, new Set(), 50).map((x) => x.id), ['cmd-a']);
+    assert.deepEqual(newGates(jobs, new Set(['r1']), 50), []);
+  });
+  it('앱이 만든 승인 알림을 누르면 approve, 진행 알림은 아님', () => {
+    const local = (data: unknown) => ({ request: { trigger: { type: 'date' }, content: { data } } });
+    assert.equal(tapKindOf(local({ open: 'approve', jobId: 'cmd-a' })), 'approve');
+    assert.equal(tapKindOf(local({ open: 'run', jobId: 'cmd-a' })), null);
+    assert.equal(tapKindOf(push({ aps: { alert: { 'loc-key': 'SAX_WAKE_UPDATE' } } })), 'update');
   });
 });

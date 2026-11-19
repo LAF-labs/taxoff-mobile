@@ -5,7 +5,7 @@
 // iPhone 먼저다(Android 승인·FCM은 다음 단계). 웹(갤러리)에는 없다.
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import { apnsToken, pushPlatform, wakeKindOf, type PushPlatform, type WakeKind } from './wake';
+import { apnsToken, pushPlatform, tapKindOf, wakeKindOf, type PushPlatform, type WakeKind } from './wake';
 
 const ios = Platform.OS === 'ios';
 
@@ -66,7 +66,7 @@ function take(r: Notifications.NotificationResponse | null | undefined): void {
   if (!r || r.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return;
   const id = r.notification.request.identifier;
   if (seen.has(id)) return;
-  const k = wakeKindOf(r.notification);
+  const k = tapKindOf(r.notification);
   if (!k) return;
   seen.add(id);
   // approve가 update보다 급하다: 둘이 겹치면 approve를 남긴다
@@ -82,7 +82,7 @@ export function installWakeTap(): void {
   void Notifications.getLastNotificationResponseAsync()
     .then((r) => {
       take(r);
-      if (r && wakeKindOf(r.notification)) void Notifications.clearLastNotificationResponseAsync().catch(() => {});
+      if (r && tapKindOf(r.notification)) void Notifications.clearLastNotificationResponseAsync().catch(() => {});
     })
     .catch(() => {});
 }
