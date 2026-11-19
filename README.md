@@ -4,7 +4,7 @@
 
 - 출발점: `LAF-labs/tex`의 `poc/apps/mobile`(실기기 페어링·전송 통과본). 그 이력과 설계 근거(D08, ADR-029·034)는 tex에 있다.
 - 프로토콜과 대화 코어: `vendor/sax-remote/`(@sax/remote, D08 정본), `vendor/sax-redaction/`(@sax/redaction, 가림 계층), `vendor/sax-chat-core/`(@sax/chat-core, PC가 꺼졌을 때 폰 대화, ADR-047)는 tex `poc/packages/`의 **고정 사본**이다. 여기서 고치지 않는다. tex에서 고친 뒤 `pnpm sync:remote <tex 체크아웃> [remote|redaction|chat-core]`으로 맞추고, 커밋은 사본마다 `vendor/<폴더>/VENDORED_FROM`에 남는다. CI의 `vendor` 작업이 사본마다 그 커밋과 같은지 본다(`TEX_READ_TOKEN` 비밀값이 있을 때).
-- 릴레이 서버·계정 서비스는 tex `poc/services/*`에 있다. 이 레포의 `dev/`에는 Node 개발 대역(더미 PC·개발 릴레이·개발 계정)만 있다. 실제 계정·릴레이까지 붙는 개발 스택은 tex의 `poc/apps/mobile/dev/stack.ts`로 돌린다.
+- 릴레이 서버·계정 서비스는 tex `poc/services/*`에 있다. 이 레포의 `dev/`에는 Node 개발 대역(더미 PC·개발 릴레이·개발 계정)만 있다. 실제 계정·릴레이까지 붙는 개발 스택은 tex의 `poc/scripts/phone-stack/stack.ts`로 돌린다(먼저 `pnpm --dir poc/scripts/phone-stack install`).
 
 ### paseo와의 관계
 
@@ -81,7 +81,7 @@ xcodebuild -workspace tex.xcworkspace -scheme tex -configuration Debug -sdk ipho
 
 ```bash
 H=$(scutil --get LocalHostName | tr A-Z a-z).local:8787
-(cd <tex>/poc/apps/mobile && STACK_LIVE=0 STACK_HOST=$H node --conditions=development dev/stack.ts)   # tex에서: 실제 계정·릴레이 + 더미 PC
+(cd <tex>/poc && STACK_LIVE=0 STACK_HOST=$H node --conditions=development scripts/phone-stack/stack.ts)   # tex에서: 실제 계정·릴레이 + 더미 PC
 EXPO_PUBLIC_TEX_DEV_HOST=$H npx expo start --port 8081                      # 같은 값을 번들에 박는다
 APPLE_TEAM_ID=<팀 ID> npx expo prebuild -p ios --no-install && (cd ios && LANG=en_US.UTF-8 pod install)
 # ios/: xcodebuild -workspace tex.xcworkspace -scheme tex -configuration Debug -destination 'id=<UDID>' -derivedDataPath build/dd-device -allowProvisioningUpdates build
