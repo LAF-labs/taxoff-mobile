@@ -3,11 +3,11 @@
 // → 계정 확인(계정 서비스 서명 acct_claim의 이메일 전체 + PC가 알려 준 이름, [내 계정 맞음], 설계 #120) → 저장.
 // 폰에는 계정 로그인이 없어 서버에서 기기 목록을 받지 않는다. 계정 등록은 PC가 대신 한다(팀장 결정 2026-11-06, D08 §4.2 3·7단계).
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as Device from 'expo-device';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
 import { MobilePairing, b64, fromB64, softNoiseStatic, type MobilePairFailure, type MobilePairResult } from '@sax/remote';
 import { BRAND, DEV_LOCAL, accountKeys, relayAllowlist } from '../config';
+import { deviceModel } from '../deviceModel';
 import { inflight } from '../inflight';
 import { devFetchQr } from '../net/account';
 import { identityLines } from '../pairing/identity';
@@ -81,7 +81,7 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
     const mp = new MobilePairing({
       keys: {
         noise, vmPub: s.keys.vmPub, kmPub: s.keys.kmPub, deviceId: s.keys.deviceId,
-        name: (Device.deviceName ?? (Platform.OS === 'ios' ? 'iPhone' : 'Android')).slice(0, 40),
+        name: deviceModel(),
         platform: Platform.OS === 'ios' ? 'ios' : 'android',
       },
       // 다시 연결이면 앞서 고정한 계정 AIK와 같아야 한다(C-01). 처음이면 QR·6자리로 고른 이 PC의 AIK를 믿는다(TOFU).
