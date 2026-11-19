@@ -76,13 +76,19 @@ function legacyOptions(): SecureStore.SecureStoreOptions {
 }
 
 /** 첫 실행(재설치 포함)이면 남은 키체인 항목과 앱 데이터를 지운다. 설치 표지가 있으면 아무것도 하지 않는다. */
-export async function ensureFreshInstall(): Promise<{ hasDevice: boolean }> {
+export async function ensureFreshInstall(): Promise<{ hasDevice: boolean; onboarded: boolean }> {
   const m = installMarker();
-  if (m) return { hasDevice: !!m.deviceId };
+  if (m) return { hasDevice: !!m.deviceId, onboarded: !!m.onboardedAt || !!m.deviceId };
   await deleteAll();
   wipeAppData();
   await writeInstallMarker({ installedAt: Date.now() });
-  return { hasDevice: false };
+  return { hasDevice: false, onboarded: false };
+}
+
+/** 온보딩을 넘겼다고 표지에 적는다(실패해도 앱은 이어진다: 다음에 한 번 더 보일 뿐). */
+export async function markOnboarded(): Promise<void> {
+  const m = installMarker();
+  await writeInstallMarker({ ...(m ?? { installedAt: Date.now() }), onboardedAt: Date.now() }).catch(() => {});
 }
 
 async function deleteAll(): Promise<void> {
@@ -125,7 +131,7 @@ export async function createDevice(): Promise<DeviceKeys> {
     wipe(v.secretKey);
     wipe(k.secretKey);
   }
-  await writeInstallMarker({ installedAt: installMarker()?.installedAt ?? Date.now(), deviceId: stored.deviceId });
+  await writeInstallMarker({ ...installMarker(), installedAt: installMarker()?.installedAt ?? Date.now(), deviceId: stored.deviceId });
   return expand(stored);
 }
 
@@ -169,9 +175,11 @@ export function forget(k: DeviceKeys | null): void {
 
 /** 분실·해제 뒤 이 폰을 초기화한다(키·앱 데이터 삭제). */
 export async function resetDevice(): Promise<void> {
+  const seen = installMarker()?.onboardedAt;
   await deleteAll();
   wipeAppData();
-  await writeInstallMarker({ installedAt: Date.now() });
+  // 온보딩은 이미 본 사람이다: 초기화 뒤에는 바로 열쇠 만들기로 간다
+  await writeInstallMarker({ installedAt: Date.now(), ...(seen ? { onboardedAt: seen } : {}) });
 }
 
 /** SP-1 진단용: 항목 속성만 보고한다(값 없음). auth: userPresence(생체 또는 폰 암호) · none(시뮬레이터 개발). */

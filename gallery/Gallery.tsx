@@ -11,6 +11,8 @@ import { SessionContext, type Session } from '../src/session';
 import { MainScreen, type Tab } from '../src/screens/MainScreen';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
 import { LockScreen } from '../src/screens/LockScreen';
+import { PairScreen } from '../src/screens/PairScreen';
+import { OnboardingScreen } from '../src/screens/OnboardingScreen';
 import type { BioInfo } from '../src/biometry';
 import { QueueScreen } from '../src/screens/QueueScreen';
 import { IssueScreen, type IssuePreview } from '../src/screens/IssueScreen';
@@ -491,6 +493,13 @@ const SCREENS: Record<
   'lock-passcode-fallback': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: FACE, err: 'cancelled' }} /> }),
   'lock-no-biometric-passcode': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'faceId', enrolled: false } }} /> }),
   'lock-no-passcode': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: FACE, err: 'passcode_required' }} /> }),
+  // ---- 첫 실행 온보딩(스플래시 직후, 열쇠 만들기 앞) ----
+  'onboarding-easy': () => ({ session: fake(emptyData(), 'unpaired'), node: <OnboardingScreen onDone={noop} start={0} /> }),
+  'onboarding-what': () => ({ session: fake(emptyData(), 'unpaired'), node: <OnboardingScreen onDone={noop} start={1} /> }),
+  'onboarding-safe': () => ({ session: fake(emptyData(), 'unpaired'), node: <OnboardingScreen onDone={noop} start={2} /> }),
+  /** 온보딩 5/5: PC와 연결(카메라 권한 전), 연결 끝 장면 */
+  'onboarding-pair': () => ({ session: fake(emptyData(), 'unpaired'), node: <PairScreen onDone={noop} onboarding={{ onBack: noop }} /> }),
+  'onboarding-paired': () => ({ session: fake(paired(), 'online'), node: <PairScreen onDone={noop} onboarding={{ onBack: noop }} previewPhase="done" /> }),
   'lock-first-run': () => ({ session: fake(emptyData(), 'unpaired'), node: <LockScreen firstRun onUnlocked={noop} onReset={noop} preview={{ bio: FACE }} /> }),
   /** 첫 실행, 생체를 등록하지 않은 폰: 열쇠 안내가 "폰 암호로 확인해요"로 바뀐다 */
   'lock-first-run-no-bio': () => ({ session: fake(emptyData(), 'unpaired'), node: <LockScreen firstRun onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'none', enrolled: false } }} /> }),
