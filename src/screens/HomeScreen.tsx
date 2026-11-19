@@ -297,7 +297,7 @@ function Kebab({ color }: { color: string }) {
 
 const at = (it: ChatItem) => (it.kind === 'merged' ? it.from : it.at);
 
-/** 지금 할 일 한 줄. 없으면 누르지 않는 줄로 "없음"만 보인다. */
+/** 지금 할 일: 머리 바 왼쪽의 글자 한 줄(면 없이). 할 일이 있으면 누르면 지금 할 일 화면, 없으면 "없음"만 옅게. */
 function TodoLine({ todo, onPress }: { todo: Todo; onPress: () => void }) {
   const p = usePalette();
   // 묶음 안은 줄을 바꾸지 않는다(큰 글자에서 "밀린 / 일 1건"처럼 끊기지 않게, 붙은 칸 U+00A0).
@@ -307,20 +307,20 @@ function TodoLine({ todo, onPress }: { todo: Todo; onPress: () => void }) {
       <T v="subStrong" style={{ flexShrink: 0 }}>
         지금 할 일
       </T>
-      <T v="sub" c={parts ? 'ink' : 'ink3'} style={{ flex: 1, textAlign: 'right' }} testID="todo-counts">
+      <T v="sub" c={parts ? 'ink' : 'ink3'} style={{ flexShrink: 1 }} lines={1} testID="todo-counts">
         {parts || '없음'}
       </T>
       {parts ? <Chevron color={p.ink4} /> : null}
     </>
   );
-  if (!parts) return <View style={[st.todo, { backgroundColor: p.tint }]} testID="todo">{body}</View>;
+  if (!parts) return <View style={st.todo} testID="todo">{body}</View>;
   return (
     <Pressable
       testID="todo"
       accessibilityRole="button"
       accessibilityLabel={`지금 할 일: ${parts.replace(/\u00A0/g, ' ')}`}
       onPress={onPress}
-      style={({ pressed }) => [st.todo, { backgroundColor: pressed ? p.sunken : p.tint }]}
+      style={({ pressed }) => [st.todo, pressed && { opacity: 0.6 }]}
     >
       {body}
     </Pressable>
@@ -569,7 +569,7 @@ const st = StyleSheet.create({
   topBtn: { minWidth: size.hit, minHeight: size.hit, paddingHorizontal: space.s3, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   lines: { paddingHorizontal: space.s5, gap: space.s2, paddingBottom: space.s2 },
   pcLine: { minHeight: size.hit, flexDirection: 'row', alignItems: 'center', gap: space.s3, marginHorizontal: -space.s2, paddingHorizontal: space.s2, borderRadius: radius.md },
-  todo: { flex: 1, minHeight: size.hit, flexDirection: 'row', alignItems: 'center', gap: space.s3, paddingHorizontal: space.s4, paddingVertical: space.s2, borderRadius: radius.lg },
+  todo: { flex: 1, minHeight: size.hit, flexDirection: 'row', alignItems: 'center', gap: space.s2, paddingLeft: space.s1 },
   fade: { position: 'absolute', top: 0, left: 0, right: 0 },
   chat: { paddingHorizontal: space.s5, paddingTop: space.s3, paddingBottom: space.s4, gap: space.s4, flexGrow: 1, justifyContent: 'flex-end' },
   msg: { gap: space.s1 },
