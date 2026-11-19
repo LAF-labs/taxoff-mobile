@@ -37,6 +37,10 @@ export interface QueueStore {
   add: (job: Job, note: string, readback?: Readback) => void;
   /** 이 폰에서 남긴 확인 줄(홈 대화 끝에 붙는다) */
   notes: ChatItem[];
+  /** [+] 발급 시트에서 고른 거래처의 세금계산서 카드를 대화에 띄운다 */
+  addCard: (item: ChatItem) => void;
+  /** 이 폰이 띄운 카드를 맡김으로 바꾼다 */
+  markSent: (itemId: string) => void;
   approval: ApprovalSettings;
   /** 승인 시트가 열린 일 */
   sheetJob: Job | null;
@@ -158,6 +162,8 @@ export function QueueProvider({
       jobs,
       last,
       notes,
+      addCard: (item) => setNotes((n) => [...n, item]),
+      markSent: (itemId) => setNotes((n) => n.map((x) => (x.id === itemId && x.kind === 'msg' && x.card ? { ...x, card: { ...x.card, sent: true } } : x))),
       approval: { ...approval, usedToday: used },
       sheetJob: jobs.find((j) => j.id === sheetId && j.gate) ?? null,
       simpleJob: jobs.find((j) => j.id === simpleId) ?? null,

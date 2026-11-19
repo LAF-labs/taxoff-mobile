@@ -83,7 +83,8 @@ export function Field({
             placeholder={placeholder}
             placeholderTextColor={p.ink4}
             maxFontSizeMultiplier={MAX_FONT_SCALE}
-            returnKeyType="done"
+            // 숫자 키보드에는 리턴 키를 붙이지 않는다(iOS 26은 키보드 위에 떠 있는 단추로 그린다). 닫기는 바깥 탭·스크롤로.
+            returnKeyType={KB[mask] === 'number-pad' ? undefined : 'done'}
             autoCorrect={false}
             autoCapitalize="none"
             autoComplete={mask === 'email' ? 'email' : undefined}

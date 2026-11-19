@@ -10,7 +10,13 @@ export interface ChatCard {
   rows: Array<{ label: string; value: string; strong?: boolean }>;
   note?: string;
   /** 폰 대화가 만든 세금계산서 카드면 그 초안. 열린 카드에는 [발급 맡기기]가 붙는다. */
-  draft?: { id: string; counterpartyId: string; amount: number; vat: 'separate' | 'included' | null; item: string | null };
+  draft?: {
+    id: string; counterpartyId: string; amount: number; vat: 'separate' | 'included' | null; item: string | null;
+    /** [+] 발급 시트에서 이 폰이 띄운 카드: 받는 곳의 상호와 등록번호(직접 입력이면 counterpartyId는 빈 글자). edit면 수정 상태로 연다. */
+    phone?: { name: string; bizNo: string; edit?: boolean; /** 모델 카드에서 거래처를 다시 골라 띄웠으면 그 카드 id(맡기면 그 카드도 맡김으로) */ draftId?: string };
+  };
+  /** 이 폰이 띄운 카드를 맡겼다(단추 없이 값만) */
+  sent?: boolean;
   /** 찍어 보낸 증빙 사진: 비율·흐린 미리보기. pending이면 원본이 아직 이 폰 보관함(outbox)에 있다(msgId로 연다). */
   photo?: { thumb: Thumb; msgId?: string };
 }

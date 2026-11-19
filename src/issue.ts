@@ -83,3 +83,14 @@ export function searchCounterparties(all: Counterparty[], q: string): Counterpar
 export function findDuplicate(today: IssuedToday[], counterpartyId: string, total: number): IssuedToday | null {
   return today.find((d) => d.counterpartyId === counterpartyId && d.total === total) ?? null;
 }
+
+/**
+ * 발급 시트의 거래처 목록 순서: 최근 발급이 앞, 같으면 자주 발급한 곳, 그다음은 받은 순서 그대로.
+ * PC 사본은 이미 "최근 발급 → 발급 건수 → 상호" 순으로 오므로(PC phone-copy.ts) 사본 순서를 지킨다.
+ */
+export function orderedCounterparties(all: Counterparty[]): Counterparty[] {
+  return all
+    .map((c, i) => ({ c, i, day: c.lastAt ? Math.floor(c.lastAt / 86_400_000) : -1 }))
+    .sort((a, b) => b.day - a.day || b.c.issued - a.c.issued || a.i - b.i)
+    .map((x) => x.c);
+}

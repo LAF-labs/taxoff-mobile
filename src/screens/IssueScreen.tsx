@@ -4,14 +4,13 @@
 // - 금액: [부가세 별도|포함] 아래 숫자 칸, 그 밑 한 줄에 공급가액·세액·합계(세액 = 공급가액 10% 버림).
 // - 바닥 주요 단추는 PC 상태를 따른다: 켜짐 [홈택스에서 준비] · 꺼짐 [PC 켜지면 준비하기] · 오래 꺼짐 단추 없이 황토 한 줄.
 // - 경고는 한 번에 하나(Notice): 오늘 같은 곳 같은 금액 > 처음 거래하는 곳 > 폰 승인 남은 건수.
-// - PC 사본에서 고른 거래처는 폰 발급 명령(cmd.run)으로 맡긴다: [발급 맡기기], 승인은 PC 승인 바, 작성일자는 오늘(src/phoneCmd.ts).
+// - PC 사본에서 고른 거래처는 폰 발급 명령(cmd.run)으로 맡긴다: [발급 맡기기], 작성일자는 오늘(src/phoneCmd.ts).
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { clock } from '../chat';
 import { findDuplicate, recentCounterparties, searchCounterparties, splitAmount, type Counterparty, type IssuedToday, type VatMode } from '../issue';
-import type { Job } from '../queue';
 import { counterpartiesOf } from '../net/pcCopy';
-import { useEntrust } from '../entrust';
+import { useIssueSubmit, useViaPc } from '../issueSubmit';
 import { kstDay } from '../phoneCmd';
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
@@ -49,7 +48,8 @@ export function IssueScreen({
 }) {
   const s = useSession();
   const queue = useQueue();
-  const entrust = useEntrust();
+  const submitIssue = useIssueSubmit();
+  const isViaPc = useViaPc();
   // 저장소에 거래처가 없으면 PC가 넘긴 사본(AppData.pcCopy)의 거래처를 쓴다. 사본도 없으면 지금처럼 빈 목록.
   const copy = s.data.pcCopy ?? null;
   const fromCopy = useMemo(() => (copy ? counterpartiesOf(copy) : null), [copy]);
@@ -102,8 +102,8 @@ export function IssueScreen({
   const firstTime = manual || (cp?.issued ?? 0) === 0;
   const online = s.pc === 'online';
   const stale = s.pc === 'stale';
-  // PC 사본에서 고른 거래처면 폰 발급 명령(cmd.run)으로 맡긴다: 거래처는 ref만, 승인은 PC 승인 바, 작성일자는 오늘(한국 시간)
-  const viaPc = !!cp && !manual && !!fromCopy?.some((c) => c.id === cp.id) && !!s.data.pair;
+  // PC 사본에서 고른 거래처면 폰 발급 명령(cmd.run)으로 맡긴다: 거래처는 ref만, 작성일자는 오늘(한국 시간)
+  const viaPc = !manual && isViaPc(cp);
   const ready = !!who && (cp ? true : bizNo.replace(/\D/g, '').length === 10) && a.supply > 0 && /^\d{4}-\d{2}-\d{2}$/.test(day) && !dup && !closed;
 
   let notice = null;
@@ -137,28 +137,17 @@ export function IssueScreen({
   const inexactAsNotice = !!inexactLine && !notice;
   if (inexactAsNotice) notice = <Notice testID="issue-inexact">{inexactLine}</Notice>;
 
-  const submitToPc = async () => {
-    if (!cp || saving) return;
+  const submit = async () => {
+    if (saving) return;
     setSaving(true);
     setSaveFailed(false);
-    const ok = await entrust({ cp, supply: a.supply, total: a.total, item, draftId: pre?.draftId });
+    const ok = await submitIssue({ cp: manual ? null : cp, name, bizNo, item, day, a, draftId: pre?.draftId });
     setSaving(false);
     if (!ok) return setSaveFailed(true);
     onSubmitted();
   };
 
-  const submit = () => {
-    if (viaPc) return void submitToPc();
-    const job: Job = { id: `job-${Date.now()}`, title: `${who} 세금계산서`, amount: a.total, createdAt: Date.now(), state: online ? 'running' : 'entrusted' };
-    // PC가 되읽을 값(시연 저장소가 승인 요청을 만들 때만 쓴다). 금액은 원 단위 숫자 글자.
-    const readback = {
-      counterpartBizNo: cp?.bizNo ?? bizNo, counterpartName: who, counterpartEmail: '', itemName: item, itemCount: '1',
-      supplyAmount: String(a.supply), taxAmount: String(a.tax), totalAmount: String(a.total), issueDate: day, remark: '', receiptType: '청구',
-    };
-    queue.add({ ...job }, online ? `${job.title} ${won(a.total)}을 홈택스에서 준비하고 있어요` : `${job.title} ${won(a.total)}을 맡겼어요. PC 켜지면 준비해요`, online ? { supplierBizNo: '', supplierName: '', ...readback } : undefined);
-    onSubmitted();
-  };
-
+  // 동작은 폼 맨 아래 제자리에 둔다(바닥 고정·키보드 위로 따라 올라가지 않는다). 키보드가 열리면 입력 칸이 보이게 스크롤만 한다.
   const footer = stale ? (
     <T v="sub" c="attention" center testID="issue-stale">
       PC를 켜면 다시 맡길 수 있어요
@@ -175,17 +164,12 @@ export function IssueScreen({
           폰에 저장하지 못해 맡기지 않았어요. 다시 눌러 주세요
         </T>
       )}
-      {viaPc && (
-        <T v="meta" c="ink3" center testID="issue-pc-approve">
-          {queue.approval.attest === 'none' ? 'PC가 홈택스에서 준비하고 승인을 받아요' : '승인할 때가 되면 알려 드릴게요'}
-        </T>
-      )}
-      <Button testID="issue-submit" label={viaPc ? (online ? '발급 맡기기' : 'PC 켜지면 맡기기') : online ? '홈택스에서 준비' : 'PC 켜지면 준비하기'} onPress={submit} disabled={!ready || saving} />
+      <Button testID="issue-submit" label={viaPc ? (online ? '발급 맡기기' : 'PC 켜지면 맡기기') : online ? '홈택스에서 준비' : 'PC 켜지면 준비하기'} onPress={() => void submit()} disabled={!ready || saving} />
     </>
   );
 
   return (
-    <Screen title="세금계산서 발급" onBack={() => setPhase('pick')} backLabel="거래처 다시 고르기" testID="issue-form" footer={footer}>
+    <Screen title="세금계산서 발급" onBack={() => setPhase('pick')} backLabel="거래처 다시 고르기" testID="issue-form">
       {notice}
       <View style={{ gap: space.s2 }}>
       <Group title="받는 곳">
@@ -255,6 +239,7 @@ export function IssueScreen({
           </View>
         </Group>
       </View>
+      <View style={st.actions}>{footer}</View>
     </Screen>
   );
 }
@@ -362,6 +347,7 @@ function lastLine(c: Counterparty): string {
 const st = StyleSheet.create({
   warn: { borderRadius: radius.md, paddingVertical: space.s3, paddingHorizontal: space.s4, gap: space.s3 },
   warnActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s2 },
+  actions: { gap: space.s2, paddingTop: space.s2 },
   sums: { paddingHorizontal: space.s4, paddingTop: space.s1, paddingBottom: space.s3, gap: space.s1 },
   sum: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'baseline', gap: space.s3 },
   sumValue: { minWidth: 120, textAlign: 'right' },
