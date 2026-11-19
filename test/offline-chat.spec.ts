@@ -43,6 +43,8 @@ function fakeGateway(outputs: Array<Array<Record<string, unknown>>>, status = 20
     if (status !== 200) out = { error };
     else if (url.endsWith('/v1/run-tokens')) out = { runToken: `rt_${'x'.repeat(30)}` };
     else if (url.endsWith('/v1/usage')) out = { usedKrw: 3, limitKrw: 50, resetAt: 1, tier: 'trial' };
+    // 판정(ADR-057): 답이 없으면 반응 없이 늘 하던 대로 답한다
+    else if (url.endsWith('/v1/decide')) out = { answers: [] };
     else out = { status: 'completed', output: (outputs.shift() ?? []).map((item) => ({ item, tag: tag() })) };
     return { status, text: async () => JSON.stringify(out) };
   };
@@ -94,7 +96,7 @@ describe('폰 대화(PC 꺼짐): 고정 사본 → 가짜 게이트웨이', () =
     );
     const r = await chat.send('한빛전자 55만원 끊어줘');
     assert.equal(r.unavailable, undefined, JSON.stringify(r));
-    const text = JSON.stringify(gw.calls[1]!.body).replace(/\\n/g, '\n');
+    const text = JSON.stringify(gw.calls.find((c) => c.url.endsWith('/v1/respond'))!.body).replace(/\\n/g, '\n');
     assert.match(text, /\[사실\]\nPC: 켜짐\n/);
     assert.match(text, /앱 판단: 세금계산서 발급 요청/);
     const card = r.items.find((x) => x.kind === 'msg' && x.card);
@@ -122,12 +124,13 @@ describe('폰 대화(PC 꺼짐): 고정 사본 → 가짜 게이트웨이', () =
     const items = await chat.items();
     assert.deepEqual(items.map((x) => x.kind === 'msg' && [x.from, x.text]), [['me', '한빛전자에 55만원 세금계산서 끊어줘'], ['pc', '한빛전자 카드를 만들었어요. 맡기면 PC를 켰을 때 시작해요.']]);
 
-    // 나간 것: 실행 토큰 1번 + respond 2번, 모두 운영 origin, 모두 기기 인증 헤더
-    assert.deepEqual(gw.calls.map((c) => c.url.slice(ORIGIN.length)), ['/v1/run-tokens', '/v1/respond', '/v1/respond']);
+    // 나간 것: 실행 토큰 1번 + 판정 1번(ADR-057, 가린 글) + respond 2번, 모두 운영 origin, 모두 기기 인증 헤더
+    assert.deepEqual(gw.calls.map((c) => c.url.slice(ORIGIN.length)), ['/v1/run-tokens', '/v1/decide', '/v1/respond', '/v1/respond']);
+    assert.equal((gw.calls[1]!.body as { bundleId: string }).bundleId, 'chat_route_v1');
     for (const c of gw.calls) assert.ok(c.headers.Authorization?.startsWith('DPoP ') && c.headers.DPoP, c.url);
     const sent = JSON.stringify(gw.calls.map((c) => c.body));
     for (const raw of ['한빛전자', '220-81-62517', '55만원', '550000', '500000', '율무상회', '123-45-67890']) assert.ok(!sent.includes(raw), `원값이 나갔다: ${raw}`);
-    assert.equal((gw.calls[1]!.body as { toolset: string }).toolset, 'chat_phone');
+    assert.equal((gw.calls[2]!.body as { toolset: string }).toolset, 'chat_phone');
     // 봉인 저장에 넘기는 것도 원값 없는 가린 글 + 화면 문장뿐이다(파일은 기기 키로 봉인된다)
     assert.ok(saved());
 

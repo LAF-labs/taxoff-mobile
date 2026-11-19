@@ -3,7 +3,7 @@
 // - 모델 공급사 키는 게이트웨이에만 있다. 폰은 기기 토큰(chat 범위, 유료·체험 중에만)과 요청별 DPoP만 붙인다.
 // - 가림·컨텍스트 조립·도구 루프·답 검사는 코어가 한다(PC와 같은 함수). 이 파일은 연결과 화면 모양만 맡는다.
 // - Expo 모듈을 부르지 않는다(시험이 Node에서 그대로 돈다). 기기 쪽 포트는 device.ts가 만든다.
-import { PhoneChat, PhoneGateway, type ChatMessage, type PhoneChatPorts, type PhoneCopy, type PhoneDraft, type PhoneGatewayOptions, type PhoneScreen, type PhoneShow, type PhoneTurnResult } from '@sax/chat-core';
+import { PhoneChat, PhoneGateway, type ChatMessage, type ReactionId, type PhoneChatPorts, type PhoneCopy, type PhoneDraft, type PhoneGatewayOptions, type PhoneScreen, type PhoneShow, type PhoneTurnResult } from '@sax/chat-core';
 import type { ChatCard, ChatItem } from '../chat.ts';
 import { maskingSelfCheck, type SelfCheck } from './selfcheck.ts';
 
@@ -34,6 +34,8 @@ export interface OfflineReply {
   screens: PhoneScreen[];
   /** 모델을 부르지 못했다(한도·연결·정지 등). text는 사장님에게 보일 한 줄이다. */
   unavailable?: { code: string; text: string; retry: boolean };
+  /** 판정이 반응만 하라고 했다(ADR-057). 답 말은 없고 내 말에 이 반응이 붙었다(기록에 이미 있다). */
+  reaction?: ReactionId;
 }
 
 const won = (n: number) => `${n.toLocaleString('en-US')}원`;
@@ -64,7 +66,7 @@ export function cardOf(s: Exclude<PhoneShow, { type: 'screen' }>, pcOnline = fal
 
 /** 코어 메시지 → 홈 대화 줄. 앱 답은 'pc' 쪽 말풍선에 그린다. 이 대화는 이 폰에만 있어서 'PC 받음' 표시는 없다. */
 export function itemOf(m: ChatMessage): ChatItem {
-  return m.from === 'user' ? { kind: 'msg', id: m.id, from: 'me', at: m.at, text: m.text } : { kind: 'msg', id: m.id, from: 'pc', via: 'phone', at: m.at, text: m.text };
+  return m.from === 'user' ? { kind: 'msg', id: m.id, from: 'me', at: m.at, text: m.text, ...(m.reaction ? { reaction: m.reaction } : {}) } : { kind: 'msg', id: m.id, from: 'pc', via: 'phone', at: m.at, text: m.text };
 }
 
 export class OfflineChat {
@@ -72,11 +74,13 @@ export class OfflineChat {
   private readonly gateway: PhoneGateway;
   private readonly ports: OfflinePorts;
   private check: Promise<SelfCheck> | null = null;
+  /** 이번 턴 내 말에 반응이 붙었을 때(일을 맡긴 말은 답보다 먼저 온다). 홈 대화가 보내는 중인 말에 바로 단다. */
+  reactionSink: ((r: ReactionId) => void) | null = null;
 
   constructor(ports: OfflinePorts) {
     this.ports = ports;
     this.gateway = new PhoneGateway({ origin: ports.origin, fetch: ports.fetch, authHeaders: ports.authHeaders });
-    this.core = new PhoneChat({ model: this.gateway, store: ports.store, copy: ports.copy, now: ports.now, newId: ports.newId, randomHex: ports.randomHex, pcOnline: () => ports.pcOnline?.() ?? false });
+    this.core = new PhoneChat({ model: this.gateway, store: ports.store, copy: ports.copy, now: ports.now, newId: ports.newId, randomHex: ports.randomHex, pcOnline: () => ports.pcOnline?.() ?? false, onReaction: (r) => this.reactionSink?.(r) });
   }
 
   /** 가림 자가 점검(앱을 연 뒤 한 번). 통과하지 못하면 send는 모델을 부르지 않는다. */
@@ -115,6 +119,7 @@ export class OfflineChat {
 
   private toReply(r: PhoneTurnResult): OfflineReply {
     if (r.kind === 'unavailable') return { items: [], chips: [], drafts: [], screens: [], unavailable: { code: r.code, text: r.text, retry: r.retry } };
+    if (r.kind === 'reaction') return { items: [], chips: [], drafts: [], screens: [], reaction: r.reaction };
     const at = this.ports.now();
     const items: ChatItem[] = [];
     r.show.forEach((s, i) => {
