@@ -69,6 +69,7 @@ const PLAIN: Record<JobState, string> = {
 /** 카드 둘째 줄: 지금 상태 한 문장 */
 export function statusLine(job: Job, state: JobState): string {
   const r: RunView | undefined = job.run;
+  if (job.wait === 'pcBusy') return '다른 일이 끝나면 할게요';
   if (r?.kind === 'refused') return REFUSED[r.reason];
   if (r?.kind === 'stopped') return '중지됐어요';
   if (state === 'needPc' && job.reason) return NEED_PC[job.reason];

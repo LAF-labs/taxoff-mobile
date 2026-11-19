@@ -526,7 +526,8 @@ const SCREENS: Record<
   'queue-refused': () => ({
     session: fake(paired(), 'online'),
     jobs: [
-      { ...runJob({ kind: 'refused', reason: 'pc_busy', startedAt: T0 }, { state: 'needPc' }), pcOnly: true },
+      { id: 'w1', title: '서울청과 세금계산서', amount: 880_000, createdAt: T0, state: 'phoneWaiting', wait: 'pcBusy', pcOnly: true },
+      { ...runJob({ kind: 'refused', reason: 'counterparty_unknown', startedAt: T0 }, { state: 'needPc' }), pcOnly: true },
       { ...runJob({ kind: 'stopped', step: 'login', reason: 'pcStopped', startedAt: T0 }, { title: '새봄꽃집 세금계산서', amount: 330_000, state: 'needPc' }), id: 'r2', pcOnly: true },
       JOBS[3]!,
     ],

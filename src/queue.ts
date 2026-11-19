@@ -40,6 +40,8 @@ export interface Job {
   run?: RunView;
   /** 폰 발급 명령(cmd.run, pc_only): 승인·중지·예약은 PC에서. 폰 진행 화면은 닫기만 둔다. */
   pcOnly?: boolean;
+  /** 기다리는 까닭. pcBusy: PC가 다른 일 중이라 끝나면 저절로 이어서 맡긴다 */
+  wait?: 'pcBusy';
 }
 
 /** 다 끝난 일 한 줄(빈 화면에 보인다) */

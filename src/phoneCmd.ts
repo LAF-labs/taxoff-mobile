@@ -27,6 +27,27 @@ export interface PhoneCmd {
   code?: string;
   attempt?: number;
   result?: RunResult;
+  /** PC가 다른 일 중이라 거절(pc_busy)했을 때 다시 보낼 시각. 그 전까지는 기다리는 일로 보인다. */
+  retryAt?: number;
+  /** 다시 보낸 횟수 */
+  retries?: number;
+}
+
+/** PC가 다른 일 중일 때 다시 보내는 간격과, 그만두는 때(맡긴 지 72시간, 밀린 일 만료와 같다) */
+export const BUSY_RETRY_MS = 30_000;
+export const BUSY_GIVE_UP_MS = 72 * 3_600_000;
+
+/** PC가 다른 일 중이라 받지 않았고 아직 다시 보낼 수 있는 명령. 끝난 것이 아니다: 저절로 이어서 한다. */
+export function busyWaiting(c: PhoneCmd, now = Date.now()): boolean {
+  return !c.pcOld && c.ack === 'rejected' && c.reason === 'pc_busy' && now - c.createdAt < BUSY_GIVE_UP_MS;
+}
+
+/** 다시 보낼 때가 된 명령 */
+export const retryDue = (c: PhoneCmd, now = Date.now()): boolean => busyWaiting(c, now) && (c.retryAt ?? 0) <= now;
+
+/** 다시 보내기 전에: 답을 지우고 작성일자를 오늘로(자정을 넘겼으면 PC가 input_invalid로 받지 않는다). 같은 cmdId를 쓴다(PC는 거절한 cmdId를 적어 두지 않는다). */
+export function forRetry(c: PhoneCmd, now = Date.now()): PhoneCmd {
+  return { ...c, ack: undefined, reason: undefined, retryAt: undefined, retries: (c.retries ?? 0) + 1, req: { ...c.req, day: kstDay(now) } };
 }
 
 /** 오늘(한국 시간) YYYY-MM-DD */
@@ -41,11 +62,12 @@ export function issueRequest(p: { ref: string; supply: number; item: string; now
 /** 같은 runId로 다시 붙은 duplicate는 거절이 아니다(앞서 보낸 명령이 이미 돌고 있다). */
 export const isReattach = (a: CmdAckBody): boolean => a.state === 'rejected' && a.reason === 'duplicate' && !!a.runId;
 
-export function applyAck(c: PhoneCmd, a: CmdAckBody): PhoneCmd {
+export function applyAck(c: PhoneCmd, a: CmdAckBody, now = Date.now()): PhoneCmd {
   if (a.cmdId !== c.cmdId) return c;
   if (isReattach(a)) return { ...c, ack: c.ack && c.ack !== 'rejected' ? c.ack : 'pc_only', runId: a.runId, reason: undefined };
   // 이미 진행 중인 명령에 늦게 온 거절은 덮지 않는다
   if (a.state === 'rejected' && c.phase) return c;
+  if (a.state === 'rejected' && a.reason === 'pc_busy') return { ...c, ack: 'rejected', reason: 'pc_busy', runId: a.runId ?? c.runId, retryAt: now + BUSY_RETRY_MS };
   return { ...c, ack: a.state, runId: a.runId ?? c.runId, reason: a.state === 'rejected' ? a.reason : undefined };
 }
 
@@ -64,8 +86,9 @@ export function applyEvent(c: PhoneCmd, e: RunEventBody): PhoneCmd {
 }
 
 /** 더 기다릴 것이 없는 명령(라이브 세션을 붙잡고 있지 않는다) */
-export function settled(c: PhoneCmd): boolean {
+export function settled(c: PhoneCmd, now = Date.now()): boolean {
   if (c.pcOld) return true;
+  if (busyWaiting(c, now)) return false;
   if (c.ack === 'rejected') return true;
   if (c.phase === 'done') return !!c.result || c.code !== 'in_doubt';
   if (c.phase === 'stopped') return c.code !== 'in_doubt';
@@ -118,9 +141,11 @@ export function runViewOf(c: PhoneCmd): RunView | null {
 
 /** 밀린 일·대화 카드가 보는 일 한 건 */
 export function jobOf(c: PhoneCmd): Job {
-  const run = runViewOf(c);
   const title = `${c.cpName} 세금계산서`;
   const base = { id: `cmd-${c.cmdId}`, title, amount: c.total, createdAt: c.createdAt, pcOnly: true };
+  // PC가 다른 일 중: 기다리는 일로 두고 저절로 다시 보낸다(취소할 수 있다, PC는 아무것도 시작하지 않았다)
+  if (busyWaiting(c)) return { ...base, state: 'phoneWaiting', wait: 'pcBusy' };
+  const run = runViewOf(c);
   if (!run) return { ...base, state: 'entrusted' };
   const state: Job['state'] = run.kind === 'done' ? 'done' : run.kind === 'verify' ? 'verify' : run.kind === 'refused' || run.kind === 'stopped' ? 'needPc' : 'running';
   return { ...base, state, run };

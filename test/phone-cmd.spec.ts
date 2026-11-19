@@ -21,7 +21,7 @@ const { driveCmds, trimCmds } = await import('../src/net/issueLive.ts');
 const { PHONE_CAPS } = await import('../src/net/pcCopy.ts');
 const { STOP_COPY } = await import('../src/run.ts');
 const { actionFor } = await import('../src/queue.ts');
-const { REJECT_LINE, applyAck, applyEvent, issueRequest, jobOf, kstDay, runViewOf, settled } = await import('../src/phoneCmd.ts');
+const { BUSY_GIVE_UP_MS, BUSY_RETRY_MS, REJECT_LINE, applyAck, applyEvent, busyWaiting, issueRequest, jobOf, kstDay, runViewOf, settled } = await import('../src/phoneCmd.ts');
 
 const T0 = Date.parse('2026-11-17T01:00:00Z');
 const cmd = (o: Partial<PhoneCmd> = {}): PhoneCmd => ({
@@ -87,19 +87,20 @@ describe('cmd.ack · run.event → 진행 화면', () => {
     assert.match(STOP_COPY.pcStopped.line, /아무것도 발급하지 않았어요/);
   });
   it('거절 이유는 한 줄 문구로, 같은 runId의 duplicate는 다시 붙기', () => {
-    for (const reason of ['playbook_unavailable', 'input_invalid', 'counterparty_unknown', 'pc_busy', 'hometax_paused'] as const) {
+    for (const reason of ['playbook_unavailable', 'input_invalid', 'counterparty_unknown', 'hometax_paused'] as const) {
       const c = applyAck(cmd(), { cmdId: cmd().cmdId, state: 'rejected', reason });
       assert.deepEqual(runViewOf(c), { kind: 'refused', reason, startedAt: T0 });
       assert.ok(REJECT_LINE[reason].length > 0);
       assert.equal(settled(c), true);
     }
+    assert.ok(REJECT_LINE.pc_busy.length > 0);
     const again = applyAck(cmd({ ack: 'pc_only', runId: 'run1', phase: 'readback', at: T0 }), { cmdId: cmd().cmdId, state: 'rejected', reason: 'duplicate', runId: 'run1' });
     assert.equal(again.ack, 'pc_only');
     assert.equal(again.phase, 'readback');
     assert.equal(settled(again), false);
   });
   it('끝난 명령은 최근 20개만 남기고 끝나지 않은 명령은 지우지 않는다', () => {
-    const done = Array.from({ length: 25 }, (_, i) => cmd({ cmdId: `D${i}`, createdAt: T0 + i, ack: 'rejected', reason: 'pc_busy' }));
+    const done = Array.from({ length: 25 }, (_, i) => cmd({ cmdId: `D${i}`, createdAt: T0 + i, ack: 'rejected', reason: 'input_invalid' }));
     const open = cmd({ cmdId: 'OPEN', createdAt: 0 });
     const kept = trimCmds([open, ...done]);
     assert.equal(kept.length, 21);
@@ -179,7 +180,7 @@ describe('라이브 세션 구동(mock)', () => {
   });
   it('끝난 명령만 있으면 아무것도 보내지 않는다', async () => {
     const m = mockChannel(() => []);
-    assert.equal(await driveCmds(m.ch as never, [CAP.issue], store([cmd({ ack: 'rejected', reason: 'pc_busy' })]).io, 5000), 'none');
+    assert.equal(await driveCmds(m.ch as never, [CAP.issue], store([cmd({ ack: 'rejected', reason: 'input_invalid' })]).io, 5000), 'none');
     assert.equal(m.sent.length, 0);
   });
   it('세션이 끊기면 멈춘다(다음 연결 때 다시 보낸다)', async () => {
@@ -194,7 +195,7 @@ describe('라이브 세션 구동(mock)', () => {
 
 describe('밀린 일: 거절·중지된 폰 발급 명령', () => {
   it('끝난 거절·중지 줄은 [치우기]가 있다. 아직 안 보낸 명령은 [취소], 확인 필요는 [자세히]', () => {
-    const refused = jobOf(applyAck(cmd({ sentAt: T0 }), { cmdId: cmd().cmdId, state: 'rejected', reason: 'pc_busy' }));
+    const refused = jobOf(applyAck(cmd({ sentAt: T0 }), { cmdId: cmd().cmdId, state: 'rejected', reason: 'counterparty_unknown' }));
     assert.equal(refused.state, 'needPc');
     assert.equal(actionFor(refused, 'needPc')?.key, 'dismiss');
     const stopped = jobOf(applyEvent(applyAck(cmd({ sentAt: T0 }), { cmdId: cmd().cmdId, state: 'pc_only', runId: 'run1' }), { runId: 'run1', event: 'phase', at: T0 + 1, phase: 'stopped' }));
@@ -206,5 +207,38 @@ describe('밀린 일: 거절·중지된 폰 발급 명령', () => {
   });
   it('폰 승인 한도처럼 PC 앞에서 해야 하는 일(run 없음)에는 동작이 없다', () => {
     assert.equal(actionFor({ id: 'j', title: 't', amount: 1, createdAt: T0, state: 'needPc', reason: 'dailyLimit' }, 'needPc'), null);
+  });
+});
+
+describe('PC가 다른 일 중(pc_busy): 저절로 이어서 한다', () => {
+  it('거절이 아니라 기다리는 일이고, 30초 뒤 다시 보낸다. 72시간이 지나면 그만둔다', () => {
+    const now = T0 + 60_000;
+    const c = applyAck(cmd({ sentAt: T0 }), { cmdId: cmd().cmdId, state: 'rejected', reason: 'pc_busy' }, now);
+    assert.equal(c.retryAt, now + BUSY_RETRY_MS);
+    assert.equal(busyWaiting(c, now), true);
+    assert.equal(settled(c, now), false);
+    assert.equal(settled(c, T0 + BUSY_GIVE_UP_MS), true);
+  });
+  it('밀린 일에서는 기다리는 일, [취소]만 있다', () => {
+    const j = jobOf(applyAck(cmd({ sentAt: T0, createdAt: Date.now() }), { cmdId: cmd().cmdId, state: 'rejected', reason: 'pc_busy' }));
+    assert.equal(j.state, 'phoneWaiting');
+    assert.equal(j.wait, 'pcBusy');
+    assert.equal(j.run, undefined);
+    assert.equal(actionFor(j, 'phoneWaiting')?.key, 'cancel');
+  });
+  it('세션 중에 다시 보낼 때가 되면 같은 cmdId, 오늘 작성일자로 다시 보내고 이어서 끝난다', async () => {
+    let clock = T0;
+    const m = mockChannel((sent) =>
+      sent.length === 1
+        ? [env('cmd.ack', { cmdId: cmd().cmdId, state: 'rejected', reason: 'pc_busy' })]
+        : [env('cmd.ack', { cmdId: cmd().cmdId, state: 'pc_only', runId: 'run2' }), env('run.event', { runId: 'run2', event: 'phase', at: clock, phase: 'done', result: { approvalNo: 'A2', total: 1_353_005 } })],
+    );
+    const s = store([cmd()]);
+    const r = await driveCmds(m.ch as never, [CAP.issue], { ...s.io, now: () => (clock += 5_000) }, 10 * 60_000);
+    assert.equal(r, 'settled');
+    assert.equal(m.sent.length, 2);
+    assert.equal((m.sent[1]!.body as { cmdId: string }).cmdId, cmd().cmdId);
+    assert.equal(s.get()[0]!.retries, 1);
+    assert.equal(s.get()[0]!.phase, 'done');
   });
 });
