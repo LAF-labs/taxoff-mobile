@@ -392,6 +392,15 @@ const SCREENS: Record<
   'run-pc-approve': () => pcRun({ phase: 'approve' }),
   'run-pc-in-doubt': () => pcRun({ phase: 'verify', code: 'in_doubt', attempt: 2 }),
   'run-pc-stopped': () => pcRun({ phase: 'stopped' }),
+  // PC가 사람 차례로 멈춤(run.event 'turn'): 공동인증서 로그인이 안 돼 간편인증 화면을 열어 둠, 모르는 까닭
+  'run-pc-turn-simple': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_auth' }),
+  'run-pc-turn-other': () => pcRun({ phase: 'readback', turn: true, code: 'turn.other' }),
+  'home-chat-pc-turn': () => ({
+    session: fake({ ...copyData(), cmds: [CMD({ phase: 'login', turn: true, code: 'login.simple_auth' })] }, 'online'),
+    notes: [{ kind: 'run', id: 'run-cmd-G1', at: now - 90_000, jobId: 'cmd-G1' }],
+    node: <Main chat={CHAT} live />,
+  }),
+  'queue-pc-turn': () => ({ session: fake({ ...copyData(), cmds: [CMD({ phase: 'login', turn: true, code: 'login.simple_auth' })] }, 'online'), node: <QueueScreen onDone={noop} onConnection={noop} onOpen={noop} now={now} /> }),
   'run-pc-done': () => pcRun({ phase: 'done', result: { approvalNo: '20261117-41000000-12345678', total: 1_353_000, emailSent: true } }),
   'run-pc-refused': () => pcRun({ ack: 'rejected', reason: 'counterparty_unknown', runId: undefined }),
   'run-pc-busy': () => pcRun({ ack: 'rejected', reason: 'pc_busy', runId: undefined }),
