@@ -47,6 +47,13 @@ export function useOfflineChat(): OfflineChatView {
   /** 답을 기다리는 동안 보이는 내 말(턴이 끝나면 코어 기록의 줄로 바뀐다) */
   const [pending, setPending] = useState<ChatItem | null>(null);
 
+  // 판정이 고른 반응은 답보다 먼저 온다: 보내는 중인 내 말에 바로 단다(ADR-057)
+  useEffect(() => {
+    if (!chat) return;
+    chat.reactionSink = (reaction) => setPending((p) => (p && p.kind === 'msg' ? { ...p, reaction } : p));
+    return () => void (chat.reactionSink = null);
+  }, [chat]);
+
   useEffect(() => {
     if (!chat) return;
     let live = true;
