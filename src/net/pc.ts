@@ -16,6 +16,7 @@ import { PHONE_CAPS, newerCopy, receiveCopy } from './pcCopy';
 import { driveCmds, trimCmds } from './issueLive';
 import { enrollPx } from './pxLive';
 import type { PxDevice } from '../approvalKey';
+import { replaying, tapping } from './hold';
 import { causeOf, pushWhy, whyCode } from './pcWhy';
 
 /** queued: PC는 꺼져 있고 릴레이 큐에 맡겼다. stale: PC가 오래 꺼져 있어 유효한 번들이 없다(맡길 수 없다). */
@@ -118,13 +119,16 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
     await d.update((x) => ({ ...x, lastSeenPc: Date.now() }));
     d.onLive?.();
     // PC는 세션을 열자마자 사본을 보낸다. 보관함을 비우기 전에 받는다(비우는 동안 온 다른 봉투는 버려진다).
-    const copy = await receiveCopy(s.channel, s.peerHello.capabilities).catch(() => null);
+    // 사본을 기다리고 보관함을 비우는 동안 온 발급 명령 봉투(승인 요청·진행)는 모아 두었다가 발급 명령 처리에 넘긴다(net/hold.ts)
+    const held: Parameters<typeof s.channel.sendRaw>[0][] = [];
+    const early = tapping(s.channel, held);
+    const copy = await receiveCopy(early, s.peerHello.capabilities).catch(() => null);
     if (copy) await d.update((x) => ({ ...x, pcCopy: newerCopy(x.pcCopy, copy) }));
     // 승인 키를 알린다(명령을 보내기 전에: PC가 이 폰을 승인 기기로 알아야 cmd.ack가 accepted로 온다)
     const onCopy = (c: PhoneCopyBody) => d.update((x) => ({ ...x, pcCopy: newerCopy(x.pcCopy, c) }));
-    const px = await enrollPx(s.channel, s.peerHello.capabilities, { pairId: pair.pairId, deviceId: d.keys.deviceId, vm: d.keys.vm, px: d.px ?? null, onCopy }).catch(() => null);
+    const px = await enrollPx(early, s.peerHello.capabilities, { pairId: pair.pairId, deviceId: d.keys.deviceId, vm: d.keys.vm, px: d.px ?? null, onCopy }).catch(() => null);
     if (px) await d.update((x) => ({ ...x, px }));
-    const flushed = await flushOutbox(s.channel, d.outbox);
+    const flushed = await flushOutbox(early, d.outbox);
     if (flushed.sent.length) {
       const sent = new Set(flushed.sent);
       await d.update((x) => ({
@@ -134,7 +138,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
       }));
     }
     // 폰 발급 명령: 저장된 cmdId로 보내고(다시 보내도 같은 cmdId), 끝날 때까지 진행을 받는다
-    await driveCmds(s.channel, s.peerHello.capabilities, {
+    await driveCmds(replaying(s.channel, held), s.peerHello.capabilities, {
       cmds: () => d.data().cmds ?? [],
       save: (f) => d.update((x) => ({ ...x, cmds: trimCmds(f(x.cmds ?? [])) })),
       onCopy,
