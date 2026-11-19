@@ -19,7 +19,7 @@ registerHooks({
 });
 
 const { OfflineChat, cardOf, itemOf } = await import('../src/offline/chat.ts');
-const { metaOf } = await import('../src/chat.ts');
+const { bubbleGroup, stampBefore, stampText, stateOf } = await import('../src/chat.ts');
 const { phoneCopyFrom } = await import('../src/offline/copy.ts');
 const { maskingSelfCheck } = await import('../src/offline/selfcheck.ts');
 
@@ -99,7 +99,10 @@ describe('폰 대화(PC 꺼짐): 고정 사본 → 가짜 게이트웨이', () =
     assert.match(text, /앱 판단: 세금계산서 발급 요청/);
     const card = r.items.find((x) => x.kind === 'msg' && x.card);
     assert.ok(card && card.kind === 'msg');
-    assert.equal(card.card?.note, '맡기면 PC가 바로 준비해요');
+    assert.equal(card.card?.note, '발급하기를 누르면 PC가 바로 준비해요');
+    // 부가세를 말하지 않았으면 별도로 둔다(카드에 "정하지 않음"을 쓰지 않는다)
+    if (card.card?.draft?.vat !== undefined) assert.notEqual(card.card.draft.vat, null);
+    assert.ok(!JSON.stringify(card.card).includes('정하지 않음'));
   });
 
   it('카드 만들기: 게이트웨이에는 가린 글과 기기 인증 헤더만 가고, 답과 카드가 홈 대화 줄이 된다', async () => {
@@ -159,17 +162,37 @@ describe('폰 대화(PC 꺼짐): 고정 사본 → 가짜 게이트웨이', () =
 
 describe('폰 대화 줄 표시', () => {
   const at = new Date(2026, 10, 18, 14, 5).getTime();
-  it('폰이 답한 말은 "폰", PC 답은 "PC"로 구분한다(가운데점 없이)', () => {
+  it('폰이 답한 말은 폰 답으로 표시해 둔다', () => {
     const a = itemOf({ id: 'a', from: 'assistant', at, text: '네' } as never);
     assert.equal(a.kind === 'msg' && a.via, 'phone');
-    assert.equal(metaOf(a as never), '폰 오후 2:05');
-    assert.equal(metaOf({ kind: 'msg', id: 'b', from: 'pc', at, text: '네' }), 'PC 오후 2:05');
   });
-  it('내 말은 어디까지 갔는지 붙인다(보내는 중, 못 보냄, PC 켜지면)', () => {
-    const me = (state: 'sending' | 'failed' | 'waiting' | 'sent') => metaOf({ kind: 'msg', id: 'm', from: 'me', at, text: 'x', state });
-    assert.equal(me('sending'), '오후 2:05 보내는 중');
-    assert.equal(me('failed'), '오후 2:05 못 보냈어요');
-    assert.equal(me('waiting'), '오후 2:05 PC 켜지면 보내요');
-    assert.equal(me('sent'), '오후 2:05');
+  it('내 말 아래에는 PC 켜지면 보낼 말에만 한 줄을 쓴다(보내는 중, 못 보냄은 다른 데서 보인다)', () => {
+    const me = (state: 'sending' | 'failed' | 'waiting' | 'sent') => stateOf({ kind: 'msg', id: 'm', from: 'me', at, text: 'x', state });
+    assert.equal(me('sending'), '');
+    assert.equal(me('failed'), '');
+    assert.equal(me('waiting'), 'PC 켜지면 보내요');
+    assert.equal(me('sent'), '');
+  });
+  const m = (id: string, from: 'me' | 'pc', min: number, extra = {}) => ({ kind: 'msg' as const, id, from, at: at + min * 60_000, text: id, ...extra });
+  it('시각 줄은 첫 말 앞, 30분 넘게 떨어진 말 앞, 날짜가 바뀐 말 앞에만 넣는다(Muse)', () => {
+    const items = [m('a', 'me', 0), m('b', 'pc', 1), m('c', 'me', 31), m('d', 'pc', 62), m('e', 'me', 24 * 60)];
+    const now = at + 10 * 60_000;
+    assert.deepEqual(items.map((_, i) => stampBefore(items, i, now)), ['오후 2:05', null, null, '오후 3:07', '11월 19일 오후 2:05']);
+  });
+  it('시각 줄 글자: 오늘은 시각만, 다른 날은 날짜, 다른 해는 해까지', () => {
+    assert.equal(stampText(at, at), '오후 2:05');
+    assert.equal(stampText(at, at + 86_400_000), '11월 18일 오후 2:05');
+    assert.equal(stampText(at, new Date(2027, 0, 2).getTime()), '2026년 11월 18일 오후 2:05');
+  });
+  it('같은 쪽이 2분 안에 잇달아 한 말은 한 묶음, 시각 줄이 끼면 끊는다', () => {
+    const items = [m('a', 'pc', 0), m('b', 'pc', 2), m('c', 'pc', 5), m('d', 'me', 5), m('e', 'me', 40), m('f', 'pc', 40, { via: 'phone' as const })];
+    const g = items.map((_, i) => bubbleGroup(items, i));
+    assert.deepEqual(g.map((x) => x.first), [true, false, true, true, true, true]);
+    assert.deepEqual(g.map((x) => x.last), [false, true, true, true, true, true]);
+  });
+  it('폰 답과 PC 답은 같은 상대라도 묶지 않는다', () => {
+    const items = [m('a', 'pc', 0), m('b', 'pc', 0, { via: 'phone' as const })];
+    assert.equal(bubbleGroup(items, 1).first, true);
+    assert.equal(bubbleGroup(items, 0).last, true);
   });
 });

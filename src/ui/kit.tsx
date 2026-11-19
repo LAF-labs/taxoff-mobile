@@ -288,10 +288,10 @@ export function Replies<K extends string>({
 }
 
 /** 둘 중 하나(두 칸 전환). */
-export function Seg<K extends string>({ options, value, onChange, testID }: { options: Array<{ key: K; label: string }>; value: K | null; onChange: (k: K) => void; testID?: string }) {
+export function Seg<K extends string>({ options, value, onChange, testID, style }: { options: Array<{ key: K; label: string }>; value: K | null; onChange: (k: K) => void; testID?: string; style?: StyleProp<ViewStyle> }) {
   const p = usePalette();
   return (
-    <View style={[st.seg, { backgroundColor: p.tint }]} testID={testID} accessibilityRole="radiogroup">
+    <View style={[st.seg, { backgroundColor: p.tint }, style]} testID={testID} accessibilityRole="radiogroup">
       {options.map((o) => {
         const on = value === o.key;
         return (

@@ -10,10 +10,9 @@ import { StyleSheet, TextInput, View } from 'react-native';
 import { clock } from '../chat';
 import { findDuplicate, recentCounterparties, searchCounterparties, splitAmount, type Counterparty, type IssuedToday, type VatMode } from '../issue';
 import type { Job } from '../queue';
-import { ulid } from '@sax/remote';
-import { chatCopyOf, counterpartiesOf } from '../net/pcCopy';
-import { offlineChat } from '../offline/device';
-import { issueRequest, kstDay, type PhoneCmd } from '../phoneCmd';
+import { counterpartiesOf } from '../net/pcCopy';
+import { useEntrust } from '../entrust';
+import { kstDay } from '../phoneCmd';
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
 import { MAX_FONT_SCALE, radius, size, space, textScale, type, usePalette } from '../theme';
@@ -50,6 +49,7 @@ export function IssueScreen({
 }) {
   const s = useSession();
   const queue = useQueue();
+  const entrust = useEntrust();
   // 저장소에 거래처가 없으면 PC가 넘긴 사본(AppData.pcCopy)의 거래처를 쓴다. 사본도 없으면 지금처럼 빈 목록.
   const copy = s.data.pcCopy ?? null;
   const fromCopy = useMemo(() => (copy ? counterpartiesOf(copy) : null), [copy]);
@@ -139,24 +139,11 @@ export function IssueScreen({
 
   const submitToPc = async () => {
     if (!cp || saving) return;
-    const cmd: PhoneCmd = { cmdId: ulid(), req: issueRequest({ ref: cp.id, supply: a.supply, item }), cpName: cp.name, total: a.total, createdAt: Date.now() };
     setSaving(true);
     setSaveFailed(false);
-    // 보내기 전에 봉인 상태에 저장한다(다시 보낼 때 같은 cmdId). 저장하지 못하면 맡기지 않고 이 화면에 남는다.
-    try {
-      await s.update((d) => ({ ...d, cmds: [...(d.cmds ?? []), cmd] }));
-    } catch {
-      // 메모리에 먼저 들어간 명령을 빼서, 다음 저장이 맡기지 않은 명령을 적지 않게 한다
-      await s.update((d) => ({ ...d, cmds: (d.cmds ?? []).filter((c) => c.cmdId !== cmd.cmdId) })).catch(() => undefined);
-      setSaving(false);
-      setSaveFailed(true);
-      return;
-    }
+    const ok = await entrust({ cp, supply: a.supply, total: a.total, item, draftId: pre?.draftId });
     setSaving(false);
-    // 대화 카드에서 왔으면 그 카드를 맡김으로(폰 대화가 같은 카드를 다시 고치지 않게)
-    if (pre?.draftId && s.data.pair) void offlineChat(s.data.pair, s.keys, () => chatCopyOf(s.data.pcCopy))?.entrust(pre.draftId).catch(() => undefined);
-    queue.noteCmd(`cmd-${cmd.cmdId}`, online ? null : `${cp.name} 세금계산서 ${won(a.total)}을 맡겼어요. PC 켜지면 보내요`);
-    void s.sync();
+    if (!ok) return setSaveFailed(true);
     onSubmitted();
   };
 
