@@ -200,7 +200,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
             {menu && (
               <View style={[st.menu, { backgroundColor: p.tint }]} testID="quick-menu">
                 <MenuRow label="세금계산서 발급" hint="거래처와 금액을 골라 PC에 맡겨요" onPress={() => quick('issue')} testID="chip-issue" />
-                <MenuRow label="증빙 찍기" hint="영수증·종이 세금계산서를 찍어 PC로 보내요" onPress={() => quick('capture')} testID="go-capture" />
+                <MenuRow label="증빙 찍기" hint="영수증이나 종이 세금계산서를 찍어 PC로 보내요" onPress={() => quick('capture')} testID="go-capture" />
                 <MenuRow label="현금 매출 적기" hint="현금으로 받은 돈을 적어 둬요" onPress={() => quick('cash')} testID="go-cash" />
               </View>
             )}
@@ -278,9 +278,9 @@ export function pcHint(pc: PcStatus): string {
     case 'connecting':
       return 'PC를 찾고 있어요';
     case 'stale':
-      return 'PC가 오래 꺼져 있어요 · 켜 두거나 연결을 확인해 주세요';
+      return 'PC가 오래 꺼져 있어요. 켜 두거나 연결을 확인해 주세요';
     default:
-      return 'PC가 꺼져 있어요 · 맡긴 일은 PC가 켜지면 실행돼요';
+      return 'PC가 꺼져 있어요. 켜지면 바로 할게요';
   }
 }
 
@@ -301,7 +301,7 @@ const at = (it: ChatItem) => (it.kind === 'merged' ? it.from : it.at);
 function TodoLine({ todo, onPress }: { todo: Todo; onPress: () => void }) {
   const p = usePalette();
   // 묶음 안은 줄을 바꾸지 않는다(큰 글자에서 "밀린 / 일 1건"처럼 끊기지 않게, 붙은 칸 U+00A0).
-  const parts = [todo.approvals > 0 && `승인\u00A0대기\u00A0${todo.approvals}건`, todo.backlog > 0 && `밀린\u00A0일\u00A0${todo.backlog}건`].filter(Boolean).join(' · ');
+  const parts = [todo.approvals > 0 && `승인\u00A0대기\u00A0${todo.approvals}건`, todo.backlog > 0 && `밀린\u00A0일\u00A0${todo.backlog}건`].filter(Boolean).join(', ');
   const body = (
     <>
       <T v="subStrong" style={{ flexShrink: 0 }}>
@@ -372,7 +372,7 @@ function Item({ it, onRetry, retryOff, openDrafts, onIssue }: { it: Exclude<Chat
       <View style={st.mergedWrap} testID="chat-merged">
         <View style={[st.merged, { backgroundColor: p.tint }]}>
           <T v="meta" c="ink3" center>
-            폰에서 나눈 대화 · {clockRange(it.from, it.to)}
+            폰에서 나눈 대화 {clockRange(it.from, it.to)}
           </T>
         </View>
       </View>
