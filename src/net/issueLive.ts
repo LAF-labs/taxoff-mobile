@@ -3,7 +3,7 @@
 // - 끝나지 않은 명령이 있는 동안 세션을 붙잡고 지켜본다(최대 WATCH_MS). 끊기면 다음 연결 때 PC가 지금 상태를 다시 보낸다.
 // - PC가 issue.v1을 알리지 않으면 보내지 않고 "PC 앱을 새 버전으로" 상태로 둔다.
 import { CAP, issueCmd, type Channel, type CmdAckBody, type PhoneCopyBody, type RunEventBody } from '@sax/remote';
-import { applyAck, applyEvent, busyWaiting, forRetry, retryDue, settled, type PhoneCmd } from '../phoneCmd.ts';
+import { applyAck, applyEvent, applyHumanRequest, busyWaiting, forRetry, retryDue, settled, type PhoneCmd } from '../phoneCmd.ts';
 
 export const WATCH_MS = 10 * 60_000;
 const TICK_MS = 2_000;
@@ -61,6 +61,29 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
       if (retryDue(c, now())) await retry(c);
       else if (!ids.has(c.cmdId) && !settled(c, now()) && !busyWaiting(c, now())) await send(c);
     }
+    // [인증서로 다시 시도]: 누른 명령의 cmd.resume을 한 번 보낸다(같은 runId)
+    for (const c of io.cmds()) {
+      if (c.resumeAt === undefined || c.resumeSentAt !== undefined || !c.runId) continue;
+      ids.add(c.cmdId);
+      try {
+        // cmd.resume 본문은 스키마 __body6({runId})에 있지만 사본의 Bodies 표에는 아직 없다: 봉투 검사는 스키마가 한다
+        (ch.send as unknown as (t: string, b: object) => unknown)('cmd.resume', { runId: c.runId });
+      } catch {
+        continue;
+      }
+      await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? { ...x, resumeSentAt: now() } : x)));
+    }
+    // 간편인증 답(요청 값 또는 승인했어요): PC가 연 reqId로 한 번 보낸다
+    for (const c of io.cmds()) {
+      if (c.simpleOut === undefined || c.simpleOutSentAt !== undefined || !c.simpleReq || !c.runId) continue;
+      ids.add(c.cmdId);
+      try {
+        (ch.send as unknown as (t: string, b: object) => unknown)('human.response', { runId: c.runId, stepId: 's7e', reqId: c.simpleReq, value: c.simpleOut });
+      } catch {
+        continue;
+      }
+      await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? { ...x, simpleOutSentAt: now() } : x)));
+    }
     if (io.cmds().filter((c) => ids.has(c.cmdId)).every((c) => settled(c, now()))) return 'settled';
     if (ch.closed) return 'closed';
     if (io.alive && !io.alive()) return 'closed';
@@ -71,6 +94,9 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
     if (e.type === 'cmd.ack') {
       const a = e.body as CmdAckBody;
       await io.save((cs) => cs.map((c) => applyAck(c, a, now())));
+    } else if (e.type === 'human.request') {
+      const b = e.body as { runId?: unknown; reqId?: unknown; kind?: unknown; prompt?: unknown };
+      await io.save((cs) => cs.map((c) => applyHumanRequest(c, b)));
     } else if (e.type === 'run.event') {
       const ev = e.body as RunEventBody;
       await io.save((cs) => cs.map((c) => applyEvent(c, ev)));

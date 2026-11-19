@@ -209,7 +209,7 @@ export function devicesErrorText(code: string): string {
     case 'account.device_not_found':
       return '이미 끊긴 기기예요. 목록을 다시 불러올게요.';
     case 'policy.rate_limited':
-      return '오늘은 더 정지할 수 없어요. 내일 다시 하거나 PC의 기기 연결 화면에서 끊어 주세요.';
+      return '오늘은 더 정지할 수 없어요. 내일 다시 해 주세요.';
     case 'account.device_suspended':
       return '이 폰은 다른 기기에서 정지했거나 연결을 끊었어요. 다시 쓰려면 PC와 다시 연결해 주세요.';
     case 'devices.unreachable':

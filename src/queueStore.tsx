@@ -3,7 +3,8 @@
 // simulate(갤러리·시연 전용): PC가 켜져 맡긴 발급이 준비 → 홈택스 로그인 → 값 확인을 지나 "PC가 승인 요청함"이 되고 시트가 뜬다.
 //   승인하면 발급 → 확인 → 결과 카드. simulate='inDoubt'이면 발급 뒤 응답이 끊겨 확인 중(조회 n회째) → 확인 필요로 간다.
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { busyWaiting, jobOf, redate, settled } from './phoneCmd';
+import { askRetryCert, askSimple, busyWaiting, jobOf, redate, settled, simpleRequestValue } from './phoneCmd';
+import type { SimpleId } from './storage/state';
 import { SessionContext } from './session';
 import { jobTimers } from './jobTimers';
 import { josa } from './ui/josa';
@@ -49,6 +50,11 @@ export interface QueueStore {
   rerequest: (id: string) => void;
   /** 진행 카드의 동작(다시 준비·다시 요청·중지·PC에서 열기 예약) */
   runAction: (id: string, action: RunAction) => void;
+  /** 폰에서 시작하는 간편인증 값 보내기(PC가 맡은 일). 값은 봉인 상태 파일에 남겨 다음에 미리 채운다. */
+  simpleAuth: (id: string, v: SimpleId) => void;
+  /** 간편인증 시트를 띄운 일(채팅·진행 화면 위 바텀시트) */
+  simpleJob: Job | null;
+  closeSimple: () => void;
   /** 진행·결과·서류 화면이 보는 일 */
   focus: Job | null;
   setFocus: (id: string | null) => void;
@@ -101,6 +107,7 @@ export function QueueProvider({
   const jobs = useMemo(() => [...localJobs, ...(cmds ?? []).map(jobOf)], [localJobs, cmds]);
   const [notes, setNotes] = useState<ChatItem[]>(initialNotes);
   const [sheetId, setSheetId] = useState<string | null>(sheet);
+  const [simpleId, setSimpleId] = useState<string | null>(null);
   const [used, setUsed] = useState(approval.usedToday);
   const [focusId, setFocusId] = useState<string | null>(initialFocus);
   const [cps, setCps] = useState<Counterparty[]>(initialCps);
@@ -143,6 +150,8 @@ export function QueueProvider({
       notes,
       approval: { ...approval, usedToday: used },
       sheetJob: jobs.find((j) => j.id === sheetId && j.gate) ?? null,
+      simpleJob: jobs.find((j) => j.id === simpleId) ?? null,
+      closeSimple: () => setSimpleId(null),
       noteCmd: (jobId, text) => {
         const now = Date.now();
         if (text === null) setNotes((n) => [...n, { kind: 'run', id: `run-${jobId}`, at: now, jobId }]);
@@ -214,7 +223,33 @@ export function QueueProvider({
         setSheetId(null);
         patch(id, (x) => ({ ...x, state: 'needPc', reason, gate: undefined }));
       },
+      simpleAuth: (id, v) => {
+        if (!id.startsWith('cmd-')) return;
+        const cmdId = id.slice(4);
+        const value = simpleRequestValue(v);
+        if (!value) return;
+        setSimpleId(null);
+        void sess?.update((d) => ({ ...d, simpleId: v, cmds: (d.cmds ?? []).map((c) => (c.cmdId === cmdId ? askSimple(c, value, v.provider) : c)) })).then(() => sess?.sync());
+      },
       runAction: (id, a) => {
+        if (a === 'simpleAuth') return setSimpleId(id);
+        if ((a === 'authDone' || a === 'resendAuth') && id.startsWith('cmd-')) {
+          // [승인했어요]: PC가 [인증 완료]를 누르고 이어서 한다. [다시 요청]: 지난 값으로 다시 보낸다
+          const cmdId = id.slice(4);
+          void sess
+            ?.update((d) => {
+              const value = a === 'authDone' ? 'sa1:done' : d.simpleId ? simpleRequestValue(d.simpleId) : null;
+              return value ? { ...d, cmds: (d.cmds ?? []).map((c) => (c.cmdId === cmdId ? askSimple(c, value) : c)) } : d;
+            })
+            .then(() => sess?.sync());
+          return;
+        }
+        if (a === 'retryCert' && id.startsWith('cmd-')) {
+          // PC가 공동인증서 로그인 실패로 기다리는 명령: 라이브 세션에서 cmd.resume을 보낸다(PC가 같은 값으로 인증서 로그인부터 다시)
+          const cmdId = id.slice(4);
+          void sess?.update((d) => ({ ...d, cmds: (d.cmds ?? []).map((c) => (c.cmdId === cmdId ? askRetryCert(c) : c)) })).then(() => sess?.sync());
+          return;
+        }
         const j = jobs.find((x) => x.id === id);
         if (!j?.run) return;
         const startedAt = j.run.startedAt;
@@ -251,7 +286,7 @@ export function QueueProvider({
         patch(id, (x) => (x.gate ? { ...x, gate: { ...x.gate, challenge: b64(randomBytes(32)), exp: Date.now() + GATE_TTL_MS } } : x));
       },
     }),
-    [jobs, last, notes, sheetId, used, focusId, cps, pickId, prefill, approval.attest, approval.iosAllowed, simulate, sess],
+    [jobs, last, notes, sheetId, simpleId, used, focusId, cps, pickId, prefill, approval.attest, approval.iosAllowed, simulate, sess],
   );
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

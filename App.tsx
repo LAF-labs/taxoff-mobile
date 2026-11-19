@@ -4,6 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { LOCK_AFTER_MS, LOCK_DRAIN_MS } from './src/config';
 import { drained, endEpoch } from './src/inflight';
@@ -24,6 +25,7 @@ import { SettingsScreen } from './src/screens/SettingsScreen';
 import { QueueScreen } from './src/screens/QueueScreen';
 import { QueueProvider } from './src/queueStore';
 import { ApprovalHost } from './src/screens/ApprovalHost';
+import { SimpleAuthHost } from './src/screens/SimpleAuthHost';
 import { NotifyHost } from './src/notify/NotifyHost';
 import { TextSizeHost } from './src/ui/TextSizeHost';
 import { DocScreen } from './src/screens/DocScreen';
@@ -204,6 +206,7 @@ export default function App() {
           />
         )}
         <ApprovalHost />
+        <SimpleAuthHost />
         <NotifyHost
           onRunScreen={route === 'run'}
           onOpen={() => setStack((x) => (x[x.length - 1] === 'run' ? x : [...x, 'run']))}
@@ -243,9 +246,11 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
+      <KeyboardProvider>
       <StatusBar style="auto" />
       {body}
       {cover && <View style={[StyleSheet.absoluteFill, { backgroundColor: p.canvas }]} testID="privacy-cover" />}
+      </KeyboardProvider>
     </SafeAreaProvider>
   );
 }

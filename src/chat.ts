@@ -2,6 +2,7 @@
 // 앱에서는 이 폰에 남은 기록(보낸 종이 증빙)과 이 폰에서 적은 말로만 줄을 만들고, PC 답은 갤러리 가짜 데이터에만 있다.
 import type { ReactionId } from '@sax/chat-core';
 import type { AppData, RecentRecord } from './storage/state';
+import type { Thumb } from './capture/thumb';
 
 /** 카드 답(묶음 면). 줄은 라벨·값 두 칸. */
 export interface ChatCard {
@@ -10,6 +11,8 @@ export interface ChatCard {
   note?: string;
   /** 폰 대화가 만든 세금계산서 카드면 그 초안. 열린 카드에는 [발급 맡기기]가 붙는다. */
   draft?: { id: string; counterpartyId: string; amount: number; vat: 'separate' | 'included' | null; item: string | null };
+  /** 찍어 보낸 증빙 사진: 비율·흐린 미리보기. pending이면 원본이 아직 이 폰 보관함(outbox)에 있다(msgId로 연다). */
+  photo?: { thumb: Thumb; msgId?: string };
 }
 
 export type ChatItem =
@@ -108,6 +111,6 @@ export function chatFromData(data: AppData): ChatItem[] {
       from: 'me' as const,
       at: r.at,
       state: r.state === 'sent' ? ('sent' as const) : ('waiting' as const),
-      card: { title: `${KIND[r.kind]} 보냄`, rows: [{ label: r.title, value: r.amount !== null ? `${r.amount.toLocaleString('ko-KR')}원` : '금액 없음' }] },
+      card: { title: `${KIND[r.kind]} 보냄`, rows: [{ label: r.title, value: r.amount !== null ? `${r.amount.toLocaleString('ko-KR')}원` : '금액 없음' }], ...(r.thumb ? { photo: { thumb: r.thumb, ...(r.state === 'sent' ? {} : { msgId: r.msgId }) } } : {}) },
     }));
 }

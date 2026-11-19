@@ -34,8 +34,8 @@ describe('연결 기록', () => {
 });
 
 describe('사람이 읽는 한 줄', () => {
-  it('PC가 우편함에 없으면 PC 앱·로그인을 확인하라고 한다', () => {
-    assert.match(pcWhyText('peer:timeout')!, /PC에서 앱이 켜져 있고 로그인돼/);
+  it('PC가 우편함에 없으면 PC 앱이 꺼졌거나 로그아웃됐을 수 있다고 한다', () => {
+    assert.match(pcWhyText('peer:timeout')!, /PC 앱이 꺼져 있거나 로그아웃/);
   });
   it('끊긴 폰은 다시 연결하라고 한다', () => {
     assert.match(pcWhyText('join:account.device_not_found.404')!, /다시 연결/);
