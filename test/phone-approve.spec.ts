@@ -26,7 +26,7 @@ const { deviceApprovalKey, PX_TAG } = await import('../src/approvalKey.ts');
 const { APPROVE_CTX, approveMessage, sheetState, ARM_DELAY_MS } = await import('../src/approval.ts');
 const { enrollPx } = await import('../src/net/pxLive.ts');
 const { driveCmds } = await import('../src/net/issueLive.ts');
-const { answerGate, applyEvent, applyGate, askRefresh, deniedByPhone, issueRequest, jobOf, markAnswered, openGate, responseDue, runViewOf, settled } = await import('../src/phoneCmd.ts');
+const { answerGate, applyEvent, applyGate, applyResolved, askRefresh, deniedByPhone, issueRequest, jobOf, markAnswered, openGate, responseDue, runViewOf, settled } = await import('../src/phoneCmd.ts');
 
 const PC = JSON.parse(readFileSync(new URL('./fixtures/gate-vectors.json', import.meta.url), 'utf8')) as {
   vectors: Array<{ fields: GateRequestBody['fields']; cardHashInputs: GateRequestBody['cardHashInputs']; actionHash: string }>;
@@ -366,6 +366,62 @@ describe('라이브 세션: 승인 요청을 받고 서명한 답을 보낸다(m
     assert.equal(s.get()[0]!.gate!.reqId, fresh.reqId);
     assert.equal(s.get()[0]!.refresh, undefined);
     assert.equal(jobOf(s.get()[0]!).state, 'approval');
+  });
+});
+
+describe('v1.11 sync.v1: 판 번호와 다른 곳에서 닫힌 승인', () => {
+  it('판 번호가 있으면 적용한 것보다 크지 않은 run.event를 PC 시계와 상관없이 버린다', () => {
+    const run = '01JDRUN0000000000000000001';
+    let c = applyEvent(cmd({ phase: 'prepare' }), { runId: run, event: 'phase', at: T0 + 10, phase: 'login', rev: 2 });
+    assert.equal(c.rev, 2);
+    // 늦게 온 옛 이벤트(시각은 더 늦어도)
+    assert.equal(applyEvent(c, { runId: run, event: 'phase', at: T0 + 99, phase: 'prepare', rev: 1 }).phase, 'login');
+    assert.equal(applyEvent(c, { runId: run, event: 'phase', at: T0 + 99, phase: 'prepare', rev: 2 }).phase, 'login');
+    // 새 이벤트(PC 시계가 뒤로 갔어도)
+    c = applyEvent(c, { runId: run, event: 'phase', at: T0, phase: 'readback', rev: 5 });
+    assert.deepEqual([c.phase, c.rev], ['readback', 5]);
+    // 번호 없는 PC(옛 판)는 지금처럼 시각으로
+    const old = applyEvent(cmd({ at: T0 + 10 }), { runId: run, event: 'phase', at: T0, phase: 'issue' });
+    assert.equal(old.phase, 'approve');
+  });
+  it('gate.resolved가 오면 그 요청과 보내지 못한 답을 지워 시트를 닫는다. 다른 요청은 그대로', () => {
+    const g = gateReq();
+    const c = applyGate(cmd(), g);
+    assert.equal(jobOf(c).state, 'approval');
+    const done = applyResolved(c, { runId: g.runId, reqId: g.reqId, by: 'pc' });
+    assert.equal(done.gate, undefined);
+    assert.equal(done.resolvedBy, 'pc');
+    assert.notEqual(jobOf(done).state, 'approval');
+    // 사장님이 서명했지만 아직 못 보낸 답은 버린다(PC가 받지 않는다)
+    const signed = answerGate(c, { reqId: g.reqId, decision: 'approve', actionHash: g.actionHash, sig: 's' }, T0);
+    const r = applyResolved(signed, { runId: g.runId, reqId: g.reqId, by: 'expired' });
+    assert.equal(r.answer, undefined);
+    assert.equal(responseDue(r, T0 + 1), null);
+    // 보낸 답은 남긴다(폰에서 거절한 기록)
+    const sent = markAnswered(answerGate(c, { reqId: g.reqId, decision: 'deny', actionHash: g.actionHash, sig: 's' }, T0), g.reqId, T0 + 1);
+    assert.ok(deniedByPhone(applyResolved(sent, { runId: g.runId, reqId: g.reqId, by: 'phone' })));
+    // 다른 실행·다른 요청
+    assert.equal(applyResolved(c, { runId: '01JDRUN0000000000000000009', reqId: g.reqId, by: 'pc' }), c);
+    assert.equal(applyResolved(c, { runId: g.runId, reqId: '01JDREQ0000000000000000009', by: 'pc' }), c);
+    // 다시 요청 중인 것도 닫힌다
+    const asked = askRefresh(c, g.exp + 1);
+    assert.equal(applyResolved(asked, { runId: g.runId, reqId: g.reqId, by: 'stopped' }).refresh, undefined);
+    // 새 요청이 오면 까닭을 지운다
+    assert.equal(applyGate(done, gateReq({ reqId: '01JDREQ0000000000000000002' })).resolvedBy, undefined);
+  });
+  it('라이브 세션에서 gate.resolved를 받으면 시트가 닫힌다(approve.v1 PC)', async () => {
+    const now = Date.now();
+    const g = gateReq({ exp: now + 120_000 });
+    const s = store([applyGate(cmd({ createdAt: now, sentAt: now, at: now }), g)]);
+    let fed = false;
+    const m = mockChannel(() => {
+      if (fed) return [];
+      fed = true;
+      return [env('gate.resolved', { runId: g.runId, reqId: g.reqId, by: 'pc' })];
+    });
+    await driveCmds(m.ch as never, [CAP.issue, CAP.approve, CAP.sync], s.io, 700);
+    assert.equal(s.get()[0]!.gate, undefined);
+    assert.equal(s.get()[0]!.resolvedBy, 'pc');
   });
 });
 

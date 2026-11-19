@@ -5,7 +5,7 @@
 //   폰은 승인 시트를 띄우고 하드웨어 키로 서명한 gate.response를 보낸다. 그 밖에는 'pc_only'다(승인은 PC 승인 바에서).
 //   PC가 폰으로 보내지 않는 건(처음 거래처·오늘 한도 등)은 run.event.code(pc_*)로 이유가 온다.
 // - 거래처는 PC 사본의 ref만 싣는다(사업자번호·이메일 원문 없음). 세액은 floor(공급가액/10), 작성일자는 오늘(한국 시간).
-import type { CmdAckBody, CmdAckState, CmdRejectReason, GateRequestBody, GateResponseBody, PhoneIssueRequest, RunEventBody, RunPhase, RunResult } from '@sax/remote';
+import type { CmdAckBody, CmdAckState, CmdRejectReason, GateRequestBody, GateResolvedBody, GateResolvedBy, GateResponseBody, PhoneIssueRequest, RunEventBody, RunPhase, RunResult } from '@sax/remote';
 import type { PhoneGate } from './approval';
 import type { Job, NeedPcReason } from './queue';
 import type { RunView } from './run';
@@ -30,6 +30,10 @@ export interface PhoneCmd {
   code?: string;
   attempt?: number;
   result?: RunResult;
+  /** v1.11: 적용한 가장 큰 run.event.rev(sync.v1 PC). 이보다 크지 않은 run.event는 버린다. */
+  rev?: number;
+  /** v1.11: 승인 요청이 다른 곳에서 닫힌 까닭(gate.resolved). 다음 승인 요청이 오면 지운다. */
+  resolvedBy?: GateResolvedBy;
   /** PC가 보낸 승인 요청(gate.request). 승인 단계를 지나면 지운다. */
   gate?: CmdGate;
   /** 사장님의 답(서명 포함). 보내면 sentAt이 붙고 gate를 지운다. 마감 전에 못 보내면 버린다(발급되지 않는다). */
@@ -105,12 +109,18 @@ export function applyAck(c: PhoneCmd, a: CmdAckBody, now = Date.now()): PhoneCmd
   return { ...c, ack: a.state, runId: a.runId ?? c.runId, reason: a.state === 'rejected' ? a.reason : undefined };
 }
 
-/** run.event를 붙인다. 같은 runId(또는 cmdId)만, 더 오래된 사건은 버린다. */
+/**
+ * run.event를 붙인다. 같은 runId(또는 cmdId)만, 더 오래된 사건은 버린다.
+ * v1.11: 판 번호(rev)가 둘 다 있으면 그것만 본다(PC 시계와 상관없이, 적용한 것보다 크지 않으면 버린다).
+ * run.event는 늘 그 실행의 지금 상태 전체라 번호가 비어도 따로 받아 올 것은 없다.
+ */
 export function applyEvent(c: PhoneCmd, e: RunEventBody): PhoneCmd {
   const mine = (c.runId && e.runId === c.runId) || (e.cmdId && e.cmdId === c.cmdId);
   if (!mine) return c;
-  if (c.at !== undefined && e.at < c.at) return c;
-  const next: PhoneCmd = { ...c, runId: c.runId ?? e.runId, at: e.at };
+  if (e.rev !== undefined && c.rev !== undefined) {
+    if (e.rev <= c.rev) return c;
+  } else if (c.at !== undefined && e.at < c.at) return c;
+  const next: PhoneCmd = { ...c, runId: c.runId ?? e.runId, at: e.at, rev: e.rev ?? c.rev };
   if (!next.ack || next.ack === 'rejected') next.ack = 'pc_only';
   if (e.phase) next.phase = e.phase;
   next.code = e.code;
@@ -136,7 +146,20 @@ export function applyGate(c: PhoneCmd, g: GateRequestBody): PhoneCmd {
   // 이미 보낸 답의 요청이 다시 오면(재전송) 무시한다
   if (c.answer?.sentAt && c.answer.reqId === g.reqId) return c;
   const gate: CmdGate = { stepId: g.stepId, reqId: g.reqId, fields: g.fields, cardHashInputs: g.cardHashInputs, actionHash: g.actionHash, challenge: g.challenge, exp: g.exp };
-  return { ...c, gate, answer: undefined, refresh: undefined, phase: 'approve', code: c.code && c.code in PC_CODE_REASON ? undefined : c.code };
+  return { ...c, gate, answer: undefined, refresh: undefined, resolvedBy: undefined, phase: 'approve', code: c.code && c.code in PC_CODE_REASON ? undefined : c.code };
+}
+
+/**
+ * v1.11 gate.resolved: 그 승인 요청이 다른 곳에서 닫혔다(PC 승인 바, 대기 만료, 중지, 이 폰의 답).
+ * 받은 요청과 다시 요청을 지워 승인 시트를 바로 닫는다. 진행(발급 중, 멈춤)은 뒤따르는 run.event가 알린다.
+ * 보내지 못한 답이 있으면 버린다(PC는 닫힌 요청의 답을 받지 않는다). 이미 보낸 답은 남긴다.
+ */
+export function applyResolved(c: PhoneCmd, r: GateResolvedBody): PhoneCmd {
+  if (!c.runId || r.runId !== c.runId) return c;
+  const ours = c.gate?.reqId === r.reqId || c.refresh === r.reqId || c.answer?.reqId === r.reqId;
+  if (!ours) return c;
+  const answer = c.answer?.reqId === r.reqId && !c.answer.sentAt ? undefined : c.answer;
+  return { ...c, gate: c.gate?.reqId === r.reqId ? undefined : c.gate, refresh: c.refresh === r.reqId ? undefined : c.refresh, answer, resolvedBy: r.by };
 }
 
 /** 아직 답하지 않은(또는 답을 못 보내고 마감이 지난) 승인 요청 */
