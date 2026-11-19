@@ -575,9 +575,18 @@ function Card({ card, onIssue }: { card: ChatCard; onIssue?: OnIssue }) {
   );
 }
 
-function CardRow({ label, value, strong, children }: { label: string; value?: string; strong?: boolean; children?: React.ReactNode }) {
+/** 세금계산서 카드의 값 글자(오른쪽 맞춤) */
+function CardValue({ text, strong, quiet }: { text: string; strong?: boolean; quiet?: boolean }) {
   return (
-    <View style={st.cardRow}>
+    <T v={strong ? 'figure' : 'value'} c={quiet ? 'ink4' : 'ink'} style={{ flexShrink: 1, textAlign: 'right' }}>
+      {text}
+    </T>
+  );
+}
+
+function CardRow({ label, value, strong, children, fixed }: { label: string; value?: string; strong?: boolean; children?: React.ReactNode; /** 칸이 들어가도 같은 높이(44) */ fixed?: boolean }) {
+  return (
+    <View style={[st.cardRow, fixed && st.cardRowFixed]}>
       <T v="sub" c="ink2" style={{ flexShrink: 1 }}>
         {label}
       </T>
@@ -622,49 +631,55 @@ function DraftCard({ card, draft, onIssue }: { card: ChatCard; draft: Draft; onI
     setBusy(false);
     if (!ok) setFailed(true);
   };
+  // 어두운 화면에서는 토글 바탕을 카드보다 어둡게(고른 칸이 밝게 떠 보이게)
+  const dark = p.overlay === p.tint;
   const inputStyle = [st.cardInput, { backgroundColor: p.canvas, color: p.ink, borderColor: p.line }];
   return (
-    <View style={[st.card, { backgroundColor: p.tint }]} testID="chat-card">
-      <T v="subStrong">{card.title}</T>
-      {edit ? (
-        <>
-          <CardRow label={edit.vat === 'incl' ? '합계 금액' : '공급가액'}>
-            <TextInput
-              testID="card-amount"
-              value={edit.amount}
-              onChangeText={(v) => setEdit({ ...edit, amount: masked('won', v) })}
-              keyboardType="number-pad"
-              accessibilityLabel="금액"
-              maxFontSizeMultiplier={MAX_FONT_SCALE}
-              style={[type.value, ...inputStyle, { textAlign: 'right' }]}
-            />
-          </CardRow>
-          <CardRow label="부가세">
-            <Seg testID="card-vat" options={VAT_OPTIONS} value={edit.vat} onChange={(v) => setEdit({ ...edit, vat: v })} style={[st.cardSeg, { backgroundColor: p.sunken }]} />
-          </CardRow>
-          <CardRow label="품목">
-            <TextInput
-              testID="card-item"
-              value={edit.item}
-              onChangeText={(v) => setEdit({ ...edit, item: v })}
-              placeholder="적지 않아도 돼요"
-              placeholderTextColor={p.ink4}
-              accessibilityLabel="품목"
-              maxFontSizeMultiplier={MAX_FONT_SCALE}
-              style={[type.value, ...inputStyle, { textAlign: 'right' }]}
-            />
-          </CardRow>
-          <CardRow label="합계" value={won(a.total)} strong />
-        </>
-      ) : (
-        <>
-          <CardRow label="공급가액" value={won(a.supply)} />
-          <CardRow label={`부가세 ${shown.vat === 'incl' ? '포함' : '별도'}`} value={won(a.tax)} />
-          <CardRow label="합계" value={won(a.total)} strong />
-          {shown.item !== '' && <CardRow label="품목" value={shown.item} />}
-        </>
-      )}
-      {card.note && !edit && (
+    <View style={[st.card, st.cardDraft, { backgroundColor: p.tint }]} testID="chat-card">
+      <T v="subStrong" style={{ paddingBottom: space.s1 }}>{card.title}</T>
+      {/* 보기와 수정이 같은 네 줄, 같은 높이(44): [수정]을 눌러도 카드 높이가 바뀌지 않는다 */}
+      <CardRow label={edit?.vat === 'incl' ? '합계 금액' : '공급가액'} fixed>
+        {edit ? (
+          <TextInput
+            testID="card-amount"
+            value={edit.amount}
+            onChangeText={(v) => setEdit({ ...edit, amount: masked('won', v) })}
+            keyboardType="number-pad"
+            accessibilityLabel="금액"
+            maxFontSizeMultiplier={MAX_FONT_SCALE}
+            style={[type.value, ...inputStyle, { textAlign: 'right' }]}
+          />
+        ) : (
+          <CardValue text={won(a.supply)} />
+        )}
+      </CardRow>
+      <CardRow label={edit ? '부가세' : `부가세 ${shown.vat === 'incl' ? '포함' : '별도'}`} fixed>
+        {edit ? (
+          <Seg testID="card-vat" options={VAT_OPTIONS} value={edit.vat} onChange={(v) => setEdit({ ...edit, vat: v })} style={[st.cardSeg, { backgroundColor: dark ? p.canvas : p.sunken }]} />
+        ) : (
+          <CardValue text={won(a.tax)} />
+        )}
+      </CardRow>
+      <CardRow label="품목" fixed>
+        {edit ? (
+          <TextInput
+            testID="card-item"
+            value={edit.item}
+            onChangeText={(v) => setEdit({ ...edit, item: v })}
+            placeholder="없음"
+            placeholderTextColor={p.ink4}
+            accessibilityLabel="품목"
+            maxFontSizeMultiplier={MAX_FONT_SCALE}
+            style={[type.value, ...inputStyle, { textAlign: 'right' }]}
+          />
+        ) : (
+          <CardValue text={shown.item || '없음'} quiet={!shown.item} />
+        )}
+      </CardRow>
+      <CardRow label="합계" fixed>
+        <CardValue text={won(a.total)} strong />
+      </CardRow>
+      {card.note && !onIssue && (
         <T v="meta" c="ink3">
           {card.note}
         </T>
@@ -678,13 +693,13 @@ function DraftCard({ card, draft, onIssue }: { card: ChatCard; draft: Draft; onI
         <View style={st.cardButtons}>
           {edit ? (
             <>
-              <Button testID="card-cancel" small kind="secondary" label="취소" onPress={() => setEdit(null)} style={{ backgroundColor: p.canvas }} />
-              <Button testID="card-done" small label="완료" onPress={done} disabled={splitAmount(Number(edit.amount.replace(/\D/g, '')), edit.vat).supply <= 0} />
+              <Button testID="card-cancel" kind="secondary" label="취소" onPress={() => setEdit(null)} style={[st.cardBtn, { backgroundColor: p.canvas }]} />
+              <Button testID="card-done" label="완료" onPress={done} disabled={splitAmount(Number(edit.amount.replace(/\D/g, '')), edit.vat).supply <= 0} style={st.cardBtn} />
             </>
           ) : (
             <>
-              <Button testID="card-issue" small label="발급하기" onPress={() => void issue()} busy={busy} disabled={busy || a.supply <= 0} />
-              <Button testID="card-edit" small kind="secondary" label="수정" onPress={startEdit} disabled={busy} style={{ backgroundColor: p.canvas }} />
+              <Button testID="card-issue" label="발급하기" onPress={() => void issue()} busy={busy} disabled={busy || a.supply <= 0} style={st.cardBtn} />
+              <Button testID="card-edit" kind="secondary" label="수정" onPress={startEdit} disabled={busy} style={[st.cardBtn, { backgroundColor: p.canvas }]} />
             </>
           )}
         </View>
@@ -795,9 +810,13 @@ const st = StyleSheet.create({
   bubble: { borderRadius: 22, minHeight: 44, maxWidth: '82%', paddingHorizontal: 15, paddingVertical: 11, justifyContent: 'center' },
   /** 카드는 말풍선보다 넓게, 대화 폭을 다 쓴다 */
   card: { alignSelf: 'stretch', borderRadius: radius.lg, padding: space.s4, gap: space.s2 },
-  cardInput: { width: 180, flexShrink: 1, minHeight: 40, paddingHorizontal: space.s3, paddingVertical: 8, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth },
+  /** 세금계산서 카드는 줄 높이(44)가 간격을 맡는다 */
+  cardDraft: { gap: 0 },
+  cardInput: { width: 180, flexShrink: 1, height: 40, paddingHorizontal: space.s3, paddingVertical: 0, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth },
   cardSeg: { width: 180, flexShrink: 1 },
-  cardButtons: { flexDirection: 'row', gap: space.s2, marginTop: space.s1 },
+  cardButtons: { flexDirection: 'row', gap: space.s2, marginTop: space.s2 },
+  cardBtn: { flex: 1 },
+  cardRowFixed: { minHeight: 44, alignItems: 'center' },
   cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: space.s3 },
   note: { flexDirection: 'row', gap: space.s2, alignItems: 'flex-start' },
   failed: { borderRadius: radius.lg, paddingHorizontal: space.s4, paddingVertical: space.s3, gap: space.s2 },
