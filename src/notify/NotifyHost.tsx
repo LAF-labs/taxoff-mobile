@@ -49,7 +49,7 @@ export function NotifyHost({ onOpen, onMoney, onRunScreen, preview }: {
     configureNotifications();
     return onOpened((data) => {
       if (data.open === 'money') opened.current.onMoney();
-      else if (typeof data.jobId === 'string') {
+      else if (data.open === 'run' && typeof data.jobId === 'string') {
         opened.current.setFocus(data.jobId);
         opened.current.onOpen(data.jobId);
       }

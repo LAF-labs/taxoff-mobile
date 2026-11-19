@@ -1,0 +1,8 @@
+{
+  "ios": {
+    "Localizable.strings": {
+      "SAX_WAKE_APPROVE": "승인을 기다리는 발급이 있어요",
+      "SAX_WAKE_UPDATE": "맡긴 일에 새 소식이 있어요"
+    }
+  }
+}

@@ -27,6 +27,13 @@ const light = {
   attention: '#8A5A0B',
   attentionSoft: '#FBF3E4',
   scrim: '#11111233',
+  /** 대화 말풍선(Muse 12.1 hatch와 같은 값): 내 말, 상대 말, 시각 줄, 기다림 점 */
+  bubbleMe: '#CBE5FF',
+  onBubbleMe: '#111112',
+  bubbleThem: '#E9EAEB',
+  stamp: '#00040996',
+  typingDot: '#0007115E',
+  typingDotDim: '#00071118',
   /** 카메라 화면 전용(테마와 무관하게 검정 위 흰 글자) */
   camera: '#000000',
   onCamera: '#FFFFFF',
@@ -50,13 +57,18 @@ const dark: typeof light = {
   attention: '#E0AE55',
   attentionSoft: '#2E2410',
   scrim: '#00000080',
+  bubbleMe: '#0074E8',
+  onBubbleMe: '#FFFFFF',
+  bubbleThem: '#1F1F20',
+  stamp: '#F2F7FF87',
+  typingDot: '#F2F7FF5E',
+  typingDotDim: '#F2F7FF18',
   camera: '#000000',
   onCamera: '#FFFFFF',
   cameraVeil: '#00000099',
 };
 export type Palette = typeof light;
 export type Ink = 'ink' | 'ink2' | 'ink3' | 'ink4' | 'onInk' | 'accent' | 'attention' | 'onCamera';
-export const palettes = { light, dark } as const;
 
 /** 4의 배수. 화면 옆 여백은 s5(20), 묶음 사이는 s6(28). */
 export const space = { s0: 2, s1: 4, s2: 8, s3: 12, s4: 16, s5: 20, s6: 28, s7: 40 } as const;

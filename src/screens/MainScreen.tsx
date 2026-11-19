@@ -22,17 +22,19 @@ const TABS: Array<{ key: Tab; label: string; a11y: string }> = [
 ];
 
 export function MainScreen({
-  tab, onTab, go, chat, todo, draft, phone, menu,
-}: { tab: Tab; onTab: (t: Tab) => void; go: (to: MainRoute) => void; chat?: ChatItem[]; todo?: Todo; draft?: string; phone?: OfflineChatView; /** 갤러리: [+] 메뉴를 펼친 채로 */ menu?: boolean }) {
+  tab, onTab, go, chat, todo, draft, phone, menu, focusAfter,
+}: { tab: Tab; onTab: (t: Tab) => void; go: (to: MainRoute) => void; chat?: ChatItem[]; todo?: Todo; draft?: string; phone?: OfflineChatView; /** 갤러리: [+] 메뉴를 펼친 채로 */ menu?: boolean; /** 갤러리: 키보드 녹화 */ focusAfter?: number }) {
   const kb = useKeyboardShown();
+  // 홈(대화)은 탭 줄을 숨기지 않는다: 숨기면 키보드가 오르는 도중 화면 높이가 한 번 더 바뀌어 입력 줄과 대화가 튄다.
+  // 키보드가 탭 줄을 덮고, 홈의 KeyboardAvoidingView가 탭 줄 위로 겹친 만큼만 올린다.
   return (
     <View style={st.fill}>
       <View style={st.fill}>
-        {tab === 'home' && <HomeScreen go={go} chat={chat} todo={todo} draft={draft} phone={phone} menu={menu} />}
+        {tab === 'home' && <HomeScreen go={go} chat={chat} todo={todo} draft={draft} phone={phone} menu={menu} focusAfter={focusAfter} />}
         {tab === 'money' && <MoneyScreen go={go} />}
         {tab === 'records' && <RecordsScreen go={go} />}
       </View>
-      {!kb && <TabBar tab={tab} onTab={onTab} />}
+      {(tab === 'home' || !kb) && <TabBar tab={tab} onTab={onTab} />}
     </View>
   );
 }
