@@ -117,7 +117,8 @@ export function QueueProvider({
     for (const j of jobs) {
       if (!j.id.startsWith('cmd-') || j.state !== 'approval' || !j.gate || shown.has(j.gate.reqId)) continue;
       shown.add(j.gate.reqId);
-      if (j.gate.exp > Date.now()) setSheetId((cur) => cur ?? j.id);
+      // 열려 있던 시트의 일이 요청을 잃었으면(PC가 거뒀거나 승인 단계를 지남) 그 자리는 빈 것으로 본다
+      if (j.gate.exp > Date.now()) setSheetId((cur) => (cur && jobs.some((x) => x.id === cur && x.gate) ? cur : j.id));
     }
   }, [jobs, shown]);
   const [focusId, setFocusId] = useState<string | null>(initialFocus);
