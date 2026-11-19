@@ -10,7 +10,7 @@ import { REJECT_LINE } from '../phoneCmd';
 import type { Job } from '../queue';
 import { ACTION_LABEL, AUTH_APPS, STEPS, STEP_LABEL, STOP_COPY, actionsOf, chipOf, elapsed, groupApprovalNo, mmss, stepOf, type IssueResult, type RunAction, type RunView } from '../run';
 import { radius, space, usePalette } from '../theme';
-import { Check, Pill, StatusDot, T, success, won } from '../ui/kit';
+import { Button, Check, Pill, StatusDot, T, success, won } from '../ui/kit';
 
 
 export function actionLabel(a: RunAction, r: RunView): string {
@@ -36,7 +36,7 @@ export function useNow(fixed?: number, on = true): number {
   return fixed ?? now;
 }
 
-export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, onShare }: {
+export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, onShare, onApprove }: {
   job: Job;
   /** 갤러리: 시계를 멈춘다 */
   now?: number;
@@ -46,6 +46,8 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
   onAction?: (a: RunAction) => void;
   onDoc?: () => void;
   onShare?: () => void;
+  /** 이 폰으로 승인할 요청이 열려 있을 때 [승인 열기](승인 시트) */
+  onApprove?: () => void;
 }) {
   const p = usePalette();
   const r = job.run;
@@ -94,6 +96,14 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
       {/* 이유 없는 PC 멈춤은 어느 단계였는지 모르니 단계 막대를 두지 않는다 */}
       {r.kind !== 'done' && r.kind !== 'refused' && !(r.kind === 'stopped' && r.reason === 'pcStopped') && <StepBar r={r} />}
       <StateLines r={r} />
+      {onApprove && job.gate && job.state === 'approval' && job.gate.exp > now && (
+        <View style={st.approve} testID="run-approve">
+          <T v="sub" c="ink2" style={{ flex: 1, fontVariant: ['tabular-nums'] }}>
+            승인을 기다려요 · 남은 시간 {mmss(job.gate.exp - now)}
+          </T>
+          <Button kind="approve" small label="승인 열기" onPress={onApprove} testID="run-approve-open" />
+        </View>
+      )}
       {r.kind === 'done' && <ResultRows result={r.result} />}
       {compact && !job.pcOnly && <CardActions r={r} now={now} onAction={onAction} onDoc={onDoc} onShare={onShare} />}
     </View>
@@ -291,6 +301,7 @@ function CardActions({ r, now, onAction, onDoc, onShare }: { r: RunView; now: nu
 }
 
 const st = StyleSheet.create({
+  approve: { flexDirection: 'row', alignItems: 'center', gap: space.s3 },
   card: { borderRadius: radius.lg, padding: space.s4, gap: space.s2 },
   head: { flexDirection: 'row', alignItems: 'baseline', gap: space.s3 },
   chipLine: { flexDirection: 'row', alignItems: 'center', gap: space.s1, flexWrap: 'wrap' },
