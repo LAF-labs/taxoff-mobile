@@ -3,7 +3,7 @@
 import { StyleSheet, View } from 'react-native';
 import { clock } from '../chat';
 import { STEP_LABEL } from '../run';
-import { REASON_LINE, STATE_ACTION, STATE_LINE, STATE_NAME, groupJobs, type Job, type JobAction, type JobState } from '../queue';
+import { REASON_LINE, STATE_LINE, STATE_NAME, actionFor, groupJobs, type Job, type JobAction, type JobState } from '../queue';
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
 import { space } from '../theme';
@@ -40,7 +40,7 @@ export function QueueScreen({ onDone, onConnection, onOpen, now = Date.now() }: 
             <Group key={g.state} title={`${STATE_NAME[g.state]} · ${g.jobs.length}건`} testID={`queue-${g.state}`}>
               {g.jobs.map((j) => (
                 <JobRow key={j.id} job={j} state={g.state} onAction={(a) => {
-                    if (a === 'cancel' || a === 'retry') return q.act(j.id, a);
+                    if (a === 'cancel' || a === 'retry' || a === 'dismiss') return q.act(j.id, a);
                     if (a === 'approve' && j.gate) return q.openSheet(j.id);
                     q.setFocus(j.id);
                     onOpen(j, a);
@@ -62,7 +62,7 @@ export function QueueScreen({ onDone, onConnection, onOpen, now = Date.now() }: 
 }
 
 function JobRow({ job, state, onAction }: { job: Job; state: JobState; onAction: (a: JobAction) => void }) {
-  const action = STATE_ACTION[state];
+  const action = actionFor(job, state);
   const r = job.run;
   const line =
     state === 'needPc' && job.reason
