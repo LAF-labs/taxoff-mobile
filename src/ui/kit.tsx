@@ -7,7 +7,7 @@
 import * as Haptics from 'expo-haptics';
 import { useContext, useEffect, useRef, type ReactNode } from 'react';
 import {
-  ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View,
+  ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View,
   type AccessibilityRole, type StyleProp, type TextStyle, type ViewStyle,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -391,4 +391,41 @@ export const st = StyleSheet.create({
   reply: { minHeight: size.row, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: space.s4, paddingVertical: space.s3, flexDirection: 'row', alignItems: 'center', gap: space.s3 },
   seg: { flexDirection: 'row', borderRadius: radius.md, padding: 3 },
   segItem: { flex: 1, minHeight: 38, borderRadius: radius.sm + 1, alignItems: 'center', justifyContent: 'center' },
+});
+
+/** 앱 안 확인 시트(승인 시트와 같은 모양: 가림막 + 아래에서 올라온 둥근 시트 + 손잡이). 되돌릴 수 없는 일 앞에 한 번. */
+export function ConfirmSheet({ title, body, yes, no, onYes, onNo }: { title: string; body?: string; yes: string; no: string; onYes: () => void; onNo: () => void }) {
+  const p = usePalette();
+  const inset = useSafeAreaInsets();
+  return (
+    <Modal transparent visible animationType="fade" onRequestClose={onNo}>
+      <View style={StyleSheet.absoluteFill} testID="confirm-sheet">
+        <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: p.scrim }]} onPress={onNo} accessibilityLabel={no} accessibilityRole="button" />
+        <View style={[sheetSt.sheet, { backgroundColor: p.canvas, paddingBottom: Math.max(inset.bottom, space.s4) }]} accessibilityViewIsModal>
+          <View style={[sheetSt.grabber, { backgroundColor: p.sunken }]} />
+          <View style={sheetSt.body}>
+            <T v="title" role="header">
+              {title}
+            </T>
+            {body ? (
+              <T v="sub" c="ink2">
+                {body}
+              </T>
+            ) : null}
+          </View>
+          <View style={sheetSt.footer}>
+            <Button label={yes} onPress={onYes} testID="confirm-yes" />
+            <Button kind="quiet" label={no} onPress={onNo} testID="confirm-no" />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const sheetSt = StyleSheet.create({
+  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingTop: space.s2 },
+  grabber: { alignSelf: 'center', width: 36, height: 5, borderRadius: 3, marginBottom: space.s2 },
+  body: { paddingHorizontal: space.s5, paddingTop: space.s3, paddingBottom: space.s4, gap: space.s3 },
+  footer: { paddingHorizontal: space.s5, paddingTop: space.s2, gap: space.s2 },
 });

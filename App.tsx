@@ -29,6 +29,7 @@ import { SimpleAuthHost } from './src/screens/SimpleAuthHost';
 import { NotifyHost } from './src/notify/NotifyHost';
 import { PushHost } from './src/notify/PushHost';
 import { installWakeTap } from './src/notify/push';
+import { showCard } from './src/cardFocus';
 import { TextSizeHost } from './src/ui/TextSizeHost';
 import { DocScreen } from './src/screens/DocScreen';
 import { BizRegScreen } from './src/screens/BizRegScreen';
@@ -213,6 +214,11 @@ export default function App() {
         <PushHost
           onQueue={() => setStack((x) => (x[x.length - 1] === 'queue' ? x : [...x, 'queue']))}
           onRun={() => setStack((x) => (x[x.length - 1] === 'run' ? x : [...x, 'run']))}
+          onCard={(id) => {
+            setTab('home');
+            setStack(['tabs']);
+            showCard(id);
+          }}
         />
         <SimpleAuthHost />
         <NotifyHost

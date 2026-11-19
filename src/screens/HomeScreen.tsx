@@ -16,6 +16,7 @@ import { queueCounts } from '../queue';
 import { useQueue } from '../queueStore';
 import { RunCard } from './RunCard';
 import { useEntrust } from '../entrust';
+import { onShowCard, shownCard } from '../cardFocus';
 import { counterpartiesOf } from '../net/pcCopy';
 import { splitAmount, type VatMode } from '../issue';
 import { masked } from '../ui/field';
@@ -170,6 +171,20 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
   const last = items.at(-1);
   const lastId = last?.id ?? '';
   const seen = useRef<string | null>(null);
+  // 승인 대기 카드로(알림 누름, 새 승인 요청): 그 카드를 화면 가운데로 스크롤한다
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  useEffect(
+    () =>
+      onShowCard((id) => {
+        const index = dataRef.current.findIndex((it) => it.kind === 'run' && it.jobId === id);
+        if (index < 0) return; // 아직 카드가 없다: 요청이 오면 다시 부른다
+        shownCard(id);
+        setEnd(null);
+        requestAnimationFrame(() => list.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true }));
+      }),
+    [],
+  );
   // 웹: 새 말을 그리기 전(이 렌더 중)에 읽던 줄을 잡아 둔다
   if (Platform.OS === 'web' && seen.current !== null && seen.current !== lastId && !anchor.current) anchor.current = catchAnchor();
   useLayoutEffect(() => holdAnchor());
@@ -256,6 +271,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
             data={data}
             inverted
             keyExtractor={(it) => it.id}
+            onScrollToIndexFailed={(e) => list.current?.scrollToOffset({ offset: e.averageItemLength * e.index, animated: true })}
             maintainVisibleContentPosition={KEEP_POSITION}
             style={st.fill}
             contentContainerStyle={st.list}
