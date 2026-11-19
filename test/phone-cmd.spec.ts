@@ -85,6 +85,10 @@ describe('cmd.ack · run.event → 진행 화면', () => {
     assert.deepEqual(stop('date_mismatch'), { kind: 'stopped', step: 'prepare', reason: 'pcStopped', startedAt: T0 });
     assert.deepEqual(runViewOf(applyEvent(base, { runId: 'run1', event: 'phase', at: T0 + 1, phase: 'verify', code: 'in_doubt', attempt: 1 })), { kind: 'inDoubt', tries: 1, startedAt: T0 });
     assert.match(STOP_COPY.pcStopped.line, /아무것도 발급하지 않았어요/);
+    // PC 앱 판이 낮아 시작하지 않았다: 이유를 말하고, PC 화면을 보라는 말은 하지 않는다
+    assert.deepEqual(stop('app_old'), { kind: 'stopped', step: 'prepare', reason: 'appOld', startedAt: T0 });
+    assert.match(STOP_COPY.appOld.line, /업데이트/);
+    assert.doesNotMatch(STOP_COPY.appOld.line + STOP_COPY.pcStopped.line, /PC 화면|PC에서 볼/);
   });
   it('거절 이유는 한 줄 문구로, 같은 runId의 duplicate는 다시 붙기', () => {
     for (const reason of ['playbook_unavailable', 'input_invalid', 'counterparty_unknown', 'hometax_paused'] as const) {
