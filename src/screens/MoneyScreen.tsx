@@ -188,7 +188,7 @@ function CopyMoney({ money }: { money: NonNullable<PhoneCopyBody['money']> }) {
       <SideCard testID="money-recv" title="받을 돈" s={money.receivable} unpaidWord="안 받음" />
       <SideCard testID="money-pay" title="낼 돈" s={money.payable} unpaidWord="안 냄" />
       <T v="meta" c="ink3" style={{ paddingHorizontal: space.s1 }} testID="money-list-on-pc">
-        한 건씩 보는 목록은 PC에서 볼 수 있어요
+        건별 목록은 PC에서 볼 수 있어요
       </T>
 
       {!noAcct && n30 && (
@@ -255,9 +255,15 @@ function SideCard({ title, s, unpaidWord, onPress, testID }: { title: string; s:
         <Amount n={s.unpaidTotal} v="figure" />
         <T v="sub" c="ink2">{`${s.unpaidCount}건${NB}${unpaidWord}`}</T>
       </View>
+      {/* 0건 줄은 두지 않는다(늘 "0건 0원"이 떠 있으면 읽을 것만 는다). 둘 다 없으면 한 줄로 */}
       <View style={[st.sep, { backgroundColor: p.line }]} />
-      <Line label="기한 지남" n={s.overdueTotal} count={s.overdueCount} ink={s.overdueCount ? 'attention' : 'ink3'} />
-      <Line label="7일 안" n={s.dueSoonTotal} count={s.dueSoonCount} />
+      {s.overdueCount > 0 && <Line label="기한 지남" n={s.overdueTotal} count={s.overdueCount} ink="attention" />}
+      {s.dueSoonCount > 0 && <Line label="7일 안" n={s.dueSoonTotal} count={s.dueSoonCount} />}
+      {s.overdueCount === 0 && s.dueSoonCount === 0 && (
+        <T v="sub" c="ink3" testID={testID && `${testID}-calm`}>
+          {s.unpaidCount === 0 ? `남은 것이 없어요` : `기한 지난 것도, 7일 안에 올 것도 없어요`}
+        </T>
+      )}
     </Pressable>
   );
 }

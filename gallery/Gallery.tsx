@@ -10,6 +10,7 @@ import type { ChatItem } from '../src/chat';
 import { SessionContext, type Session } from '../src/session';
 import { MainScreen, type Tab } from '../src/screens/MainScreen';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
+import { Banner } from '../src/notify/NotifyHost';
 import { LockScreen } from '../src/screens/LockScreen';
 import type { BioInfo } from '../src/biometry';
 import { QueueScreen } from '../src/screens/QueueScreen';
@@ -476,7 +477,29 @@ const SCREENS: Record<
   'money-mark': () => money(MONEY_OK, { start: 'mark' }),
   'money-mark-offline': () => money(MONEY_LAST, { start: 'mark', live: false, pc: 'offline' }),
   'records-empty': () => ({ session: fake(paired(), 'online'), node: <Main start="records" /> }),
-  settings: () => ({ session: fake(paired(), 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} /> }),
+  settings: () => ({ session: fake(paired(), 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="granted" /> }),
+  'settings-unpaired': () => ({ session: fake(emptyData(), 'unpaired'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="undetermined" /> }),
+  'settings-notify': () => ({ session: fake(paired(), 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="granted" sub="notify" /> }),
+  'settings-notify-ask': () => ({ session: fake(paired(), 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="undetermined" sub="notify" /> }),
+  'settings-notify-off': () => ({ session: fake({ ...paired(), notify: { run: true, money: false } }, 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="denied" sub="notify" /> }),
+  'notify-banner': () => ({
+    session: fake(paired(), 'online'),
+    node: (
+      <>
+        <Main start="money" />
+        <Banner ev={{ jobId: 'j', kind: 'done', title: '세금계산서를 발급했어요', line: '가나식자재 세금계산서', os: { title: '', body: '' } }} onPress={noop} onClose={noop} />
+      </>
+    ),
+  }),
+  'notify-banner-turn': () => ({
+    session: fake(paired(), 'online'),
+    node: (
+      <>
+        <Main start="records" />
+        <Banner ev={{ jobId: 'j', kind: 'myTurn', title: '내 차례예요', line: '가나식자재 세금계산서 · 폰에서 간편인증을 승인해 주세요', os: { title: '', body: '' } }} onPress={noop} onClose={noop} />
+      </>
+    ),
+  }),
   // ---- 앱 잠금(P-01) ----
   'lock-faceid': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: FACE }} /> }),
   'lock-touchid': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'touchId', enrolled: true } }} /> }),

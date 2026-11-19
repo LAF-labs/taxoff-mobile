@@ -3,6 +3,7 @@ import type { MoneySnapshot } from '../money';
 import type { PhoneCopyBody } from '@sax/remote';
 import type { PhoneCmd } from '../phoneCmd';
 import type { PcWhy } from '../net/pcWhy';
+import type { NotifyPrefs } from '../notify/events';
 import { File } from 'expo-file-system';
 import { fromUtf8, utf8, xOpen, xSeal, type DeviceListJson, type SignedCert } from '@sax/remote';
 import { currentEpoch, inflight, liveKey, sameEpoch } from '../inflight';
@@ -76,6 +77,8 @@ export interface AppData {
   cmds?: PhoneCmd[];
   /** PC 연결이 안 된 최근 원인(net/pcWhy.ts, '단계:원인'과 시각만. 최대 20개) */
   pcLog?: PcWhy[];
+  /** 알림 고르기(설정 > 알림). 없으면 모두 켜짐(notify/events DEFAULT_PREFS). OS 허용은 따로 OS가 갖는다. */
+  notify?: NotifyPrefs;
 }
 
 export const emptyData = (): AppData => ({ v: 1, pair: null, deviceList: null, seenListVersion: 0, ikTs: 0, lastSeenPc: null, cash: [], recent: [], queueSeq: 0, qbundleSeq: 0 });
