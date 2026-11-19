@@ -559,7 +559,7 @@ function InvoiceFields({
       </Group>
 
       {inv.items.length > 0 && (
-        <Group title={`품목 ${inv.items.length}개`} note="품목은 읽은 그대로 보내요. 고칠 게 있으면 PC에서 고쳐요.">
+        <Group title={`품목 ${inv.items.length}개`} note="품목은 읽은 그대로 보내요. 틀린 칸은 보낸 뒤에 고칠 수 있어요.">
           {inv.items.map((it, i) => (
             <Row
               key={i}

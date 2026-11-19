@@ -23,7 +23,7 @@ export function MoneyListScreen({ kind, onDone, onMark }: { kind: 'recv' | 'pay'
   }
   return (
     <Screen title={title} onBack={onDone} testID={`money-${kind}-list`}>
-      <Group note={kind === 'pay' ? '낸 처리는 PC에서 해요' : m.live ? undefined : 'PC에서 마지막으로 받은 값이에요. 받음 처리는 PC가 켜지면 해요.'}>
+      <Group note={kind === 'pay' ? '낸 처리는 아직 폰에서 할 수 없어요' : m.live ? undefined : 'PC에서 마지막으로 받은 값이에요. 받음 처리는 PC가 켜지면 해요.'}>
         {list.map((v) => (
           <Item
             key={v.id}

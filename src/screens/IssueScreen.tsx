@@ -127,9 +127,9 @@ export function IssueScreen({
       </View>
     );
   } else if (viaPc) notice = null;
-  else if (firstTime) notice = <Notice testID="issue-first">처음 거래하는 곳이라 발급 승인은 PC에서 해요</Notice>;
+  else if (firstTime) notice = <Notice testID="issue-first">처음 거래하는 곳이라 폰으로는 승인할 수 없어요</Notice>;
   else if (approvalsLeft <= 1)
-    notice = <Notice testID="issue-limit">{approvalsLeft === 0 ? '오늘 폰 승인을 다 썼어요. 발급 승인은 PC에서 해요' : `오늘 폰 승인은 ${approvalsLeft}건 남았어요`}</Notice>;
+    notice = <Notice testID="issue-limit">{approvalsLeft === 0 ? '오늘 폰 승인을 다 썼어요. 내일 0시에 다시 생겨요' : `오늘 폰 승인은 ${approvalsLeft}건 남았어요`}</Notice>;
 
   // 부가세 포함 합계를 세액 규칙(10% 버림)으로 정확히 못 만드는 값이면 아래로 맞추고 알린다.
   const entered = Number(amount.replace(/\D/g, ''));
@@ -177,7 +177,7 @@ export function IssueScreen({
       )}
       {viaPc && (
         <T v="meta" c="ink3" center testID="issue-pc-approve">
-          승인은 PC 승인 바에서 해요
+          발급 승인은 PC가 받아요
         </T>
       )}
       <Button testID="issue-submit" label={viaPc ? (online ? '발급 맡기기' : 'PC 켜지면 맡기기') : online ? '홈택스에서 준비' : 'PC 켜지면 준비하기'} onPress={submit} disabled={!ready || saving} />
@@ -281,7 +281,7 @@ function statusNote(status: Counterparty['status'], firstAsLine: boolean) {
   if (status?.kind === 'checking') parts.push(<StatusDot key="s" busy tone="quiet" v="meta" label="PC가 휴·폐업 여부를 확인해요" testID="issue-status-checking" />);
   if (status?.kind === 'waitPc') parts.push(<T key="s" v="meta" c="ink3" testID="issue-status-wait">PC가 켜지면 휴·폐업을 확인해요</T>);
   if (status?.kind === 'ok') parts.push(<T key="s" v="meta" c="ink3" testID="issue-status-ok">휴·폐업 조회 정상</T>);
-  if (firstAsLine) parts.push(<T key="f" v="meta" c="ink3">처음 거래하는 곳이라 승인은 PC에서 해요</T>);
+  if (firstAsLine) parts.push(<T key="f" v="meta" c="ink3">처음 거래하는 곳이라 폰으로는 승인할 수 없어요</T>);
   return parts.length ? <View style={{ gap: 2, paddingHorizontal: space.s1 }}>{parts}</View> : null;
 }
 

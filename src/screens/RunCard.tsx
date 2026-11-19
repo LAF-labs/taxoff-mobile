@@ -187,7 +187,7 @@ function StateLines({ r }: { r: RunView }) {
       // 폰 발급 명령(pc_only): 승인은 PC 승인 바에서
       return r.pcApproval && r.step === 'approve' ? (
         <T v="sub" c="attention" testID="run-pc-approve">
-          PC 승인 바에서 승인해 주세요
+          PC가 승인을 기다리고 있어요
         </T>
       ) : null;
     case 'refused':
