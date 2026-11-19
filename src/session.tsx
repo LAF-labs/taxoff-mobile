@@ -5,6 +5,8 @@ import { AppState } from 'react-native';
 import { RECONNECT_MS } from './config';
 import { inflight } from './inflight';
 import type { DeviceKeys } from './keyring';
+import SaxNative from '../modules/sax-native/src/SaxNativeModule';
+import { deviceApprovalKey } from './approvalKey';
 import { closeLive, syncWithPc, type PcStatus } from './net/pc';
 import { statusWhileSyncing } from './net/pcWhy';
 import { failed, netChanged, NET_SETTLE_MS, retryDelay, type NetShape } from './net/reconnect';
@@ -40,6 +42,8 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
   const [pending, setPending] = useState({ receipts: 0, cash: 0 });
   const [pc, setPc] = useState<PcStatus>(initial.pair ? 'offline' : 'unpaired');
   const [syncing, setSyncing] = useState(false);
+  /** 하드웨어 승인 키(iOS 네이티브 빌드에만 있다) */
+  const px = useMemo(() => deviceApprovalKey(SaxNative), []);
   const busy = useRef(false);
   /** 잠그면(이 공급자가 내려가면) 거짓. 지켜보던 발급 명령 세션을 멈춘다. */
   const alive = useRef(true);
@@ -91,7 +95,7 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
     let ok: boolean;
     try {
       const r = await inflight(() =>
-        syncWithPc({ keys, data: () => dataRef.current, update, outbox, onLive: () => alive.current && setPc('online'), alive: () => alive.current && netGen.current === gen }),
+        syncWithPc({ keys, data: () => dataRef.current, update, outbox, px, onLive: () => alive.current && setPc('online'), alive: () => alive.current && netGen.current === gen }),
       );
       setPc(r.status);
       ok = !failed(r.status);
@@ -112,7 +116,7 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
       fails.current += 1;
       later(retryDelay(fails.current, RECONNECT_MS));
     }
-  }, [keys, update, outbox, refreshPending, later]);
+  }, [keys, update, outbox, refreshPending, px, later]);
   syncRef.current = sync;
 
   useEffect(() => {

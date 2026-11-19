@@ -123,6 +123,62 @@ public class SaxNativeModule: Module {
       SecItemDelete(q as CFDictionary)
     }
 
+    // ---- 승인 키(Px, ADR-052): Secure Enclave P-256. 개인키는 기기 밖으로 나오지 않고, 서명할 때마다 생체를 확인한다 ----
+    // 접근 제어: WhenPasscodeSetThisDeviceOnly + privateKeyUsage + biometryCurrentSet(폰 암호 대체 없음. 생체를 다시 등록하면 키가 죽는다).
+    // 오류 message: px_unavailable(Secure Enclave·생체 없음) · px_missing · biometry_lockout · px_sign_failed:<코드>
+
+    // 공개키(SEC1 비압축 65바이트, base64). 키가 없으면 nil. 생체를 묻지 않는다.
+    AsyncFunction("pxPublic") { (tag: String) -> String? in
+      guard let key = pxKey(tag, nil) else { return nil }
+      return try pxPub(key)
+    }
+
+    // 키가 없으면 만든다. 있으면 그 키의 공개키. 생체를 묻지 않는다(등록된 생체가 없으면 px_unavailable).
+    AsyncFunction("pxCreate") { (tag: String) -> String in
+      if let key = pxKey(tag, nil) { return try pxPub(key) }
+      var err: Unmanaged<CFError>?
+      guard let ac = SecAccessControlCreateWithFlags(nil, kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly, [.privateKeyUsage, .biometryCurrentSet], &err) else {
+        throw VaultException("px_unavailable")
+      }
+      let attrs: [String: Any] = [
+        kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+        kSecAttrKeySizeInBits as String: 256,
+        kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
+        kSecPrivateKeyAttrs as String: [
+          kSecAttrIsPermanent as String: true,
+          kSecAttrApplicationTag as String: Data(tag.utf8),
+          kSecAttrAccessControl as String: ac,
+        ] as [String: Any],
+      ]
+      guard let key = SecKeyCreateRandomKey(attrs as CFDictionary, &err) else { throw VaultException("px_unavailable") }
+      return try pxPub(key)
+    }
+
+    // 생체 확인 → ECDSA-P256-SHA256(data). 서명은 X9.62 DER(base64). 사용자가 취소하면 nil.
+    AsyncFunction("pxSign") { (tag: String, dataB64: String, prompt: String) -> String? in
+      guard let data = Data(base64Encoded: dataB64) else { throw VaultException("px_bad_input") }
+      let ctx = LAContext()
+      ctx.localizedReason = prompt
+      // 폰 암호 대체를 두지 않는다(D08 §3.1: 비가역 승인은 생체만)
+      ctx.localizedFallbackTitle = ""
+      guard let key = pxKey(tag, ctx) else { throw VaultException("px_missing") }
+      var err: Unmanaged<CFError>?
+      guard let sig = SecKeyCreateSignature(key, .ecdsaSignatureMessageX962SHA256, data as CFData, &err) as Data? else {
+        let e = err?.takeRetainedValue()
+        let code = e.map { CFErrorGetCode($0) } ?? 0
+        // LAError: userCancel -2 · systemCancel -4 · appCancel -9 · userFallback -3, 키체인: errSecUserCanceled -128
+        if code == -2 || code == -4 || code == -9 || code == -3 || code == Int(errSecUserCanceled) { return nil }
+        if code == -8 { throw VaultException("biometry_lockout") }
+        throw VaultException("px_sign_failed:\(code)")
+      }
+      return sig.base64EncodedString()
+    }
+
+    AsyncFunction("pxDelete") { (tag: String) in
+      let q: [String: Any] = [kSecClass as String: kSecClassKey, kSecAttrApplicationTag as String: Data(tag.utf8), kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom]
+      SecItemDelete(q as CFDictionary)
+    }
+
     // SP-1 진단: 항목 정책 이름만(값 없음)
     Function("vaultPolicy") { () -> [String: String] in
       ["accessible": "WHEN_PASSCODE_SET_THIS_DEVICE_ONLY", "auth": "userPresence"]
@@ -134,6 +190,28 @@ public class SaxNativeModule: Module {
 final class VaultException: GenericException<String> {
   override var code: String { "ERR_SAX_VAULT" }
   override var reason: String { param }
+}
+
+// 승인 키 찾기. ctx를 주면 그 인증 맥락으로 서명한다(찾는 것만으로는 생체를 묻지 않는다).
+private func pxKey(_ tag: String, _ ctx: LAContext?) -> SecKey? {
+  var q: [String: Any] = [
+    kSecClass as String: kSecClassKey,
+    kSecAttrApplicationTag as String: Data(tag.utf8),
+    kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+    kSecReturnRef as String: true,
+    kSecMatchLimit as String: kSecMatchLimitOne,
+  ]
+  if let ctx = ctx { q[kSecUseAuthenticationContext as String] = ctx }
+  var out: CFTypeRef?
+  guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let ref = out else { return nil }
+  return (ref as! SecKey)
+}
+
+private func pxPub(_ key: SecKey) throws -> String {
+  guard let pub = SecKeyCopyPublicKey(key), let raw = SecKeyCopyExternalRepresentation(pub, nil) as Data?, raw.count == 65 else {
+    throw VaultException("px_unavailable")
+  }
+  return raw.base64EncodedString()
 }
 
 enum SaxError: Error {

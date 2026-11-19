@@ -2,11 +2,15 @@
 // - 보낼 명령은 이미 봉인 상태 파일에 cmdId와 함께 저장돼 있다. 다시 연결할 때마다 같은 cmdId로 다시 보낸다.
 // - 끝나지 않은 명령이 있는 동안 세션을 붙잡고 지켜본다(최대 WATCH_MS). 끊기면 다음 연결 때 PC가 지금 상태를 다시 보낸다.
 // - PC가 issue.v1을 알리지 않으면 보내지 않고 "PC 앱을 새 버전으로" 상태로 둔다.
-import { CAP, issueCmd, type Channel, type CmdAckBody, type PhoneCopyBody, type RunEventBody } from '@sax/remote';
-import { applyAck, applyEvent, applyHumanRequest, busyWaiting, forRetry, retryDue, settled, type PhoneCmd } from '../phoneCmd.ts';
+// - 폰 승인(v1.10, ADR-052): PC가 approve.v1을 알렸으면 gate.request를 받아 명령에 붙이고(승인 시트가 뜬다),
+//   사장님이 서명한 답(gate.response)과 [PC에 다시 요청](gate.refresh)을 이 세션으로 보낸다.
+import { CAP, issueCmd, type Channel, type CmdAckBody, type GateRequestBody, type PhoneCopyBody, type RunEventBody } from '@sax/remote';
+import { applyAck, applyEvent, applyGate, applyHumanRequest, busyWaiting, forRetry, markAnswered, responseDue, retryDue, settled, type PhoneCmd } from '../phoneCmd.ts';
 
 export const WATCH_MS = 10 * 60_000;
 const TICK_MS = 2_000;
+/** 승인 요청이 열려 있는 동안: 사장님의 답을 바로 보내려고 더 자주 본다 */
+const GATE_TICK_MS = 300;
 
 export interface CmdIo {
   cmds: () => PhoneCmd[];
@@ -55,7 +59,34 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
     } else await send(c);
   }
   const deadline = t0 + watchMs;
+  const approves = peerCaps.includes(CAP.approve);
+  /** 사장님이 적어 둔 답과 다시 요청을 보낸다. 승인 봉투는 PC가 approve.v1을 알렸을 때만. */
+  const flushApprovals = async () => {
+    if (!approves) return;
+    for (const c of io.cmds()) {
+      const r = responseDue(c, now());
+      // 보내다 던지면: 채널이 닫혔으면 그대로 두고(다음 연결에 마감 전이면 다시 보낸다), 봉투가 규칙에 안 맞으면 그 답을 버린다
+      if (r) {
+        try {
+          ch.send('gate.response', r);
+        } catch {
+          if (ch.closed) return;
+          await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? { ...x, answer: undefined } : x)));
+          continue;
+        }
+        await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? markAnswered(x, r.reqId, now()) : x)));
+      } else if (c.refresh && c.runId) {
+        try {
+          ch.send('gate.refresh', { runId: c.runId, reqId: c.refresh });
+        } catch {
+          if (ch.closed) return;
+        }
+        await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? { ...x, refresh: undefined } : x)));
+      }
+    }
+  };
   for (;;) {
+    await flushApprovals();
     // 지켜보는 동안 새로 맡긴 명령도 이 세션으로 보낸다
     for (const c of io.cmds()) {
       if (retryDue(c, now())) await retry(c);
@@ -89,7 +120,8 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
     if (io.alive && !io.alive()) return 'closed';
     const left = deadline - now();
     if (left <= 0) return 'timeout';
-    const e = await ch.recv(Math.min(left, TICK_MS));
+    const waiting = approves && io.cmds().some((c) => !!c.gate || (!!c.answer && !c.answer.sentAt) || !!c.refresh);
+    const e = await ch.recv(Math.min(left, waiting ? GATE_TICK_MS : TICK_MS));
     if (!e) continue;
     if (e.type === 'cmd.ack') {
       const a = e.body as CmdAckBody;
@@ -100,6 +132,9 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
     } else if (e.type === 'run.event') {
       const ev = e.body as RunEventBody;
       await io.save((cs) => cs.map((c) => applyEvent(c, ev)));
+    } else if (e.type === 'gate.request' && approves) {
+      const g = e.body as GateRequestBody;
+      await io.save((cs) => cs.map((c) => applyGate(c, g)));
     } else if (e.type === 'phone.copy' && io.onCopy) {
       await io.onCopy(e.body as PhoneCopyBody);
     }

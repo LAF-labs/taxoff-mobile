@@ -4,6 +4,7 @@ import type { MoneySnapshot } from '../money';
 import type { PhoneCopyBody } from '@sax/remote';
 import type { PhoneCmd } from '../phoneCmd';
 import type { PcWhy } from '../net/pcWhy';
+import type { PxState } from '../net/pxLive';
 import type { NotifyPrefs } from '../notify/events';
 import type { TextSize } from '../theme';
 import { File } from 'expo-file-system';
@@ -93,6 +94,8 @@ export interface AppData {
   cmds?: PhoneCmd[];
   /** PC 연결이 안 된 최근 원인(net/pcWhy.ts, '단계:원인'과 시각만. 최대 20개) */
   pcLog?: PcWhy[];
+  /** 승인 키를 PC가 받았는지(net/pxLive.ts, ADR-052). enrolled일 때만 이 폰에서 발급을 승인할 수 있다. 페어링을 끊으면 지운다. */
+  px?: PxState;
   /** 알림 고르기(설정 > 알림). 없으면 모두 켜짐(notify/events DEFAULT_PREFS). OS 허용은 따로 OS가 갖는다. */
   notify?: NotifyPrefs;
   /** 서버에 마지막으로 올린 푸시 토큰의 지문(notify/wake.ts tokenHash). 토큰 자체는 두지 않는다. 지우면 null */
