@@ -159,17 +159,17 @@ describe('폰 대화(PC 꺼짐): 고정 사본 → 가짜 게이트웨이', () =
 
 describe('폰 대화 줄 표시', () => {
   const at = new Date(2026, 10, 18, 14, 5).getTime();
-  it('폰이 답한 말은 "폰에서 답함", PC 답은 "PC"로 구분한다', () => {
+  it('폰이 답한 말은 "폰", PC 답은 "PC"로 구분한다(가운데점 없이)', () => {
     const a = itemOf({ id: 'a', from: 'assistant', at, text: '네' } as never);
     assert.equal(a.kind === 'msg' && a.via, 'phone');
-    assert.equal(metaOf(a as never), '폰에서 답함 · 오후 2:05');
-    assert.equal(metaOf({ kind: 'msg', id: 'b', from: 'pc', at, text: '네' }), 'PC · 오후 2:05');
+    assert.equal(metaOf(a as never), '폰 오후 2:05');
+    assert.equal(metaOf({ kind: 'msg', id: 'b', from: 'pc', at, text: '네' }), 'PC 오후 2:05');
   });
-  it('내 말은 어디까지 갔는지 붙인다(보내는 중 · 못 보냄 · PC 켜지면)', () => {
+  it('내 말은 어디까지 갔는지 붙인다(보내는 중, 못 보냄, PC 켜지면)', () => {
     const me = (state: 'sending' | 'failed' | 'waiting' | 'sent') => metaOf({ kind: 'msg', id: 'm', from: 'me', at, text: 'x', state });
-    assert.equal(me('sending'), '오후 2:05 · 보내는 중');
-    assert.equal(me('failed'), '오후 2:05 · 못 보냈어요');
-    assert.equal(me('waiting'), '오후 2:05 · PC 켜지면 보내요');
+    assert.equal(me('sending'), '오후 2:05 보내는 중');
+    assert.equal(me('failed'), '오후 2:05 못 보냈어요');
+    assert.equal(me('waiting'), '오후 2:05 PC 켜지면 보내요');
     assert.equal(me('sent'), '오후 2:05');
   });
 });

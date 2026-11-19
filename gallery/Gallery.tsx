@@ -131,7 +131,7 @@ const chatOn = (d: number): ChatItem[] => [
 const CHAT = chatOn(0);
 const CHAT_OFFLINE: ChatItem[] = [
   ...CHAT,
-  { kind: 'msg', id: 'c5', from: 'me', at: at(11, 40), text: '동네마트에 오늘 날짜로 세금계산서 발급해 줘. 공급가액 320,000원', state: 'waiting' },
+  { kind: 'msg', id: 'c5', from: 'me', at: at(11, 40), text: '동네마트에 오늘 날짜로 세금계산서 발급해 줘. 공급가액 320,000원' },
 ];
 const CHAT_MERGED: ChatItem[] = [
   ...chatOn(1),
@@ -145,9 +145,9 @@ const CHAT_MERGED: ChatItem[] = [
 const TODO = { approvals: 2, backlog: 1 };
 
 /** 탭 화면을 가짜 세션으로 그린다. 탭은 눌러서 바꿀 수 있다. */
-function Main({ start = 'home', chat, live, phone }: { start?: Tab; chat?: ChatItem[]; /** 지금 할 일 건수를 가짜 밀린 일에서 센다 */ live?: boolean; phone?: OfflineChatView }) {
+function Main({ start = 'home', chat, live, phone, menu }: { start?: Tab; chat?: ChatItem[]; /** 지금 할 일 건수를 가짜 밀린 일에서 센다 */ live?: boolean; phone?: OfflineChatView; menu?: boolean }) {
   const [tab, setTab] = useState<Tab>(start);
-  return <MainScreen tab={tab} onTab={setTab} go={noop} chat={chat} todo={chat && !live ? TODO : undefined} phone={phone} />;
+  return <MainScreen tab={tab} onTab={setTab} go={noop} chat={chat} todo={chat && !live ? TODO : undefined} phone={phone} menu={menu} />;
 }
 const read = parsePaperInvoice(SAMPLE_INVOICE, today)!;
 
@@ -452,6 +452,12 @@ const SCREENS: Record<
   'home-phone-typing': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('typing')} /> }),
   'home-phone-reply': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('reply')} /> }),
   'home-phone-failed': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('failed')} /> }),
+  // PC가 켜져 있어도 폰 대화로 보낸다: "세금계산서"라는 말 없이 "끊어줘"만으로 카드가 뜨고 [발급 맡기기]가 붙는다
+  'home-phone-card': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('card')} /> }),
+  'home-phone-ask': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('ask')} /> }),
+  'home-phone-screen': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('screen')} /> }),
+  'home-phone-lunch': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('lunch')} /> }),
+  'home-plus-menu': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('card')} menu /> }),
   'home-phone-limit': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('limit')} /> }),
   /** 처음 연결한 뒤 대화가 아직 없는 홈(앱이 이 폰 기록으로 만든 대화) */
   home: () => ({ session: fake(paired(), 'online', { receipts: 2, cash: 0 }), node: <Main /> }),
