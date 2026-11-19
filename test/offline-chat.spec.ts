@@ -59,7 +59,7 @@ const copy = phoneCopyFrom({
   counterparties: [{ id: 'c1', name: '한빛전자', bizNo: '220-81-62517', lastSupply: 500000, lastItem: '컨설팅', lastAt: Date.UTC(2026, 10, 3, 1), issued: 3 }],
 });
 
-function make(outputs: Array<Array<Record<string, unknown>>>, status = 200, error?: string) {
+function make(outputs: Array<Array<Record<string, unknown>>>, status = 200, error?: string, pcOnline?: () => boolean) {
   const gw = fakeGateway(outputs, status, error);
   let saved: string | null = null;
   let n = 0;
@@ -72,6 +72,7 @@ function make(outputs: Array<Array<Record<string, unknown>>>, status = 200, erro
     now: () => NOW,
     newId: () => `01KB${String(++n).padStart(22, '0')}`,
     randomHex: () => randomBytes(16).toString('hex'),
+    pcOnline,
   });
   return { chat, gw, saved: () => saved };
 }
@@ -81,9 +82,29 @@ describe('폰 대화(PC 꺼짐): 고정 사본 → 가짜 게이트웨이', () =
     assert.deepEqual(await maskingSelfCheck(() => randomBytes(16).toString('hex')), { ok: true });
   });
 
+  it('PC가 켜져 있어도 폰이 직접 보낸다: [사실]에 PC 켜짐 줄, 카드 안내도 켜짐에 맞춘다("PC 켜지면 보내요"로 멈추던 버그)', async () => {
+    const { chat, gw } = make(
+      [
+        [fnCall('call_a', 'invoice_draft', { counterparty: '[NAME_1]', amount: '[AMT_1]', vat: null, item: null, date_month_offset: null, date_day: null, quantity: null, unit_price: null })],
+        [message({ kind: 'did', text: '[NAME_1] 카드를 만들었어요.', show: [], ask: null })],
+      ],
+      200,
+      undefined,
+      () => true,
+    );
+    const r = await chat.send('한빛전자 55만원 끊어줘');
+    assert.equal(r.unavailable, undefined, JSON.stringify(r));
+    const text = JSON.stringify(gw.calls[1]!.body).replace(/\\n/g, '\n');
+    assert.match(text, /\[사실\]\nPC: 켜짐\n/);
+    assert.match(text, /앱 판단: 세금계산서 발급 요청/);
+    const card = r.items.find((x) => x.kind === 'msg' && x.card);
+    assert.ok(card && card.kind === 'msg');
+    assert.equal(card.card?.note, '맡기면 PC가 바로 준비해요');
+  });
+
   it('카드 만들기: 게이트웨이에는 가린 글과 기기 인증 헤더만 가고, 답과 카드가 홈 대화 줄이 된다', async () => {
     const { chat, gw, saved } = make([
-      [fnCall('call_a', 'invoice_draft', { counterparty: '[NAME_1]', amount: '[AMT_1]', vat: 'separate', item: null })],
+      [fnCall('call_a', 'invoice_draft', { counterparty: '[NAME_1]', amount: '[AMT_1]', vat: 'separate', item: null, date_month_offset: null, date_day: null, quantity: null, unit_price: null })],
       [message({ kind: 'did', text: '[NAME_1] 카드를 만들었어요. 맡기면 PC를 켰을 때 시작해요.', show: [], ask: null })],
     ]);
     const r = await chat.send('한빛전자에 55만원 세금계산서 끊어줘');

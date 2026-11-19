@@ -3,7 +3,7 @@
 //   지금 할 일 한 줄(승인 대기 · 밀린 일 건수 → 지금 할 일)
 //   대화(PC 답은 글자, 카드 답은 tint 면, 내 말은 오른쪽 tint 말풍선, 폰에서 나눈 구간 머리)
 //   바닥: 빠른 일 [세금계산서 발급] [찍기] [현금] + 입력 줄(보내기). 키보드가 올라오면 함께 올라간다.
-// 이 PR은 화면만 바꾼다. 적은 말은 이 화면에만 남고 아직 PC로 가지 않는다(대화 프로토콜은 다음 PR).
+// 적은 말은 PC가 켜져 있든 꺼져 있든 이 폰이 게이트웨이로 직접 보낸다(ADR-047 결정 6, 대화는 기기마다 따로). 발급은 카드에서 PC에 맡긴다.
 import { useRef, useState, type ComponentRef } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -76,10 +76,12 @@ export function HomeScreen({ go, chat, todo, draft = '', phone }: { go: (to: Hom
   /** PC가 꺼져 있으면 폰이 대화를 이어 받는다(기획 v2). */
   const pcOff = off || s.pc === 'stale';
 
-  // PC가 꺼져 있으면 폰이 게이트웨이를 거쳐 직접 답한다(ADR-047). 켜져 있을 때의 PC 대화는 아직 화면만 있다.
+  // 폰 대화는 PC가 켜져 있어도 이 폰이 게이트웨이를 거쳐 직접 부른다(ADR-047 결정 6). 예전에는 켜져 있으면 화면에만 두어 "PC 켜지면 보내요"로 멈췄다.
   const live = useOfflineChat();
   const offline = phone ?? live;
-  const phoneAnswers = pcOff && offline.available;
+  const canSend = offline.available;
+  /** PC가 꺼져 있어 폰 혼자 답하는 중(안내 문구용) */
+  const phoneAnswers = pcOff && canSend;
   const items = [...(chat ?? chatFromData(s.data)), ...q.notes, ...mine, ...(chat && !phone ? [] : offline.items)].sort((a, b) => at(a) - at(b));
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   /** 예시 문장을 누르면 입력 칸에 넣고 바로 고칠 수 있게 한다(보내지는 않는다) */
@@ -91,11 +93,17 @@ export function HomeScreen({ go, chat, todo, draft = '', phone }: { go: (to: Hom
     const v = text.trim();
     if (!v || offline.busy) return;
     setText('');
-    if (phoneAnswers) {
+    if (canSend) {
       void offline.send(v);
       return;
     }
-    setMine((m) => [...m, { kind: 'msg', id: `me-${Date.now()}`, from: 'me', at: Date.now(), text: v, state: 'waiting' }]);
+    // 이 폰이 대화를 부를 수 없다(게이트웨이를 정할 수 없는 개발 판 등): 말을 붙잡아 두지 않고 못 보냈다고 바로 알린다
+    const now = Date.now();
+    setMine((m) => [
+      ...m,
+      { kind: 'msg', id: `me-${now}`, from: 'me', at: now, text: v, state: 'failed' },
+      { kind: 'note', id: `me-note-${now}`, at: now + 1, text: CANT_SEND_TEXT, failed: {} },
+    ]);
   };
 
   return (
@@ -165,8 +173,8 @@ export function HomeScreen({ go, chat, todo, draft = '', phone }: { go: (to: Hom
               ),
             )
           )}
-          {paired && phoneAnswers && offline.busy && <Typing />}
-          {paired && phoneAnswers && !offline.busy && offline.chips.length > 0 && (
+          {paired && canSend && offline.busy && <Typing />}
+          {paired && canSend && !offline.busy && offline.chips.length > 0 && (
             <View style={st.replies} testID="chat-chips">
               {offline.chips.map((c) => (
                 <Chip key={c.label} label={c.label} onPress={() => void offline.send(c.text)} />
@@ -194,9 +202,9 @@ export function HomeScreen({ go, chat, todo, draft = '', phone }: { go: (to: Hom
                 testID="chat-input"
                 value={text}
                 onChangeText={setText}
-                placeholder={phoneAnswers ? '궁금한 것이나 시킬 일' : 'PC에 시킬 일'}
+                placeholder="궁금한 것이나 시킬 일"
                 placeholderTextColor={p.ink3}
-                accessibilityLabel={phoneAnswers ? '궁금한 것이나 시킬 일 적기' : 'PC에 시킬 일 적기'}
+                accessibilityLabel="궁금한 것이나 시킬 일 적기"
                 maxFontSizeMultiplier={MAX_FONT_SCALE}
                 multiline
                 numberOfLines={1}
@@ -208,7 +216,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone }: { go: (to: Hom
                   { backgroundColor: p.tint, color: p.ink },
                 ]}
               />
-              <Button testID="chat-send" small label="보내기" onPress={send} disabled={!text.trim() || (phoneAnswers && offline.busy)} />
+              <Button testID="chat-send" small label="보내기" onPress={send} disabled={!text.trim() || offline.busy} />
             </View>
           </View>
         )}
@@ -232,6 +240,9 @@ function TopFade() {
     </View>
   );
 }
+
+/** 이 폰이 대화를 부를 수 없을 때 한 줄 */
+export const CANT_SEND_TEXT = '이 폰에서는 아직 대화를 보낼 수 없어요. 앱을 다시 열거나 설정에서 PC 연결을 확인해 주세요.';
 
 const at = (it: ChatItem) => (it.kind === 'merged' ? it.from : it.at);
 
