@@ -13,6 +13,9 @@ import { radius, space, usePalette } from '../theme';
 import { Check, Pill, StatusDot, T, success, won } from '../ui/kit';
 
 
+/** PC가 맡은 일의 로그인 차례(폰에서 할 수 있는 일이 있다) */
+const pcTurn = (r: RunView) => r.kind === 'myTurn' && (r.auth.method === 'pc' || (r.auth.method === 'simple' && !!r.auth.pc));
+
 export function actionLabel(a: RunAction, r: RunView): string {
   if (a === 'openApp' && r.kind === 'myTurn' && r.auth.method === 'simple') return `${r.auth.app} 열기`;
   return ACTION_LABEL[a];
@@ -95,7 +98,8 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
       {r.kind !== 'done' && r.kind !== 'refused' && !(r.kind === 'stopped' && r.reason === 'pcStopped') && <StepBar r={r} />}
       <StateLines r={r} />
       {r.kind === 'done' && <ResultRows result={r.result} />}
-      {compact && !job.pcOnly && <CardActions r={r} now={now} onAction={onAction} onDoc={onDoc} onShare={onShare} />}
+      {/* 폰 발급 명령은 지켜보기만 한다. 로그인 차례(간편인증·인증서로 다시·승인했어요)만 대화 카드에서 바로 한다 */}
+      {compact && (!job.pcOnly || pcTurn(r)) && <CardActions r={r} now={now} onAction={onAction} onDoc={onDoc} onShare={onShare} />}
     </View>
   );
   if (!compact || !onOpen) return body;

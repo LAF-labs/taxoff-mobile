@@ -52,6 +52,9 @@ export interface QueueStore {
   runAction: (id: string, action: RunAction) => void;
   /** 폰에서 시작하는 간편인증 값 보내기(PC가 맡은 일). 값은 봉인 상태 파일에 남겨 다음에 미리 채운다. */
   simpleAuth: (id: string, v: SimpleId) => void;
+  /** 간편인증 시트를 띄운 일(채팅·진행 화면 위 바텀시트) */
+  simpleJob: Job | null;
+  closeSimple: () => void;
   /** 진행·결과·서류 화면이 보는 일 */
   focus: Job | null;
   setFocus: (id: string | null) => void;
@@ -104,6 +107,7 @@ export function QueueProvider({
   const jobs = useMemo(() => [...localJobs, ...(cmds ?? []).map(jobOf)], [localJobs, cmds]);
   const [notes, setNotes] = useState<ChatItem[]>(initialNotes);
   const [sheetId, setSheetId] = useState<string | null>(sheet);
+  const [simpleId, setSimpleId] = useState<string | null>(null);
   const [used, setUsed] = useState(approval.usedToday);
   const [focusId, setFocusId] = useState<string | null>(initialFocus);
   const [cps, setCps] = useState<Counterparty[]>(initialCps);
@@ -146,6 +150,8 @@ export function QueueProvider({
       notes,
       approval: { ...approval, usedToday: used },
       sheetJob: jobs.find((j) => j.id === sheetId && j.gate) ?? null,
+      simpleJob: jobs.find((j) => j.id === simpleId) ?? null,
+      closeSimple: () => setSimpleId(null),
       noteCmd: (jobId, text) => {
         const now = Date.now();
         if (text === null) setNotes((n) => [...n, { kind: 'run', id: `run-${jobId}`, at: now, jobId }]);
@@ -222,9 +228,11 @@ export function QueueProvider({
         const cmdId = id.slice(4);
         const value = simpleRequestValue(v);
         if (!value) return;
+        setSimpleId(null);
         void sess?.update((d) => ({ ...d, simpleId: v, cmds: (d.cmds ?? []).map((c) => (c.cmdId === cmdId ? askSimple(c, value, v.provider) : c)) })).then(() => sess?.sync());
       },
       runAction: (id, a) => {
+        if (a === 'simpleAuth') return setSimpleId(id);
         if ((a === 'authDone' || a === 'resendAuth') && id.startsWith('cmd-')) {
           // [승인했어요]: PC가 [인증 완료]를 누르고 이어서 한다. [다시 요청]: 지난 값으로 다시 보낸다
           const cmdId = id.slice(4);
@@ -278,7 +286,7 @@ export function QueueProvider({
         patch(id, (x) => (x.gate ? { ...x, gate: { ...x.gate, challenge: b64(randomBytes(32)), exp: Date.now() + GATE_TTL_MS } } : x));
       },
     }),
-    [jobs, last, notes, sheetId, used, focusId, cps, pickId, prefill, approval.attest, approval.iosAllowed, simulate, sess],
+    [jobs, last, notes, sheetId, simpleId, used, focusId, cps, pickId, prefill, approval.attest, approval.iosAllowed, simulate, sess],
   );
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

@@ -1,8 +1,6 @@
 // 발급 진행·결과 화면(P-04): 대화 카드나 밀린 일 [진행 보기]·[결과 보기]에서 연다.
 // 바닥에 기본 행동 하나 + 보조 하나가 늘 보인다. 결과 모름·확인 필요에는 다시 발급하는 단추가 없다.
-import { useState } from 'react';
 import { useQueue } from '../queueStore';
-import { SimpleAuthForm, checkDraft, draftOf, type SimpleDraft } from './SimpleAuthForm';
 import { actionsOf, type RunAction } from '../run';
 import { Button, Empty, Screen } from '../ui/kit';
 import { Pressable, View } from 'react-native';
@@ -19,10 +17,6 @@ export function RunScreen({ onDone, onDoc, onRecords, now: fixedNow }: { onDone:
   const job = q.focus;
   const r = job?.run;
   const now = useNow(fixedNow, !!r && r.kind === 'myTurn');
-  // 폰에서 간편인증 시작: 값 받기 화면(같은 화면 안). 보내면 진행 카드로 돌아간다
-  const [asking, setAsking] = useState(false);
-  const [draft, setDraft] = useState<SimpleDraft>(() => draftOf(s.data.simpleId));
-  const [errors, setErrors] = useState<Partial<Record<keyof SimpleDraft, string>>>({});
   if (!job || !r) {
     return (
       <Screen title="발급 진행" onBack={onDone} scroll={false} footer={<Button kind="secondary" label="닫기" onPress={onDone} />}>
@@ -33,37 +27,9 @@ export function RunScreen({ onDone, onDoc, onRecords, now: fixedNow }: { onDone:
   const run = (a: RunAction) => {
     if (a === 'close') return onDone();
     if (a === 'openApp') return openAuthApp(r);
-    if (a === 'simpleAuth') {
-      setDraft(draftOf(s.data.simpleId));
-      setErrors({});
-      return setAsking(true);
-    }
     q.runAction(job.id, a);
     if (a === 'stop') onDone();
   };
-  const sendSimple = () => {
-    const c = checkDraft(draft);
-    if (!c.ok) return setErrors(c.errors);
-    q.simpleAuth(job.id, c.id);
-    setAsking(false);
-  };
-  if (asking && job.pcOnly && r.kind === 'myTurn' && r.auth.method === 'pc') {
-    return (
-      <Screen
-        title="간편인증"
-        onBack={() => setAsking(false)}
-        testID="simple-screen"
-        footer={
-          <>
-            <Button label="승인 요청 보내기" onPress={sendSimple} testID="simple-send" />
-            <Button kind="quiet" label="취소" onPress={() => setAsking(false)} testID="simple-cancel" />
-          </>
-        }
-      >
-        <SimpleAuthForm draft={draft} onChange={(d) => (setDraft(d), setErrors({}))} errors={errors} failed={r.auth.failed} />
-      </Screen>
-    );
-  }
   let footer;
   if (job.pcOnly && r.kind === 'myTurn' && (r.auth.method === 'pc' || (r.auth.method === 'simple' && r.auth.pc)) && actionsOf(r, now)[0] !== 'close') {
     // 폰 발급 명령이 로그인에서 기다린다: 폰에서 간편인증·[인증서로 다시 시도]·[승인했어요]

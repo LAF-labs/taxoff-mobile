@@ -24,8 +24,7 @@ import { buildGate, type GateField, type PhoneGate } from '../src/approval';
 import { useEffect } from 'react';
 import { useQueue } from '../src/queueStore';
 import { RunScreen } from '../src/screens/RunScreen';
-import { SimpleAuthForm, draftOf } from '../src/screens/SimpleAuthForm';
-import { Button as KitButton, Screen as KitScreen } from '../src/ui/kit';
+import { SimpleAuthSheet, draftOf } from '../src/screens/SimpleAuthSheet';
 import { BizRegScreen, type BizRegPreview } from '../src/screens/BizRegScreen';
 import { PDF_LINE } from '../src/capture/pick';
 import { MoneyProvider, type MarkState, type MoneyStatus } from '../src/moneyStore';
@@ -238,6 +237,16 @@ const CMD = (o: Partial<PhoneCmd> = {}): PhoneCmd => ({
 const pcRun = (o: Partial<PhoneCmd>) => ({
   session: fake({ ...copyData(), cmds: [CMD(o)] }, 'online'), focus: 'cmd-G1', node: <RunScreen onDone={noop} onDoc={noop} onRecords={noop} now={now} />,
 });
+const simpleSheet = (start?: Parameters<typeof SimpleAuthSheet>[0]['start'], remembered?: Parameters<typeof SimpleAuthSheet>[0]['remembered'], failed?: boolean) => ({
+  session: fake({ ...copyData(), cmds: [CMD({ phase: 'login', turn: true, code: 'login.simple_auth', simpleReq: '01JD0000000000000000000000' })] }, 'online'),
+  notes: [{ kind: 'run' as const, id: 'run-cmd-G1', at: now - 90_000, jobId: 'cmd-G1' }],
+  node: (
+    <>
+      <Main chat={CHAT} live />
+      <SimpleAuthSheet remembered={remembered} failed={failed} onSend={noop} onClose={noop} start={start} />
+    </>
+  ),
+});
 const docCase = (state: DocState, result = RES) => ({
   session: fake(paired(), state.kind === 'pcOff' ? 'offline' : 'online'), jobs: [runJob({ kind: 'done', result, startedAt: T0 })], focus: 'r1', node: <DocScreen onDone={noop} state={state} />,
 });
@@ -399,15 +408,18 @@ const SCREENS: Record<
   'run-pc-turn-other': () => pcRun({ phase: 'readback', turn: true, code: 'turn.other' }),
   // 폰에서 간편인증: 고르기(인증서로 다시·간편인증), 승인 대기(남은 시간), 시간 지남, 앞 요청 실패
   'run-pc-turn-choice': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_auth', simpleReq: '01JD0000000000000000000000' }),
-  'simple-form-empty': () => ({ session: fake(paired(), 'online'), node: <KitScreen title="간편인증" onBack={noop} footer={<><KitButton label="승인 요청 보내기" onPress={noop} /><KitButton kind="quiet" label="취소" onPress={noop} /></>}><SimpleAuthForm draft={draftOf(null)} onChange={noop} errors={{}} /></KitScreen> }),
-  'simple-form-filled': () => ({ session: fake(paired(), 'online'), node: <KitScreen title="간편인증" onBack={noop} footer={<><KitButton label="승인 요청 보내기" onPress={noop} /><KitButton kind="quiet" label="취소" onPress={noop} /></>}><SimpleAuthForm draft={draftOf({ provider: 'kakao', name: '김가나', birth: '19840312', phone: '01012345678' })} onChange={noop} errors={{}} /></KitScreen> }),
-  'simple-form-pass': () => ({ session: fake(paired(), 'online'), node: <KitScreen title="간편인증" onBack={noop} footer={<><KitButton label="승인 요청 보내기" onPress={noop} /><KitButton kind="quiet" label="취소" onPress={noop} /></>}><SimpleAuthForm draft={draftOf({ provider: 'pass', carrier: 'ka', name: '김가나', birth: '19840312', phone: '01012345678' })} onChange={noop} errors={{}} /></KitScreen> }),
-  'simple-form-errors': () => ({ session: fake(paired(), 'online'), node: <KitScreen title="간편인증" onBack={noop} footer={<KitButton label="승인 요청 보내기" onPress={noop} />}><SimpleAuthForm draft={{ provider: '', carrier: '', name: '김가나', birth: '1984-13', phone: '010-12' }} onChange={noop} errors={{ provider: '인증 앱을 골라 주세요', birth: '생년월일 8자리를 넣어 주세요(예: 1990-01-01)', phone: '휴대폰 번호를 넣어 주세요' }} failed /></KitScreen> }),
+  // 간편인증 시트: 채팅 화면 위에서 한 단계씩(앱 → 통신사 → 이름 → 생년월일 → 휴대폰), 앞서 쓴 값이면 확인 한 장
+  'simple-sheet-app': () => simpleSheet({ step: 'app' }),
+  'simple-sheet-carrier': () => simpleSheet({ step: 'carrier', draft: { ...draftOf(null), provider: 'pass' } }),
+  'simple-sheet-name': () => simpleSheet({ step: 'name', draft: { ...draftOf(null), provider: 'kakao', name: '김가' } }),
+  'simple-sheet-phone': () => simpleSheet({ step: 'phone', draft: { ...draftOf(null), provider: 'kakao', name: '김가나', birth: '1984-03-12', phone: '010-1234-56' } }),
+  'simple-sheet-confirm': () => simpleSheet(undefined, { provider: 'kakao', name: '김가나', birth: '19840312', phone: '01012345678' }),
+  'simple-sheet-failed': () => simpleSheet({ step: 'app', draft: { ...draftOf(null), provider: 'kakao' } }, null, true),
   'run-pc-turn-choice-failed': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_auth', simpleReq: '01JD0000000000000000000000', simpleFailed: true }),
   'run-pc-simple-wait': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_sent.kakao', simpleApp: 'kakao', simpleReq: '01JD0000000000000000000000', deadline: now + 248_000 }),
   'run-pc-simple-timeout': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_sent.kakao', simpleApp: 'kakao', simpleReq: '01JD0000000000000000000000', deadline: now - 1_000 }),
   'home-chat-pc-turn': () => ({
-    session: fake({ ...copyData(), cmds: [CMD({ phase: 'login', turn: true, code: 'login.simple_auth' })] }, 'online'),
+    session: fake({ ...copyData(), cmds: [CMD({ phase: 'login', turn: true, code: 'login.simple_auth', simpleReq: '01JD0000000000000000000000' })] }, 'online'),
     notes: [{ kind: 'run', id: 'run-cmd-G1', at: now - 90_000, jobId: 'cmd-G1' }],
     node: <Main chat={CHAT} live />,
   }),
