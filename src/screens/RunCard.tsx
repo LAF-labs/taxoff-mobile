@@ -80,16 +80,16 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
           (r.kind === 'myTurn' && r.auth.method === 'simple' && r.auth.deadline !== undefined ? (
             r.auth.deadline > now ? (
               <T v="meta" c="attention" testID="run-left" style={{ fontVariant: ['tabular-nums'] }}>
-                · 남은 시간 {mmss(r.auth.deadline - now)}
+                {mmss(r.auth.deadline - now)} 남았어요
               </T>
             ) : (
               <T v="meta" c="attention" testID="run-left">
-                · 시간이 지났어요
+                시간이 지났어요
               </T>
             )
           ) : (
             <T v="meta" c="ink3" testID="run-elapsed">
-              · {elapsed(now - r.startedAt)}
+              {elapsed(now - r.startedAt)}
             </T>
           ))}
       </View>
@@ -120,7 +120,7 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
 }
 
 /**
- * 단계: 얇은 6칸 막대(지난 칸 ink3, 지금 칸 ink로 조금 두껍게, 남은 칸 sunken) + 아래 한 줄 "2/6 · 홈택스 로그인".
+ * 단계: 얇은 6칸 막대(지난 칸 ink3, 지금 칸 ink로 조금 두껍게, 남은 칸 sunken) + 아래 한 줄 "홈택스 로그인 2/6".
  * 파랑은 PC 켜짐·승인 단추에만 쓰므로 지금 칸은 ink와 두께로 강조한다. 어느 폭에서도 한 줄이다.
  */
 function StepBar({ r }: { r: RunView }) {
@@ -134,7 +134,7 @@ function StepBar({ r }: { r: RunView }) {
         ))}
       </View>
       <T v="sub" c="ink2" lines={1}>
-        {cur + 1}/{STEPS.length} · <T v="subStrong">{STEP_LABEL[STEPS[cur]!]}</T>
+        <T v="subStrong">{STEP_LABEL[STEPS[cur]!]}</T> {cur + 1}/{STEPS.length}
       </T>
     </View>
   );
@@ -307,7 +307,7 @@ const st = StyleSheet.create({
   approve: { flexDirection: 'row', alignItems: 'center', gap: space.s3 },
   card: { borderRadius: radius.lg, padding: space.s4, gap: space.s2 },
   head: { flexDirection: 'row', alignItems: 'baseline', gap: space.s3 },
-  chipLine: { flexDirection: 'row', alignItems: 'center', gap: space.s1, flexWrap: 'wrap' },
+  chipLine: { flexDirection: 'row', alignItems: 'center', gap: space.s3, flexWrap: 'wrap' },
   doneChip: { flexDirection: 'row', alignItems: 'center', gap: space.s2 },
   bar: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: space.s1 },
   seg: { flex: 1, height: 4, borderRadius: 2 },
