@@ -25,6 +25,8 @@ import { QueueScreen } from './src/screens/QueueScreen';
 import { QueueProvider } from './src/queueStore';
 import { ApprovalHost } from './src/screens/ApprovalHost';
 import { NotifyHost } from './src/notify/NotifyHost';
+import { PushHost } from './src/notify/PushHost';
+import { installWakeTap } from './src/notify/push';
 import { TextSizeHost } from './src/ui/TextSizeHost';
 import { DocScreen } from './src/screens/DocScreen';
 import { BizRegScreen } from './src/screens/BizRegScreen';
@@ -41,6 +43,8 @@ type Route = 'tabs' | MainRoute;
 
 // 시스템 스플래시(app.json, 바탕색 + 표시)를 첫 화면이 그려질 때까지 둔다. 빈 바탕 한 장이 끼지 않게.
 SplashScreen.preventAutoHideAsync().catch(() => {});
+// 깨우기 알림 누름은 잠금 화면보다 먼저 받아 둔다(잠금이 풀리면 PushHost가 꺼내 쓴다)
+installWakeTap();
 
 export default function App() {
   const p = usePalette();
@@ -204,6 +208,10 @@ export default function App() {
           />
         )}
         <ApprovalHost />
+        <PushHost
+          onQueue={() => setStack((x) => (x[x.length - 1] === 'queue' ? x : [...x, 'queue']))}
+          onRun={() => setStack((x) => (x[x.length - 1] === 'run' ? x : [...x, 'run']))}
+        />
         <NotifyHost
           onRunScreen={route === 'run'}
           onOpen={() => setStack((x) => (x[x.length - 1] === 'run' ? x : [...x, 'run']))}
