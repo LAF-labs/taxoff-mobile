@@ -98,9 +98,12 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
       <StateLines r={r} />
       {onApprove && job.gate && job.state === 'approval' && job.gate.exp > now && (
         <View style={st.approve} testID="run-approve">
-          <T v="sub" c="ink2" style={{ flex: 1, fontVariant: ['tabular-nums'] }}>
-            승인을 기다려요 · 남은 시간 {mmss(job.gate.exp - now)}
-          </T>
+          <View style={{ flex: 1, gap: 2 }}>
+            <T v="subStrong">승인을 기다려요</T>
+            <T v="meta" c="ink3" style={{ fontVariant: ['tabular-nums'] }}>
+              {job.gate.exp - now > 60_000 ? `${Math.ceil((job.gate.exp - now) / 60_000)}분 남았어요` : '곧 닫혀요'}
+            </T>
+          </View>
           <Button kind="approve" small label="승인 열기" onPress={onApprove} testID="run-approve-open" />
         </View>
       )}
