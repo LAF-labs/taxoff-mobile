@@ -10,6 +10,8 @@ import { ROOT, writeProtected } from './files';
 
 const AD = utf8('SAX-mobile-state-v1');
 const FILE = new File(ROOT, 'state.bin');
+/** 같은 봉투의 앞선 사본. 본 파일을 쓰다 끊겨도(통째로 덮어쓰는 중 앱 종료) 이 사본에서 되살린다. */
+const SPARE = new File(ROOT, 'state.new');
 
 export interface PairState {
   pairId: string;
@@ -78,11 +80,22 @@ export interface AppData {
 
 export const emptyData = (): AppData => ({ v: 1, pair: null, deviceList: null, seenListVersion: 0, ikTs: 0, lastSeenPc: null, cash: [], recent: [], queueSeq: 0, qbundleSeq: 0 });
 
-export async function loadData(fileKey: Uint8Array): Promise<AppData> {
-  if (!FILE.exists) return emptyData();
-  const box = await FILE.bytes();
+async function openFile(f: File, fileKey: Uint8Array): Promise<AppData> {
+  const box = await f.bytes();
   const d = JSON.parse(fromUtf8(xOpen(fileKey, box, AD))) as AppData;
   return d.v === 1 ? { ...emptyData(), ...d } : emptyData();
+}
+
+export async function loadData(fileKey: Uint8Array): Promise<AppData> {
+  if (!FILE.exists && !SPARE.exists) return emptyData();
+  try {
+    if (!FILE.exists) throw new Error('state: main missing');
+    return await openFile(FILE, fileKey);
+  } catch (e) {
+    // 본 파일이 없거나 깨졌다: 사본이 열리면 그것으로 이어 가고, 사본도 안 되면 처음 오류를 던진다(앱이 빈 상태로 시작한다)
+    if (!SPARE.exists) throw e;
+    return openFile(SPARE, fileKey);
+  }
 }
 
 let writing: Promise<void> = Promise.resolve();
@@ -96,7 +109,10 @@ export function saveData(fileKey: Uint8Array, d: AppData): Promise<void> {
   const mine = inflight(() =>
     writing
       .catch(() => undefined)
-      .then(() => {
+      .then(async () => {
+        sameEpoch(e);
+        // 사본을 먼저 온전히 쓰고 본 파일을 쓴다: 둘 중 하나는 늘 온전하다. 사본 쓰기가 실패하면 본 파일은 건드리지 않는다.
+        await writeProtected(SPARE, box);
         sameEpoch(e);
         return writeProtected(FILE, box);
       }),
