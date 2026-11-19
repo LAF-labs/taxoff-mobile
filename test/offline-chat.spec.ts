@@ -119,7 +119,7 @@ describe('폰 대화(PC 꺼짐): 고정 사본 → 가짜 게이트웨이', () =
     assert.equal(card.card.title, '한빛전자 세금계산서');
     assert.deepEqual(card.card.rows[0], { label: '금액', value: '550,000원', strong: true });
 
-    const items = await chat.items();
+    const items = (await chat.items()).filter((x) => x.kind === 'msg' && x.text !== undefined);
     assert.deepEqual(items.map((x) => x.kind === 'msg' && [x.from, x.text]), [['me', '한빛전자에 55만원 세금계산서 끊어줘'], ['pc', '한빛전자 카드를 만들었어요. 맡기면 PC를 켰을 때 시작해요.']]);
 
     // 나간 것: 실행 토큰 1번 + respond 2번, 모두 운영 origin, 모두 기기 인증 헤더
@@ -194,5 +194,61 @@ describe('폰 대화 줄 표시', () => {
     const items = [m('a', 'pc', 0), m('b', 'pc', 0, { via: 'phone' as const })];
     assert.equal(bubbleGroup(items, 1).first, true);
     assert.equal(bubbleGroup(items, 0).last, true);
+  });
+});
+
+describe('앱을 껐다 켜도 폰 대화가 남는다', () => {
+  /** 두 번 실행 사이에 남는 파일 둘(코어 기록, 카드·표)을 흉내 낸다 */
+  function twoRuns(outputs: Array<Array<Record<string, unknown>>>, status = 200) {
+    const disk = { chat: null as string | null, shown: null as string | null };
+    const open = (o: Array<Array<Record<string, unknown>>>, st = 200) => {
+      const gw = fakeGateway(o, st);
+      let n = 0;
+      return new OfflineChat({
+        origin: ORIGIN,
+        fetch: gw.fetch,
+        authHeaders: async (method, url) => ({ Authorization: 'DPoP sxd1.test', DPoP: `${method} ${url}` }),
+        store: { load: async () => disk.chat, save: async (d) => void (disk.chat = d) },
+        shownStore: { load: async () => disk.shown, save: async (d) => void (disk.shown = d) },
+        copy: () => copy,
+        now: () => NOW,
+        newId: () => `01KC${String(++n).padStart(22, '0')}`,
+        randomHex: () => randomBytes(16).toString('hex'),
+      });
+    };
+    return { first: open(outputs, status), reopen: () => open([]) };
+  }
+
+  it('카드가 붙은 답: 다시 열어도 말과 카드가 그대로 있다', async () => {
+    const { first, reopen } = twoRuns([
+      [fnCall('call_a', 'invoice_draft', { counterparty: '[NAME_1]', amount: '[AMT_1]', vat: 'separate', item: null, date_month_offset: null, date_day: null, quantity: null, unit_price: null })],
+      [message({ kind: 'did', text: '[NAME_1] 카드를 만들었어요.', show: [], ask: null })],
+    ]);
+    const r = await first.send('한빛전자에 55만원 세금계산서 끊어줘');
+    assert.equal(r.unavailable, undefined, JSON.stringify(r));
+    const again = await reopen().items();
+    assert.deepEqual(again.map((x) => x.id), (await first.items()).map((x) => x.id));
+    const card = again.find((x) => x.kind === 'msg' && x.card);
+    assert.ok(card && card.kind === 'msg' && card.card?.title === '한빛전자 세금계산서', JSON.stringify(again));
+    assert.equal(again.filter((x) => x.kind === 'msg' && x.from === 'me').length, 1);
+  });
+
+  it('못 보낸 말과 이유 줄도 남기고, 지우면 다시 열어도 없다', async () => {
+    const { first, reopen } = twoRuns([]);
+    const failed = [
+      { kind: 'msg' as const, id: 'off-me-1', from: 'me' as const, at: NOW, text: '안녕', state: 'failed' as const },
+      { kind: 'note' as const, id: 'off-1', at: NOW + 1, text: '연결이 잠깐 끊겼어요', failed: { retry: '안녕' } },
+    ];
+    await first.keep(failed);
+    const seen = await reopen().items();
+    assert.deepEqual(seen.map((x) => x.id), ['off-me-1', 'off-1']);
+    await first.forget(['off-me-1', 'off-1']);
+    assert.deepEqual(await reopen().items(), []);
+  });
+
+  it('저장소가 깨진 값을 주면 빈 대화로 시작한다', async () => {
+    const { reopen } = twoRuns([]);
+    const c = reopen();
+    assert.deepEqual(await c.items(), []);
   });
 });
