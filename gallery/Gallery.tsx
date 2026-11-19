@@ -539,6 +539,9 @@ const SCREENS: Record<
   'home-phone-ask': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('ask')} /> }),
   'home-phone-screen': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('screen')} /> }),
   'home-phone-lunch': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('lunch')} /> }),
+  'home-phone-react-working': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('react-working')} /> }),
+  'home-phone-react-result': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('react-result')} /> }),
+  'home-phone-react-only': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('react-only')} /> }),
   'home-plus-menu': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('card')} menu /> }),
   'home-phone-limit': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('limit')} /> }),
   /** 처음 연결한 뒤 대화가 아직 없는 홈(앱이 이 폰 기록으로 만든 대화) */

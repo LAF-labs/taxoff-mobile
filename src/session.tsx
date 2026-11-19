@@ -116,7 +116,7 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
       fails.current += 1;
       later(retryDelay(fails.current, RECONNECT_MS));
     }
-  }, [keys, update, outbox, refreshPending, later, px]);
+  }, [keys, update, outbox, refreshPending, px, later]);
   syncRef.current = sync;
 
   useEffect(() => {

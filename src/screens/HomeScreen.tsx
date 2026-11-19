@@ -5,12 +5,12 @@
 //   바닥: 입력 줄 하나. 왼쪽 [+]가 빠른 일(세금계산서 발급·증빙 찍기·현금 매출)을 펼치고, 오른쪽 작은 원이 보내기다. 키보드가 올라오면 함께 올라간다.
 // 적은 말은 PC가 켜져 있든 꺼져 있든 이 폰이 게이트웨이로 직접 보낸다(ADR-047 결정 6, 대화는 기기마다 따로). 발급은 카드에서 PC에 맡긴다.
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
-import { Animated, Easing, FlatList, Platform, Pressable, ScrollView, StyleSheet, TextInput, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { bubbleGroup, chatFromData, clockRange, stampBefore, stateOf, type ChatCard, type ChatItem } from '../chat';
 import { useOfflineChat, type OfflineChatView } from '../offline/useOfflineChat';
-import type { PhoneScreen } from '@sax/chat-core';
+import type { PhoneScreen, ReactionId } from '@sax/chat-core';
 import { BRAND } from '../config';
 import { queueCounts } from '../queue';
 import { useQueue } from '../queueStore';
@@ -578,8 +578,9 @@ function Item({ it, group, onRetry, retryOff, openDrafts, onIssue }: { it: Exclu
   return (
     <View style={[st.msg, !group.first && st.follow, me ? st.mine : st.theirs]} testID={`chat-${it.from}`}>
       {it.text !== undefined && (
-        <View style={[st.bubble, { backgroundColor: me ? p.bubbleMe : p.bubbleThem }, corners]} testID="chat-bubble">
+        <View style={[st.bubble, { backgroundColor: me ? p.bubbleMe : p.bubbleThem }, corners, it.reaction && st.reacted]} testID="chat-bubble">
           <T style={me ? { color: p.onBubbleMe } : undefined}>{it.text}</T>
+          {it.reaction && <Reaction id={it.reaction} />}
         </View>
       )}
       {it.card && <Card card={it.card} onIssue={it.card.draft && (!openDrafts || openDrafts.has(it.card.draft.id)) ? onIssue : undefined} />}
@@ -589,6 +590,40 @@ function Item({ it, group, onRetry, retryOff, openDrafts, onIssue }: { it: Exclu
         </T>
       )}
     </View>
+  );
+}
+
+/** 판정이 고른 반응(ADR-057, @sax/chat-core REACTIONS). 이름 밖의 값은 그리지 않는다. */
+const REACTION_EMOJI: Record<ReactionId, string> = { thumbs_up: '👍', eyes: '👀', check: '✅', pray: '🙏' };
+const REACTION_LABEL: Record<ReactionId, string> = { thumbs_up: '좋아요', eyes: '보고 있어요', check: '확인', pray: '감사해요' };
+
+/**
+ * 말풍선 반응 알약(Muse 12.1 s2n): 말풍선 아래 끝 귀퉁이(끝 4, 아래 -20), 높이 28, 최소 폭 38, 옆 8.5, 글자 16.
+ * 바탕은 상대 말풍선 색, 테두리 2는 대화 바탕색이라 겹친 곳이 끊겨 보인다. 0.12초에 커지며 나온다(동작 줄이기면 바로).
+ */
+function Reaction({ id }: { id: ReactionId }) {
+  const p = usePalette();
+  const a = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    let live = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((reduce) => {
+      if (!live) return;
+      if (reduce) a.setValue(1);
+      else Animated.timing(a, { toValue: 1, duration: 120, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+    });
+    return () => void (live = false);
+  }, [a, id]);
+  if (!Object.hasOwn(REACTION_EMOJI, id)) return null;
+  return (
+    <Animated.View
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={REACTION_LABEL[id]}
+      testID={`chat-reaction-${id}`}
+      style={[st.reaction, { backgroundColor: p.bubbleThem, borderColor: p.canvas, opacity: a, transform: [{ translateY: a.interpolate({ inputRange: [0, 1], outputRange: [-4, 0] }) }, { scale: a.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }] }]}
+    >
+      <Text style={st.reactionGlyph}>{REACTION_EMOJI[id]}</Text>
+    </Animated.View>
   );
 }
 
@@ -967,6 +1002,10 @@ const st = StyleSheet.create({
   /** Muse: 높이 44, 옆 15, 둥글기 22, 점 지름 8 간격 4 */
   typing: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 44, paddingHorizontal: 15, borderRadius: 22 },
   dot: { width: 8, height: 8, borderRadius: 4 },
+  /** 반응이 달린 말풍선: 알약이 아래로 20 나오므로 그만큼 아래를 띄운다 */
+  reacted: { marginBottom: 12 },
+  reaction: { position: 'absolute', right: 4, bottom: -20, height: 28, minWidth: 38, paddingHorizontal: 8.5, borderRadius: 14, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  reactionGlyph: { fontSize: 16, lineHeight: 18 },
   /** Muse: 둥글기 22, 최소 높이 44, 옆 15 위아래 11 */
   /** 말풍선은 양쪽 다 글 폭만큼, 반대편에 조금 여백을 남긴다(Muse 폰 앱). 카드만 대화 폭을 다 쓴다. */
   bubble: { borderRadius: 22, minHeight: 44, maxWidth: '90%', paddingHorizontal: 15, paddingVertical: 11, justifyContent: 'center' },
