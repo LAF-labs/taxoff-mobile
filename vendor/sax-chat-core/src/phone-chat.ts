@@ -9,7 +9,7 @@ import { capture, rebind, type ChatMessage, type MaskedText } from './chat-log.t
 import { cleanItem, fillWithJosa, finalOf, fixJosa, koDate, kstDate, splitVat, validAmount, won } from './fill.ts';
 import { PhoneChatError, type PhoneChatErrorCode, type PhoneModel, type PhoneRespondResult, type PhoneToolCall, type ReplayItem } from './phone-gateway.ts';
 import { ReplyShapeError, braceTokens, chatSecretShaped, checkAgentReply, unsafeText, type CheckedReply, type ReplyFilter } from './reply-check.ts';
-import { chatInput, gluedName, parseKrw, registerChatRecords, type ChatRecord } from './rules.ts';
+import { chatInput, gluedName, issueIntent, parseKrw, registerChatRecords, type ChatRecord, type IssueIntent } from './rules.ts';
 import {
   AGENT_ASKS,
   AGENT_SHOW_MAX,
@@ -36,7 +36,7 @@ import { estimateTokens } from './tokens.ts';
 /** 한 번 부를 때의 입력 상한(추정 토큰, 머리말·도구 정의 포함). 하루 한도(체험 50원·구독 300원) 안에서 대화 횟수를 지키는 값이다. */
 export const PHONE_CONTEXT_MAX_TOKENS = 8000;
 /** chat_phone 머리말 + 도구 정의 + 출력 스키마의 추정 토큰(넉넉하게). 시험이 실제 머리말의 추정값이 이보다 작은지 본다. */
-export const PHONE_PREFIX_EST_TOKENS = 3800;
+export const PHONE_PREFIX_EST_TOKENS = 4600;
 /** [앞 대화]에 두는 사용자 턴 수 상한. 넘으면 오래된 절반을 한꺼번에 요약으로 접는다. */
 export const PHONE_TURNS_MAX = 20;
 /** [사실]에 미리 조회해 넣는 거래처 수 상한 */
@@ -72,6 +72,7 @@ export const PHONE_ASK_TEXT: Record<AgentAsk, string> = {
   counterparty: '어느 거래처인가요? 거래처 목록에서 골라 주세요.',
   vat: '부가세 별도인가요, 포함인가요?',
   which_card: '어느 카드를 말씀하시는지 골라 주세요.',
+  date: '작성일자를 정하는 카드는 PC에서 만들 수 있어요. PC가 켜지면 PC 대화에서 말씀해 주세요.',
 };
 export const PHONE_SLOT_MISSING_TEXT = '같이 보이는 표에서 값을 확인해 주세요.';
 export const PHONE_UNAVAILABLE_TEXT = '지금 답을 받지 못했어요. 잠시 뒤 다시 시도해 주세요.';
@@ -158,6 +159,11 @@ export interface PhoneChatPorts {
   newId(): string;
   /** 대화 세션 id에 넣을 난수(16진 32자 이상) */
   randomHex(): string;
+  /**
+   * 지금 PC가 켜져 있는지(라이브 연결). 켜져 있으면 맡긴 카드를 PC가 바로 시작한다. 없으면 꺼짐으로 본다(옛 앱).
+   * 폰 대화는 PC가 켜져 있을 때도 이 폰이 직접 부른다(ADR-047 결정 6: 기기마다 따로).
+   */
+  pcOnline?(): boolean;
 }
 
 // ── 화면에 주는 결과 ──
@@ -240,9 +246,30 @@ interface Turn {
   created: string[];
   frameRefs: Set<string>;
   unknownName?: string;
+  /** 이번 문장의 발급 의도(가린 글에서 읽음). 모델이 놓치면 되묻기로 잇는다. */
+  intent: IssueIntent;
+  /** 이번 턴에 고친 카드가 있다 */
+  edited?: boolean;
 }
 
 const KINDS: ReadonlySet<PhoneReplyKind> = new Set(PHONE_REPLY_KINDS);
+
+/** PC가 켜져 있을 때 맡긴 한 줄: PC가 바로 홈택스에서 준비하고, 발급은 PC 승인으로만 된다. */
+export const PHONE_ENTRUST_ONLINE_TEXT = (name: string): string => `${name} 세금계산서를 PC에 맡겼어요. PC가 홈택스에서 준비하고, 발급 전에 한 번 더 확인을 받아요.`;
+
+/** 발급 의도가 분명한데 모델이 아무 도구도 부르지 않고 넘긴 답(인사·일반 답·못 함) */
+const INTENT_MISSED: ReadonlySet<PhoneReplyKind> = new Set(['smalltalk', 'answer', 'cannot']);
+
+/**
+ * 발급 의도 안전망: "[AMT_1] 끊어줘"처럼 발급을 시켰는데 모델이 도구 없이 잡담·일반 답으로 넘기면, 비어 있는 칸 하나를 되묻는 답으로 바꾼다.
+ * 거래처가 없으면 거래처(열린 카드가 하나도 없을 때), 금액이 없으면 금액. 둘 다 있으면 모델 답을 그대로 둔다(되묻기·카드는 모델이 한다).
+ * 모델이 도구를 하나라도 불렀거나 되묻기·미루기·세무 판단으로 답했으면 손대지 않는다.
+ */
+export function intentNet(turn: Pick<Turn, 'intent' | 'done'>, openCards: boolean, reply: CheckedReply<PhoneReplyKind, AgentAsk>): CheckedReply<PhoneReplyKind, AgentAsk> {
+  if (!turn.intent.issue || turn.done.size > 0 || !INTENT_MISSED.has(reply.kind)) return reply;
+  const ask: AgentAsk | null = !turn.intent.counterparty && !openCards ? 'counterparty' : !turn.intent.amount ? 'amount' : null;
+  return ask ? { kind: 'ask', text: PHONE_ASK_TEXT[ask], show: reply.show, ask, filtered: null } : reply;
+}
 const ASKS: ReadonlySet<AgentAsk> = new Set(AGENT_ASKS);
 const VAT_LABEL = { separate: '별도', included: '포함' } as const;
 const out = (status: PhoneToolStatus, ref: string | null = null, needs: ToolNeed[] | null = null): ToolOutput => ({ ref, status, fields: null, needs });
@@ -324,10 +351,11 @@ export class PhoneChat {
       if (!d || d.state !== 'open') return null;
       d.state = 'entrusted';
       const name = this.ports.copy()?.counterparties.find((c) => c.id === d.counterpartyId)?.name ?? '거래처';
-      const text = PHONE_ENTRUST_TEXT(name);
+      const line = this.ports.pcOnline?.() ? PHONE_ENTRUST_ONLINE_TEXT : PHONE_ENTRUST_TEXT;
+      const text = line(name);
       // 컨텍스트에는 이름 대신 토큰으로 남긴다(이름은 값으로만 들고 있다)
       const tok = '[NAME_1]';
-      this.push(st, { from: 'app', text, kind: 'did', ctx: { t: PHONE_ENTRUST_TEXT(tok), e: { [tok]: { k: 'NAME', v: name, r: `cp:${d.counterpartyId}` } } } });
+      this.push(st, { from: 'app', text, kind: 'did', ctx: { t: line(tok), e: { [tok]: { k: 'NAME', v: name, r: `cp:${d.counterpartyId}` } } } });
       await this.save(st);
       return { ...d };
     });
@@ -432,11 +460,11 @@ export class PhoneChat {
       return this.unavailable('chat.unavailable');
     }
     const cards = this.openCards(st, copy);
-    const turn: Turn = { user, replay: [], done: new Map(), made: [], created: [], frameRefs: new Set(cards.map((c) => c.ref)) };
+    const turn: Turn = { user, replay: [], done: new Map(), made: [], created: [], frameRefs: new Set(cards.map((c) => c.ref)), intent: issueIntent(user) };
     const facts = this.facts(st, s, copy, now, user);
     const message = this.compose(st, s, copy, now, turn, facts, cards);
     s.turns++;
-    const reply = await this.advance(st, s, copy, now, turn, message);
+    const reply = intentNet(turn, cards.length > 0, await this.advance(st, s, copy, now, turn, message));
     return this.finish(st, s, copy, now, text, turn, reply);
   }
 
@@ -513,8 +541,10 @@ export class PhoneChat {
       const frame = cards.length
         ? `화면: ${cards.map((c) => `카드 ${c.ref}(세금계산서, 거래처 ${mask(c.name)}, 금액 있음, 부가세 ${c.vat ? VAT_LABEL[c.vat] : '미정'}, 품목 ${c.item ? '있음' : '없음'})`).join('; ')}`
         : '화면: 열린 카드 없음';
-      const nowBlock = `[지금]\n${frame}\n사용자: ${turn.user}`;
-      const copyLine = `사본: ${this.copyState(copy, now)}`;
+      // 앱이 읽은 발급 의도: "세금계산서"라는 말이 없어도("[AMT_1] 끊어줘") 모델이 카드 만들기로 읽게 한 줄 짚어 준다
+      const hint = turn.intent.issue ? '\n앱 판단: 세금계산서 발급 요청' : '';
+      const nowBlock = `[지금]\n${frame}${hint}\n사용자: ${turn.user}`;
+      const copyLine = `PC: ${this.ports.pcOnline?.() ? '켜짐' : '꺼짐'}\n사본: ${this.copyState(copy, now)}`;
       let nFacts = factBlocks.length;
       let from = 0;
       for (;;) {
@@ -625,6 +655,7 @@ export class PhoneChat {
       return String(r.value).trim() || null;
     };
     const vat = (v: unknown): Vat | null => (v === 'separate' || v === 'included' ? v : null);
+    const pcOnly = () => ['date_month_offset', 'date_day', 'quantity', 'unit_price'].some((k) => a[k] !== null && a[k] !== undefined);
     const parse: { [K in ChatPhoneToolName]: () => DomainCall | ToolOutput } = {
       invoice_history: () => {
         const id = a.counterparty === null ? null : cp(a.counterparty);
@@ -635,10 +666,13 @@ export class PhoneChat {
         return a.counterparty !== null && !id ? unknown(a.counterparty) : { tool: 'receivables', counterpartyId: id };
       },
       invoice_draft: () => {
+        // 작성일자·수량·단가(ADR-049)는 1단계에서 PC만 계산한다. 폰은 카드를 만들지 않고 not_on_phone으로 답해 모델이 PC로 미룬다(defer).
+        if (pcOnly()) return out('not_on_phone');
         const id = cp(a.counterparty);
         return id ? { tool: 'invoice_draft', counterpartyId: id, amount: amount(a.amount), vat: vat(a.vat), item: item(a.item) } : unknown(a.counterparty);
       },
       draft_edit: () => {
+        if (pcOnly()) return out('not_on_phone');
         const d = draft(a.draft);
         return d ? { tool: 'draft_edit', draft: d, amount: amount(a.amount), vat: vat(a.vat), item: item(a.item) } : out('no_such_draft');
       },

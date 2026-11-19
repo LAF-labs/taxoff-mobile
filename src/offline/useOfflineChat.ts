@@ -1,10 +1,10 @@
-// 홈 대화에서 쓰는 폰 대화 훅. PC가 꺼져 있을 때만 쓴다(켜져 있으면 PC 에이전트가 답한다).
+// 홈 대화에서 쓰는 폰 대화 훅. PC가 켜져 있든 꺼져 있든 폰 대화는 이 폰이 게이트웨이로 직접 부른다(ADR-047 결정 6: 대화는 기기마다 따로).
 // 대화 줄은 코어 기록(봉인 파일)에서 읽고, 카드·표는 답이 온 턴의 결과로 더한다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatItem } from '../chat';
 import { useSession } from '../session';
 import type { OfflineReply } from './chat';
-import { offlineChat } from './device';
+import { offlineChat, setPcOnline } from './device';
 import { chatCopyOf } from '../net/pcCopy';
 
 export interface OfflineChatView {
@@ -27,6 +27,9 @@ export function useOfflineChat(): OfflineChatView {
   // 폰 사본(거래처·최근 발급): PC가 라이브 세션마다 넘긴 마지막 phone.copy. 대화를 다시 만들지 않고 물을 때마다 최신 값을 읽는다.
   const copyRef = useRef(s.data.pcCopy);
   copyRef.current = s.data.pcCopy;
+  const pcRef = useRef(s.pc);
+  pcRef.current = s.pc;
+  useEffect(() => setPcOnline(() => pcRef.current === 'online'), []);
   const chat = useMemo(() => (pair ? offlineChat(pair, s.keys, () => chatCopyOf(copyRef.current)) : null), [pair, s.keys]);
   const [log, setLog] = useState<ChatItem[]>([]);
   const [extra, setExtra] = useState<ChatItem[]>([]);

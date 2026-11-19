@@ -57,6 +57,12 @@ let open: { pairId: string; chat: OfflineChat } | null = null;
  * 페어링된 폰의 대화. 페어링이 같으면 같은 것을 준다. 게이트웨이 origin을 정할 수 없으면(릴리스 origin 미설정,
  * 개발 실기기의 평문 mDNS) null이다: 그때는 폰 대화 없이 PC를 기다린다.
  */
+/** 지금 PC가 켜져 있는지(세션이 라이브 연결로 정한다). 대화를 다시 만들지 않고 부를 때마다 읽는다. */
+let pcOnline: () => boolean = () => false;
+export function setPcOnline(f: () => boolean): void {
+  pcOnline = f;
+}
+
 export function offlineChat(pair: PairState, keys: DeviceKeys, copy: () => PhoneCopy | null): OfflineChat | null {
   if (open?.pairId === pair.pairId) return open.chat;
   const auth = deviceAuthFor(pair.pairId, pair.cert, keys.vm);
@@ -73,6 +79,7 @@ export function offlineChat(pair: PairState, keys: DeviceKeys, copy: () => Phone
       now: Date.now,
       newId: () => ulid(),
       randomHex,
+      pcOnline: () => pcOnline(),
     });
     open = { pairId: pair.pairId, chat };
     return chat;

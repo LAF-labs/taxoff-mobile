@@ -18,6 +18,8 @@ export interface OfflinePorts {
   now(): number;
   newId(): string;
   randomHex(): string;
+  /** 지금 PC가 켜져 있는지. 켜져 있어도 폰 대화는 이 폰이 직접 부른다(ADR-047 결정 6). */
+  pcOnline?(): boolean;
 }
 
 /** 홈 화면에 주는 한 턴의 결과 */
@@ -36,7 +38,7 @@ const won = (n: number) => `${n.toLocaleString('en-US')}원`;
 const VAT: Record<string, string> = { separate: '부가세 별도', included: '부가세 포함' };
 
 /** 카드·표 → 홈 대화의 묶음 면 */
-export function cardOf(s: PhoneShow): ChatCard {
+export function cardOf(s: PhoneShow, pcOnline = false): ChatCard {
   if (s.type === 'card') {
     const d = s.draft;
     return {
@@ -46,7 +48,7 @@ export function cardOf(s: PhoneShow): ChatCard {
         { label: '부가세', value: d.vat ? VAT[d.vat]! : '정하지 않음' },
         { label: '품목', value: d.item ?? '정하지 않음' },
       ],
-      note: d.state === 'entrusted' ? 'PC를 켜면 시작해요' : '맡기면 PC를 켰을 때 시작해요',
+      note: pcOnline ? (d.state === 'entrusted' ? 'PC가 준비하고 있어요' : '맡기면 PC가 바로 준비해요') : d.state === 'entrusted' ? 'PC를 켜면 시작해요' : '맡기면 PC를 켰을 때 시작해요',
     };
   }
   return {
@@ -70,7 +72,7 @@ export class OfflineChat {
   constructor(ports: OfflinePorts) {
     this.ports = ports;
     this.gateway = new PhoneGateway({ origin: ports.origin, fetch: ports.fetch, authHeaders: ports.authHeaders });
-    this.core = new PhoneChat({ model: this.gateway, store: ports.store, copy: ports.copy, now: ports.now, newId: ports.newId, randomHex: ports.randomHex });
+    this.core = new PhoneChat({ model: this.gateway, store: ports.store, copy: ports.copy, now: ports.now, newId: ports.newId, randomHex: ports.randomHex, pcOnline: () => ports.pcOnline?.() ?? false });
   }
 
   /** 가림 자가 점검(앱을 연 뒤 한 번). 통과하지 못하면 send는 모델을 부르지 않는다. */
@@ -81,7 +83,7 @@ export class OfflineChat {
 
   async send(text: string): Promise<OfflineReply> {
     const c = await this.ready();
-    if (!c.ok) return { items: [], chips: [], drafts: [], unavailable: { code: 'chat.unavailable', text: '지금은 폰에서 답할 수 없어요. PC를 켜면 이어서 할게요.', retry: false } };
+    if (!c.ok) return { items: [], chips: [], drafts: [], unavailable: { code: 'chat.unavailable', text: this.ports.pcOnline?.() ? '지금은 폰에서 답할 수 없어요. PC 화면의 대화에서 말씀해 주세요.' : '지금은 폰에서 답할 수 없어요. PC를 켜면 이어서 할게요.', retry: false } };
     return this.toReply(await this.core.send(text));
   }
 
@@ -111,7 +113,7 @@ export class OfflineChat {
     if (r.kind === 'unavailable') return { items: [], chips: [], drafts: [], unavailable: { code: r.code, text: r.text, retry: r.retry } };
     const at = this.ports.now();
     const items: ChatItem[] = [];
-    r.show.forEach((s, i) => items.push({ kind: 'msg', id: `${r.id}-${i}`, from: 'pc', via: 'phone', at, card: cardOf(s) }));
+    r.show.forEach((s, i) => items.push({ kind: 'msg', id: `${r.id}-${i}`, from: 'pc', via: 'phone', at, card: cardOf(s, this.ports.pcOnline?.() ?? false) }));
     return { items, chips: r.ask?.chips ?? [], drafts: r.show.flatMap((s) => (s.type === 'card' ? [s.draft] : [])) };
   }
 }
