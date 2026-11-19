@@ -4,6 +4,7 @@
 import type { PhoneCopyBody } from '@sax/remote';
 import type { PhoneCmd } from '../src/phoneCmd';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { useState } from 'react';
 import { View } from 'react-native';
 import type { ChatItem } from '../src/chat';
@@ -11,6 +12,7 @@ import { SessionContext, type Session } from '../src/session';
 import { MainScreen, type Tab } from '../src/screens/MainScreen';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
 import { Banner } from '../src/notify/NotifyHost';
+import { AskSheet } from '../src/notify/PushHost';
 import { TextSizeHost } from '../src/ui/TextSizeHost';
 import { LockScreen } from '../src/screens/LockScreen';
 import { PairScreen } from '../src/screens/PairScreen';
@@ -24,6 +26,7 @@ import { buildGate, type GateField, type PhoneGate } from '../src/approval';
 import { useEffect } from 'react';
 import { useQueue } from '../src/queueStore';
 import { RunScreen } from '../src/screens/RunScreen';
+import { SimpleAuthSheet, draftOf } from '../src/screens/SimpleAuthSheet';
 import { BizRegScreen, type BizRegPreview } from '../src/screens/BizRegScreen';
 import { PDF_LINE } from '../src/capture/pick';
 import { MoneyProvider, type MarkState, type MoneyStatus } from '../src/moneyStore';
@@ -137,21 +140,51 @@ const CHAT_OFFLINE: ChatItem[] = [
   ...CHAT,
   { kind: 'msg', id: 'c5', from: 'me', at: at(11, 40), text: '동네마트에 오늘 날짜로 세금계산서 발급해 줘. 공급가액 320,000원' },
 ];
+/** public/sample-invoice.jpg를 가로 16px로 줄인 흐린 미리보기(앱이 찍을 때 만드는 것과 같은 크기) */
+const SAMPLE_THUMB = { w: 1520, h: 1040, data: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAA0QDQAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb//gAPTGF2YzYzLjEuMTAyAP/bAEMACBAQExATFhYWFhYWGhgaGxsbGhoaGhsbGx0dHSIiIh0dHRsbHR0gICIiJSYlIyMiIyYmKCgoMDAuLjg4OkVFU//EAFQAAAMBAAAAAAAAAAAAAAAAAAABBAcBAQEAAAAAAAAAAAAAAAAAAAABEAEBAAMBAAAAAAAAAAAAAAAAAREh8EERAQEAAAAAAAAAAAAAAAAAAAAR/8AAEQgACwAQAwEiAAIRAAMRAP/aAAwDAQACEQMRAD8A2rEuy7xQEpH/2Q==' };
 const CHAT_MERGED: ChatItem[] = [
   ...chatOn(1),
   { kind: 'msg', id: 'm0', from: 'pc', at: at(18, 30, 1), text: '오늘 받은 종이 영수증 3장을 세무사 꾸러미에 넣었어요.' },
   { kind: 'merged', id: 'mg', from: at(8, 10), to: at(9, 40) },
-  { kind: 'msg', id: 'm1', from: 'me', at: at(8, 10), card: { title: '영수증 보냄', rows: [{ label: '동네마트 성수점', value: '12,800원' }] } },
+  { kind: 'msg', id: 'm1', from: 'me', at: at(8, 10), card: { title: '영수증 보냄', rows: [{ label: '동네마트 성수점', value: '12,800원' }], photo: { thumb: SAMPLE_THUMB } } },
   { kind: 'msg', id: 'm2', from: 'me', at: at(8, 12), text: '이거 식자재로 넣어 줘' },
   { kind: 'msg', id: 'm3', from: 'pc', at: at(9, 38), text: '식자재(매입)로 넣었어요. 이번 달 식자재 매입은 2,140,000원이에요.' },
   { kind: 'msg', id: 'm4', from: 'me', at: at(9, 40), text: '고마워' },
 ];
 const TODO = { approvals: 2, backlog: 1 };
 
+/**
+ * 긴 대화(스크롤 시험, 11-19): ?s=home-chat-long&n=200. n줄을 나와 PC가 번갈아 말한 기록으로 채운다.
+ * 시험 도구(scripts/scroll-shift-gallery.mjs)가 window.__galleryReply(글) / __galleryMine(글)로 새 말을 붙인다.
+ */
+const LONG_PC = ['네, 확인했어요.', '이번 달 발급은 14건이에요. 합계 8,420,000원이에요.', '가나식자재 입금이 평소보다 늦어요. 지난달에는 12일 걸렸는데 이번에는 31일째예요.', '영수증 3장을 세무사 꾸러미에 넣었어요.', '부가세 2기 확정 신고는 1월 25일까지예요.', '동네마트 세금계산서는 PC가 켜지면 바로 발급할게요.'];
+const LONG_ME = ['고마워', '이번 달 매출 알려줘', '가나식자재 돈 들어왔어?', '영수증 넣어 줘', '신고 언제까지야?', '동네마트 발급해 줘'];
+const longChat = (n: number): ChatItem[] =>
+  Array.from({ length: n }, (_, i) => {
+    const me = i % 2 === 0;
+    const k = Math.floor(i / 2) % 6;
+    return { kind: 'msg' as const, id: `L${i}`, from: me ? ('me' as const) : ('pc' as const), at: now - (n - i) * 3 * 60_000, text: `${me ? LONG_ME[k] : LONG_PC[k]} (${i + 1})` };
+  });
+function LongChat() {
+  const gq = new URLSearchParams(typeof location !== 'undefined' && location.search ? location.search : (process.env.EXPO_PUBLIC_GALLERY ?? ''));
+  const n = Number(gq.get('n')) || 24;
+  /** kb=ms: 그 뒤 키보드를 띄우고 3초 뒤 내린다(시뮬레이터 녹화용) */
+  const kb = gq.get('kb') ? Number(gq.get('kb')) : undefined;
+  const [items, setItems] = useState(() => longChat(n));
+  useEffect(() => {
+    const w = globalThis as unknown as Record<string, (t: string) => void>;
+    const add = (from: 'me' | 'pc') => (text: string) => setItems((x) => [...x, { kind: 'msg', id: `N${x.length}`, from, at: Date.now(), text }]);
+    w.__galleryReply = add('pc');
+    w.__galleryMine = add('me');
+  }, []);
+  return <Main chat={items} focusAfter={kb} />;
+}
+
+
 /** 탭 화면을 가짜 세션으로 그린다. 탭은 눌러서 바꿀 수 있다. */
-function Main({ start = 'home', chat, live, phone, menu }: { start?: Tab; chat?: ChatItem[]; /** 지금 할 일 건수를 가짜 밀린 일에서 센다 */ live?: boolean; phone?: OfflineChatView; menu?: boolean }) {
+function Main({ start = 'home', chat, live, phone, menu, focusAfter }: { start?: Tab; chat?: ChatItem[]; /** 지금 할 일 건수를 가짜 밀린 일에서 센다 */ live?: boolean; phone?: OfflineChatView; menu?: boolean; focusAfter?: number }) {
   const [tab, setTab] = useState<Tab>(start);
-  return <MainScreen tab={tab} onTab={setTab} go={noop} chat={chat} todo={chat && !live ? TODO : undefined} phone={phone} menu={menu} />;
+  return <MainScreen tab={tab} onTab={setTab} go={noop} chat={chat} todo={chat && !live ? TODO : undefined} phone={phone} menu={menu} focusAfter={focusAfter} />;
 }
 const read = parsePaperInvoice(SAMPLE_INVOICE, today)!;
 
@@ -235,6 +268,16 @@ const CMD = (o: Partial<PhoneCmd> = {}): PhoneCmd => ({
 });
 const pcRun = (o: Partial<PhoneCmd>) => ({
   session: fake({ ...copyData(), cmds: [CMD(o)] }, 'online'), focus: 'cmd-G1', node: <RunScreen onDone={noop} onDoc={noop} onRecords={noop} now={now} />,
+});
+const simpleSheet = (start?: Parameters<typeof SimpleAuthSheet>[0]['start'], remembered?: Parameters<typeof SimpleAuthSheet>[0]['remembered'], failed?: boolean) => ({
+  session: fake({ ...copyData(), cmds: [CMD({ phase: 'login', turn: true, code: 'login.simple_auth', simpleReq: '01JD0000000000000000000000' })] }, 'online'),
+  notes: [{ kind: 'run' as const, id: 'run-cmd-G1', at: now - 90_000, jobId: 'cmd-G1' }],
+  node: (
+    <>
+      <Main chat={CHAT} live />
+      <SimpleAuthSheet remembered={remembered} failed={failed} onSend={noop} onClose={noop} start={start} />
+    </>
+  ),
 });
 const docCase = (state: DocState, result = RES) => ({
   session: fake(paired(), state.kind === 'pcOff' ? 'offline' : 'online'), jobs: [runJob({ kind: 'done', result, startedAt: T0 })], focus: 'r1', node: <DocScreen onDone={noop} state={state} />,
@@ -392,6 +435,27 @@ const SCREENS: Record<
   'run-pc-approve': () => pcRun({ phase: 'approve' }),
   'run-pc-in-doubt': () => pcRun({ phase: 'verify', code: 'in_doubt', attempt: 2 }),
   'run-pc-stopped': () => pcRun({ phase: 'stopped' }),
+  // PC가 사람 차례로 멈춤(run.event 'turn'): 공동인증서 로그인이 안 돼 간편인증 화면을 열어 둠, 모르는 까닭
+  'run-pc-turn-simple': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_auth' }),
+  'run-pc-turn-other': () => pcRun({ phase: 'readback', turn: true, code: 'turn.other' }),
+  // 폰에서 간편인증: 고르기(인증서로 다시·간편인증), 승인 대기(남은 시간), 시간 지남, 앞 요청 실패
+  'run-pc-turn-choice': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_auth', simpleReq: '01JD0000000000000000000000' }),
+  // 간편인증 시트: 채팅 화면 위에서 한 단계씩(앱 → 통신사 → 이름 → 생년월일 → 휴대폰), 앞서 쓴 값이면 확인 한 장
+  'simple-sheet-app': () => simpleSheet({ step: 'app' }),
+  'simple-sheet-carrier': () => simpleSheet({ step: 'carrier', draft: { ...draftOf(null), provider: 'pass' } }),
+  'simple-sheet-name': () => simpleSheet({ step: 'name', draft: { ...draftOf(null), provider: 'kakao', name: '김가' } }),
+  'simple-sheet-phone': () => simpleSheet({ step: 'phone', draft: { ...draftOf(null), provider: 'kakao', name: '김가나', birth: '1984-03-12', phone: '010-1234-56' } }),
+  'simple-sheet-confirm': () => simpleSheet(undefined, { provider: 'kakao', name: '김가나', birth: '19840312', phone: '01012345678' }),
+  'simple-sheet-failed': () => simpleSheet({ step: 'app', draft: { ...draftOf(null), provider: 'kakao' } }, null, true),
+  'run-pc-turn-choice-failed': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_auth', simpleReq: '01JD0000000000000000000000', simpleFailed: true }),
+  'run-pc-simple-wait': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_sent.kakao', simpleApp: 'kakao', simpleReq: '01JD0000000000000000000000', deadline: now + 248_000 }),
+  'run-pc-simple-timeout': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_sent.kakao', simpleApp: 'kakao', simpleReq: '01JD0000000000000000000000', deadline: now - 1_000 }),
+  'home-chat-pc-turn': () => ({
+    session: fake({ ...copyData(), cmds: [CMD({ phase: 'login', turn: true, code: 'login.simple_auth', simpleReq: '01JD0000000000000000000000' })] }, 'online'),
+    notes: [{ kind: 'run', id: 'run-cmd-G1', at: now - 90_000, jobId: 'cmd-G1' }],
+    node: <Main chat={CHAT} live />,
+  }),
+  'queue-pc-turn': () => ({ session: fake({ ...copyData(), cmds: [CMD({ phase: 'login', turn: true, code: 'login.simple_auth' })] }, 'online'), node: <QueueScreen onDone={noop} onConnection={noop} onOpen={noop} now={now} /> }),
   'run-pc-done': () => pcRun({ phase: 'done', result: { approvalNo: '20261117-41000000-12345678', total: 1_353_000, emailSent: true } }),
   'run-pc-refused': () => pcRun({ ack: 'rejected', reason: 'counterparty_unknown', runId: undefined }),
   'run-pc-busy': () => pcRun({ ack: 'rejected', reason: 'pc_busy', runId: undefined }),
@@ -446,6 +510,7 @@ const SCREENS: Record<
   'approval-in-doubt': () => sheetCase(gate(), { state: 'verify' }),
   'approval-long': () => sheetCase(gate({ rb: LONG })),
   'home-chat-online': () => ({ session: fake(paired(), 'online', { receipts: 1, cash: 0 }), node: <Main chat={CHAT} /> }),
+  'home-chat-long': () => ({ session: fake(paired(), 'online'), node: <LongChat /> }),
   'home-chat-offline': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * 3_600_000 }, 'offline', { receipts: 1, cash: 0 }), node: <Main chat={CHAT_OFFLINE} /> }),
   'home-chat-merged': () => ({ session: fake(paired(), 'online', { receipts: 1, cash: 0 }), node: <Main chat={CHAT_MERGED} /> }),
   'home-unpaired': () => ({ session: fake(emptyData(), 'unpaired'), node: <Main /> }),
@@ -508,6 +573,16 @@ const SCREENS: Record<
       <>
         <Main start="records" />
         <Banner ev={{ jobId: 'j', kind: 'myTurn', title: '내 차례예요', line: '가나식자재 세금계산서 · 폰에서 간편인증을 승인해 주세요', os: { title: '', body: '' } }} onPress={noop} onClose={noop} />
+      </>
+    ),
+  }),
+  // 첫 발급을 맡긴 뒤 한 번 묻는 알림 허용(ADR-053)
+  'push-ask': () => ({
+    session: fake(paired(), 'online'),
+    node: (
+      <>
+        <Main start="home" />
+        <AskSheet onYes={noop} onNo={noop} />
       </>
     ),
   }),
@@ -599,7 +674,8 @@ const SCREENS: Record<
 
 export default function Gallery() {
   const p = usePalette();
-  const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
+  // 웹은 주소의 ?s=…, 시험용 iOS 빌드(GALLERY_NATIVE=1)는 EXPO_PUBLIC_GALLERY 값
+  const q = new URLSearchParams(typeof location !== 'undefined' && location.search ? location.search : (process.env.EXPO_PUBLIC_GALLERY ?? ''));
   const name = q.get('s') || 'home-chat-online';
   const fs = Math.min(Number(q.get('fs')) || 1, MAX_FONT_SCALE);
   textScale.web = fs;
@@ -609,6 +685,7 @@ export default function Gallery() {
   const h = Number(q.get('h')) || 852;
   return (
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: w, height: h }, insets: h < 700 ? { top: 20, left: 0, right: 0, bottom: 0 } : { top: 59, left: 0, right: 0, bottom: 34 } }}>
+      <KeyboardProvider>
       <View style={{ flex: 1, backgroundColor: p.canvas }}>
         <SessionContext.Provider value={session}>
           <TextSizeHost base={fs}>
@@ -621,6 +698,7 @@ export default function Gallery() {
           </TextSizeHost>
         </SessionContext.Provider>
       </View>
+      </KeyboardProvider>
     </SafeAreaProvider>
   );
 }

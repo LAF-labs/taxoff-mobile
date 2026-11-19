@@ -58,14 +58,14 @@ export function phoneChat(state: 'empty' | 'typing' | 'reply' | 'failed' | 'limi
         ...base0,
         items: [
           { kind: 'msg', id: 'c1', from: 'me', at: t(2), text: '동네마트 32만원 끊어줘' },
-          { kind: 'msg', id: 'c2', from: 'pc', via: 'phone', at: t(2), text: '동네마트 성수점 카드를 만들었어요. 맞으면 [발급 맡기기]를 눌러 주세요.' },
+          { kind: 'msg', id: 'c2', from: 'pc', via: 'phone', at: t(2), text: '동네마트 성수점 카드를 만들었어요. 맞으면 [발급하기]를 눌러 주세요.' },
           {
             kind: 'msg', id: 'c3', from: 'pc', via: 'phone', at: t(2),
             card: {
               title: '동네마트 성수점 세금계산서',
-              rows: [{ label: '금액', value: '320,000원', strong: true }, { label: '부가세', value: '정하지 않음' }, { label: '품목', value: '생활용품' }],
-              note: '맡기면 PC가 바로 준비해요',
-              draft: { id: 'd-sample', counterpartyId: 'dm', amount: 320_000, vat: null, item: '생활용품' },
+              rows: [{ label: '금액', value: '320,000원', strong: true }, { label: '부가세', value: '부가세 별도' }, { label: '품목', value: '생활용품' }],
+              note: '발급하기를 누르면 PC가 바로 준비해요',
+              draft: { id: 'd-sample', counterpartyId: 'dm', amount: 320_000, vat: 'separate', item: '생활용품' },
             },
           },
         ],

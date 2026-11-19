@@ -3,18 +3,20 @@
 // - 돈: 받을 돈·낼 돈의 기한 지남·7일 안 건수(PC 사본·요약). 아침 알림 한 번.
 // 잠금 화면에 뜰 수 있으므로 OS 알림 글에는 거래처·금액을 넣지 않는다(앱 안 배너에만 넣는다).
 import type { Job } from '../queue';
-import type { RunView } from '../run';
+import { pcTurnOf, type RunView } from '../run.ts';
 
 export type NotifyKind = 'myTurn' | 'done' | 'stopped' | 'verify' | 'refused';
-export type NotifyTopic = 'run' | 'money';
 
 export interface NotifyPrefs {
   /** 발급 진행(내 차례·끝남·멈춤) */
   run: boolean;
   /** 받을 돈·낼 돈 기한(아침 9시) */
   money: boolean;
+  /** 앱을 닫아 둬도 오는 알림(PC가 서버 푸시로 깨운다: 승인할 일, 맡긴 일 소식). 예전 저장본에는 없다: 없으면 켜짐 */
+  wake?: boolean;
 }
-export const DEFAULT_PREFS: NotifyPrefs = { run: true, money: true };
+export const DEFAULT_PREFS: NotifyPrefs = { run: true, money: true, wake: true };
+export const wakeOn = (p: NotifyPrefs | undefined): boolean => p?.wake !== false;
 
 export interface RunEvent {
   jobId: string;
@@ -58,7 +60,8 @@ const COPY: Record<NotifyKind, { title: string; os: string }> = {
 function lineOf(job: Job, kind: NotifyKind): string {
   const r = job.run;
   if (kind === 'myTurn' && r?.kind === 'myTurn') {
-    return r.auth.method === 'cert' ? `${job.title}. 인증서 로그인은 PC에서 해 주세요` : `${job.title}. 간편인증을 승인해 주세요`;
+    if (r.auth.method === 'pc') return `${job.title}. ${pcTurnOf(r.auth.code).short}`;
+    return r.auth.method === 'cert' ? `${job.title}. 인증서 비밀번호가 필요해요` : `${job.title}. 간편인증을 승인해 주세요`;
   }
   return job.title;
 }

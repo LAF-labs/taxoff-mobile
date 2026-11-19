@@ -16,6 +16,7 @@ import { PHONE_CAPS, newerCopy, receiveCopy } from './pcCopy';
 import { driveCmds, trimCmds } from './issueLive';
 import { enrollPx } from './pxLive';
 import type { PxDevice } from '../approvalKey';
+import { replaying, tapping } from './hold';
 import { causeOf, pushWhy, whyCode } from './pcWhy';
 
 /** queued: PC는 꺼져 있고 릴레이 큐에 맡겼다. stale: PC가 오래 꺼져 있어 유효한 번들이 없다(맡길 수 없다). */
@@ -90,6 +91,17 @@ export async function syncWithPc(d: SyncDeps): Promise<SyncResult> {
 
 type Pair = NonNullable<AppData['pair']>;
 
+/** 지금 열려 있는 우편함 라이브 연결(하나뿐이다. 동시에 두 번 돌지 않는다) */
+let liveLink: Link | null = null;
+
+/**
+ * 앱이 뒤로 가면 라이브 연결을 닫는다(ADR-053). iOS는 뒤로 간 앱을 곧 멈추는데 연결은 그대로 남아, PC는 폰이 붙어 있다고 보고
+ * 승인 요청을 그 세션으로 넘긴다(아무도 못 본다). 닫으면 PC가 세션이 없다고 알고 서버 푸시로 깨운다.
+ */
+export function closeLive(): void {
+  liveLink?.close();
+}
+
 /** 라이브 세션. 세션이 열리지 않으면 멈춘 단계와 원인(큐로 넘어간다). */
 async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: string }> {
   let link: Link | null = null;
@@ -98,6 +110,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
   try {
     const relay = relayFor(pair.relayHost, deviceAuthFor(pair.pairId, pair.cert, d.keys.vm));
     link = await relay.joinMailbox(fromB64(pair.mbxId), { read: fromB64(pair.tokRead), write: fromB64(pair.tokWrite) }, 'mobile');
+    liveLink = link;
     // 우편함에는 들어갔다. PC가 이 우편함을 지키고 있으면 릴레이가 곧 peer를 알린다(없으면 PC가 꺼졌거나 이 폰 기록이 PC에 없다)
     if (!(await waitPeer(link, PEER_WAIT_MS))) return { why: whyCode('peer', link.closed ? 'closed' : 'timeout') };
     stage = 'session';
@@ -118,13 +131,16 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
     await d.update((x) => ({ ...x, lastSeenPc: Date.now() }));
     d.onLive?.();
     // PC는 세션을 열자마자 사본을 보낸다. 보관함을 비우기 전에 받는다(비우는 동안 온 다른 봉투는 버려진다).
-    const copy = await receiveCopy(s.channel, s.peerHello.capabilities).catch(() => null);
+    // 사본을 기다리고 보관함을 비우는 동안 온 발급 명령 봉투(승인 요청·진행)는 모아 두었다가 발급 명령 처리에 넘긴다(net/hold.ts)
+    const held: Parameters<typeof s.channel.sendRaw>[0][] = [];
+    const early = tapping(s.channel, held);
+    const copy = await receiveCopy(early, s.peerHello.capabilities).catch(() => null);
     if (copy) await d.update((x) => ({ ...x, pcCopy: newerCopy(x.pcCopy, copy) }));
     // 승인 키를 알린다(명령을 보내기 전에: PC가 이 폰을 승인 기기로 알아야 cmd.ack가 accepted로 온다)
     const onCopy = (c: PhoneCopyBody) => d.update((x) => ({ ...x, pcCopy: newerCopy(x.pcCopy, c) }));
-    const px = await enrollPx(s.channel, s.peerHello.capabilities, { pairId: pair.pairId, deviceId: d.keys.deviceId, vm: d.keys.vm, px: d.px ?? null, onCopy }).catch(() => null);
+    const px = await enrollPx(early, s.peerHello.capabilities, { pairId: pair.pairId, deviceId: d.keys.deviceId, vm: d.keys.vm, px: d.px ?? null, onCopy }).catch(() => null);
     if (px) await d.update((x) => ({ ...x, px }));
-    const flushed = await flushOutbox(s.channel, d.outbox);
+    const flushed = await flushOutbox(early, d.outbox);
     if (flushed.sent.length) {
       const sent = new Set(flushed.sent);
       await d.update((x) => ({
@@ -134,7 +150,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
       }));
     }
     // 폰 발급 명령: 저장된 cmdId로 보내고(다시 보내도 같은 cmdId), 끝날 때까지 진행을 받는다
-    await driveCmds(s.channel, s.peerHello.capabilities, {
+    await driveCmds(replaying(s.channel, held), s.peerHello.capabilities, {
       cmds: () => d.data().cmds ?? [],
       save: (f) => d.update((x) => ({ ...x, cmds: trimCmds(f(x.cmds ?? [])) })),
       onCopy,
@@ -147,6 +163,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
   } finally {
     noise.destroy();
     link?.close();
+    if (liveLink === link) liveLink = null;
   }
 }
 

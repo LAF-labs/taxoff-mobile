@@ -61,12 +61,12 @@ export function pcWhyText(code: string | null | undefined): string | null {
   if (!code) return null;
   const [stage = '', cause = ''] = code.split(':');
   // 계정 서비스 POST /v1/device-tokens 거절(services/account): 끊긴 기기·정지된 기기는 다시 연결해야 한다
-  if (/^(join|queue)$/.test(stage) && /^account\.(device_not_found|device_suspended)/.test(cause)) return '이 폰의 연결이 해제됐어요. PC에서 다시 연결해 주세요.';
-  if (/^(join|queue)$/.test(stage) && cause.startsWith('account.')) return '폰 확인이 거절됐어요. 잠시 뒤 다시 하고, 계속되면 PC에서 다시 연결해 주세요.';
+  if (/^(join|queue)$/.test(stage) && /^account\.(device_not_found|device_suspended)/.test(cause)) return '이 폰의 연결이 해제됐어요. 설정에서 PC와 다시 연결해 주세요.';
+  if (/^(join|queue)$/.test(stage) && cause.startsWith('account.')) return '폰 확인이 거절됐어요. 잠시 뒤 다시 하고, 계속되면 설정에서 PC와 다시 연결해 주세요.';
   if (stage === 'join' && cause.startsWith('net.')) return '인터넷에 연결되지 않았어요. 연결을 확인해 주세요.';
   if (stage === 'join') return 'PC와 잇는 길이 지금 열리지 않았어요. 잠시 뒤 다시 해 볼게요.';
-  if (stage === 'peer') return 'PC가 응답하지 않았어요. PC에서 앱이 켜져 있고 로그인돼 있는지 확인해 주세요.';
-  if (stage === 'session') return 'PC가 이 폰을 받지 않았어요. 계속되면 PC에서 다시 연결해 주세요.';
+  if (stage === 'peer') return 'PC가 응답하지 않았어요. PC 앱이 꺼져 있거나 로그아웃됐을 수 있어요.';
+  if (stage === 'session') return 'PC가 이 폰을 받지 않았어요. 계속되면 설정에서 PC와 다시 연결해 주세요.';
   if (stage === 'live') return 'PC와 연결이 중간에 끊겼어요. 잠시 뒤 다시 해 볼게요.';
   if (stage === 'stale') return 'PC가 오래 꺼져 있었어요. PC를 켜 두거나 다시 연결해 주세요.';
   if (stage === 'queue' && cause.startsWith('net.')) return '인터넷에 연결되지 않았어요. 연결을 확인해 주세요.';

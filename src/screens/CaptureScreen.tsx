@@ -8,6 +8,7 @@ import { Asset } from 'expo-asset';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { File } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { makeThumb } from '../capture/thumb';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, StyleSheet, View, type LayoutRectangle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -242,6 +243,8 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
     let jpeg: Uint8Array | null = null;
     try {
       jpeg = await new File(shot.uri).bytes();
+      // 대화 카드가 사진 자리를 먼저 잡을 비율과 흐린 미리보기(지우기 전에 만든다)
+      const thumb = await makeThumb(shot.uri, shot.width, shot.height);
       const offer = makeReceiptOffer(jpeg, { capturedAt: shot.capturedAt, width: shot.width, height: shot.height, ocrEngine: engine, ownerConfirmed: true, candidates: c, paperInvoice: paper });
       await s.outbox.put({ kind: 'receipt', msgId: offer.msgId, offer, createdAt: Date.now(), attempts: 0 }, jpeg);
       cleanup();
@@ -249,7 +252,7 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
       const rec = docMode === 'invoice'
         ? { kind: invoice.docKind, title: `${(invoice.direction === 'sales' ? invoice.buyer.name : invoice.supplier.name) ?? (invoice.docKind === 'invoice' ? '계산서' : '세금계산서')}`, amount: invoice.total }
         : { kind: 'receipt' as const, title: c.merchant ?? '영수증', amount: c.amount ?? null };
-      await s.update((d) => ({ ...d, recent: [{ msgId: offer.msgId, at: Date.now(), state: 'pending' as const, ...rec }, ...d.recent].slice(0, 30) }));
+      await s.update((d) => ({ ...d, recent: [{ msgId: offer.msgId, at: Date.now(), state: 'pending' as const, ...rec, ...(thumb ? { thumb } : {}) }, ...d.recent].slice(0, 30) }));
       await s.refreshPending();
       setSent(
         docMode === 'invoice'
@@ -556,7 +559,7 @@ function InvoiceFields({
       </Group>
 
       {inv.items.length > 0 && (
-        <Group title={`품목 ${inv.items.length}개`} note="품목은 읽은 그대로 보내요. 고칠 게 있으면 PC에서 고쳐요.">
+        <Group title={`품목 ${inv.items.length}개`} note="품목은 읽은 그대로 보내요. 틀린 칸은 보낸 뒤에 고칠 수 있어요.">
           {inv.items.map((it, i) => (
             <Row
               key={i}

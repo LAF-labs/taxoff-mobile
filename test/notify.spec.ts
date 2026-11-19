@@ -30,11 +30,11 @@ describe('알림 거리', () => {
     assert.equal(runEvents([job('1')], [job('1', running)]).length, 0);
   });
 
-  it('내 차례: 간편인증은 폰에서, 인증서는 PC에서라고 쓴다', () => {
+  it('내 차례: 간편인증은 승인, 인증서는 비밀번호가 필요하다고 쓴다', () => {
     const simple = runEvents([job('1', running)], [job('1', { kind: 'myTurn', step: 'login', auth: { method: 'simple', app: 'kakao' }, startedAt: 0 })]);
     assert.match(simple[0]?.line ?? '', /간편인증/);
     const cert = runEvents([job('1', running)], [job('1', { kind: 'myTurn', step: 'login', auth: { method: 'cert' }, startedAt: 0 })]);
-    assert.match(cert[0]?.line ?? '', /PC에서/);
+    assert.match(cert[0]?.line ?? '', /인증서/);
   });
 
   it('OS 알림 글(잠금 화면)에는 거래처·금액이 없다', () => {

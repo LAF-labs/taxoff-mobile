@@ -99,8 +99,8 @@ function Back({ onPress, label }: { onPress: () => void; label: string }) {
 }
 
 /** 글꼴 없이 그리는 꺾쇠(10×10 두 변). 아이콘 묶음을 들이지 않는다. */
-export function Chevron({ dir = 'right', color, sizePx = 9 }: { dir?: 'left' | 'right' | 'down'; color: string; sizePx?: number }) {
-  const rot = dir === 'left' ? '-135deg' : dir === 'down' ? '135deg' : '45deg';
+export function Chevron({ dir = 'right', color, sizePx = 9 }: { dir?: 'left' | 'right' | 'down' | 'up'; color: string; sizePx?: number }) {
+  const rot = dir === 'left' ? '-135deg' : dir === 'down' ? '135deg' : dir === 'up' ? '-45deg' : '45deg';
   return <View style={{ width: sizePx, height: sizePx, borderTopWidth: 2, borderRightWidth: 2, borderColor: color, transform: [{ rotate: rot }], marginHorizontal: 4 }} />;
 }
 
@@ -288,10 +288,10 @@ export function Replies<K extends string>({
 }
 
 /** 둘 중 하나(두 칸 전환). */
-export function Seg<K extends string>({ options, value, onChange, testID }: { options: Array<{ key: K; label: string }>; value: K | null; onChange: (k: K) => void; testID?: string }) {
+export function Seg<K extends string>({ options, value, onChange, testID, style }: { options: Array<{ key: K; label: string }>; value: K | null; onChange: (k: K) => void; testID?: string; style?: StyleProp<ViewStyle> }) {
   const p = usePalette();
   return (
-    <View style={[st.seg, { backgroundColor: p.tint }]} testID={testID} accessibilityRole="radiogroup">
+    <View style={[st.seg, { backgroundColor: p.tint }, style]} testID={testID} accessibilityRole="radiogroup">
       {options.map((o) => {
         const on = value === o.key;
         return (
