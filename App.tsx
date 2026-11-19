@@ -4,6 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { LOCK_AFTER_MS, LOCK_DRAIN_MS } from './src/config';
 import { drained, endEpoch } from './src/inflight';
@@ -243,9 +244,11 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
+      <KeyboardProvider>
       <StatusBar style="auto" />
       {body}
       {cover && <View style={[StyleSheet.absoluteFill, { backgroundColor: p.canvas }]} testID="privacy-cover" />}
+      </KeyboardProvider>
     </SafeAreaProvider>
   );
 }
