@@ -18,6 +18,7 @@ import { useEntrust } from '../entrust';
 import { counterpartiesOf } from '../net/pcCopy';
 import { splitAmount, type VatMode } from '../issue';
 import { masked } from '../ui/field';
+import { FlapText } from '../ui/FlapText';
 import { useSession } from '../session';
 import type { PcStatus } from '../net/pc';
 import { MAX_FONT_SCALE, TextSizeContext, radius, size, space, textScale, type, usePalette, useReducedMotion } from '../theme';
@@ -584,12 +585,16 @@ function CardValue({ text, strong, quiet }: { text: string; strong?: boolean; qu
   );
 }
 
-function CardRow({ label, value, strong, children, fixed }: { label: string; value?: string; strong?: boolean; children?: React.ReactNode; /** 칸이 들어가도 같은 높이(44) */ fixed?: boolean }) {
+function CardRow({ label, value, strong, children, fixed, flap }: { label: string; value?: string; strong?: boolean; children?: React.ReactNode; /** 칸이 들어가도 같은 높이(44) */ fixed?: boolean; /** 라벨이 바뀔 때 글자가 차르륵 바뀐다 */ flap?: boolean }) {
   return (
     <View style={[st.cardRow, fixed && st.cardRowFixed]}>
-      <T v="sub" c="ink2" style={{ flexShrink: 1 }}>
-        {label}
-      </T>
+      {flap ? (
+        <FlapText text={label} />
+      ) : (
+        <T v="sub" c="ink2" style={{ flexShrink: 1 }}>
+          {label}
+        </T>
+      )}
       {children ?? (
         <T v={strong ? 'figure' : 'value'} style={{ flexShrink: 0, textAlign: 'right' }}>
           {value}
@@ -638,7 +643,7 @@ function DraftCard({ card, draft, onIssue }: { card: ChatCard; draft: Draft; onI
     <View style={[st.card, st.cardDraft, { backgroundColor: p.tint }]} testID="chat-card">
       <T v="subStrong" style={{ paddingBottom: space.s1 }}>{card.title}</T>
       {/* 보기와 수정이 같은 네 줄, 같은 높이(44): [수정]을 눌러도 카드 높이가 바뀌지 않는다 */}
-      <CardRow label={edit?.vat === 'incl' ? '합계 금액' : '공급가액'} fixed>
+      <CardRow label={edit?.vat === 'incl' ? '합계 금액' : '공급가액'} fixed flap>
         {edit ? (
           <TextInput
             testID="card-amount"
@@ -653,7 +658,7 @@ function DraftCard({ card, draft, onIssue }: { card: ChatCard; draft: Draft; onI
           <CardValue text={won(a.supply)} />
         )}
       </CardRow>
-      <CardRow label={edit ? '부가세' : `부가세 ${shown.vat === 'incl' ? '포함' : '별도'}`} fixed>
+      <CardRow label={edit ? '부가세' : `부가세 ${shown.vat === 'incl' ? '포함' : '별도'}`} fixed flap>
         {edit ? (
           <Seg testID="card-vat" options={VAT_OPTIONS} value={edit.vat} onChange={(v) => setEdit({ ...edit, vat: v })} style={[st.cardSeg, { backgroundColor: dark ? p.canvas : p.sunken }]} />
         ) : (
