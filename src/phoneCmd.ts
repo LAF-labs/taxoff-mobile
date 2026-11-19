@@ -27,6 +27,9 @@ export interface PhoneCmd {
   code?: string;
   /** PC가 사람 차례로 기다린다(run.event 'turn'). code가 그 까닭. 다음 사건이 오면 풀린다. */
   turn?: boolean;
+  /** 사장님이 [인증서로 다시 시도]를 눌렀다(보낼 cmd.resume, 누른 시각). 보내면 resumeSentAt. 다음 사건이 오면 둘 다 지운다. */
+  resumeAt?: number;
+  resumeSentAt?: number;
   attempt?: number;
   result?: RunResult;
   /** PC가 다른 일 중이라 거절(pc_busy)했을 때 다시 보낼 시각. 그 전까지는 기다리는 일로 보인다. */
@@ -94,6 +97,11 @@ export function applyEvent(c: PhoneCmd, e: RunEventBody): PhoneCmd {
   if (e.phase) next.phase = e.phase;
   next.code = e.code;
   next.turn = e.event === 'turn' ? true : undefined;
+  // 다시 시도를 보낸 뒤 온 사건(새 실행의 진행이든 그대로 차례든)이면 누름을 끝낸다
+  if (next.resumeSentAt !== undefined) {
+    next.resumeAt = undefined;
+    next.resumeSentAt = undefined;
+  }
   if (e.attempt !== undefined) next.attempt = e.attempt;
   if (e.result) next.result = e.result;
   return next;
@@ -126,6 +134,8 @@ export function runViewOf(c: PhoneCmd): RunView | null {
   if (c.ack === 'rejected') return { kind: 'refused', reason: c.reason ?? 'input_invalid', startedAt };
   // 보냈지만 아직 답이 없으면 준비 중(맡김으로 두면 폰에서 취소할 수 있어 PC와 어긋난다)
   if (!c.ack) return c.sentAt ? { kind: 'running', step: 'prepare', startedAt, pcApproval: true } : null;
+  // [인증서로 다시 시도]를 눌렀고 PC 답을 기다린다: 로그인 중으로 보인다
+  if (c.turn && c.resumeAt !== undefined) return { kind: 'running', step: 'login', startedAt, pcApproval: true };
   // PC가 사람 차례로 기다린다(예: 공동인증서 로그인이 안 돼 간편인증 화면을 열어 둠). "진행 중"으로 두지 않는다.
   if (c.turn && c.phase && c.phase !== 'done' && c.phase !== 'stopped') {
     const step = (STEPS as readonly string[]).includes(c.phase) ? (c.phase as Step) : 'login';
@@ -156,6 +166,14 @@ export function runViewOf(c: PhoneCmd): RunView | null {
     default:
       return { kind: 'running', step: c.phase, startedAt, pcApproval: true };
   }
+}
+
+/** 폰 [인증서로 다시 시도]를 받을 수 있는 차례(PC가 공동인증서 로그인 실패로 기다린다) */
+export const canRetryCert = (c: PhoneCmd): boolean => !!c.turn && c.code === 'login.simple_auth' && !!c.runId && c.resumeAt === undefined;
+
+/** [인증서로 다시 시도]를 누름: 다음 라이브 세션에서 cmd.resume을 보낸다 */
+export function askRetryCert(c: PhoneCmd, now = Date.now()): PhoneCmd {
+  return canRetryCert(c) ? { ...c, resumeAt: now, resumeSentAt: undefined } : c;
 }
 
 /** 밀린 일·대화 카드가 보는 일 한 건 */

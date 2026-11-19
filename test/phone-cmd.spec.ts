@@ -21,7 +21,7 @@ const { driveCmds, trimCmds } = await import('../src/net/issueLive.ts');
 const { PHONE_CAPS } = await import('../src/net/pcCopy.ts');
 const { PC_TURN, STOP_COPY, actionsOf, pcTurnOf } = await import('../src/run.ts');
 const { actionFor } = await import('../src/queue.ts');
-const { BUSY_GIVE_UP_MS, BUSY_RETRY_MS, REJECT_LINE, applyAck, applyEvent, busyWaiting, issueRequest, jobOf, kstDay, needsRedate, redate, retryDue, runViewOf, settled } = await import('../src/phoneCmd.ts');
+const { BUSY_GIVE_UP_MS, BUSY_RETRY_MS, REJECT_LINE, applyAck, applyEvent, askRetryCert, canRetryCert, busyWaiting, issueRequest, jobOf, kstDay, needsRedate, redate, retryDue, runViewOf, settled } = await import('../src/phoneCmd.ts');
 
 const T0 = Date.parse('2026-11-17T01:00:00Z');
 const cmd = (o: Partial<PhoneCmd> = {}): PhoneCmd => ({
@@ -92,7 +92,8 @@ describe('cmd.ack · run.event → 진행 화면', () => {
     assert.deepEqual(runViewOf(t), { kind: 'myTurn', step: 'login', auth: { method: 'pc', code: 'login.simple_auth' }, startedAt: T0 });
     assert.equal(jobOf(t).state, 'running');
     assert.equal(settled(t), false);
-    assert.deepEqual(actionsOf(runViewOf(t)!), ['close']);
+    assert.deepEqual(actionsOf(runViewOf(t)!), ['retryCert', 'close']);
+    assert.deepEqual(actionsOf(runViewOf(applyEvent(base, { runId: 'run1', event: 'turn', at: T0 + 1, phase: 'login', code: 'portal.captcha' }))!), ['close']);
     assert.match(pcTurnOf('login.simple_auth').line, /공동인증서/);
     for (const t of [...Object.values(PC_TURN), pcTurnOf()]) assert.doesNotMatch(t.line + t.short, /(?<!다른 )PC(에서| 화면| 홈택스| 창)/, '폰은 PC 화면으로 보내지 않는다');
     assert.equal(pcTurnOf('모르는.코드').short, '예상 밖 화면에서 멈췄어요');
@@ -183,6 +184,20 @@ describe('라이브 세션 구동(mock)', () => {
     assert.equal((m.sent[0]!.body as { cmdId: string }).cmdId, cmd().cmdId);
     assert.equal(s.get()[0]!.ack, 'pc_only');
     assert.deepEqual(runViewOf(s.get()[0]!), { kind: 'stopped', step: 'prepare', reason: 'pcStopped', startedAt: T0 });
+  });
+  it('[인증서로 다시 시도]: cmd.resume(같은 runId)을 한 번 보내고, 그동안 로그인 중으로 보이며, 다음 사건이 오면 누름을 끝낸다', async () => {
+    const turn = applyEvent(applyAck(cmd({ sentAt: T0 }), { cmdId: cmd().cmdId, state: 'pc_only', runId: 'run1' }), { runId: 'run1', event: 'turn', at: T0 + 1, phase: 'login', code: 'login.simple_auth' });
+    assert.ok(canRetryCert(turn));
+    const asked = askRetryCert(turn, T0 + 2);
+    assert.equal(canRetryCert(asked), false, '두 번 누르지 않는다');
+    assert.deepEqual(runViewOf(asked), { kind: 'running', step: 'login', startedAt: T0, pcApproval: true });
+    assert.equal(askRetryCert(applyEvent(turn, { runId: 'run1', event: 'phase', at: T0 + 3, phase: 'login' })).resumeAt, undefined, '차례가 아니면 받지 않는다');
+    const s = store([asked]);
+    const m = mockChannel((sent) => (sent.at(-1)?.type === 'cmd.resume' ? [env('run.event', { runId: 'run1', event: 'phase', at: T0 + 10, phase: 'readback' }), env('run.event', { runId: 'run1', event: 'end', at: T0 + 11, phase: 'stopped', code: 'not_issued' })] : [env('cmd.ack', { cmdId: cmd().cmdId, state: 'rejected', reason: 'duplicate', runId: 'run1' })]));
+    assert.equal(await driveCmds(m.ch as never, [CAP.issue], s.io, 5000), 'settled');
+    assert.deepEqual(m.sent.filter((x) => x.type === 'cmd.resume').map((x) => x.body), [{ runId: 'run1' }]);
+    assert.equal(s.get()[0]!.resumeAt, undefined);
+    assert.equal(s.get()[0]!.turn, undefined);
   });
   it('PC가 issue.v1을 모르면 보내지 않고 새 버전 안내', async () => {
     const m = mockChannel(() => []);

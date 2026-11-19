@@ -61,6 +61,18 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
       if (retryDue(c, now())) await retry(c);
       else if (!ids.has(c.cmdId) && !settled(c, now()) && !busyWaiting(c, now())) await send(c);
     }
+    // [인증서로 다시 시도]: 누른 명령의 cmd.resume을 한 번 보낸다(같은 runId)
+    for (const c of io.cmds()) {
+      if (c.resumeAt === undefined || c.resumeSentAt !== undefined || !c.runId) continue;
+      ids.add(c.cmdId);
+      try {
+        // cmd.resume 본문은 스키마 __body6({runId})에 있지만 사본의 Bodies 표에는 아직 없다: 봉투 검사는 스키마가 한다
+        (ch.send as unknown as (t: string, b: object) => unknown)('cmd.resume', { runId: c.runId });
+      } catch {
+        continue;
+      }
+      await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? { ...x, resumeSentAt: now() } : x)));
+    }
     if (io.cmds().filter((c) => ids.has(c.cmdId)).every((c) => settled(c, now()))) return 'settled';
     if (ch.closed) return 'closed';
     if (io.alive && !io.alive()) return 'closed';

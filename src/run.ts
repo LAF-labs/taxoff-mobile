@@ -27,7 +27,7 @@ export type Auth = { method: 'simple'; app: string; deadline?: number } | { meth
  * 폰에서는 할 수 없는 일이라(홈택스 창은 PC에 있다) 할 일을 PC 기준으로 말한다. 모르는 코드는 기본 줄.
  */
 export const PC_TURN: Readonly<Record<string, { line: string; short: string }>> = {
-  'login.simple_auth': { line: '공동인증서로 홈택스에 로그인하지 못했어요. 아무것도 발급하지 않았어요', short: '공동인증서 로그인이 안 됐어요' },
+  'login.simple_auth': { line: '공동인증서로 홈택스에 두 번 로그인하지 못했어요. 아무것도 발급하지 않았어요', short: '공동인증서 로그인이 안 됐어요' },
   'cert.pick_needed': { line: '인증서가 여러 개라 어느 것으로 로그인할지 정해야 해요. 아무것도 발급하지 않았어요', short: '쓸 인증서를 정해야 해요' },
   'portal.captcha': { line: '홈택스가 자동입력방지 문자를 물어서 로그인 앞에서 기다리고 있어요', short: '홈택스 로그인 앞에서 기다려요' },
   'portal.mfa_pending': { line: '홈택스가 추가 인증을 요구해서 로그인 앞에서 기다리고 있어요', short: '홈택스 추가 인증을 기다려요' },
@@ -40,7 +40,7 @@ export const pcTurnOf = (code?: string) => (code && Object.hasOwn(PC_TURN, code)
 export type StopReason = 'blocked' | 'unknownScreen' | 'dateMismatch' | 'inputMismatch' | 'totalMismatch' | 'otherLogin' | 'passwordError' | 'pcStopped';
 
 /** 폰에서 할 수 있는 다음 행동. 못 하는 것(브라우저로 가기·금고에서 확인)은 PC에서 열기 예약으로 바꾼다. */
-export type RunAction = 'retryPrepare' | 'reserveOnPc' | 'resendAuth' | 'stop' | 'close' | 'openApp';
+export type RunAction = 'retryPrepare' | 'reserveOnPc' | 'resendAuth' | 'retryCert' | 'stop' | 'close' | 'openApp';
 
 export const STOP_COPY: Record<StopReason, { line: string; action: 'retryPrepare' | 'reserveOnPc' }> = {
   blocked: { line: '홈택스가 잠시 접속을 막아서 24시간 동안 쉬어요. 아무것도 발급하지 않았어요.', action: 'reserveOnPc' },
@@ -57,6 +57,7 @@ export const ACTION_LABEL: Record<RunAction, string> = {
   retryPrepare: '다시 준비',
   reserveOnPc: 'PC에서 열기 예약',
   resendAuth: '다시 요청',
+  retryCert: '인증서로 다시 시도',
   stop: '중지',
   close: '닫기',
   openApp: '',
@@ -134,7 +135,7 @@ export function actionsOf(r: RunView, now = Date.now()): RunAction[] {
     case 'myTurn':
       if (r.auth.method === 'cert') return ['reserveOnPc', 'stop'];
       // PC가 맡은 일의 사람 차례: 폰에서 할 수 있는 일이 없다(홈택스 창은 PC에)
-      if (r.auth.method === 'pc') return ['close'];
+      if (r.auth.method === 'pc') return r.auth.code === 'login.simple_auth' ? ['retryCert', 'close'] : ['close'];
       // 간편인증 시간이 지났으면 [다시 요청]이 기본 행동이다
       if (r.auth.deadline !== undefined && r.auth.deadline <= now) return ['resendAuth', 'stop'];
       return Object.hasOwn(AUTH_APPS, r.auth.app) ? ['openApp', 'resendAuth', 'stop'] : ['resendAuth', 'stop'];

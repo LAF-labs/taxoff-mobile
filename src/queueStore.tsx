@@ -3,7 +3,7 @@
 // simulate(갤러리·시연 전용): PC가 켜져 맡긴 발급이 준비 → 홈택스 로그인 → 값 확인을 지나 "PC가 승인 요청함"이 되고 시트가 뜬다.
 //   승인하면 발급 → 확인 → 결과 카드. simulate='inDoubt'이면 발급 뒤 응답이 끊겨 확인 중(조회 n회째) → 확인 필요로 간다.
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { busyWaiting, jobOf, redate, settled } from './phoneCmd';
+import { askRetryCert, busyWaiting, jobOf, redate, settled } from './phoneCmd';
 import { SessionContext } from './session';
 import { jobTimers } from './jobTimers';
 import { josa } from './ui/josa';
@@ -215,6 +215,12 @@ export function QueueProvider({
         patch(id, (x) => ({ ...x, state: 'needPc', reason, gate: undefined }));
       },
       runAction: (id, a) => {
+        if (a === 'retryCert' && id.startsWith('cmd-')) {
+          // PC가 공동인증서 로그인 실패로 기다리는 명령: 라이브 세션에서 cmd.resume을 보낸다(PC가 같은 값으로 인증서 로그인부터 다시)
+          const cmdId = id.slice(4);
+          void sess?.update((d) => ({ ...d, cmds: (d.cmds ?? []).map((c) => (c.cmdId === cmdId ? askRetryCert(c) : c)) })).then(() => sess?.sync());
+          return;
+        }
         const j = jobs.find((x) => x.id === id);
         if (!j?.run) return;
         const startedAt = j.run.startedAt;

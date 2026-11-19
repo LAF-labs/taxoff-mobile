@@ -31,8 +31,16 @@ export function RunScreen({ onDone, onDoc, onRecords, now: fixedNow }: { onDone:
     if (a === 'stop') onDone();
   };
   let footer;
-  if (job.pcOnly) {
-    // 폰 발급 명령: 승인·중지·서류는 PC에서. 폰은 지켜보기만 한다.
+  if (job.pcOnly && r.kind === 'myTurn' && r.auth.method === 'pc' && actionsOf(r, now)[0] === 'retryCert') {
+    // 폰 발급 명령이 공동인증서 로그인 실패로 기다린다: 폰에서 [인증서로 다시 시도]
+    footer = (
+      <>
+        <Button label={actionLabel('retryCert', r)} onPress={() => run('retryCert')} testID="run-main-retryCert" />
+        <Button kind="quiet" label="닫기" onPress={onDone} testID="run-sub-close" />
+      </>
+    );
+  } else if (job.pcOnly) {
+    // 폰 발급 명령: 승인·중지·서류는 PC가 맡는다. 폰은 지켜보기만 한다.
     footer = <Button kind="secondary" label="닫기" onPress={onDone} testID="run-main-close" />;
   } else if (r.kind === 'done') {
     footer = (
