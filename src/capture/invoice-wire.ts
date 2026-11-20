@@ -1,7 +1,3 @@
-// 확인한 세금계산서(PaperInvoice, 폰 안 모양) → 와이어 paperInvoice(@sax/remote v1.7, cap receipt.v2).
-// 와이어 규칙(릴레이 스레드 합의, tex remote-envelope v1.7): CBOR 결정적 인코딩이라 안전 정수만 — 확신은 0~100 정수, 수량도 정수(소수 수량은 규격 칸으로).
-// 등록번호는 000-00-00000, receiptOrClaim은 늘 있다(모르면 null). 마지막 관문은 @sax/remote checkPaperInvoice(PC도 같은 함수로 다시 본다).
-// 순수 함수 — node --test로 시험한다.
 import { checkPaperInvoice, type PaperInvoice as WireInvoice, type PaperInvoiceItem } from '../../vendor/sax-remote/src/index.ts';
 import type { PaperInvoice } from './invoice.ts';
 
@@ -28,10 +24,6 @@ function wireItems(inv: PaperInvoice): PaperInvoiceItem[] | undefined {
 
 type WireResult = { ok: true; invoice: WireInvoice; droppedItems: boolean } | { ok: false; bad: string[] };
 
-/**
- * 와이어 모양으로 바꾸고 검사한다. 품목 합이 공급가액과 다르면(품목 줄을 덜 읽었을 때) 품목만 빼고 보낸다 —
- * 원본 사진이 함께 가므로 세무사는 사진에서 품목을 본다.
- */
 export function toWire(inv: PaperInvoice): WireResult {
   if (!inv.direction || !inv.writtenOn || inv.supplyAmount === null || inv.total === null) {
     return { ok: false, bad: [!inv.direction && 'direction', !inv.writtenOn && 'writtenOn', inv.supplyAmount === null && 'supplyAmount', inv.total === null && 'total'].filter(Boolean) as string[] };

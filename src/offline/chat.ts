@@ -1,49 +1,32 @@
-// PC가 꺼져 있을 때 폰이 게이트웨이를 거쳐 모델을 직접 부르는 대화(ADR-046 결정 7, ADR-047).
-// 대화 코어(@sax/chat-core, tex 고정 사본)를 폰의 포트에 잇고, 코어의 결과를 홈 대화 줄(ChatItem)로 바꾼다.
-// - 모델 공급사 키는 게이트웨이에만 있다. 폰은 기기 토큰(chat 범위, 유료·체험 중에만)과 요청별 DPoP만 붙인다.
-// - 가림·컨텍스트 조립·도구 루프·답 검사는 코어가 한다(PC와 같은 함수). 이 파일은 연결과 화면 모양만 맡는다.
-// - Expo 모듈을 부르지 않는다(시험이 Node에서 그대로 돈다). 기기 쪽 포트는 device.ts가 만든다.
 import { PhoneChat, PhoneGateway, type ChatMessage, type ReactionId, type PhoneChatPorts, type PhoneCopy, type PhoneDraft, type PhoneGatewayOptions, type PhoneScreen, type PhoneShow, type PhoneTurnResult } from '@sax/chat-core';
 import type { ChatCard, ChatItem } from '../chat.ts';
 import { maskingSelfCheck, type SelfCheck } from './selfcheck.ts';
 
 interface OfflinePorts {
-  /** 게이트웨이 origin(운영 https://tax.laf-co.com, 계정 서비스와 같다) */
   origin: string;
   fetch: PhoneGatewayOptions['fetch'];
   authHeaders: PhoneGatewayOptions['authHeaders'];
-  /** 봉인 저장(대화 기록·카드). 값은 JSON 문자열 하나 */
   store: PhoneChatPorts['store'];
-  /** 대화에 붙은 카드·표를 남기는 봉인 저장(없으면 앱을 끄면 사라진다). 값은 JSON 문자열 하나 */
   shownStore?: PhoneChatPorts['store'];
   copy(): PhoneCopy | null;
   now(): number;
   newId(): string;
   randomHex(): string;
-  /** 지금 PC가 켜져 있는지. 켜져 있어도 폰 대화는 이 폰이 직접 부른다(ADR-047 결정 6). */
   pcOnline?(): boolean;
 }
 
-/** 홈 화면에 주는 한 턴의 결과 */
 export interface OfflineReply {
-  /** 대화 줄에 더할 것(앱 답과 카드·표). 내가 쓴 줄은 messages()에 이미 있다. */
   items: ChatItem[];
-  /** 되묻기 칩(누르면 그 글을 보낸다) */
   chips: Array<{ label: string; text: string }>;
-  /** 이번 턴에 만든 카드(맡기기·취소 단추용) */
   drafts: PhoneDraft[];
-  /** 모델이 연 앱 화면(대화 아래 단추로 붙는다) */
   screens: PhoneScreen[];
-  /** 모델을 부르지 못했다(한도·연결·정지 등). text는 사장님에게 보일 한 줄이다. */
   unavailable?: { code: string; text: string; retry: boolean };
-  /** 판정이 반응만 하라고 했다(ADR-057). 답 말은 없고 내 말에 이 반응이 붙었다(기록에 이미 있다). */
   reaction?: ReactionId;
 }
 
 const won = (n: number) => `${n.toLocaleString('en-US')}원`;
 const VAT: Record<string, string> = { separate: '부가세 별도', included: '부가세 포함' };
 
-/** 카드·표 → 홈 대화의 묶음 면 */
 export function cardOf(s: Exclude<PhoneShow, { type: 'screen' }>, pcOnline = false): ChatCard {
   if (s.type === 'card') {
     const d = s.draft;
@@ -51,7 +34,6 @@ export function cardOf(s: Exclude<PhoneShow, { type: 'screen' }>, pcOnline = fal
       title: `${s.counterparty} 세금계산서`,
       rows: [
         { label: '금액', value: won(d.amount), strong: true },
-        // 부가세를 말하지 않았으면 별도(공급가액에 10%를 더한다). 카드의 [수정]에서 포함으로 바꿀 수 있다.
         { label: '부가세', value: VAT[d.vat ?? 'separate']! },
         ...(d.item ? [{ label: '품목', value: d.item }] : []),
       ],
@@ -66,14 +48,12 @@ export function cardOf(s: Exclude<PhoneShow, { type: 'screen' }>, pcOnline = fal
   };
 }
 
-/** 코어 메시지 → 홈 대화 줄. 앱 답은 'pc' 쪽 말풍선에 그린다. 이 대화는 이 폰에만 있어서 'PC 받음' 표시는 없다. */
 export function itemOf(m: ChatMessage): ChatItem {
   return m.from === 'user' ? { kind: 'msg', id: m.id, from: 'me', at: m.at, text: m.text, ...(m.reaction ? { reaction: m.reaction } : {}) } : { kind: 'msg', id: m.id, from: 'pc', via: 'phone', at: m.at, text: m.text };
 }
 
 type Shown = Exclude<ChatItem, { kind: 'merged' }>;
 const isShown = (x: ChatItem): x is Shown => x.kind !== 'merged';
-/** 남겨 두는 카드·표의 수(코어 기록 600개에 비해 충분하다) */
 const SHOWN_MAX = 100;
 
 export class OfflineChat {
@@ -81,9 +61,7 @@ export class OfflineChat {
   private readonly gateway: PhoneGateway;
   private readonly ports: OfflinePorts;
   private check: Promise<SelfCheck> | null = null;
-  /** 이번 턴 내 말에 반응이 붙었을 때(일을 맡긴 말은 답보다 먼저 온다). 홈 대화가 보내는 중인 말에 바로 단다. */
   reactionSink: ((r: ReactionId) => void) | null = null;
-  /** 대화에 붙은 카드·표(오래된 것부터). 처음 부를 때 한 번 읽는다. */
   private shown: Promise<Shown[]> | null = null;
 
   constructor(ports: OfflinePorts) {
@@ -92,7 +70,6 @@ export class OfflineChat {
     this.core = new PhoneChat({ model: this.gateway, store: ports.store, copy: ports.copy, now: ports.now, newId: ports.newId, randomHex: ports.randomHex, pcOnline: () => ports.pcOnline?.() ?? false, onReaction: (r) => this.reactionSink?.(r) });
   }
 
-  /** 가림 자가 점검(앱을 연 뒤 한 번). 통과하지 못하면 send는 모델을 부르지 않는다. */
   ready(): Promise<SelfCheck> {
     this.check ??= maskingSelfCheck(this.ports.randomHex);
     return this.check;
@@ -106,10 +83,8 @@ export class OfflineChat {
     return r;
   }
 
-  /** 지금까지의 폰 대화(PC가 넘긴 앞 대화 포함) */
   async items(): Promise<ChatItem[]> {
     const shown = await this.loadShown();
-    // 코어 기록에서 밀려난 옛 말보다 앞선 카드는 보이지 않게 한다(말이 없는 카드만 덩그러니 남지 않게)
     const msgs = (await this.core.messages()).map(itemOf).filter(isShown);
     const first = msgs[0]?.at ?? 0;
     return [...msgs, ...shown.filter((x) => x.at >= first)].sort((a, b) => a.at - b.at);
@@ -128,12 +103,10 @@ export class OfflineChat {
     return this.shown;
   }
 
-  /** 카드·표나 못 보낸 말(과 이유 줄)을 남긴다. 저장이 안 돼도 대화는 계속된다(이번 실행 동안은 화면에 있다). */
   async keep(items: ChatItem[]): Promise<void> {
     await this.remember(items.filter(isShown));
   }
 
-  /** 남겨 둔 줄을 지운다(못 보낸 말을 다시 보낼 때) */
   async forget(ids: string[]): Promise<void> {
     const all = (await this.loadShown()).filter((x) => !ids.includes(x.id));
     await this.write(all);
@@ -164,7 +137,6 @@ export class OfflineChat {
     return this.core.discard(draftId);
   }
 
-  /** 오늘 쓴 금액과 한도(PC와 같이 센다) */
   usage() {
     return this.gateway.usage();
   }

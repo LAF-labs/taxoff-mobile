@@ -1,8 +1,3 @@
-// 돈 탭(기획 v2 PR 8, 11-cash-flow §3.7 폰): 이번 달 한 줄(들어온 돈·나간 돈·남은 돈) → 받을 돈 → 낼 돈 → 앞으로 30일.
-// - 기준 시각과 넣은 자료(계좌 수)를 늘 함께. PC가 꺼져 있으면 "PC에서 마지막으로 받은 값"과 그 시각.
-// - 알림 후보는 맨 위 한 줄만(§3.5 문구 그대로). 한 화면에 주의 면은 하나.
-// - 자료가 모자라면 0이 아니라 "확인 못 함"과 이유(§3.4). 계좌가 없으면 받을 돈은 세금계산서 기준으로만.
-// - 큰 금액은 줄바꿈 없이, 1억이 넘으면 줄여 보이고 누르면 정확한 값.
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import type { PhoneCopyBody } from '@sax/remote';
@@ -48,7 +43,6 @@ export function MoneyScreen({ go }: { go: (to: HomeRoute) => void }) {
       </Screen>
     );
   }
-  // 받아 둔 요약(MoneySnapshot)이 없으면 PC가 세션마다 넘기는 사본의 돈 요약(pcCopy.money)을 쓴다
   const cm = s.data.pcCopy?.money;
   if (!m.snap && cm) return <CopyMoney money={cm} />;
   if (!m.snap) {
@@ -90,7 +84,7 @@ export function MoneyScreen({ go }: { go: (to: HomeRoute) => void }) {
             <T v="label" c="ink3">
               {monthNo}월
             </T>
-            {/* 세 칸을 나란히 두면 큰 금액·음수가 잘린다: 라벨 왼쪽, 금액 오른쪽 세 줄 */}
+            {}
             <MonthLine label="들어온 돈" n={unsure ? null : month.cash.in.total} />
             <MonthLine label="나간 돈" n={unsure ? null : month.cash.out.total} />
             <MonthLine label="남은 돈" n={unsure ? null : month.cash.net} strong />
@@ -139,10 +133,6 @@ export function MoneyScreen({ go }: { go: (to: HomeRoute) => void }) {
   );
 }
 
-/**
- * 사본 돈 요약(remote-envelope v1.8 phone.copy money). 숫자는 PC가 계산한 그대로, null은 0이 아니라 "확인 못 함".
- * 받을 돈·낼 돈 목록은 사본에 없어서 카드는 누르지 않고 "목록은 PC에서" 한 줄만 둔다.
- */
 function CopyMoney({ money }: { money: NonNullable<PhoneCopyBody['money']> }) {
   const p = usePalette();
   const cf = money.cashflow;
@@ -215,7 +205,6 @@ function CopyMoney({ money }: { money: NonNullable<PhoneCopyBody['money']> }) {
   );
 }
 
-/** 이번 달 한 줄: 확인 못 함이면 0 대신 "—" */
 function MonthLine({ label, n, strong }: { label: string; n: number | null; strong?: boolean }) {
   return (
     <View style={st.line}>
@@ -233,7 +222,6 @@ function MonthLine({ label, n, strong }: { label: string; n: number | null; stro
   );
 }
 
-/** 받을 돈·낼 돈 카드: 안 받은(안 낸) 합계·건수, 기한 지남(황토 글자), 7일 안. 누르면 목록. */
 function SideCard({ title, s, unpaidWord, onPress, testID }: { title: string; s: PayableSummary; unpaidWord: string; onPress?: () => void; testID?: string }) {
   const p = usePalette();
   return (
@@ -255,7 +243,7 @@ function SideCard({ title, s, unpaidWord, onPress, testID }: { title: string; s:
         <Amount n={s.unpaidTotal} v="figure" />
         <T v="sub" c="ink2">{`${s.unpaidCount}건${NB}${unpaidWord}`}</T>
       </View>
-      {/* 0건 줄은 두지 않는다(늘 "0건 0원"이 떠 있으면 읽을 것만 는다). 둘 다 없으면 한 줄로 */}
+      {}
       <View style={[st.sep, { backgroundColor: p.line }]} />
       {s.overdueCount > 0 && <Line label="기한 지남" n={s.overdueTotal} count={s.overdueCount} ink="attention" />}
       {s.dueSoonCount > 0 && <Line label="7일 안" n={s.dueSoonTotal} count={s.dueSoonCount} />}
@@ -286,7 +274,6 @@ function Line({ label, n, count, ink = 'ink', sub }: { label: string; n: number;
   );
 }
 
-/** 금액: 줄바꿈 없이, 1억이 넘으면 줄여 보이고 누르면 정확한 값. */
 export function Amount({ n, v = 'value', ink = 'ink' }: { n: number; v?: 'value' | 'figure'; ink?: Ink }) {
   const [exact, setExact] = useState(false);
   const big = Math.abs(n) >= 100_000_000;
@@ -304,12 +291,10 @@ export function Amount({ n, v = 'value', ink = 'ink' }: { n: number; v?: 'value'
   );
 }
 
-/** "11월 17일 오전 9:10" */
 function when(ts: number): string {
   const d = new Date(ts);
   return `${d.getMonth() + 1}월 ${d.getDate()}일 ${clock(ts)}`;
 }
-/** "오늘 오전 9:10" · "어제 오후 6:20" · "11월 15일 오후 6:20" */
 function relWhen(ts: number, now = Date.now()): string {
   const d = new Date(ts);
   const t = new Date(now);

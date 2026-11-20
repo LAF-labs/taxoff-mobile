@@ -8,7 +8,6 @@ describe('안내 틀 자르기', () => {
     assert.deepEqual(r, { originX: 300, originY: 400, width: 2400, height: 3200 });
   });
   it('미리보기가 더 길쭉하면(cover) 사진 좌우가 잘려 보인다', () => {
-    // 사진 3000x4000, 화면 390x844 → scale = 844/4000 = 0.211, 보이는 폭 = 1848, 좌우 576씩 잘림
     const r = guideCrop({ width: 3000, height: 4000 }, { width: 390, height: 844 }, { x: 0, y: 0, w: 390, h: 844 });
     assert.equal(r.originY, 0);
     assert.equal(r.height, 4000);

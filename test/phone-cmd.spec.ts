@@ -1,4 +1,3 @@
-// 폰 발급 명령(remote-envelope v1.8 cmd.run · cmd.ack · run.event): 모델과 라이브 세션 구동. 채널은 가짜(mock).
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import { describe, it } from 'node:test';
@@ -38,7 +37,6 @@ describe('발급 명령 입력', () => {
     const r = cmd().req;
     assert.deepEqual(r, { counterpartyRef: 'cp_gana', supply: 1_230_005, tax: 123_000, item: '식자재', day: '2026-11-17' });
     assert.equal(checkIssueRequest(r), null);
-    // UTC 15시 = 한국 다음 날 0시
     assert.equal(kstDay(Date.parse('2026-11-17T15:00:00Z')), '2026-11-18');
   });
   it('hello에 copy.v1과 issue.v1을 알린다', () => {
@@ -85,7 +83,6 @@ describe('cmd.ack · run.event → 진행 화면', () => {
     assert.deepEqual(stop('date_mismatch'), { kind: 'stopped', step: 'prepare', reason: 'pcStopped', startedAt: T0 });
     assert.deepEqual(runViewOf(applyEvent(base, { runId: 'run1', event: 'phase', at: T0 + 1, phase: 'verify', code: 'in_doubt', attempt: 1 })), { kind: 'inDoubt', tries: 1, startedAt: T0 });
     assert.match(STOP_COPY.pcStopped.line, /아무것도 발급하지 않았어요/);
-    // PC 앱 판이 낮아 시작하지 않았다: 이유를 말하고, PC 화면을 보라는 말은 하지 않는다
     assert.deepEqual(stop('app_old'), { kind: 'stopped', step: 'prepare', reason: 'appOld', startedAt: T0 });
     assert.match(STOP_COPY.appOld.line, /업데이트/);
     assert.doesNotMatch(STOP_COPY.appOld.line + STOP_COPY.pcStopped.line, /PC 화면|PC에서 볼/);
@@ -126,7 +123,6 @@ describe('cmd.ack · run.event → 진행 화면', () => {
   });
 });
 
-/** 가짜 채널: 보낸 봉투를 모으고, 받을 봉투를 차례로 내준다. */
 function mockChannel(script: (sent: Array<{ type: string; body: unknown }>) => Envelope[]) {
   const sent: Array<{ type: string; body: unknown }> = [];
   const inbox: Envelope[] = [];
@@ -225,7 +221,6 @@ describe('라이브 세션 구동(mock)', () => {
       if (last.type === 'human.response') return [env('run.event', { runId: 'run1', event: 'phase', at: T0 + 9, phase: 'readback' }), env('run.event', { runId: 'run1', event: 'end', at: T0 + 10, phase: 'stopped', code: 'not_issued' })];
       return [env('cmd.ack', { cmdId: cmd().cmdId, state: 'rejected', reason: 'duplicate', runId: 'run1' })];
     });
-    // 첫 세션: 요청 값 보냄 → 승인 대기
     const io = { ...s.io };
     let step = 0;
     const r1 = await driveCmds(m.ch as never, [CAP.issue], { ...io, alive: () => step++ < 6 }, 5000);
@@ -234,11 +229,9 @@ describe('라이브 세션 구동(mock)', () => {
     assert.deepEqual(runViewOf(wait), { kind: 'myTurn', step: 'login', auth: { method: 'simple', app: '카카오톡', pc: true, deadline }, startedAt: T0 });
     assert.deepEqual(actionsOf(runViewOf(wait)!, T0 + 10), ['authDone', 'openApp', 'resendAuth']);
     assert.deepEqual(actionsOf(runViewOf(wait)!, deadline + 1), ['resendAuth', 'retryCert']);
-    // [승인했어요]
     await s.io.save((cs) => cs.map((c) => askSimple(c, 'sa1:done')));
     assert.equal(await driveCmds(m.ch as never, [CAP.issue], s.io, 5000), 'settled');
     assert.deepEqual(m.sent.filter((x) => x.type === 'human.response').map((x) => (x.body as { value: string; reqId: string }).reqId), ['REQ1', 'REQ1']);
-    // 못 함: 고르기로 돌아가고 실패를 보인다
     const failed = applyEvent(asked, { runId: 'run1', event: 'turn', at: T0 + 20, phase: 'login', code: 'login.simple_failed' });
     const fv = runViewOf({ ...failed, simpleOutSentAt: undefined, simpleOut: undefined })!;
     assert.equal(fv.kind === 'myTurn' && fv.auth.method === 'pc' && fv.auth.failed, true);

@@ -1,4 +1,3 @@
-// 폰 대화 기록의 주인(src/offline/chatKey.ts): QR로 다시 연결해도 같은 계정의 같은 PC면 기록이 이어지고, 다르면 쓰지 않는다.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { chatDataFor, chatOwnerOf, chatWrapOf } from '../src/offline/chatKey.ts';

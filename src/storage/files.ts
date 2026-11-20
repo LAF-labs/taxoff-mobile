@@ -1,6 +1,3 @@
-// 앱 데이터 폴더. 문서 폴더 아래 sax/ 하나에 모은다: 파일 보호 등급 Complete(iOS 기본 등급 entitlement + 파일마다 지정)와
-// 백업 제외(isExcludedFromBackup, Android는 allowBackup=false·dataExtractionRules 전부 제외). 카메라 롤에는 저장하지 않는다(앨범에서 고른 사진은 고르기가 만든 사본만 지운다).
-// 보호 지정이 안 되는 환경(네이티브 모듈 없음)에서는 저장을 거부한다.
 import { Directory, File, Paths } from 'expo-file-system';
 import SaxNative, { type PathProtection } from '../../modules/sax-native/src/SaxNativeModule';
 
@@ -16,7 +13,6 @@ export class ProtectionError extends Error {
 interface InstallMarker {
   installedAt: number;
   deviceId?: string;
-  /** 첫 실행 온보딩을 넘긴 시각(건너뛰기·시작하기). 있으면 다시 보이지 않는다. */
   onboardedAt?: number;
 }
 
@@ -29,7 +25,6 @@ export function installMarker(): InstallMarker | null {
   }
 }
 
-/** 표지도 백업에서 뺀다(복원된 폰에서 키체인 없이 표지만 남지 않게). */
 export async function writeInstallMarker(m: InstallMarker): Promise<void> {
   MARKER.write(JSON.stringify(m));
   await protect(MARKER.uri);
@@ -39,7 +34,6 @@ export function wipeAppData(): void {
   if (ROOT.exists) ROOT.delete();
 }
 
-/** 보호 지정. iOS는 파일 보호 Complete + 백업 제외, Android는 앱 전용 폴더(백업 규칙으로 제외). */
 async function protect(uri: string): Promise<PathProtection> {
   if (!SaxNative) throw new ProtectionError();
   const p = await SaxNative.protectPath(uri);
@@ -57,7 +51,6 @@ async function ensureDir(d: Directory): Promise<Directory> {
   return d;
 }
 
-/** 쓰고 나서 바로 보호 지정. 실패하면 파일을 지운다. */
 export async function writeProtected(f: File, bytes: Uint8Array): Promise<void> {
   await ensureDir(f.parentDirectory);
   f.write(bytes);
@@ -79,10 +72,6 @@ export function deleteQuietly(uri: string | null | undefined): void {
   }
 }
 
-/**
- * 촬영 임시 파일(카메라·자르기 결과, 봉인 전 평문 JPEG)이 남는 캐시 폴더를 비운다. 앱 시작 때와 촬영 화면을 떠날 때 부른다.
- * 정상 흐름은 촬영 화면이 파일마다 지우고, 이것은 앱이 백그라운드에서 종료되는 등 그 자리를 건너뛴 경우를 덮는다.
- */
 const CAPTURE_CACHE_DIRS = ['Camera', 'ImageManipulator'] as const;
 export function sweepCaptureTemps(): void {
   for (const name of CAPTURE_CACHE_DIRS) {

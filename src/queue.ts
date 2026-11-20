@@ -1,5 +1,3 @@
-// 밀린 일(P-13, 기획 v2 PR 2): 폰에서 PC에 맡긴 일의 로컬 모델. 아직 프로토콜 없이 화면용 상태만 있다.
-// 맡긴 지 72시간이 지나도록 시작하지 못한 일은 만료로 본다(createdAt 기준, 저장하지 않고 그때그때 계산).
 
 import type { PhoneGate } from './approval';
 import type { RunView } from './run';
@@ -7,55 +5,39 @@ import type { RunView } from './run';
 export const EXPIRE_MS = 72 * 3_600_000;
 
 export type JobState =
-  /** PC가 꺼져 있어 맡겨 둠 */
   | 'entrusted'
-  /** 앞의 일이 시작되기를 폰에서 기다림(아직 맡기지 않음) */
   | 'phoneWaiting'
-  /** PC가 켜져 시작해도 되는지 묻는 중 */
   | 'confirmStart'
   | 'running'
   | 'approval'
-  /** PC 앞에서 해야 함(이유 한 줄) */
   | 'needPc'
-  /** 발급됐는지 확인 필요 */
   | 'verify'
   | 'expired'
-  /** 발급까지 끝남(결과를 다시 볼 수 있다) */
   | 'done';
 
 export type NeedPcReason = 'firstCounterparty' | 'dailyLimit' | 'notApprover';
 
 export interface Job {
   id: string;
-  /** "가나식자재 세금계산서" */
   title: string;
-  /** 합계(원) */
   amount: number | null;
   createdAt: number;
   state: JobState;
   reason?: NeedPcReason;
-  /** 승인 대기일 때 PC가 보낸 승인 요청(gate.request). 있으면 [승인 열기]가 승인 시트를 연다. */
   gate?: PhoneGate;
-  /** PC가 알려 준 진행·결과(P-04) */
   run?: RunView;
-  /** 폰 발급 명령(cmd.run, pc_only): 승인·중지·예약은 PC에서. 폰 진행 화면은 닫기만 둔다. */
   pcOnly?: boolean;
-  /** 기다리는 까닭. pcBusy: PC가 다른 일 중이라 끝나면 저절로 이어서 맡긴다. newDay: 기다리는 사이 날짜가 바뀌어 사장님 확인이 필요하다 */
   wait?: 'pcBusy' | 'newDay';
-  /** newDay일 때 원래 작성일자(YYYY-MM-DD) */
   waitDay?: string;
 }
 
-/** 다 끝난 일 한 줄(빈 화면에 보인다) */
 export interface DoneJob {
   title: string;
   finishedAt: number;
 }
 
-/** 화면에 보이는 순서: 사장님이 할 일 → PC가 하는 일 → 기다리는 일 → 끝난 일. */
 const ORDER: JobState[] = ['confirmStart', 'approval', 'needPc', 'verify', 'running', 'entrusted', 'phoneWaiting', 'expired', 'done'];
 
-/** 줄마다 하나뿐인 동작. 시작 확인은 바닥 [모두 시작]이 주요 동작이고, 줄에는 건별 [빼기](글자만)만 있다. */
 export type JobAction = 'cancel' | 'progress' | 'approve' | 'retry' | 'result' | 'dismiss' | 'redate';
 const STATE_ACTION: Record<JobState, { key: JobAction; label: string } | null> = {
   entrusted: { key: 'cancel', label: '취소' },
@@ -69,20 +51,12 @@ const STATE_ACTION: Record<JobState, { key: JobAction; label: string } | null> =
   done: { key: 'result', label: '결과 보기' },
 };
 
-/**
- * 줄의 동작. 폰 발급 명령(pcOnly)이 PC에서 거절되거나 중지돼 'PC 앞 필요'로 끝난 줄은 PC도 이미 놓은 일이라
- * 폰에서 할 것이 없고 건수만 남는다. [치우기]로 목록에서 지운다(run이 있는 줄만: 아직 안 보낸 명령은 [취소]).
- */
 export function actionFor(job: Job, state: JobState): { key: JobAction; label: string } | null {
   if (state === 'needPc' && job.pcOnly && job.run) return { key: 'dismiss', label: '치우기' };
   if (job.wait === 'newDay') return { key: 'redate', label: '오늘 날짜로 맡기기' };
   return STATE_ACTION[state];
 }
 
-/**
- * 아직 PC가 가져가지 않은 일(맡김·폰에 대기)이 72시간을 넘기면 만료.
- * 시작 확인은 PC가 이미 가져가 사장님 답을 기다리는 중이라 createdAt으로 만료시키지 않는다.
- */
 export function stateAt(job: Job, now: number): JobState {
   const waiting = job.state === 'entrusted' || job.state === 'phoneWaiting';
   return waiting && now - job.createdAt >= EXPIRE_MS ? 'expired' : job.state;
@@ -92,7 +66,6 @@ export function groupJobs(jobs: Job[], now: number): Array<{ state: JobState; jo
   return ORDER.map((state) => ({ state, jobs: jobs.filter((j) => stateAt(j, now) === state).sort((a, b) => a.createdAt - b.createdAt) })).filter((g) => g.jobs.length > 0);
 }
 
-/** 홈 "지금 할 일" 건수: 승인 대기, 나머지 밀린 일(만료 제외). */
 export function queueCounts(jobs: Job[], now: number): { approvals: number; backlog: number } {
   let approvals = 0;
   let backlog = 0;
@@ -104,14 +77,12 @@ export function queueCounts(jobs: Job[], now: number): { approvals: number; back
   return { approvals, backlog };
 }
 
-/** 줄 동작 결과(취소는 지우고, 다시 맡기기는 지금 시각으로 맡김). */
 export function applyAction(jobs: Job[], id: string, action: JobAction, now: number): Job[] {
   if (action === 'cancel') return jobs.filter((j) => j.id !== id);
   if (action === 'retry') return jobs.map((j) => (j.id === id ? { ...j, state: 'entrusted' as const, createdAt: now } : j));
   return jobs;
 }
 
-/** [모두 시작]: 시작 확인 중인 일을 진행 중으로. */
 export function startAll(jobs: Job[], now: number): Job[] {
   return jobs.map((j) => (stateAt(j, now) === 'confirmStart' ? { ...j, state: 'running' as const } : j));
 }

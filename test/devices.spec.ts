@@ -1,4 +1,3 @@
-// 계정에 연결된 기기(src/devices.ts, ADR-048 결정 1·6): 목록 읽기, 화면 줄, 정지 규칙, 이 폰 나가기.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { MAX_DESKTOPS, MAX_MOBILES } from '../vendor/sax-remote/src/index.ts';
@@ -64,7 +63,6 @@ describe('화면 줄과 정지 규칙', () => {
     assert.deepEqual(one.phones.map((r) => [r.self, r.canStop, r.stopBlocked]), [[true, false, null], [false, true, null]]);
     const two = devicesView([dev(1, 'desktop'), dev(2, 'desktop'), dev(3, 'mobile')], { selfId: id(3), pairedPcId: null, now: NOW });
     assert.deepEqual(two.pcs.map((r) => r.canStop), [true, true]);
-    // 연결 중인 PC는 활성 PC 수에 들지 않지만 정지는 할 수 있다(모르는 기기가 붙으려 할 때)
     const pend = devicesView([dev(1, 'desktop'), dev(2, 'desktop', { state: 'pending' })], { selfId: id(9), pairedPcId: id(1), now: NOW });
     assert.deepEqual(pend.pcs.map((r) => [r.canStop, r.stopBlocked]), [[false, 'last_pc'], [true, null]]);
   });
@@ -74,7 +72,6 @@ describe('화면 줄과 정지 규칙', () => {
     assert.match(stopConfirm({ label: '집 PC', role: 'desktop' }).body, /이 PC는 바로 .* 7일 뒤/);
     for (const c of ['account.last_desktop', 'account.device_not_found', 'policy.rate_limited', 'account.device_suspended', 'devices.unreachable', 'zzz.unknown']) assert.ok(devicesErrorText(c).length > 5, c);
     assert.notEqual(devicesErrorText('account.last_desktop'), devicesErrorText('zzz.unknown'));
-    // PC에는 정지 풀기·되돌리기가 없다: 문구가 그런 길을 안내하지 않는다
     assert.equal(devicesErrorText('account.device_suspended'), '이 폰은 다른 기기에서 정지했거나 연결을 끊었어요. 다시 쓰려면 PC와 다시 연결해 주세요.');
     assert.doesNotMatch(stopConfirm({ label: '집 PC', role: 'desktop' }).body, /풀 수|되돌릴/);
     assert.deepEqual([isStopped('account.device_suspended'), isStopped('account.unauthorized')], [true, false]);
@@ -124,7 +121,6 @@ describe('계정 서비스 호출', () => {
     assert.equal(s.calls.length, before);
     const down = devicesClient(async () => { throw new Error('offline'); }, 'https://a.example.test', async () => ({}));
     assert.equal(await code(down.list()), 'devices.unreachable');
-    // 토큰을 받는 단계에서 서버가 거절하면(정지·끊긴 폰) 그 코드가 올라온다
     const stopped = devicesClient(async () => ({ status: 200, body: {} }), 'https://a.example.test', async () => { throw Object.assign(new Error('device-auth'), { status: 403, code: 'account.device_suspended' }); });
     assert.equal(await code(stopped.list()), 'account.device_suspended');
   });

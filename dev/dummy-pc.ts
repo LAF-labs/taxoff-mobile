@@ -1,12 +1,3 @@
-// 시뮬레이터 개발용 더미 PC + 릴레이(D14 M7-2·M7-4 "PC 역할은 시험 더미"). 실제 PC 배선은 데스크톱·금고 트랙 몫이다.
-//   node dev/dummy-pc.ts          → http://localhost:8787
-//   GET  /dev/qr                  새 페어링 QR 텍스트(시뮬레이터에는 카메라가 없어 앱의 개발 버튼이 가져간다)
-//   POST /dev/sas  {"code":"123456"}  사용자가 PC에 6자리를 입력하는 것을 대신한다
-//   POST /v1/device-tokens        계정 서비스 대역(AIK 인증서 + DPoP → 15분 토큰, dev/dev-auth.ts)
-//   WSS  /v1/rooms/:id, /v1/mailboxes/:id/live   릴레이 대역(dev/relay-server.ts, services/relay/API.md)
-//   POST/GET /v1/mailboxes/:id/envelopes·ack·bundle   릴레이 HTTPS 큐 대역. 더미 PC는 번들(Q_D)을 올리고 2초마다 큐를 비운다.
-//   GET  /dev/status              페어링·수신 상태(금액·사진 내용 없음)
-// 받은 사진·현금매출은 dev/out/에 쓴다(git 제외). 로그에 금액·사진·비밀을 넣지 않는다.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
@@ -32,7 +23,6 @@ const aik = ed25519Keygen();
 const kv = x25519Keygen();
 const keys: DesktopKeys = { noise: softNoiseStatic(s.secretKey), vd: softSigner(vd.secretKey, VD_PURPOSES), aik: softSigner(aik.secretKey, AIK_PURPOSES), kvPublic: () => kv.publicKey };
 const deviceId = uuid4();
-// 30일 전에 등록된 PC로 둔다(24시간 경고 화면은 DUMMY_NEW_PC=1로 본다)
 const registeredAt = Date.now() - (process.env.DUMMY_NEW_PC ? 3_600_000 : 30 * 86_400_000);
 let deviceList: DeviceListJson = await initialDeviceList(keys.aik, { deviceId, role: 'desktop', noisePub: keys.noise.publicKey, signPub: keys.vd.publicKey, registeredAt });
 
@@ -40,13 +30,11 @@ const ORIGIN = `http://${HOST}`;
 const auth = new DevAuth(keys.aik.publicKey, ORIGIN);
 const relay = new DevRelay(auth, ORIGIN);
 
-/** Node fetch → HttpJson(계정 서비스 호출). */
 export const fetchJson: HttpJson = async (r) => {
   const res = await fetch(r.url, { method: r.method, headers: r.headers, body: r.body });
   const t = await res.text();
   return { status: res.status, body: t ? (JSON.parse(t) as unknown) : null };
 };
-// PC 자신의 AIK 인증서(실제 PC는 금고가 signAik로 발급한다) → 기기 토큰 → 우편함 라이브 연결 헤더
 const deskCert = await issueCert(keys.aik, { device_id: deviceId, role: 'desktop', Sx: keys.noise.publicKey, Vx: keys.vd.publicKey, not_after: certNotAfter() });
 const tokens = new DeviceTokenCache(() => requestDeviceToken(fetchJson, ORIGIN, deskCert, keys.vd));
 const client = wsRelayClient({
@@ -66,7 +54,7 @@ async function startPairing(): Promise<string> {
   pairing?.cancel();
   const p = new DesktopPairing({
     keys, deviceList, relayHost: HOST,
-    enrollPhone: async () => {}, // 계정 서비스 대역 없음(실제 계정 POST /v1/devices/enroll은 dev/stack.ts)
+    enrollPhone: async () => {},
     accountClaim: async () => devAcctClaim(keys.aik.publicKey, 'owner@example.test'),
     desktopName: '더미 PC',
     publishDeviceList: async (l) => {
@@ -78,7 +66,7 @@ async function startPairing(): Promise<string> {
   const o = p.offer();
   qr = { text: o.qr, exp: o.exp };
   p.onState((st) => log('pairing:', st));
-  relay.createRoom(b64url(p.roomId)); // POST /v1/rooms
+  relay.createRoom(b64url(p.roomId));
   const link = await client.joinRoom(p.roomId, 'desktop');
   void p.run(link);
   return o.qr;
@@ -128,7 +116,6 @@ async function serveMailbox(rec: PairRecord, mbxId: Uint8Array, tok: { read: Uin
   }
 }
 
-/** 큐 수신: Q_D 번들을 올리고(실제 PC는 7일마다 갈고 금고가 hpkeOpen한다) 2초마다 큐를 비운다. */
 async function serveQueue(rec: PairRecord, mbxId: Uint8Array, tok: { read: Uint8Array; write: Uint8Array }, phoneVm: Uint8Array, mbxEpoch: number, receive: ReceiveQueue) {
   const qd = x25519Keygen();
   const rq = relayQueue({ http: fetchJson, origin: ORIGIN, mbxId, tok, deviceAuth: async (htm, htu) => deviceAuthHeaders(await tokens.token(), keys.vd, htm, htu) });

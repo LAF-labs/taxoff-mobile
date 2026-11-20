@@ -1,6 +1,3 @@
-// 화면 갤러리(웹 전용, 디자인 점검용). 가짜 세션으로 화면 하나를 그린다: /?s=home-chat-online | home-unpaired | money-empty | ...
-// ?fs=1.6 이면 글자 크기 설정 1.6배를 흉내 낸다(앱에서는 OS 설정을 따른다).
-// 앱 번들에는 들어가지 않는다(metro.config.cjs가 web에서만 App을 이것으로 바꾼다). 네트워크·키·카메라를 쓰지 않는다.
 import type { PhoneCopyBody } from '@sax/remote';
 import type { PhoneCmd } from '../src/phoneCmd';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -84,7 +81,6 @@ function fake(data: AppData, pc: PcStatus, pending = { receipts: 0, cash: 0 }): 
   };
 }
 
-/** PC가 세션마다 넘기는 폰 사본(remote-envelope v1.8 phone.copy) 가짜 */
 const COPY_AT = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 10, 0).getTime();
 const COPY: PhoneCopyBody = {
   asOf: COPY_AT,
@@ -103,7 +99,6 @@ const COPY: PhoneCopyBody = {
   },
 };
 const copyData = (c: PhoneCopyBody | null = COPY): AppData => ({ ...paired(), pcCopy: c });
-/** 발급 시트(대화 [+]): PC가 넘긴 거래처 장부 사본. PC 순서(최근 발급 → 자주 발급 → 상호) 그대로다. */
 const lastOn = (days: number, supply: number, item: string) => ({ supply, vatMode: 'excl' as const, item, day: iso(new Date(now - days * DAY)) });
 const COPY_MANY: PhoneCopyBody = {
   asOf: COPY_AT,
@@ -119,7 +114,6 @@ const COPY_MANY: PhoneCopyBody = {
   ],
 };
 const issueSheet = (issue: IssueSheetPreview, c: PhoneCopyBody = COPY_MANY, pc: PcStatus = 'online') => ({ session: fake(copyData(c), pc), node: <Main live chat={[]} phone={phoneChat('empty')} issue={issue} /> });
-/** 시트에서 받는 곳을 고른 뒤: 대화에 뜬 세금계산서 카드 */
 const issueCardCase = (pick: IssuePick, pc: PcStatus = 'online') => ({ session: fake(copyData(COPY_MANY), pc), notes: [issueCard(pick, null, now - 30_000)], node: <Main live chat={[]} phone={phoneChat('empty')} /> });
 const cpOfCopy = (ref: string) => counterpartiesOf(COPY_MANY).find((c) => c.id === ref)!;
 const COPY_UNSURE: PhoneCopyBody = {
@@ -143,7 +137,6 @@ const at = (h: number, m: number, dayOffset = 0) => {
   return d.getTime();
 };
 
-/** 대화 견본: PC 답(글자·카드)과 내 말. d일 전 아침. */
 const chatOn = (d: number): ChatItem[] => [
   { kind: 'msg', id: 'c1', from: 'me', at: at(9, 2, d), text: '어제 가나식자재 세금계산서 발급됐어?' },
   {
@@ -161,7 +154,6 @@ const CHAT_OFFLINE: ChatItem[] = [
   ...CHAT,
   { kind: 'msg', id: 'c5', from: 'me', at: at(11, 40), text: '동네마트에 오늘 날짜로 세금계산서 발급해 줘. 공급가액 320,000원' },
 ];
-/** public/sample-invoice.jpg를 가로 16px로 줄인 흐린 미리보기(앱이 찍을 때 만드는 것과 같은 크기) */
 const SAMPLE_THUMB = { w: 1520, h: 1040, data: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAA0QDQAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb//gAPTGF2YzYzLjEuMTAyAP/bAEMACBAQExATFhYWFhYWGhgaGxsbGhoaGhsbGx0dHSIiIh0dHRsbHR0gICIiJSYlIyMiIyYmKCgoMDAuLjg4OkVFU//EAFQAAAMBAAAAAAAAAAAAAAAAAAABBAcBAQEAAAAAAAAAAAAAAAAAAAABEAEBAAMBAAAAAAAAAAAAAAAAAREh8EERAQEAAAAAAAAAAAAAAAAAAAAR/8AAEQgACwAQAwEiAAIRAAMRAP/aAAwDAQACEQMRAD8A2rEuy7xQEpH/2Q==' };
 const CHAT_MERGED: ChatItem[] = [
   ...chatOn(1),
@@ -174,10 +166,6 @@ const CHAT_MERGED: ChatItem[] = [
 ];
 const TODO = { approvals: 2, backlog: 1 };
 
-/**
- * 긴 대화(스크롤 시험, 11-19): ?s=home-chat-long&n=200. n줄을 나와 PC가 번갈아 말한 기록으로 채운다.
- * 시험 도구(scripts/scroll-shift-gallery.mjs)가 window.__galleryReply(글) / __galleryMine(글)로 새 말을 붙인다.
- */
 const LONG_PC = ['네, 확인했어요.', '이번 달 발급은 14건이에요. 합계 8,420,000원이에요.', '가나식자재 입금이 평소보다 늦어요. 지난달에는 12일 걸렸는데 이번에는 31일째예요.', '영수증 3장을 세무사 꾸러미에 넣었어요.', '부가세 2기 확정 신고는 1월 25일까지예요.', '동네마트 세금계산서는 PC가 켜지면 바로 발급할게요.'];
 const LONG_ME = ['고마워', '이번 달 매출 알려줘', '가나식자재 돈 들어왔어?', '영수증 넣어 줘', '신고 언제까지야?', '동네마트 발급해 줘'];
 const longChat = (n: number): ChatItem[] =>
@@ -189,7 +177,6 @@ const longChat = (n: number): ChatItem[] =>
 function LongChat() {
   const gq = new URLSearchParams(typeof location !== 'undefined' && location.search ? location.search : (process.env.EXPO_PUBLIC_GALLERY ?? ''));
   const n = Number(gq.get('n')) || 24;
-  /** kb=ms: 그 뒤 키보드를 띄우고 3초 뒤 내린다(시뮬레이터 녹화용) */
   const kb = gq.get('kb') ? Number(gq.get('kb')) : undefined;
   const [items, setItems] = useState(() => longChat(n));
   useEffect(() => {
@@ -202,14 +189,12 @@ function LongChat() {
 }
 
 
-/** 탭 화면을 가짜 세션으로 그린다. 탭은 눌러서 바꿀 수 있다. */
-function Main({ start = 'home', chat, live, phone, menu, focusAfter, issue }: { start?: Tab; chat?: ChatItem[]; /** 지금 할 일 건수를 가짜 밀린 일에서 센다 */ live?: boolean; phone?: OfflineChatView; menu?: boolean; focusAfter?: number; issue?: IssueSheetPreview }) {
+function Main({ start = 'home', chat, live, phone, menu, focusAfter, issue }: { start?: Tab; chat?: ChatItem[]; live?: boolean; phone?: OfflineChatView; menu?: boolean; focusAfter?: number; issue?: IssueSheetPreview }) {
   const [tab, setTab] = useState<Tab>(start);
   return <MainScreen tab={tab} onTab={setTab} go={noop} chat={chat} todo={chat && !live ? TODO : undefined} phone={phone} menu={menu} focusAfter={focusAfter} issue={issue} />;
 }
 const read = parsePaperInvoice(SAMPLE_INVOICE, today)!;
 
-/** 거래처 견본(가짜 사업자) */
 const CPS: Counterparty[] = [
   { id: 'ga', name: '가나식자재', bizNo: '123-45-67890', lastSupply: 1_230_000, lastItem: '식자재', lastAt: now - 1 * DAY, issued: 12 },
   { id: 'dm', name: '동네마트 성수점', bizNo: '220-81-12345', lastSupply: 320_000, lastItem: '생활용품', lastAt: now - 3 * DAY, issued: 4 },
@@ -236,7 +221,6 @@ const JOBS: Job[] = [
 ];
 const LAST_DONE: DoneJob = { title: '가나식자재 세금계산서', finishedAt: at(9, 12) };
 
-// ---- 승인 시트 견본(P-03): 엔진과 같은 식으로 만든 게이트, 시계는 멈춘다 ----
 const RB = {
   supplierBizNo: '123-45-67890', supplierName: '택스오프상회', counterpartBizNo: '211-09-87654', counterpartName: '서울청과',
   counterpartEmail: 'tax@seoulfruit.example', itemName: '과일', itemCount: '1', supplyAmount: '800000', taxAmount: '80000', totalAmount: '880000',
@@ -253,7 +237,6 @@ const gate = (o: { rb?: typeof RB; reserved?: GateField[]; left?: number; tamper
     readback: o.rb ?? RB, reserved: o.reserved ?? NO_FIRST, packageDigest: 'ab'.repeat(32), authorizes: ['s21'], intentId: '01JD8Z6Q3B9K2M4N5P7R8S9T0V',
     reqId: '01JD0000000000000000000000', challenge: 'A'.repeat(43) + '=', exp: now + (o.left ?? 118_000),
   });
-  // 해시 불일치: PC가 보낸 값 하나가 화면과 다르다(엔진 버그·변조를 흉내)
   return o.tamper ? { ...g, fields: g.fields.map((f) => (f.key === 'totalAmount' ? { ...f, value: '8800000' } : f)) } : g;
 };
 const HW: ApprovalSettings = { attest: 'hw', iosAllowed: true, usedToday: 1 };
@@ -266,7 +249,6 @@ const sheetCase = (g: PhoneGate, o: { settings?: ApprovalSettings; openedAt?: nu
   node: <QueueScreen onDone={noop} onConnection={noop} onOpen={noop} now={now} />,
 });
 
-// ---- 진행·결과·서류(P-04·P-05) 견본 ----
 const RES: IssueResult = {
   approvalNo: '20261116-41000000-12345678', counterpart: '가나식자재', total: 1_353_000, email: 'tax@gana.example', emailSent: true, issuedAt: now - 60_000,
   doc: { name: '세금계산서_가나식자재_20261116.pdf', issuedOn: iso(today), uri: '' },
@@ -282,12 +264,10 @@ const T0 = now - 80_000;
 const runCase = (run: RunView, o: { title?: string; amount?: number } = {}) => ({
   session: fake(paired(), 'online'), jobs: [runJob(run, o)], focus: 'r1', node: <RunScreen onDone={noop} onDoc={noop} onRecords={noop} now={now} />,
 });
-/** 폰 발급 명령(cmd.run, pc_only): 봉인 상태의 명령 하나를 PC 진행으로 본다 */
 const CMD = (o: Partial<PhoneCmd> = {}): PhoneCmd => ({
   cmdId: 'G1', req: { counterpartyRef: 'cp_gana', supply: 1_230_000, tax: 123_000, item: '식자재', day: iso(today) }, cpName: '가나식자재', total: 1_353_000,
   createdAt: now - 90_000, sentAt: now - 88_000, ack: 'pc_only', runId: 'run1', at: now - 5_000, ...o,
 });
-/** 승인 대기(카드에서 바로 승인): PC가 되읽은 값과 같은 거래처, 합계 */
 const APPROVE_CMD = () =>
   CMD({ phase: 'approve', ack: 'accepted', cpName: '서울청과', total: 880_000, gate: { ...gate({ left: 8 * 60_000 }), stepId: 's21' } });
 const pcRun = (o: Partial<PhoneCmd>) => ({
@@ -307,7 +287,6 @@ const docCase = (state: DocState, result = RES) => ({
   session: fake(paired(), state.kind === 'pcOff' ? 'offline' : 'online'), jobs: [runJob({ kind: 'done', result, startedAt: T0 })], focus: 'r1', node: <DocScreen onDone={noop} state={state} />,
 });
 
-// ---- 사업자등록증 찍기(PR 7) 견본: public/sample-bizreg.jpg(가짜 사업자) ----
 const BIZ_SHOT = { uri: '/sample-bizreg.jpg', width: 1140, height: 1608 };
 const BIZ_VALUES = { name: '동네마트 성수점', bizNo: '220-81-12341', ceo: '김견본', address: '서울특별시 성동구 성수이로 00, 1층', bizType: '도매 및 소매업', item: '생활용품', email: '' };
 const HIGH = { name: 0.9, bizNo: 0.95, ceo: 0.9, address: 0.85, bizType: 0.85, item: 0.85 };
@@ -321,7 +300,6 @@ const issueNew = (status: Counterparty['status'], pc: PcStatus = 'online') => ({
   node: issue({ phase: 'form', cpId: 'new', amount: '320,000' }, [...CPS, { ...NEW_CP, status }]),
 });
 
-// ---- 돈 탭(PR 8) 견본: 엔진 db.query.bank.summary·cashflow 모양 그대로(가짜 거래처) ----
 const dayOff = (n: number) => iso(new Date(now + n * DAY));
 const rv = (id: string, cpName: string, total: number, writtenAgo: number, dueIn: number | null, o: Partial<ReceivableView> = {}): ReceivableView => ({
   id, counterpartyId: null, cpName, cpBizNo: null, item: null, approvalTail: null, writtenOn: dayOff(-writtenAgo), total, received: 0, remaining: total,
@@ -388,7 +366,6 @@ const money = (snap: MoneySnapshot | null, o: { status?: MoneyStatus; live?: boo
     o.start === 'list' ? <MoneyListScreen kind="recv" onDone={noop} onMark={noop} /> : o.start === 'pay' ? <MoneyListScreen kind="pay" onDone={noop} onMark={noop} /> : o.start === 'mark' ? <MarkReceivedScreen onDone={noop} /> : <Main start="money" />,
 });
 
-/** 시연: 켜진 PC에 발급을 맡긴 순간부터(대화 홈 + 승인 시트가 스스로 뜬다) */
 function Demo() {
   const q = useQueue();
   useEffect(() => {
@@ -459,12 +436,9 @@ const SCREENS: Record<
   'run-pc-approve': () => pcRun({ phase: 'approve' }),
   'run-pc-in-doubt': () => pcRun({ phase: 'verify', code: 'in_doubt', attempt: 2 }),
   'run-pc-stopped': () => pcRun({ phase: 'stopped' }),
-  // PC가 사람 차례로 멈춤(run.event 'turn'): 공동인증서 로그인이 안 돼 간편인증 화면을 열어 둠, 모르는 까닭
   'run-pc-turn-simple': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_auth' }),
   'run-pc-turn-other': () => pcRun({ phase: 'readback', turn: true, code: 'turn.other' }),
-  // 폰에서 간편인증: 고르기(인증서로 다시·간편인증), 승인 대기(남은 시간), 시간 지남, 앞 요청 실패
   'run-pc-turn-choice': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_auth', simpleReq: '01JD0000000000000000000000' }),
-  // 간편인증 시트: 채팅 화면 위에서 한 단계씩(앱 → 통신사 → 이름 → 생년월일 → 휴대폰), 앞서 쓴 값이면 확인 한 장
   'simple-sheet-app': () => simpleSheet({ step: 'app' }),
   'simple-sheet-carrier': () => simpleSheet({ step: 'carrier', draft: { ...draftOf(null), provider: 'pass' } }),
   'simple-sheet-name': () => simpleSheet({ step: 'name', draft: { ...draftOf(null), provider: 'kakao', name: '김가' } }),
@@ -530,7 +504,6 @@ const SCREENS: Record<
   'approval-urgent': () => sheetCase(gate({ left: 14_000 })),
   'approval-expired': () => sheetCase(gate({ left: -1 })),
   'approval-dup': () => sheetCase(gate({ reserved: [...NO_FIRST, { key: '$dup.businessKey', value: 'committed' }] })),
-  /** 값이 승인번호 끝·시각을 실어 올 때(모양은 엔진과 맞출 것) */
   'approval-dup-detail': () => sheetCase(gate({ reserved: [...NO_FIRST, { key: '$dup.businessKey', value: 'committed;4821;10:20' }] })),
   'approval-dup-acked': () => sheetCase(gate({ reserved: [...NO_FIRST, { key: '$dup.businessKey', value: 'committed' }] }), { acked: ['$dup.businessKey'] }),
   'approval-unknown': () => sheetCase(gate({ reserved: [...NO_FIRST, { key: '$bank.account', value: '1234' }] })),
@@ -538,7 +511,6 @@ const SCREENS: Record<
   'approval-limit': () => sheetCase(gate(), { settings: { ...HW, usedToday: 5 } }),
   'approval-no-key': () => sheetCase(gate(), { settings: { attest: 'none', iosAllowed: false, usedToday: 0 } }),
   'approval-ios-allowed': () => sheetCase(gate(), { settings: { attest: 'ios_app_attest', iosAllowed: true, usedToday: 1 } }),
-  /** 정책으로 iPhone 승인을 막은 경우(기본은 허용, ADR-046 결정 4 채택) */
   'approval-ios-policy-blocked': () => sheetCase(gate(), { settings: { attest: 'ios_app_attest', iosAllowed: false, usedToday: 1 } }),
   'approval-mismatch': () => sheetCase(gate({ tamper: true })),
   'approval-in-doubt': () => sheetCase(gate(), { state: 'verify' }),
@@ -548,14 +520,11 @@ const SCREENS: Record<
   'home-chat-offline': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * 3_600_000 }, 'offline', { receipts: 1, cash: 0 }), node: <Main chat={CHAT_OFFLINE} /> }),
   'home-chat-merged': () => ({ session: fake(paired(), 'online', { receipts: 1, cash: 0 }), node: <Main chat={CHAT_MERGED} /> }),
   'home-unpaired': () => ({ session: fake(emptyData(), 'unpaired'), node: <Main /> }),
-  /** 연결은 됐고 대화가 아직 없는 홈: 무엇을 시킬 수 있는지 + 예시 문장 */
   'home-chat-empty': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} /> }),
-  /** PC가 꺼져 폰이 답하는 대화(ADR-047): 빈 상태 · 답 쓰는 중 · 되묻기 칩 · 못 보냄 + 다시 보내기 · 오늘 한도 */
   'home-phone-empty': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('empty')} /> }),
   'home-phone-typing': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('typing')} /> }),
   'home-phone-reply': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('reply')} /> }),
   'home-phone-failed': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('failed')} /> }),
-  // PC가 켜져 있어도 폰 대화로 보낸다: "세금계산서"라는 말 없이 "끊어줘"만으로 카드가 뜨고 [발급 맡기기]가 붙는다
   'home-phone-card': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('card')} /> }),
   'home-phone-ask': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('ask')} /> }),
   'home-phone-screen': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('screen')} /> }),
@@ -576,7 +545,6 @@ const SCREENS: Record<
   'home-phone-react-only': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('react-only')} /> }),
   'home-plus-menu': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('card')} menu /> }),
   'home-phone-limit': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('limit')} /> }),
-  /** 처음 연결한 뒤 대화가 아직 없는 홈(앱이 이 폰 기록으로 만든 대화) */
   home: () => ({ session: fake(paired(), 'online', { receipts: 2, cash: 0 }), node: <Main /> }),
   'home-stale': () => ({ session: fake({ ...paired(), lastSeenPc: now - 9 * DAY }, 'stale', { receipts: 3, cash: 1 }), node: <Main chat={CHAT} /> }),
   'money-empty': () => money(null),
@@ -624,7 +592,6 @@ const SCREENS: Record<
       </>
     ),
   }),
-  // 첫 발급을 맡긴 뒤 한 번 묻는 알림 허용(ADR-053)
   'push-ask': () => ({
     session: fake(paired(), 'online'),
     node: (
@@ -634,7 +601,6 @@ const SCREENS: Record<
       </>
     ),
   }),
-  // ---- 앱 잠금(P-01) ----
   'lock-faceid': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: FACE }} /> }),
   'lock-touchid': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'touchId', enrolled: true } }} /> }),
   'lock-android': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'fingerprint', enrolled: true } }} /> }),
@@ -642,21 +608,15 @@ const SCREENS: Record<
   'lock-passcode-fallback': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: FACE, err: 'cancelled' }} /> }),
   'lock-no-biometric-passcode': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'faceId', enrolled: false } }} /> }),
   'lock-no-passcode': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: FACE, err: 'passcode_required' }} /> }),
-  // ---- 첫 실행 온보딩(스플래시 직후, 열쇠 만들기 앞) ----
   'onboarding-easy': () => ({ session: fake(emptyData(), 'unpaired'), node: <OnboardingScreen onDone={noop} start={0} /> }),
   'onboarding-what': () => ({ session: fake(emptyData(), 'unpaired'), node: <OnboardingScreen onDone={noop} start={1} /> }),
   'onboarding-safe': () => ({ session: fake(emptyData(), 'unpaired'), node: <OnboardingScreen onDone={noop} start={2} /> }),
-  /** 온보딩 5/5: PC와 연결(카메라 권한 전), 연결 끝 장면 */
   'onboarding-pair': () => ({ session: fake(emptyData(), 'unpaired'), node: <PairScreen onDone={noop} onboarding={{ onBack: noop }} /> }),
   'onboarding-paired': () => ({ session: fake(paired(), 'online'), node: <PairScreen onDone={noop} onboarding={{ onBack: noop }} previewPhase="done" /> }),
   'lock-first-run': () => ({ session: fake(emptyData(), 'unpaired'), node: <LockScreen firstRun onUnlocked={noop} onReset={noop} preview={{ bio: FACE }} /> }),
-  /** 첫 실행, 생체를 등록하지 않은 폰: 열쇠 안내가 "폰 암호로 확인해요"로 바뀐다 */
   'lock-first-run-no-bio': () => ({ session: fake(emptyData(), 'unpaired'), node: <LockScreen firstRun onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'none', enrolled: false } }} /> }),
-  /** 첫 실행, 폰 암호가 없어 열쇠를 못 만든 경우 */
   'lock-first-run-no-passcode': () => ({ session: fake(emptyData(), 'unpaired'), node: <LockScreen firstRun onUnlocked={noop} onReset={noop} preview={{ bio: FACE, err: 'passcode_required' }} /> }),
-  /** 앱 전환 덮개: 다른 앱으로 넘어가면 내용을 바탕색 면으로 가린다(App.tsx privacy-cover) */
   'lock-cover': () => ({ session: fake(paired(), 'online'), node: <View style={{ flex: 1 }}><Main chat={CHAT} /><View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}><Cover /></View></View> }),
-  /** 꺼진 PC에 발급을 맡기고 홈으로 돌아온 뒤: 대화 끝에 확인 한 줄 */
   'home-chat-entrusted': () => ({
     session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'),
     jobs: [JOBS[7]!],
@@ -686,7 +646,6 @@ const SCREENS: Record<
   'issue-stale': () => ({ session: fake({ ...paired(), lastSeenPc: now - 9 * DAY }, 'stale'), node: issue({ phase: 'form', cpId: 'ga' }) }),
   'issue-first-counterparty': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'form', cpId: 'sb', amount: '300,000' }) }),
   'issue-duplicate': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'form', cpId: 'ga' }, CPS, DUP) }),
-  /** 부가세 포함 합계 21원: 세액 규칙으로 정확히 못 맞춰 20원으로 */
   'issue-inexact': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'form', cpId: 'ga', amount: '21', vat: 'incl' }) }),
   'issue-limit': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'form', cpId: 'sc' }, CPS, [], 1) }),
   cash: () => ({ session: fake(paired(), 'online'), node: <CashScreen onDone={noop} /> }),
@@ -722,7 +681,6 @@ const SCREENS: Record<
 
 export default function Gallery() {
   const p = usePalette();
-  // 웹은 주소의 ?s=…, 시험용 iOS 빌드(GALLERY_NATIVE=1)는 EXPO_PUBLIC_GALLERY 값
   const q = new URLSearchParams(typeof location !== 'undefined' && location.search ? location.search : (process.env.EXPO_PUBLIC_GALLERY ?? ''));
   const name = q.get('s') || 'home-chat-online';
   const fs = Math.min(Number(q.get('fs')) || 1, MAX_FONT_SCALE);

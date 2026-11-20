@@ -1,7 +1,5 @@
-// 입력 칸 표기(금액 천 단위 쉼표, 사업자번호·날짜 하이픈). 순수 함수.
 export type Mask = 'won' | 'bizNo' | 'day' | 'text' | 'email' | 'phone';
 
-/** 입력 중 표기 맞추기. 저장 값은 parse 쪽에서 숫자만 다시 뽑는다. */
 export function masked(m: Mask, raw: string): string {
   if (m === 'text') return raw;
   if (m === 'email') return raw.replace(/\s/g, '');

@@ -1,6 +1,3 @@
-// 앱 틀(기획 v2): 아래 탭 셋 — 홈(대화) · 돈 · 기록. 설정은 홈 오른쪽 위.
-// 탭 줄은 글자만 쓴다(아이콘 묶음을 들이지 않는다). 고른 탭은 ink 600 + 밑 막대, 나머지는 ink3.
-// 키보드가 올라오면 탭 줄을 숨겨 입력 줄이 키보드 바로 위에 오게 한다.
 import { useEffect, useState } from 'react';
 import { Keyboard, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,19 +25,16 @@ const TABS: Array<{ key: Tab; label: string; a11y: string }> = [
 
 export function MainScreen({
   tab, onTab, go, chat, todo, draft, phone, menu, focusAfter, issue: issuePreview, issueCps,
-}: { tab: Tab; onTab: (t: Tab) => void; go: (to: MainRoute) => void; chat?: ChatItem[]; todo?: Todo; draft?: string; phone?: OfflineChatView; /** 갤러리: [+] 메뉴를 펼친 채로 */ menu?: boolean; /** 갤러리: 키보드 녹화 */ focusAfter?: number; /** 갤러리: 발급 시트를 연 채로 */ issue?: IssueSheetPreview; issueCps?: Counterparty[] }) {
+}: { tab: Tab; onTab: (t: Tab) => void; go: (to: MainRoute) => void; chat?: ChatItem[]; todo?: Todo; draft?: string; phone?: OfflineChatView; menu?: boolean; focusAfter?: number; issue?: IssueSheetPreview; issueCps?: Counterparty[] }) {
   const kb = useKeyboardShown();
   const q = useQueue();
   const s = useSession();
-  // [+] → 세금계산서 발급은 대화 위 시트로 연다(탭 줄까지 덮는다). 거래처를 고르면 대화에 그 카드를 띄운다.
   const [issueOpen, setIssueOpen] = useState(!!issuePreview);
-  // 다른 탭의 [세금계산서 발급]도 예전 발급 화면 대신 홈 대화 위 시트로 연다
   const goMain = (to: MainRoute) => {
     if (to !== 'issue') return go(to);
     onTab('home');
     setIssueOpen(true);
   };
-  // 등록증을 찍어 막 만든 거래처(queue.pickId): 대화로 돌아오면 그 거래처의 카드를 띄운다
   useEffect(() => {
     if (!q.pickId) return;
     const cp = [...q.counterparties, ...(s.data.pcCopy ? counterpartiesOf(s.data.pcCopy) : [])].find((c) => c.id === q.pickId);
@@ -50,8 +44,6 @@ export function MainScreen({
     q.addCard(issueCard({ cp }, q.prefill));
     q.setPrefill(null);
   }, [q.pickId]);
-  // 홈(대화)은 탭 줄을 숨기지 않는다: 숨기면 키보드가 오르는 도중 화면 높이가 한 번 더 바뀌어 입력 줄과 대화가 튄다.
-  // 키보드가 탭 줄을 덮고, 홈의 KeyboardAvoidingView가 탭 줄 위로 겹친 만큼만 올린다.
   return (
     <View style={st.fill}>
       <View style={st.fill}>

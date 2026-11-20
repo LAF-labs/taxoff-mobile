@@ -1,9 +1,3 @@
-// 푸시 깨우기 자리(App에 하나, 잠금이 풀린 동안, ADR-053 결정 4).
-//   - 토큰: PC와 붙어 있고 OS 허용과 설정 스위치가 켜져 있으면 기기 토큰을 올린다. 지난번과 같은 토큰이면 올리지 않는다.
-//     스위치를 끄거나 OS에서 끄면 지운다(PC 연결 해제 때는 screens/leavePhone.ts가 지운다).
-//   - 허용: 첫 발급을 맡긴 뒤 한 번만 앱 안 시트로 묻고, 좋다고 하면 OS 창을 띄운다. 거절하면 다시 묻지 않는다(설정에 스위치).
-//   - 누름: approve는 PC와 붙어 첫 화면 대화의 승인 카드로(카드에서 바로 승인), 요청이 안 오면(게이트가 닫혔다) 그 실행의 지금 상태를. update는 맡긴 일 목록.
-//   - 앱이 앞에 있을 때 온 깨우기는 배너 없이 바로 sync(). 세션이 붙으면 알림 센터의 깨우기 알림을 지운다.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,17 +13,12 @@ import { PLATFORM, clearWakeNotifications, deviceToken, onTokenChange, onWakeRec
 import { pushClient } from './pushApi';
 import { LOCAL_APPROVE, SHEET_WAIT_MS, askDue, latestEntrusted, newGates, pushPlan, tokenHash, type WakeKind } from './wake';
 
-/** 맡긴 직후 화면이 바뀌는 사이에 끼지 않게 조금 뒤에 묻는다 */
 const ASK_DELAY_MS = 700;
 
 export function PushHost({ onQueue, onRun, onCard, askPreview }: {
-  /** 맡긴 일 목록(밀린 일)으로 */
   onQueue: () => void;
-  /** q.focus 실행의 진행 화면으로 */
   onRun: () => void;
-  /** 승인 대기 카드로(첫 화면 대화, 카드에서 바로 승인) */
   onCard: (jobId: string) => void;
-  /** 갤러리: 허용 묻는 시트를 바로 보인다 */
   askPreview?: boolean;
 }) {
   const s = useSession();
@@ -40,7 +29,6 @@ export function PushHost({ onQueue, onRun, onCard, askPreview }: {
   const token = useRef<string | null>(null);
   const busy = useRef(false);
   const again = useRef(false);
-  /** approve를 눌러 승인 시트를 기다리는 중(sync가 끝난 뒤 SHEET_WAIT_MS) */
   const [waitSheet, setWaitSheet] = useState<number | null>(null);
   const live = useRef({ s, q, onQueue, onRun, onCard });
   live.current = { s, q, onQueue, onRun, onCard };
@@ -49,7 +37,6 @@ export function PushHost({ onQueue, onRun, onCard, askPreview }: {
   const online = s.pc === 'online';
   const wake = wakeOn(s.data.notify);
 
-  // OS 허용(설정 앱에서 바꾸고 돌아오면 다시 읽는다)
   useEffect(() => {
     if (askPreview) return;
     const read = () => void permission().then(setPerm);
@@ -58,7 +45,6 @@ export function PushHost({ onQueue, onRun, onCard, askPreview }: {
     return () => sub.remove();
   }, [askPreview]);
 
-  // OS가 토큰을 바꾸면 다시 맞춘다
   useEffect(
     () =>
       onTokenChange((t) => {
@@ -68,7 +54,6 @@ export function PushHost({ onQueue, onRun, onCard, askPreview }: {
     [],
   );
 
-  // 서버와 맞추기: 붙어 있을 때만(망이 되는 때). 실패하면 다음에 붙을 때 다시
   const reconcile = useCallback(async () => {
     if (askPreview) return;
     if (busy.current) {
@@ -109,15 +94,12 @@ export function PushHost({ onQueue, onRun, onCard, askPreview }: {
     if (online) void reconcile();
   }, [online, perm, wake, tokTick, s.data.pushHash, pair?.pairId, reconcile]);
 
-  // 세션이 붙으면 알림 센터의 깨우기 알림을 지운다
   useEffect(() => {
     if (online && !askPreview) void clearWakeNotifications();
   }, [online, askPreview]);
 
-  // 앱이 앞에 있을 때 온 깨우기: 배너 없이 바로 붙는다
   useEffect(() => onWakeReceived(() => void live.current.s.sync()), []);
 
-  // 누른 깨우기(잠금 화면에서 눌렀으면 잠금이 풀린 지금 꺼낸다)
   const handle = useCallback((k: WakeKind) => {
     const { s: cur, onQueue: toQueue } = live.current;
     if (k === 'update') {
@@ -137,7 +119,6 @@ export function PushHost({ onQueue, onRun, onCard, askPreview }: {
     return onWakeTap(drain);
   }, [handle, askPreview]);
 
-  // approve: PC가 다시 보낸 승인 요청이 오면 시트를 연다. 기다려도 안 오면 그 실행의 지금 상태
   const gated = q.jobs.find((j) => j.gate && j.state === 'approval' && j.gate.exp > Date.now()) ?? null;
   useEffect(() => {
     if (waitSheet === null) return;
@@ -158,7 +139,6 @@ export function PushHost({ onQueue, onRun, onCard, askPreview }: {
     return () => clearTimeout(t);
   }, [waitSheet, gated]);
 
-  // 앱으로 돌아왔는데 열린 승인 요청이 있고 시트가 닫혀 있으면 연다(뒤에서 받은 요청은 사장님이 아직 못 봤다)
   useEffect(() => {
     if (askPreview) return;
     const sub = AppState.addEventListener('change', (st) => {
@@ -170,8 +150,6 @@ export function PushHost({ onQueue, onRun, onCard, askPreview }: {
     return () => sub.remove();
   }, [askPreview]);
 
-  // 승인 요청이 왔다. 앞에 있으면 그 요청의 시트를 한 번 연다(뒤에서 받은 적이 있어도). 뒤에 있으면(뒤로 간 직후 아직 붙어 있던
-  // 연결로 받았다) 폰이 직접 알린다. 누르면 잠금 뒤 승인 시트로 간다(push.ts tapKindOf).
   const toldBg = useRef(new Set<string>());
   const shownFg = useRef(new Set<string>());
   useEffect(() => {
@@ -187,11 +165,9 @@ export function PushHost({ onQueue, onRun, onCard, askPreview }: {
     if (!fresh.length) return;
     for (const j of fresh) toldBg.current.add(j.gate!.reqId);
     if (!wakeOn(live.current.s.data.notify)) return;
-    // identifier를 서버 깨우기의 접힘 ID와 같게: PC 깨우기가 뒤따라 와도 알림이 하나만 남는다
     void notifyNow({ title: '승인을 기다리는 발급이 있어요', body: '눌러서 승인하거나 거절해 주세요' }, { open: LOCAL_APPROVE, jobId: fresh[0]!.id }, 'sax-wake-approve');
   }, [q.jobs, q.sheetJob, askPreview]);
 
-  // 허용 묻기: 첫 발급을 맡긴 뒤 한 번
   const entrusted = (s.data.cmds ?? []).length;
   const due = !askPreview && askDue({ entrusted, asked: !!s.data.pushAsked, perm });
   useEffect(() => {
@@ -199,7 +175,6 @@ export function PushHost({ onQueue, onRun, onCard, askPreview }: {
     const t = setTimeout(() => setAsking(true), ASK_DELAY_MS);
     return () => clearTimeout(t);
   }, [due]);
-  // OS에서 이미 정했으면(허용·거절) 묻지 않고 물은 것으로 둔다
   useEffect(() => {
     if (askPreview || perm === null || perm === 'undetermined' || s.data.pushAsked || !entrusted) return;
     void s.update((d) => ({ ...d, pushAsked: true })).catch(() => undefined);
@@ -216,7 +191,6 @@ export function PushHost({ onQueue, onRun, onCard, askPreview }: {
   return <AskSheet onYes={() => void answer(true)} onNo={() => void answer(false)} />;
 }
 
-/** 승인 시트와 같은 모양(가림막 + 아래에서 올라온 둥근 시트 + 손잡이) */
 export function AskSheet({ onYes, onNo }: { onYes: () => void; onNo: () => void }) {
   const p = usePalette();
   const inset = useSafeAreaInsets();

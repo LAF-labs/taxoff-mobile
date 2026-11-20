@@ -1,4 +1,3 @@
-// 앱 상태 파일(페어링 기록·기기 목록·IK 타임스탬프·현금매출 기록). fileKey로 XChaCha20-Poly1305 봉인해 sax/state.bin에 둔다.
 import type { Thumb } from '../capture/thumb';
 import type { MoneySnapshot } from '../money';
 import type { PhoneCopyBody } from '@sax/remote';
@@ -14,7 +13,6 @@ import { ROOT, writeProtected } from './files';
 
 const AD = utf8('SAX-mobile-state-v1');
 const FILE = new File(ROOT, 'state.bin');
-/** 같은 봉투의 앞선 사본. 본 파일을 쓰다 끊겨도(통째로 덮어쓰는 중 앱 종료) 이 사본에서 되살린다. */
 const SPARE = new File(ROOT, 'state.new');
 
 export interface PairState {
@@ -24,19 +22,15 @@ export interface PairState {
   desktopDeviceId: string;
   kvPub: string;
   aikPub: string;
-  /** AIK 서명 기기 인증서. 계정 서비스 POST /v1/device-tokens에 그대로 보낸다(packages/remote requestDeviceToken). */
   cert: SignedCert;
   certNotAfter: number;
   mbxId: string;
-  /** 우편함 능력 토큰(릴레이 X-Mbx-Read·X-Mbx-Write). PC가 PAIR_OK로 준다. */
   tokRead: string;
   tokWrite: string;
   mbxEpoch: number;
   relayHost: string;
   pairedAt: number;
-  /** 사용자가 [내 계정 맞음]으로 확인한 계정 이메일(계정 서비스 서명 acct_claim에서 검증, 설계 #120). */
   accountEmail?: string;
-  /** PC가 스스로 알린 이름(서명 없음, 참고 표시만). 없으면 PC가 보내지 않았다. */
   desktopName?: string | null;
 }
 
@@ -44,11 +38,9 @@ export interface CashRecord {
   day: string;
   amount: number;
   msgId: string;
-  /** queued: 릴레이 큐에 맡김(PC가 켜져야 받는다), sent: 라이브 세션에서 PC가 받았다고 답함 */
   state: 'pending' | 'queued' | 'sent';
 }
 
-/** 홈의 "최근 보낸 것" 한 줄(원본 사진은 없고 16px 흐린 미리보기만 있다. 봉인된 상태 파일 안에만 있다). */
 export interface RecentRecord {
   msgId: string;
   kind: 'receipt' | 'tax_invoice' | 'invoice';
@@ -56,19 +48,14 @@ export interface RecentRecord {
   amount: number | null;
   at: number;
   state: 'pending' | 'queued' | 'sent';
-  /** 사진 비율과 16px 흐린 미리보기(대화 카드가 사진 자리를 먼저 잡는다). 예전 기록에는 없다. */
   thumb?: Thumb;
 }
 
-/** 간편인증 본인 정보(홈택스 개인용 간편인증 창과 같은 칸) */
 export interface SimpleId {
   provider: string;
   name: string;
-  /** YYYYMMDD */
   birth: string;
-  /** 숫자만 */
   phone: string;
-  /** PASS만: 통신사(s·k·l·sa·ka·la) */
   carrier?: string;
 }
 
@@ -80,31 +67,18 @@ export interface AppData {
   ikTs: number;
   lastSeenPc: number | null;
   cash: CashRecord[];
-  /** 최근 보낸 종이 증빙(최대 30) */
   recent: RecentRecord[];
-  /** 큐 봉투 seq(xfer.seq) 최고값. 봉인 전에 먼저 올려 둔다(재사용하면 PC가 재생으로 버린다). */
   queueSeq: number;
-  /** 본 우편함 번들 seq 최고값(이보다 낮은 번들로는 봉인하지 않는다). */
   qbundleSeq: number;
-  /** 돈 탭: PC에서 마지막으로 받은 요약(받은 시각 포함). 거래처 이름·금액·날짜만, 사업자번호·계좌는 지운 뒤 봉인 보관(src/money.ts storeable) */
   money?: MoneySnapshot | null;
-  /** PC가 라이브 세션마다 넘기는 폰 사본(remote-envelope v1.8 phone.copy): 거래처·최근 발급·돈 요약. 이메일은 가린 힌트, 계좌는 은행 이름뿐이다. */
   pcCopy?: PhoneCopyBody | null;
-  /** 폰 발급 명령(cmd.run). 보내기 전에 cmdId와 함께 저장해 다시 보낼 때 같은 cmdId를 쓴다(src/phoneCmd.ts). */
   cmds?: PhoneCmd[];
-  /** PC 연결이 안 된 최근 원인(net/pcWhy.ts, '단계:원인'과 시각만. 최대 20개) */
   pcLog?: PcWhy[];
-  /** 승인 키를 PC가 받았는지(net/pxLive.ts, ADR-052). enrolled일 때만 이 폰에서 발급을 승인할 수 있다. 페어링을 끊으면 지운다. */
   px?: PxState;
-  /** 알림 고르기(설정 > 알림). 없으면 모두 켜짐(notify/events DEFAULT_PREFS). OS 허용은 따로 OS가 갖는다. */
   notify?: NotifyPrefs;
-  /** 서버에 마지막으로 올린 푸시 토큰의 지문(notify/wake.ts tokenHash). 토큰 자체는 두지 않는다. 지우면 null */
   pushHash?: string | null;
-  /** 앱 안에서 알림 허용을 물었는지(한 번만 묻는다, ADR-053 결정 4) */
   pushAsked?: boolean;
-  /** 폰에서 시작하는 간편인증에 쓴 값(인증 앱·이름·생년월일·휴대폰 번호). 봉인 상태 파일에만 두고, 다음에 같은 차례가 오면 미리 채운다. */
   simpleId?: SimpleId | null;
-  /** 앱 안 글자 크기(설정 > 화면). 없으면 중간 */
   textSize?: TextSize;
 }
 
@@ -122,17 +96,12 @@ export async function loadData(fileKey: Uint8Array): Promise<AppData> {
     if (!FILE.exists) throw new Error('state: main missing');
     return await openFile(FILE, fileKey);
   } catch (e) {
-    // 본 파일이 없거나 깨졌다: 사본이 열리면 그것으로 이어 가고, 사본도 안 되면 처음 오류를 던진다(앱이 빈 상태로 시작한다)
     if (!SPARE.exists) throw e;
     return openFile(SPARE, fileKey);
   }
 }
 
 let writing: Promise<void> = Promise.resolve();
-/**
- * 순서대로 쓴다(겹친 저장이 섞이지 않게). 한 번 실패해도 사슬은 끊기지 않는다: 호출자는 그 실패를 받고,
- * 다음 저장은 앞 결과와 관계없이 새 상태 전체를 쓴다(상태 파일은 매번 통째로 쓰므로 마지막 성공이 최신이다).
- */
 export function saveData(fileKey: Uint8Array, d: AppData): Promise<void> {
   const e = currentEpoch();
   const box = xSeal(liveKey(fileKey), utf8(JSON.stringify(d)), AD);
@@ -141,7 +110,6 @@ export function saveData(fileKey: Uint8Array, d: AppData): Promise<void> {
       .catch(() => undefined)
       .then(async () => {
         sameEpoch(e);
-        // 사본을 먼저 온전히 쓰고 본 파일을 쓴다: 둘 중 하나는 늘 온전하다. 사본 쓰기가 실패하면 본 파일은 건드리지 않는다.
         await writeProtected(SPARE, box);
         sameEpoch(e);
         return writeProtected(FILE, box);

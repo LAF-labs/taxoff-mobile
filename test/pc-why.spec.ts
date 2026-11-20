@@ -1,4 +1,3 @@
-// PC 연결 원인 코드(src/net/pcWhy.ts): "PC 꺼짐"으로 보일 때 어느 단계에서 왜 멈췄는지 남기고, 사람이 읽는 한 줄을 고른다.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { PC_LOG_MAX, causeOf, pcWhyText, pushWhy, statusWhileSyncing, whyCode } from '../src/net/pcWhy.ts';

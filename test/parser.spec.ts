@@ -1,4 +1,3 @@
-// P-08 규칙 파서 시험(폰 앱 자체 시험 실행기: node --test).
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { parseAmount, parseBizNo, parseDate, parseMerchant, parseReceipt, validBizNo } from '../src/capture/parser.ts';

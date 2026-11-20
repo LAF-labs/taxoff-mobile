@@ -1,5 +1,3 @@
-// 발급 진행·결과 화면(P-04): 대화 카드나 밀린 일 [진행 보기]·[결과 보기]에서 연다.
-// 바닥에 기본 행동 하나 + 보조 하나가 늘 보인다. 결과 모름·확인 필요에는 다시 발급하는 단추가 없다.
 import { useQueue } from '../queueStore';
 import { actionsOf, type RunAction } from '../run';
 import { Button, Empty, Screen } from '../ui/kit';
@@ -32,7 +30,6 @@ export function RunScreen({ onDone, onDoc, onRecords, now: fixedNow }: { onDone:
   };
   let footer;
   if (job.pcOnly && r.kind === 'myTurn' && (r.auth.method === 'pc' || (r.auth.method === 'simple' && r.auth.pc)) && actionsOf(r, now)[0] !== 'close') {
-    // 폰 발급 명령이 로그인에서 기다린다: 폰에서 간편인증·[인증서로 다시 시도]·[승인했어요]
     const [first, ...rest] = actionsOf(r, now);
     footer = (
       <>
@@ -43,7 +40,6 @@ export function RunScreen({ onDone, onDoc, onRecords, now: fixedNow }: { onDone:
       </>
     );
   } else if (job.pcOnly) {
-    // 폰 발급 명령: 승인·중지·서류는 PC가 맡는다. 폰은 지켜보기만 한다.
     footer = <Button kind="secondary" label="닫기" onPress={onDone} testID="run-main-close" />;
   } else if (r.kind === 'done') {
     footer = (
@@ -53,7 +49,6 @@ export function RunScreen({ onDone, onDoc, onRecords, now: fixedNow }: { onDone:
       </>
     );
   } else {
-    // 기본 행동 하나(ink 알약) + 보조(글자). 진행 중에는 닫기가 기본이고 중지는 보조다.
     const raw = actionsOf(r, now);
     const acts: RunAction[] = raw[0] === 'stop' ? ['close', 'stop'] : raw;
     const [first, ...rest] = acts;
@@ -71,8 +66,8 @@ export function RunScreen({ onDone, onDoc, onRecords, now: fixedNow }: { onDone:
     <Screen title={r.kind === 'done' ? '발급 결과' : '발급 진행'} onBack={onDone} testID="run-screen" footer={footer}>
       <View style={{ gap: space.s3 }}>
         <RunCard job={job} now={fixedNow} />
-        {/* 카드 아래 안내: 어디서 하고 있는지, 앱을 닫아도 되는지 */}
-        {/* 내 차례에는 할 일만 보인다(안내를 겹쳐 쓰지 않는다, 대표 지적 2026-11-19) */}
+        {}
+        {}
         {(r.kind === 'running' || r.kind === 'inDoubt') && (
           <View style={{ gap: 2, paddingHorizontal: space.s1 }} testID="run-hint">
             <T v="meta" c="ink3">

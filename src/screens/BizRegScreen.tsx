@@ -1,8 +1,3 @@
-// 사업자등록증 찍기(기획 v2 PR 7): 처음 거래하는 곳의 등록증을 찍어 거래처를 만든다.
-// 찍기 → 기기 안 OCR → 읽은 값 확인(낮은 확신 "확인해 주세요", 사업자번호 검증식) → [거래처로 저장] → 발급 작성(이 거래처가 골라짐).
-// 종이 증빙 찍기(P-08)의 자르기·OCR·임시 파일 정리를 그대로 쓴다. 카메라와 앨범 둘 다(2026-11-16 대표 결정):
-// 앨범에서 고른 사진은 고르기가 만든 사본만 지우고 원본은 그대로 둔다.
-// 원본 사진은 PC에 보관하고 이 폰에서는 거래처를 저장하면 지운다(PC로 보내기는 프로토콜이 생긴 뒤).
 import { Asset } from 'expo-asset';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { File } from 'expo-file-system';
@@ -35,11 +30,8 @@ interface Shot {
 
 export interface BizRegPreview {
   phase: 'camera' | 'confirm';
-  /** 갤러리: 카메라 권한을 거절한 뒤(설정에서 허용) */
   denied?: boolean;
-  /** 앨범에서 고른 사진 */
   fromAlbum?: boolean;
-  /** 갤러리: 카메라 화면 아래 안내 한 줄(예: PDF) */
   err?: string;
   shot?: Shot;
   values?: BizRegFields & { email: string };
@@ -53,10 +45,8 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export function BizRegScreen({
   existing: given, onDone, onSaved, onUseExisting, preview,
 }: {
-  /** 없으면 저장소의 거래처 */
   existing?: Counterparty[];
   onDone: () => void;
-  /** 저장소에 더하고(발급 작성에서 골라 둠) 부른다 */
   onSaved: (cp: Counterparty) => void;
   onUseExisting: (cp: Counterparty) => void;
   preview?: BizRegPreview;
@@ -89,7 +79,6 @@ export function BizRegScreen({
     temp.current.push(uri);
     if (gone.current) cleanup();
   };
-  // 화면이 내려가면(잠금·뒤로) 찍은 사진을 남기지 않는다
   useEffect(
     () => () => {
       gone.current = true;
@@ -140,7 +129,6 @@ export function BizRegScreen({
       if (!r) return;
       if (r.kind === 'pdf') return setErr(PDF_LINE);
       setFromAlbum(true);
-      // 고른 사진은 안내 틀이 없으니 자르지 않는다. 사본(앱 캐시)은 track이 지운다.
       await process(r, false);
     } catch {
       setErr('사진을 고르지 못했어요.');
@@ -159,7 +147,6 @@ export function BizRegScreen({
     }
   }
 
-  /** 시뮬레이터 개발 빌드만: 앱에 묶인 견본 등록증(가짜 사업자)을 카메라 대신 쓴다. */
   async function devSample() {
     const a = Asset.fromModule(sampleBizReg);
     await a.downloadAsync();
@@ -184,7 +171,6 @@ export function BizRegScreen({
     const unsure = (k: BizRegKey) => !touched.has(k) && (conf[k] ?? 0) < UNSURE_BELOW;
     const digits = v.bizNo.replace(/\D/g, '');
     const badNo = digits.length > 0 && !(digits.length === 10 && validBizNo(digits));
-    // 번호가 맞을 때만 이미 있는 거래처와 맞춘다(틀린 번호면 먼저 고치게)
     const dup = badNo ? null : findByBizNo(existing, v.bizNo);
     const badEmail = v.email !== '' && !EMAIL.test(v.email);
     const ready = !!v.name.trim() && digits.length === 10 && validBizNo(digits) && !badEmail;
@@ -323,7 +309,6 @@ export function BizRegScreen({
               </T>
             </View>
             {perm && !perm.canAskAgain ? (
-              // 한 번 거절하면 앱이 다시 물을 수 없다: 설정 앱의 이 앱 화면으로
               <Button small kind="secondary" label="설정에서 허용" onPress={() => void Linking.openSettings()} testID="bizreg-open-settings" />
             ) : (
               <Button small kind="secondary" label="카메라 허용" onPress={() => void requestPerm()} testID="bizreg-ask-camera" />
@@ -337,7 +322,7 @@ export function BizRegScreen({
           <Button kind="secondary" label="개발: 견본 등록증으로 찍기" onPress={() => void devSample()} busy={phase === 'reading'} style={{ alignSelf: 'stretch' }} />
         ) : (
           <View style={st.shutterRow}>
-            {/* 셔터 왼쪽 [앨범]: 카메라 권한 없이도 고를 수 있다 */}
+            {}
             <Pressable testID="bizreg-album" accessibilityRole="button" accessibilityLabel="앨범에서 고르기" onPress={() => void album()} disabled={phase === 'reading'} style={({ pressed }) => [st.side, pressed && { opacity: 0.6 }]}>
               <T v="subStrong" c="onCamera">
                 앨범

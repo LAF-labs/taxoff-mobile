@@ -1,6 +1,3 @@
-// P-08 규칙 파서: 폰 OCR 줄에서 금액·날짜·상호·사업자번호 후보를 뽑는다. 모델 없음(ADR-032 결정 11·ADR-034 결정 9).
-// 결과는 입력 보조 후보일 뿐이고, 사장님이 확인·수정한다. PC docparse 샌드박스 OCR이 정본이다.
-// 순수 함수(React Native·Expo 의존 없음) — node --test로 시험한다.
 
 interface Candidates {
   amount?: number;
@@ -14,7 +11,6 @@ const NOT_TOTAL = /(부\s*가\s*세|과\s*세|면\s*세|공\s*급\s*가|봉\s*�
 const MERCHANT_KEYS = /^(?:상\s*호(?:\s*명)?|가\s*맹\s*점(?:\s*명)?|매\s*장\s*명|업\s*체\s*명|판\s*매\s*자)\s*[:：]?\s*(.+)$/;
 const NOISE_LINE = /(영수증|receipt|카드|승인|전화|tel|주소|대표|사업자|등록번호|일시|날짜|번호|POS|합계|금액|부가세|과세|면세|품명|수량|단가)/i;
 
-/** 숫자 문자열 → 원. 쉼표·마침표 천 단위만 받는다. */
 function money(s: string): number | null {
   const t = s.replace(/\s/g, '');
   if (!/^\d{1,3}([,.]\d{3})+$|^\d{1,9}$/.test(t)) return null;
@@ -26,7 +22,6 @@ const NUM_RE = /(?<![\d-])(\d{1,3}(?:[,.]\d{3})+|\d{3,9})(?![\d-])\s*(원|₩)?/
 
 function amountsIn(line: string): { n: number; won: boolean }[] {
   const out: { n: number; won: boolean }[] = [];
-  // 날짜·시각·사업자번호·전화번호 꼴은 지운다
   const clean = line
     .replace(/\d{3}-\d{2}-\d{5}/g, ' ')
     .replace(/\d{2,4}[-./]\d{1,2}[-./]\d{1,2}/g, ' ')
@@ -44,13 +39,11 @@ export function parseAmount(lines: string[]): number | undefined {
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i]!;
     if (!TOTAL_KEYS.test(l) || NOT_TOTAL.test(l.replace(TOTAL_KEYS, ''))) continue;
-    // 같은 줄, 없으면 다음 줄의 금액
     const here = amountsIn(l.replace(TOTAL_KEYS, ' '));
     const found = here.length ? here : amountsIn(lines[i + 1] ?? '');
     for (const a of found) if (best === undefined || a.n > best) best = a.n;
   }
   if (best !== undefined) return best;
-  // 키워드가 없으면 원·천 단위 표기가 붙은 수 중 가장 큰 것
   for (const l of lines) for (const a of amountsIn(l)) if (a.won && (best === undefined || a.n > best)) best = a.n;
   return best;
 }
@@ -85,7 +78,6 @@ export function parseDate(lines: string[], today = new Date()): string | undefin
   return undefined;
 }
 
-/** 사업자등록번호 검증(국세청 가중치 1,3,7,1,3,7,1,3,5). */
 export function validBizNo(digits: string): boolean {
   if (!/^\d{10}$/.test(digits)) return false;
   const w = [1, 3, 7, 1, 3, 7, 1, 3, 5];
@@ -114,7 +106,6 @@ export function parseMerchant(lines: string[]): string | undefined {
       if (v) return v;
     }
   }
-  // 위에서 세 줄 안의, 한글이 반 넘는 짧은 줄
   for (const l of lines.slice(0, 3)) {
     const t = tidy(l);
     if (!t || NOISE_LINE.test(t)) continue;

@@ -1,5 +1,3 @@
-// 설정(홈 오른쪽 위): 연결(PC · 계정 · 연결된 기기) · 알림 · 보안(앱 잠금) · 도움말(사용 안내 · 문의) · 앱 정보(버전 · 약관).
-// D08 §4.2: 연결된 PC와 계정은 설정에 늘 보인다. "준비 중"처럼 아무것도 못 하는 줄은 두지 않는다.
 import { useEffect, useState } from 'react';
 import { AppState, Linking, View } from 'react-native';
 import { APP_VERSION, LOCK_AFTER_MS, PUBLIC_ORIGIN } from '../config';
@@ -42,7 +40,6 @@ export function SettingsScreen({
   const line = pcLine(s.pc, s.data.lastSeenPc);
   const prefs = s.data.notify ?? DEFAULT_PREFS;
   const anyOn = prefs.run || prefs.money || wakeOn(prefs);
-  // 사장님 말로 둘만: 폰이 알려 주면 켜짐, 아니면 꺼짐(OS가 아직 묻지 않은 상태도 꺼짐이다)
   const notifyValue = perm === 'granted' && anyOn ? '켜짐' : '꺼짐';
   const lockSub = bio && bio.enrolled && bio.kind !== 'none' ? `${bioName(bio.kind)}, 안 되면 폰 암호` : '폰 암호';
 

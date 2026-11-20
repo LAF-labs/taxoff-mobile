@@ -1,6 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-// Android 백업·기기 이전에서 앱 데이터를 모두 뺀다(ADR-029·ADR-034 결정 9, D07). allowBackup=false와 함께
-// Android 12+의 기기 간 이전(device-transfer)도 막아야 해서 dataExtractionRules를 따로 둔다.
 const { withAndroidManifest, withDangerousMod } = require('expo/config-plugins');
 const fs = require('node:fs');
 const path = require('node:path');

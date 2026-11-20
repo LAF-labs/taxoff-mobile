@@ -45,7 +45,6 @@ describe('세금계산서 확인 칸', () => {
 
 describe('칸 고치기', () => {
   const none = new Set<string>();
-  /** 한 글자씩 치는 것처럼 */
   const typeIn = (f: ReturnType<typeof emptyInvoiceForm>, k: 'supply' | 'vat', s: string, touched: ReadonlySet<string> = none) => {
     for (let i = 1; i <= s.length; i++) f = editInvoiceForm(f, k, masked('won', s.slice(0, i)), touched);
     return f;

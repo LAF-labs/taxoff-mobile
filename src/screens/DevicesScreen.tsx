@@ -1,7 +1,3 @@
-// 연결된 기기(ADR-048 결정 1·6): 계정에 연결한 PC·폰(각 3대까지)을 보고, 잃어버린 기기를 정지하고, 이 폰을 계정에서 뺀다.
-// 규칙(줄·한도·정지 가능 여부·문구)은 src/devices.ts에 있고 이 화면은 그리기와 확인 창만 한다.
-// - 정지할 수 있는 줄에는 [정지] 알약, 마지막 PC에는 흐린 [정지](누르면 이유). 이 폰·이미 정지된 줄에는 동작이 없다.
-// - 정지된 줄은 상태 글을 황토로. 한도에 닿은 묶음은 묶음 아래 한 줄.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { DevicesError, devicesClient, devicesErrorText, devicesView, isStopped, stopConfirm, type AccountDevice, type DeviceRow } from '../devices';
@@ -17,7 +13,6 @@ const LAST_PC = '계정에 남은 마지막 PC는 정지할 수 없어요. 다�
 
 type DevicesLoad = { kind: 'loading' } | { kind: 'ready'; devices: AccountDevice[] } | { kind: 'error'; code: string };
 
-/** 갤러리 견본: 망을 부르지 않고 이 상태를 그린다. */
 export interface DevicesPreview {
   load: DevicesLoad;
   selfId: string;

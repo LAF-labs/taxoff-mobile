@@ -1,9 +1,3 @@
-// 폰 화면 공통 부품(design-system v2.0을 폰 크기로, src/theme.ts·docs/design.md).
-// - 화면 틀: 머리(48, 뒤로 ‹ + 제목 17/600) · 내용 · 바닥 동작 줄(주요 단추 하나, 안전 영역 위).
-// - 단추: primary(ink 채움 알약) 하나, secondary(tint 채움), quiet(글자만). 파랑 채움 없음.
-// - 묶음(Group): tint 채움 16 모서리, 줄 사이는 안쪽 선(line) 한 줄. 카드 테두리·그림자 없음.
-// - 상태는 점 + 글자(StatusDot). 색은 accent·attention뿐.
-// - 답 후보(Reply): 점선 전폭 줄. 고르면 실선 + 체크로 굳고 나머지는 흐려진다(Muse 확인 UI).
 import * as Haptics from 'expo-haptics';
 import { useContext, useEffect, useRef, type ReactNode } from 'react';
 import {
@@ -13,26 +7,20 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MAX_FONT_SCALE, TextSizeContext, motion, radius, size, space, textScale, type, useReducedMotion, usePalette, type Ink, type TypeName } from '../theme';
 
-/** 한글은 낱말 단위로 줄을 바꾼다(숫자와 단위, 낱말이 쪼개지지 않게). iOS는 hangul-word, 웹(갤러리)은 keep-all. */
-// overflowWrap anywhere: 띄어쓰기 없는 긴 값(이메일 등)은 넘칠 때만 아무 데서나 끊는다.
 const keepAll = { wordBreak: 'keep-all', overflowWrap: 'anywhere' } as unknown as TextStyle;
 
-/** 가운뎃점(·)이 줄 끝에 홀로 남지 않게: 점 뒤 칸을 붙은 칸으로 바꿔 점이 다음 낱말과 함께 넘어가게 한다. */
 const glueDots = (t: string) => t.replace(/ · /g, ' ·\u00A0');
 const glue = (c: ReactNode): ReactNode => (typeof c === 'string' ? glueDots(c) : Array.isArray(c) ? c.map(glue) : c);
 
-/** 누를 때 가벼운 진동. 실패해도 조용히 넘긴다(진동이 없는 기기·설정). */
 export const tap = () => void Haptics.selectionAsync().catch(() => {});
 export const success = () => void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
 export const warn = () => void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
 
-// ── 글자 ──
 export function T({
   children, v = 'body', c = 'ink', style, testID, lines, center, role,
 }: { children: ReactNode; v?: TypeName; c?: Ink; style?: StyleProp<TextStyle>; testID?: string; lines?: number; center?: boolean; role?: AccessibilityRole }) {
   const p = usePalette();
   const base = type[v];
-  // 글자 크기 설정이 바뀌면 다시 그린다(값은 textScale.web에 있다)
   useContext(TextSizeContext);
   const k = textScale.web;
   return (
@@ -49,12 +37,10 @@ export function T({
   );
 }
 
-// ── 화면 틀 ──
 export function Screen({
   title, onBack, backLabel = '뒤로', right, children, footer, scroll = true, testID, style, tabbed,
 }: {
   title?: string; onBack?: () => void; backLabel?: string; right?: ReactNode; children: ReactNode; footer?: ReactNode; scroll?: boolean; testID?: string; style?: StyleProp<ViewStyle>;
-  /** 아래 탭 줄 위에 놓이는 화면: 안전 영역은 탭 줄이 맡는다. */
   tabbed?: boolean;
 }) {
   const p = usePalette();
@@ -73,7 +59,7 @@ export function Screen({
           <View style={[st.headerSide, { alignItems: 'flex-end' }]}>{right}</View>
         </View>
       )}
-      {/* 바닥 동작 줄이 있으면 키보드 위로 함께 올린다(주요 단추가 키보드에 가리지 않게). */}
+      {}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={footer && Platform.OS === 'ios' ? 'padding' : undefined} enabled={!!footer}>
       {scroll ? (
         <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets={!footer}>
@@ -98,7 +84,6 @@ function Back({ onPress, label }: { onPress: () => void; label: string }) {
   );
 }
 
-/** 글꼴 없이 그리는 꺾쇠(10×10 두 변). 아이콘 묶음을 들이지 않는다. */
 export function Chevron({ dir = 'right', color, sizePx = 9 }: { dir?: 'left' | 'right' | 'down' | 'up'; color: string; sizePx?: number }) {
   const rot = dir === 'left' ? '-135deg' : dir === 'down' ? '135deg' : dir === 'up' ? '-45deg' : '45deg';
   return <View style={{ width: sizePx, height: sizePx, borderTopWidth: 2, borderRightWidth: 2, borderColor: color, transform: [{ rotate: rot }], marginHorizontal: 4 }} />;
@@ -108,8 +93,6 @@ export function Check({ color }: { color: string }) {
   return <View style={{ width: 12, height: 7, borderLeftWidth: 2, borderBottomWidth: 2, borderColor: color, transform: [{ rotate: '-45deg' }], marginTop: -3 }} />;
 }
 
-// ── 단추 ──
-/** approve: 파랑 채움. 폰 앱에서 승인 시트의 [승인하고 발급] 하나에만 쓴다(ADR-046 결정 6, docs/design.md). */
 type Kind = 'primary' | 'secondary' | 'quiet' | 'approve';
 export function Button({
   label, onPress, kind = 'primary', disabled, busy, testID, style, small, hint,
@@ -146,7 +129,6 @@ export function Button({
   );
 }
 
-// ── 묶음과 줄 ──
 export function Group({ children, title, note, style, testID }: { children: ReactNode; title?: string; note?: ReactNode; style?: StyleProp<ViewStyle>; testID?: string }) {
   const p = usePalette();
   const items = (Array.isArray(children) ? children : [children]).filter((c) => c !== null && c !== undefined && c !== false);
@@ -174,10 +156,9 @@ export function Group({ children, title, note, style, testID }: { children: Reac
   );
 }
 
-/** 목록 줄: 왼쪽 라벨, 오른쪽 값(또는 꺾쇠). 누를 수 있으면 누름 면이 생긴다. */
 export function Row({
   label, value, sub, onPress, chevron, testID, valueInk = 'ink2', strong, accessory, subInk = 'ink3',
-}: { label: string; value?: ReactNode; sub?: string; onPress?: () => void; chevron?: boolean; testID?: string; valueInk?: Ink; strong?: boolean; accessory?: ReactNode; /** 둘째 줄 색: 확인이 필요한 상태(정지됨 등)는 attention */ subInk?: Ink }) {
+}: { label: string; value?: ReactNode; sub?: string; onPress?: () => void; chevron?: boolean; testID?: string; valueInk?: Ink; strong?: boolean; accessory?: ReactNode; subInk?: Ink }) {
   const p = usePalette();
   const body = (
     <>
@@ -198,9 +179,7 @@ export function Row({
   );
 }
 
-// ── 상태 ──
 export type Tone = 'accent' | 'attention' | 'quiet';
-/** 점 + 글자. busy면 점이 숨 쉬듯 흐려졌다 돌아온다(motion-pulse, 동작 줄이기면 멈춤). */
 export function StatusDot({ tone = 'quiet', label, busy, testID, v = 'subStrong' }: { tone?: Tone; label: string; busy?: boolean; testID?: string; v?: TypeName }) {
   const p = usePalette();
   const reduce = useReducedMotion();
@@ -231,8 +210,7 @@ export function StatusDot({ tone = 'quiet', label, busy, testID, v = 'subStrong'
   );
 }
 
-/** 확인이 필요한 한 줄(attention-soft 면). 사라지는 토스트 대신 그 자리에 남긴다. */
-export function Notice({ children, tone = 'attention', testID, sub }: { children: ReactNode; tone?: 'attention' | 'quiet'; testID?: string; /** 둘째 줄(작은 회색): 다음에 할 일·안심 문구 */ sub?: string }) {
+export function Notice({ children, tone = 'attention', testID, sub }: { children: ReactNode; tone?: 'attention' | 'quiet'; testID?: string; sub?: string }) {
   const p = usePalette();
   return (
     <View style={[st.notice, { backgroundColor: tone === 'attention' ? p.attentionSoft : p.tint, gap: space.s1 }]} testID={testID} accessibilityRole="alert">
@@ -248,8 +226,6 @@ export function Notice({ children, tone = 'attention', testID, sub }: { children
   );
 }
 
-// ── 답 후보 ──
-/** 점선 전폭 줄. chosen이 있으면 그 줄은 실선 + 체크, 나머지는 흐려진다. */
 export function Replies<K extends string>({
   options, chosen, onChoose, testID,
 }: { options: Array<{ key: K; label: string; sub?: string }>; chosen?: K | null; onChoose: (k: K) => void; testID?: string }) {
@@ -287,7 +263,6 @@ export function Replies<K extends string>({
   );
 }
 
-/** 둘 중 하나(두 칸 전환). */
 export function Seg<K extends string>({ options, value, onChange, testID, style }: { options: Array<{ key: K; label: string }>; value: K | null; onChange: (k: K) => void; testID?: string; style?: StyleProp<ViewStyle> }) {
   const p = usePalette();
   return (
@@ -304,7 +279,6 @@ export function Seg<K extends string>({ options, value, onChange, testID, style 
               tap();
               onChange(o.key);
             }}
-            // 다크에서는 overlay가 tint와 같아 고른 칸이 사라진다: 한 단 밝은 sunken으로 올린다.
             style={[st.segItem, on && { backgroundColor: p.overlay === p.tint ? p.sunken : p.overlay, ...shadowCard }]}
           >
             <T v="subStrong" c={on ? 'ink' : 'ink3'}>
@@ -319,8 +293,7 @@ export function Seg<K extends string>({ options, value, onChange, testID, style 
 
 const shadowCard = { shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 };
 
-/** 묶음(tint) 안 줄에 붙는 작은 동작: 바탕색 알약 36, 누름 영역 44. */
-export function Pill({ label, onPress, testID, quiet }: { label: string; onPress: () => void; testID?: string; /** 글자만(덜 중요한 동작, 예: 건별 빼기) */ quiet?: boolean }) {
+export function Pill({ label, onPress, testID, quiet }: { label: string; onPress: () => void; testID?: string; quiet?: boolean }) {
   const p = usePalette();
   return (
     <Pressable
@@ -338,7 +311,6 @@ export function Pill({ label, onPress, testID, quiet }: { label: string; onPress
   );
 }
 
-/** 빈 화면: 무엇이 비었는지 한 줄, 왜인지 한 줄, 다음 할 일 하나(막다른 화면을 만들지 않는다). */
 export function Empty({ title, sub, action, testID }: { title: string; sub?: string; action?: ReactNode; testID?: string }) {
   return (
     <View style={st.empty} testID={testID}>
@@ -357,7 +329,6 @@ export function Empty({ title, sub, action, testID }: { title: string; sub?: str
   );
 }
 
-// ── 표기 ──
 export function ago(ts: number | null, now = Date.now()): string {
   if (!ts) return '접속 기록 없음';
   const m = Math.floor((now - ts) / 60_000);
@@ -393,7 +364,6 @@ export const st = StyleSheet.create({
   segItem: { flex: 1, minHeight: 38, borderRadius: radius.sm + 1, alignItems: 'center', justifyContent: 'center' },
 });
 
-/** 앱 안 확인 시트(승인 시트와 같은 모양: 가림막 + 아래에서 올라온 둥근 시트 + 손잡이). 되돌릴 수 없는 일 앞에 한 번. */
 export function ConfirmSheet({ title, body, yes, no, onYes, onNo }: { title: string; body?: string; yes: string; no: string; onYes: () => void; onNo: () => void }) {
   const p = usePalette();
   const inset = useSafeAreaInsets();

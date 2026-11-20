@@ -1,5 +1,3 @@
-// 기록 탭: 이 폰에서 맡겨 발급까지 끝난 세금계산서. 비었으면 [세금계산서 발급].
-// (PC에서 발급한 것까지 모으는 것은 PC가 넘기는 폰 사본, ADR-046 결정 5가 생긴 뒤다.)
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
 import { Button, Empty, Group, Row, Screen, won } from '../ui/kit';

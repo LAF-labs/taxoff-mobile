@@ -1,5 +1,3 @@
-// 설정 > 알림: OS 허용 한 줄 + 받을 알림 셋(앱을 닫아 둬도 오는 승인과 소식, 발급 진행, 돈 기한). 고른 것은 봉인 상태 파일(AppData.notify)에 둔다.
-// 앱을 닫아 둬도 오는 알림은 PC가 서버 푸시로 깨운다(ADR-053). 끄면 서버의 이 폰 푸시 토큰을 지운다(notify/PushHost.tsx).
 import { useCallback, useEffect, useState } from 'react';
 import { AppState, Linking, Platform, Switch } from 'react-native';
 import { DEFAULT_PREFS, wakeOn, type NotifyPrefs } from '../notify/events';
@@ -19,7 +17,6 @@ export function NotifyScreen({ onDone, permPreview }: { onDone: () => void; perm
   }, [permPreview]);
   useEffect(() => {
     refresh();
-    // 설정 앱에서 허용하고 돌아오면 다시 읽는다
     const sub = AppState.addEventListener('change', (st) => st === 'active' && refresh());
     return () => sub.remove();
   }, [refresh]);
@@ -35,7 +32,6 @@ export function NotifyScreen({ onDone, permPreview }: { onDone: () => void; perm
       value={k === 'wake' ? wakeOn(prefs) : !!prefs[k]}
       onValueChange={(v) => set(k, v)}
       trackColor={{ true: p.ink, false: p.sunken }}
-      // 켜짐은 ink 채움(파랑은 PC 켜짐에만 쓴다). 다크에서 ink가 밝으므로 손잡이는 바탕색
       thumbColor={p.canvas}
       {...(Platform.OS === 'web' ? { activeThumbColor: p.canvas } : {})}
       ios_backgroundColor={p.sunken}

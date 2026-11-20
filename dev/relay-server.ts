@@ -1,14 +1,3 @@
-// 개발용 릴레이(services/relay 대역). 경로·헤더·제어 메시지는 services/relay/API.md와 같고, 저장·한도는 덜어 냈다.
-//   WSS GET /v1/rooms/:roomId              인증 없음, PC가 createRoom(= POST /v1/rooms)으로 먼저 만든다. 정원 2, 120초, 1회용.
-//   WSS GET /v1/mailboxes/:mbxId/live      Authorization: DPoP + DPoP + X-Mbx-Read + X-Mbx-Write. 쪽은 기기 토큰의 역할.
-//   바이너리 = D08 §6 바깥 프레임(ver=1, kind HS=1·DATA=2, len 일치). 텍스트 {"t":"peer","online"}. 4001 토큰 만료, 4002 대체.
-//   HTTPS 큐(D08 §7, 기기 토큰 DPoP + 우편함 토큰):
-//     POST /v1/mailboxes/:id/envelopes {v:1,kind:"ENV",enc,ct}  X-Mbx-Write  → 202 {seq} | 429 relay.queue_full
-//     GET  /v1/mailboxes/:id/envelopes                           X-Mbx-Read   → 200 {envelopes:[{seq, env}]}
-//     POST /v1/mailboxes/:id/ack {seq}                           X-Mbx-Read   → 200 (seq까지 지운다)
-//     PUT  /v1/mailboxes/:id/bundle {bundle}                     X-Mbx-Write  → 204 · GET → 200 {bundle} | 404
-//   한도: 우편함당 160 봉투 · 6 MiB · TTL 24시간, ct ≤ 65,536자, 번들 ≤ 2KB.
-// 내용은 모른다(프레임 바이트만 나른다).
 import { createHash } from 'node:crypto';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
@@ -56,11 +45,9 @@ export class DevRelay {
     this.#origin = origin;
   }
 
-  /** POST /v1/rooms 대역(PC만). */
   createRoom(roomIdB64url: string) {
     this.#rooms.set(roomIdB64url, { conns: [], expires: Date.now() + ROOM_TTL_MS });
   }
-  /** POST /v1/mailboxes 대역(PC만). 서버는 토큰 해시만 저장한다. */
   registerMailbox(mbxIdB64url: string, readHash: string, writeHash: string) {
     this.#tokens.set(mbxIdB64url, { read: readHash, write: writeHash });
   }
@@ -72,7 +59,6 @@ export class DevRelay {
     s?.m?.close(1000);
   }
 
-  /** HTTPS 큐·번들 요청이면 처리하고 true. 내용은 열지 않는다(바깥 객체 모양과 크기만 본다). */
   async handleHttp(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const path = new URL(req.url ?? '/', 'http://x').pathname;
     const m = /^\/v1\/mailboxes\/([A-Za-z0-9_-]{43})\/(envelopes|ack|bundle)$/.exec(path);
@@ -154,7 +140,6 @@ export class DevRelay {
     r.conns.push(ws);
     let fails = 0;
     const end = () => {
-      // 1회용: 한쪽이 나가면 룸을 폐기하고 다른 쪽도 끊는다
       if (this.#rooms.get(id) !== r) return;
       this.#rooms.delete(id);
       for (const c of r.conns) if (c !== ws) c.close(4001);
@@ -177,13 +162,12 @@ export class DevRelay {
   #onMailbox(ws: WebSocket, id: string, side: 'd' | 'm', exp: number) {
     const slot = this.#mbx.get(id) ?? {};
     this.#mbx.set(id, slot);
-    slot[side]?.close(4002); // 같은 쪽 새 연결이 옛 연결을 대신한다
+    slot[side]?.close(4002);
     slot[side] = ws;
     const other = () => slot[side === 'd' ? 'm' : 'd'];
     const t = setTimeout(() => ws.close(4001), Math.max(0, exp - Date.now()));
     let fails = 0;
     ws.on('message', (d: Buffer, bin) => {
-      // 앱 수준 keepalive(ws-link RELAY_PING): 상대에게 넘기지 않고 이 연결에만 pong(tex services/relay와 같음)
       if (!bin && d.length === PING.length && d.equals(PING)) return void ws.send(PONG);
       if (!bin || !outerOk(d)) {
         if (++fails >= FAILS_MAX) ws.close(1008);

@@ -1,8 +1,6 @@
-// 확인 화면의 세금계산서 칸(글자) ↔ 보낼 값(PaperInvoice). 순수 함수 — node --test로 시험한다.
 import { masked } from '../ui/mask.ts';
 import type { InvoiceItem, InvoiceKind, PaperInvoice } from './invoice.ts';
 
-/** 확인 화면의 세금계산서 칸(글자 그대로). 보낼 때 PaperInvoice로 바꾼다. */
 export interface InvoiceForm {
   docKind: InvoiceKind;
   direction: 'sales' | 'purchase' | null;
@@ -54,7 +52,6 @@ export function formFrom(inv: PaperInvoice): InvoiceForm {
   };
 }
 
-/** 확인한 칸 → 보낼 값. 사장님이 만진 칸은 확신 1, 나머지는 읽은 확신 그대로. */
 export function invoiceOf(f: InvoiceForm, conf: Record<string, number>, touched: ReadonlySet<string>): PaperInvoice {
   const fc: Record<string, number> = {};
   for (const [k, field] of Object.entries(FIELD_KEY)) {
@@ -72,10 +69,6 @@ export function invoiceOf(f: InvoiceForm, conf: Record<string, number>, touched:
 }
 
 
-/**
- * 확인 화면에서 칸 하나를 고친 결과. 세액은 사장님이 손대지 않았고 비어 있거나 앞서 자동으로 채운 값(공급가액의 10%)일 때만
- * 공급가액을 따라가고, 합계는 손대지 않았으면 세액을 정한 뒤 공급가액 + 세액(계산서는 공급가액)으로 맞춘다.
- */
 export function editInvoiceForm(cur: InvoiceForm, k: keyof InvoiceForm, v: InvoiceForm[keyof InvoiceForm], touched: ReadonlySet<string>): InvoiceForm {
   const next = { ...cur, [k]: v } as InvoiceForm;
   const tenth = (x: string) => (num(x) === null ? null : Math.floor(num(x)! / 10));

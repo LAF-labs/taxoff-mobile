@@ -1,8 +1,3 @@
-// 진행 카드·결과 카드(P-04, 기획 v2 PR 6). 대화 안 카드(compact)와 진행 화면(RunScreen)이 같은 부품을 쓴다.
-// - 머리: 일 이름 + 합계, 상태 칩(점 + 글자) · 경과 시간
-// - 단계 줄: 준비 → 홈택스 로그인 → 값 확인 → 승인 → 발급 → 확인, 지금 단계만 ink 600
-// - 상태 한 줄(08 §11 표를 폰 길이로). 결과 모름·확인 필요에는 다시 발급하는 단추가 없다.
-// - 결과: 승인번호(4자리씩, 길게 누르면 원문 복사) · 거래처 · 합계 · 받는 이메일로 보냄 여부, [서류 보기] [공유]
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
@@ -14,7 +9,6 @@ import { Check, Chevron, Pill, StatusDot, T, success, won } from '../ui/kit';
 import { CardApprove } from './CardApprove';
 
 
-/** PC가 맡은 일의 로그인 차례(폰에서 할 수 있는 일이 있다) */
 const pcTurn = (r: RunView) => r.kind === 'myTurn' && (r.auth.method === 'pc' || (r.auth.method === 'simple' && !!r.auth.pc));
 
 export function actionLabel(a: RunAction, r: RunView): string {
@@ -22,14 +16,12 @@ export function actionLabel(a: RunAction, r: RunView): string {
   return ACTION_LABEL[a];
 }
 
-/** 간편인증 앱 열기(이름을 아는 앱만). 열 수 없으면 조용히 넘긴다: 그 앱을 직접 열면 된다. */
 export function openAuthApp(r: RunView) {
   if (r.kind !== 'myTurn' || r.auth.method !== 'simple') return;
   const url = AUTH_APPS[r.auth.app];
   if (url) Linking.openURL(url).catch(() => {});
 }
 
-/** 1초마다 흐르는 시계. fixed가 있으면(갤러리) 멈춘다. */
 export function useNow(fixed?: number, on = true): number {
   const [now, setNow] = useState(() => fixed ?? Date.now());
   useEffect(() => {
@@ -42,15 +34,12 @@ export function useNow(fixed?: number, on = true): number {
 
 export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, onShare, onApprove }: {
   job: Job;
-  /** 갤러리: 시계를 멈춘다 */
   now?: number;
-  /** 대화 안 카드: 단추는 작게, 닫기는 두지 않는다. 누르면 진행 화면 */
   compact?: boolean;
   onOpen?: () => void;
   onAction?: (a: RunAction) => void;
   onDoc?: () => void;
   onShare?: () => void;
-  /** 이 폰으로 승인할 요청이 열려 있을 때: 카드에서 바로 승인, [자세히 보기]면 승인 시트 */
   onApprove?: () => void;
 }) {
   const p = usePalette();
@@ -92,18 +81,17 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
               </T>
             )
           ) : compact ? null : (
-            // 대화 카드에는 지난 시간을 두지 않는다(대표 결정 2026-11-19: 시간이 바뀌면 어지럽다)
             <T v="meta" c="ink3" testID="run-elapsed">
               {elapsed(now - r.startedAt)}
             </T>
           ))}
       </View>
-      {/* 이유 없는 PC 멈춤은 어느 단계였는지 모르니 단계 막대를 두지 않는다 */}
+      {}
       {r.kind !== 'done' && r.kind !== 'refused' && !(r.kind === 'stopped' && (r.reason === 'pcStopped' || r.reason === 'appOld')) && (compact ? <FoldSteps id={job.id} r={r} /> : <StepBar r={r} />)}
       <StateLines r={r} />
       {onApprove && job.gate && job.state === 'approval' && <CardApprove job={job} gate={job.gate} onDetail={onApprove} now={fixedNow} />}
       {r.kind === 'done' && <ResultRows result={r.result} />}
-      {/* 폰 발급 명령은 지켜보기만 한다. 로그인 차례(간편인증·인증서로 다시·승인했어요)만 대화 카드에서 바로 한다 */}
+      {}
       {compact && (!job.pcOnly || pcTurn(r)) && <CardActions r={r} now={now} onAction={onAction} onDoc={onDoc} onShare={onShare} />}
     </View>
   );
@@ -115,11 +103,6 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
   );
 }
 
-/**
- * 대화 안 카드의 단계(11-19): 닫힌 채로 시작하고 사용자가 연 카드만 기억한다.
- * 닫힌 것을 기억하지 않는 까닭: 나중에 온 카드가 "닫힘 목록"에 없어 한 번 펼쳐 그려졌다가 닫히며 화면이 튄다
- * (Happy docs/chat-list-scrolling.md "Collapsed-by-default"). 연 것은 이 앱이 켜져 있는 동안 기억한다.
- */
 const opened = new Set<string>();
 function FoldSteps({ id, r }: { id: string; r: RunView }) {
   const p = usePalette();
@@ -168,10 +151,6 @@ function FoldSteps({ id, r }: { id: string; r: RunView }) {
   );
 }
 
-/**
- * 단계: 얇은 6칸 막대(지난 칸 ink3, 지금 칸 ink로 조금 두껍게, 남은 칸 sunken) + 아래 한 줄 "홈택스 로그인 2/6".
- * 파랑은 PC 켜짐·승인 단추에만 쓰므로 지금 칸은 ink와 두께로 강조한다. 어느 폭에서도 한 줄이다.
- */
 function StepBar({ r }: { r: RunView }) {
   const p = usePalette();
   const cur = STEPS.indexOf(stepOf(r));
@@ -193,7 +172,6 @@ function StateLines({ r }: { r: RunView }) {
   const p = usePalette();
   switch (r.kind) {
     case 'running':
-      // 폰 발급 명령(pc_only): 승인은 PC 승인 바에서
       return r.pcApproval && r.step === 'approve' ? (
         <T v="sub" c="attention" testID="run-pc-approve">
           PC가 승인을 기다리고 있어요
@@ -254,7 +232,6 @@ function StateLines({ r }: { r: RunView }) {
   }
 }
 
-/** 결과 줄. 승인번호는 4자리씩 띄워 보이고, 길게 누르면 원문을 복사한다. */
 function ResultRows({ result }: { result: IssueResult }) {
   const p = usePalette();
   const [copied, setCopied] = useState(false);
@@ -266,7 +243,7 @@ function ResultRows({ result }: { result: IssueResult }) {
   };
   return (
     <View style={[st.rows, { borderTopColor: p.line }]}>
-      {/* 승인번호는 라벨 옆에 다 들어가지 않아 라벨 아래 한 줄로(숫자 사이에서 끊지 않는다) */}
+      {}
       <Pressable onLongPress={() => void copy()} accessibilityRole="button" accessibilityLabel={`승인번호 ${result.approvalNo}`} accessibilityHint="길게 누르면 복사해요" style={st.stack} testID="result-approval-no">
         <View style={st.stackHead}>
           <T v="sub" c="ink2">
@@ -309,7 +286,6 @@ function ResultRows({ result }: { result: IssueResult }) {
   );
 }
 
-/** 이메일: 넘칠 때 @ 앞에서만, 그래도 넘치면 점 뒤에서만 줄을 바꾼다(승인 시트와 같은 규칙). */
 function EmailText({ value }: { value: string }) {
   const at = value.lastIndexOf('@');
   const parts = at > 0 ? [value.slice(0, at), value.slice(at)] : [value];
@@ -331,7 +307,6 @@ function EmailText({ value }: { value: string }) {
   );
 }
 
-/** 대화 카드 안 단추: 기본 행동은 바탕색 알약(tint 카드 위), 나머지는 글자만. 화면의 주요 단추는 입력 줄 [보내기]다. 닫기는 두지 않는다. */
 function CardActions({ r, now, onAction, onDoc, onShare }: { r: RunView; now: number; onAction?: (a: RunAction) => void; onDoc?: () => void; onShare?: () => void }) {
   if (r.kind === 'done') {
     return (

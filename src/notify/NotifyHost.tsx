@@ -1,7 +1,3 @@
-// 알림 자리(App에 하나): PC가 알려 준 발급 진행이 바뀌면
-//   - 앱이 앞에 있으면 화면 위 배너 한 장(tint 면 + 은은한 경계, 6초 뒤 걷힘, 누르면 진행 화면). 진행 화면을 보고 있으면 띄우지 않는다.
-//   - 앱이 뒤에 있으면(잠기기 전) OS 알림 한 번. 글에는 거래처·금액이 없다.
-// 돈: 마지막으로 받은 PC 값으로 다음 오전 9시 알림 하나를 걸어 둔다(값이 바뀌면 다시 건다).
 import { useEffect, useRef, useState } from 'react';
 import { AppState, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,12 +24,9 @@ function moneyCounts(d: AppData): MoneyCounts | null {
 }
 
 export function NotifyHost({ onOpen, onMoney, onRunScreen, preview }: {
-  /** 배너·알림을 눌렀을 때: 그 일의 진행 화면으로 */
   onOpen: (jobId: string) => void;
   onMoney: () => void;
-  /** 진행 화면을 보고 있으면 그 일(q.focus)은 배너를 띄우지 않는다 */
   onRunScreen?: boolean;
-  /** 갤러리: 처음부터 보일 배너 */
   preview?: RunEvent;
 }) {
   const s = useSession();
@@ -56,7 +49,6 @@ export function NotifyHost({ onOpen, onMoney, onRunScreen, preview }: {
     });
   }, []);
 
-  // 발급 진행
   useEffect(() => {
     const evs = runEvents(prev.current, q.jobs);
     prev.current = q.jobs;
@@ -69,20 +61,17 @@ export function NotifyHost({ onOpen, onMoney, onRunScreen, preview }: {
     }
   }, [q.jobs, prefs.run, watching]);
 
-  // 배너 걷기
   useEffect(() => {
     if (!banner || preview) return;
     const t = setTimeout(() => setBanner(null), SHOW_MS);
     return () => clearTimeout(t);
   }, [banner, preview]);
 
-  // 돈 아침 알림
   const counts = moneyCounts(s.data);
   const key = counts ? `${counts.recvOverdue}.${counts.recvSoon}.${counts.payOverdue}.${counts.paySoon}` : '';
   useEffect(() => {
     const c = prefs.money && counts ? moneyReminder(counts) : null;
     void scheduleMoney(c, nextMorning(Date.now()));
-    // counts는 key로 본다
   }, [key, prefs.money]);
 
   if (!banner) return null;

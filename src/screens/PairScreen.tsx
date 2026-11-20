@@ -1,7 +1,3 @@
-// S-03 폰 쪽(D08 §4): 앱 안 스캐너로 PC의 QR을 찍고 → 검사(만료·릴레이 허용 목록) → Noise XXpsk0 → 6자리를 보여 준다
-// (사용자가 PC에 입력, "일치" 버튼 없음) → pair.ok 검사(AIK 서명 기기 목록·이 PC가 목록에 있음) → 24시간 경고
-// → 계정 확인(계정 서비스 서명 acct_claim의 이메일 전체 + PC가 알려 준 이름, [내 계정 맞음], 설계 #120) → 저장.
-// 폰에는 계정 로그인이 없어 서버에서 기기 목록을 받지 않는다. 계정 등록은 PC가 대신 한다(팀장 결정 2026-11-06, D08 §4.2 3·7단계).
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
@@ -36,11 +32,10 @@ const FAIL: Record<MobilePairFailure | 'relay' | 'save', string> = {
 };
 
 interface PairOnboarding {
-  /** 뒤로(‹·왼쪽 가장자리 쓸기): 온보딩 마지막 장으로. 열쇠는 이미 있으니 [다음]은 다시 이 화면으로 온다 */
   onBack: () => void;
 }
 
-export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () => void; /** 첫 실행 온보딩의 마지막 단계(5/5)로 쓸 때 */ onboarding?: PairOnboarding; /** 갤러리: 이 단계로 그린다(연결 없음) */ previewPhase?: 'scan' | 'done' }) {
+export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () => void; onboarding?: PairOnboarding; previewPhase?: 'scan' | 'done' }) {
   const s = useSession();
   const p = usePalette();
   const [perm, requestPerm] = useCameraPermissions();
@@ -51,12 +46,9 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
   const noiseRef = useRef<ReturnType<typeof softNoiseStatic> | null>(null);
   const scanned = useRef(false);
   const linkRef = useRef<{ close(): void } | null>(null);
-  /** 24시간 경고·계정 확인에서 사용자가 고르기 전까지 들고 있는 pair.ok 결과(아직 저장하지 않았다). */
   const pendingRef = useRef<MobilePairResult | null>(null);
   const gone = useRef(false);
 
-  // 화면을 떠나면(잠금 포함) 페어링을 멈춘다: 룸 연결을 닫아 PC 쪽도 끝나게 하고(1회용 룸), 메모리의 Sm 사본을 지운다.
-  // 잠긴 뒤 PC가 SAS를 받아도 폰은 키 없이 pair.ok를 저장할 수 없으므로, 끝까지 가지 않게 한다.
   useEffect(
     () => () => {
       gone.current = true;
@@ -84,7 +76,6 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
         name: deviceModel(),
         platform: Platform.OS === 'ios' ? 'ios' : 'android',
       },
-      // 다시 연결이면 앞서 고정한 계정 AIK와 같아야 한다(C-01). 처음이면 QR·6자리로 고른 이 PC의 AIK를 믿는다(TOFU).
       knownAikPub: s.data.pair ? fromB64(s.data.pair.aikPub) : undefined,
       seenListVersion: s.data.seenListVersion,
       accountKeys: accountKeys().map((k) => fromB64(k)),
@@ -118,13 +109,11 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
       r = null;
     }
     if (!r) {
-      // 룸 연결을 닫는다(룸은 1회용이라 릴레이가 폐기한다. 다시 할 때는 PC의 새 QR로 새 룸을 연다).
       link.close();
       return failWith(mp.failure ?? 'handshake');
     }
     r.channel.close();
     if (gone.current) return;
-    // 3단계 24시간 경고는 PAIR_OK의 AIK 서명 목록으로 판단한다. 그 뒤 PC 이름·계정을 확인한다. 둘 다 고르기 전에는 저장하지 않는다.
     pendingRef.current = r;
     setPhase(mp.newDesktopWarning ? 'warn' : 'confirm');
   }
@@ -148,13 +137,10 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
           mbxEpoch: r.mbxEpoch, relayHost: r.relayHost, pairedAt: Date.now(),
         },
         deviceList: r.deviceList,
-        // 다시 연결하면 새 우편함·새 번들이다(seq가 처음부터). 옛 최고값을 두면 새 번들을 거부한다.
         qbundleSeq: 0,
         seenListVersion: Math.max(d.seenListVersion, r.deviceList.listVersion),
       })));
     } catch {
-      // PC는 이미 이 폰을 받았지만 폰은 기록이 없다. 다시 연결하면 PC가 같은 키를 갱신한다(upsertDevice).
-      // 화면 상태에는 남지 않도록 pair를 비워 둔다(저장 실패 뒤 메모리만 연결된 것처럼 보이지 않게).
       await s.update((d) => ({ ...d, pair: null, px: undefined })).catch(() => undefined);
       return failWith('save');
     }
@@ -362,10 +348,6 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
   );
 }
 
-/**
- * 첫 실행 끝 장면: 체크가 그려지듯 커지고 물결이 한 번 퍼진 뒤 글이 떠오른다. [시작하기] → 홈.
- * transform·opacity 네이티브 드라이버, 동작 줄이기면 바로 완성 상태.
- */
 function PairedScene({ onStart, pcName }: { onStart: () => void; pcName: string | null }) {
   const p = usePalette();
   const reduce = useReducedMotion();

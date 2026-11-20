@@ -1,5 +1,3 @@
-// 홈 대화에서 쓰는 폰 대화 훅. PC가 켜져 있든 꺼져 있든 폰 대화는 이 폰이 게이트웨이로 직접 부른다(ADR-047 결정 6: 대화는 기기마다 따로).
-// 대화 줄은 코어 기록(봉인 파일)에서 읽고, 카드·표는 답이 온 턴의 결과로 더한다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatItem } from '../chat';
 import { useSession } from '../session';
@@ -9,27 +7,21 @@ import { offlineChat, setPcOnline } from './device';
 import { chatCopyOf } from '../net/pcCopy';
 
 export interface OfflineChatView {
-  /** 페어링 전이거나 게이트웨이를 정할 수 없으면 거짓 */
   available: boolean;
   items: ChatItem[];
   busy: boolean;
   chips: OfflineReply['chips'];
-  /** 아직 맡기지 않은 카드 id(이 카드에만 [발급 맡기기]가 붙는다). 없으면 모든 카드를 연 것으로 본다(갤러리). */
   openDrafts?: ReadonlySet<string>;
-  /** 방금 답에서 모델이 연 앱 화면(open_screen). 답 아래 단추로 붙고 다음 말을 보내면 사라진다. */
   screens?: PhoneScreen[];
   send(text: string): Promise<void>;
-  /** 못 보낸 말을 다시 보낸다(그 말과 이유 줄은 지우고 새로 보낸다) */
   retry(noteId: string): Promise<void>;
 }
 
-/** 연결이 끊기는 등 코어가 답을 주지 못하고 던졌을 때 보이는 한 줄 */
 const SEND_FAILED_TEXT = '연결이 잠깐 끊겨서 보내지 못했어요. 다시 보내 주세요.';
 
 export function useOfflineChat(): OfflineChatView {
   const s = useSession();
   const pair = s.data.pair;
-  // 폰 사본(거래처·최근 발급): PC가 라이브 세션마다 넘긴 마지막 phone.copy. 대화를 다시 만들지 않고 물을 때마다 최신 값을 읽는다.
   const copyRef = useRef(s.data.pcCopy);
   copyRef.current = s.data.pcCopy;
   const pcRef = useRef(s.pc);
@@ -42,12 +34,9 @@ export function useOfflineChat(): OfflineChatView {
   const [chips, setChips] = useState<OfflineReply['chips']>([]);
   const [screens, setScreens] = useState<PhoneScreen[]>([]);
   const [busy, setBusy] = useState(false);
-  /** 지금 보내는 중인지(화면이 다시 그려지기 전에 두 번 눌려도 한 번만 보낸다) */
   const sending = useRef(false);
-  /** 답을 기다리는 동안 보이는 내 말(턴이 끝나면 코어 기록의 줄로 바뀐다) */
   const [pending, setPending] = useState<ChatItem | null>(null);
 
-  // 판정이 고른 반응은 답보다 먼저 온다: 보내는 중인 내 말에 바로 단다(ADR-057)
   useEffect(() => {
     if (!chat) return;
     chat.reactionSink = (reaction) => setPending((p) => (p && p.kind === 'msg' ? { ...p, reaction } : p));
@@ -77,7 +66,6 @@ export function useOfflineChat(): OfflineChatView {
       setChips([]);
       setScreens([]);
       setPending({ kind: 'msg', id: 'off-pending', from: 'me', at: Date.now(), text, state: 'sending' });
-      // 모델을 부르지 못한 턴은 코어가 기록하지 않는다: 내가 쓴 말은 화면에 남기고 이유 한 줄과 [다시 보내기]를 붙인다
       const fail = (why: string, retry: boolean): ChatItem[] => {
         const at = Date.now();
         return [
@@ -88,7 +76,6 @@ export function useOfflineChat(): OfflineChatView {
       try {
         const r = await chat.send(text);
         const failed = r.unavailable ? fail(r.unavailable.text, r.unavailable.retry) : [];
-        // 못 보낸 말과 이유 줄도 남긴다: 앱을 껐다 켜도 [다시 보내기]가 보이게
         if (failed.length) void chat.keep(failed);
         setExtra((x) => [...x, ...r.items, ...failed]);
         setChips(r.chips);
@@ -109,13 +96,11 @@ export function useOfflineChat(): OfflineChatView {
 
   const retry = useCallback(
     async (noteId: string) => {
-      // 남겨 둔 줄(log)과 이번 실행에서 만든 줄(extra)을 같이 본다
       const all = [...log, ...extra.filter((x) => !log.some((l) => l.id === x.id))];
       const i = all.findIndex((x) => x.id === noteId);
       const n = all[i];
       if (!chat || !n || n.kind !== 'note' || !n.failed?.retry || sending.current) return;
       const text = n.failed.retry;
-      // 이유 줄과 바로 앞의 못 보낸 내 말을 지운다
       const prev = all[i - 1];
       const gone = [noteId, ...(prev && prev.kind === 'msg' && prev.state === 'failed' ? [prev.id] : [])];
       setExtra((x) => x.filter((y) => !gone.includes(y.id)));
@@ -126,7 +111,6 @@ export function useOfflineChat(): OfflineChatView {
     [chat, log, extra, send],
   );
 
-  // 남겨 둔 카드·표(log)와 방금 받은 것(extra)이 같은 줄이면 한 번만 보인다
   const shownIds = new Set(log.map((x) => x.id));
   return { available: !!chat, items: [...log, ...extra.filter((x) => !shownIds.has(x.id)), ...(pending ? [pending] : [])], busy, chips, openDrafts, screens, send, retry };
 }

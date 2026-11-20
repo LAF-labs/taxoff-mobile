@@ -1,11 +1,8 @@
-// 글자가 바뀔 때 공항 출발 안내판처럼 한 글자씩 차르륵 바뀐다: 새 글자는 위에서 내려오고, 옛 글자는 아래로 빠지며 사라진다.
-// 줄 높이 안에서만 움직인다(위아래 줄을 넘지 않게 잘라 낸다). 동작 줄이기 설정이면 바로 바꾼다.
 import { useContext, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { TextSizeContext, textScale, type, useReducedMotion, type Ink, type TypeName } from '../theme';
 import { T } from './kit';
 
-/** 한 글자가 내려오는 시간과 글자 사이 늦춤(ms) */
 const STEP = 240;
 const STAGGER = 34;
 
@@ -28,7 +25,6 @@ export function FlapText({ text, v = 'sub', c = 'ink2', testID }: { text: string
     const anim = Animated.timing(t, { toValue: 1, duration: STEP + STAGGER * (n - 1), easing: Easing.linear, useNativeDriver: true });
     anim.start(({ finished }) => finished && setOld(null));
     return () => anim.stop();
-    // shown은 이 효과 안에서 바꾸므로 text만 본다
   }, [text]);
   const h = type[v].lineHeight * textScale.web;
   const n = Math.max(shown.length, old?.length ?? 0);
@@ -49,7 +45,6 @@ export function FlapText({ text, v = 'sub', c = 'ink2', testID }: { text: string
         </Animated.View>
       );
     });
-  // 자리는 둘 중 긴 글자가 잡고(옛 글자가 옆으로 잘리지 않게), 두 층은 그 위에 겹친다
   const longer = old !== null && old.length > shown.length ? old : shown;
   return (
     <View style={[st.clip, { height: h }]} testID={testID} accessible accessibilityLabel={shown}>

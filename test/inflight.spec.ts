@@ -1,4 +1,3 @@
-// 잠금 때 키 지우기(src/inflight.ts): 진행 중 작업을 기다리고, 지운 키로는 봉인하지 않는다.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { currentEpoch, drained, endEpoch, inflight, liveKey, sameEpoch } from '../src/inflight.ts';

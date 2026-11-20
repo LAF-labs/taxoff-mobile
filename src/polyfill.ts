@@ -1,4 +1,3 @@
-// @sax/remote가 기대하는 웹 표준 전역을 Hermes에 맞춘다. 다른 모듈보다 먼저 import한다(index.ts 첫 줄).
 import { getRandomValues } from 'expo-crypto';
 
 type G = { crypto?: { getRandomValues?: unknown }; TextDecoder?: unknown };
@@ -8,7 +7,6 @@ if (typeof g.crypto?.getRandomValues !== 'function') {
   g.crypto = { ...(g.crypto ?? {}), getRandomValues };
 }
 
-/** fatal 모드만 지원하는 UTF-8 디코더(잘못된 바이트는 던진다). Hermes에 TextDecoder가 없을 때만 쓴다. */
 class StrictUtf8Decoder {
   decode(input?: ArrayBufferView | ArrayBuffer): string {
     if (!input) return '';

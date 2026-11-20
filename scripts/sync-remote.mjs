@@ -1,11 +1,3 @@
-// tex 정본 고정 사본 맞추기. 정본은 LAF-labs/tex이고, 이 레포에서는 고치지 않는다.
-//   vendor/sax-remote     ← poc/packages/remote/src + 봉투 스키마 둘(@sax/remote, D08)
-//   vendor/sax-redaction  ← poc/packages/redaction/src(@sax/redaction, 가림 계층)
-//   vendor/sax-chat-core  ← poc/packages/chat-core/src(@sax/chat-core, PC가 꺼졌을 때 폰 대화, ADR-047)
-// 쓰는 법: node scripts/sync-remote.mjs <tex 체크아웃 경로> [remote|redaction|chat-core ...] [--check]
-//   이름을 주면 그 사본만, 안 주면 셋 다. 사본마다 tex HEAD 커밋을 vendor/<폴더>/VENDORED_FROM에 적고 그대로 복사한다.
-//   사본마다 커밋이 따로 적히므로 하나만 올려도 다른 사본은 그대로다.
-//   --check: 복사하지 않고 사본이 tex 체크아웃과 같은지만 본다(CI가 사본마다 적힌 커밋을 받아 돌린다).
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -59,7 +51,6 @@ for (const key of picked) {
           bad++;
         }
       }
-      // 정본에서 지운 파일이 사본에 남아 있어도 다르다
       const mineDir = path.join(dest, to);
       if (fs.existsSync(mineDir) && fs.statSync(mineDir).isDirectory()) {
         for (const [rel] of files(mineDir)) {
