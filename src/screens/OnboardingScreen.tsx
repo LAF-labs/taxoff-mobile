@@ -406,8 +406,6 @@ function Dots({ x, w, n, page, reduce }: { x: Animated.Value; w: number; n: numb
   );
 }
 
-// ── 움직임 도구 ──
-
 /** 잔잔한 반복(0 ↔ 1, 사인 곡선). 지금 장에서만 돌고 넘기면 멈춘다. 네이티브 드라이버. */
 function useFloat(active: boolean, reduce: boolean, period = 3600, phase = 0): Animated.Value {
   const v = useRef(new Animated.Value(phase)).current;

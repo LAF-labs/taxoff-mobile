@@ -39,8 +39,6 @@ const URGENT_MS = 20_000;
 /** policy.remote.irreversiblePerDay 기본값(정책은 더 엄격하게만 바꾼다) */
 export const DAILY_LIMIT = 5;
 
-// ---- 해시 ----
-
 const sha256hex = (b: Uint8Array) => toHex(sha256Hash(b));
 const hashBytes = (h: string) => {
   if (!/^[0-9a-f]{64}$/.test(h)) throw new Error('bad_hash');
@@ -69,8 +67,6 @@ export function gateMatches(g: Pick<PhoneGate, 'fields' | 'cardHashInputs' | 'ac
     return false;
   }
 }
-
-// ---- 앱 내장 라벨 사전 ----
 
 /** readback 칸(엔진 READBACK_KEYS와 같은 순서). 이 순서가 게이트 fields 앞 13칸이다. */
 export const READBACK_KEYS = [
@@ -162,8 +158,6 @@ export function showValue(key: string, v: string): string {
   return v;
 }
 
-// ---- 시트 상태 ----
-
 /**
  * hw: 하드웨어 키 생성 증명됨(Android StrongBox 등) · ios_se: iPhone Secure Enclave 키를 PC가 받음(증명 없음, ADR-052)
  * ios_app_attest: 앱 무결성만(iPhone) · none: 승인 기기로 못 씀
@@ -227,8 +221,6 @@ export function mmss(ms: number): string {
   const s = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
-
-// ---- 응답 ----
 
 /**
  * gate.response 서명 대상(컨텍스트 제외): CBOR([pairId, reqId, challenge(32B), actionHash(32B), decision]).

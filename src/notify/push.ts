@@ -53,8 +53,6 @@ export async function clearWakeNotifications(): Promise<void> {
   }
 }
 
-// --- 누른 깨우기(잠금 전에 받아 두고 잠금이 풀리면 꺼낸다) ---
-
 let pending: { kind: WakeKind; at: number } | null = null;
 const seen = new Set<string>();
 const listeners = new Set<() => void>();

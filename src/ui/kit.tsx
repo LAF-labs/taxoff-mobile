@@ -26,7 +26,6 @@ export const tap = () => void Haptics.selectionAsync().catch(() => {});
 export const success = () => void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
 export const warn = () => void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
 
-// ── 글자 ──
 export function T({
   children, v = 'body', c = 'ink', style, testID, lines, center, role,
 }: { children: ReactNode; v?: TypeName; c?: Ink; style?: StyleProp<TextStyle>; testID?: string; lines?: number; center?: boolean; role?: AccessibilityRole }) {
@@ -49,7 +48,6 @@ export function T({
   );
 }
 
-// ── 화면 틀 ──
 export function Screen({
   title, onBack, backLabel = '뒤로', right, children, footer, scroll = true, testID, style, tabbed,
 }: {
@@ -108,7 +106,6 @@ export function Check({ color }: { color: string }) {
   return <View style={{ width: 12, height: 7, borderLeftWidth: 2, borderBottomWidth: 2, borderColor: color, transform: [{ rotate: '-45deg' }], marginTop: -3 }} />;
 }
 
-// ── 단추 ──
 /** approve: 파랑 채움. 폰 앱에서 승인 시트의 [승인하고 발급] 하나에만 쓴다(ADR-046 결정 6, docs/design.md). */
 type Kind = 'primary' | 'secondary' | 'quiet' | 'approve';
 export function Button({
@@ -146,7 +143,6 @@ export function Button({
   );
 }
 
-// ── 묶음과 줄 ──
 export function Group({ children, title, note, style, testID }: { children: ReactNode; title?: string; note?: ReactNode; style?: StyleProp<ViewStyle>; testID?: string }) {
   const p = usePalette();
   const items = (Array.isArray(children) ? children : [children]).filter((c) => c !== null && c !== undefined && c !== false);
@@ -198,7 +194,6 @@ export function Row({
   );
 }
 
-// ── 상태 ──
 export type Tone = 'accent' | 'attention' | 'quiet';
 /** 점 + 글자. busy면 점이 숨 쉬듯 흐려졌다 돌아온다(motion-pulse, 동작 줄이기면 멈춤). */
 export function StatusDot({ tone = 'quiet', label, busy, testID, v = 'subStrong' }: { tone?: Tone; label: string; busy?: boolean; testID?: string; v?: TypeName }) {
@@ -248,7 +243,6 @@ export function Notice({ children, tone = 'attention', testID, sub }: { children
   );
 }
 
-// ── 답 후보 ──
 /** 점선 전폭 줄. chosen이 있으면 그 줄은 실선 + 체크, 나머지는 흐려진다. */
 export function Replies<K extends string>({
   options, chosen, onChoose, testID,
@@ -357,7 +351,6 @@ export function Empty({ title, sub, action, testID }: { title: string; sub?: str
   );
 }
 
-// ── 표기 ──
 export function ago(ts: number | null, now = Date.now()): string {
   if (!ts) return '접속 기록 없음';
   const m = Math.floor((now - ts) / 60_000);

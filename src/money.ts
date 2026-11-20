@@ -5,8 +5,6 @@
 // 서버는 이 숫자를 갖지 않는다(09 §13). 폰은 PC가 켜져 있을 때 물어 받고, 꺼져 있으면 마지막으로 받은 요약을 날짜와 함께 보인다.
 // 폰에 보관할 때는 거래처 이름만 남기고 사업자번호·계좌 정보는 지운다(storeable).
 
-// ---- 엔진 모양 ----
-
 export type ReceivableStatus = 'unpaid' | 'unknown' | 'partial' | 'waiting' | 'received' | 'excluded';
 export type AllocMethod = 'account' | 'cash' | 'other_account' | 'offset' | 'other' | 'fee';
 
@@ -116,8 +114,6 @@ export type BankErrorCode = 'already_received' | 'already_undone' | 'cannot_undo
 
 export const METHOD_LABEL: Record<PhoneMarkMethod, string> = { cash: '현금', other_account: '다른 계좌', offset: '상계', other: '기타' };
 
-// ---- 폰에 보관하는 마지막 요약 ----
-
 export interface MoneySnapshot {
   /** PC에서 받은 시각(ms) */
   at: number;
@@ -143,8 +139,6 @@ export function storeable(s: MoneySnapshot): MoneySnapshot {
     },
   };
 }
-
-// ---- 표기 ----
 
 const NB = ' ';
 const comma = (n: number) => Math.trunc(n).toLocaleString('ko-KR');

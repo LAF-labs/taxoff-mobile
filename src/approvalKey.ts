@@ -37,8 +37,6 @@ export function fakeApprovalKey(attestState: AttestState, opts: { cancel?: boole
   };
 }
 
-// ---- 진짜 키 ----
-
 /** 키체인 application tag. 바꾸면 새 키가 만들어지고 PC에 다시 알려진다. */
 export const PX_TAG = 'com.lafco.tex.px.v1';
 /** Touch ID 창에 보이는 한 줄(Face ID는 OS 문구만 보인다) */

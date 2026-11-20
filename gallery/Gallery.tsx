@@ -266,7 +266,6 @@ const sheetCase = (g: PhoneGate, o: { settings?: ApprovalSettings; openedAt?: nu
   node: <QueueScreen onDone={noop} onConnection={noop} onOpen={noop} now={now} />,
 });
 
-// ---- 진행·결과·서류(P-04·P-05) 견본 ----
 const RES: IssueResult = {
   approvalNo: '20261116-41000000-12345678', counterpart: '가나식자재', total: 1_353_000, email: 'tax@gana.example', emailSent: true, issuedAt: now - 60_000,
   doc: { name: '세금계산서_가나식자재_20261116.pdf', issuedOn: iso(today), uri: '' },
@@ -634,7 +633,6 @@ const SCREENS: Record<
       </>
     ),
   }),
-  // ---- 앱 잠금(P-01) ----
   'lock-faceid': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: FACE }} /> }),
   'lock-touchid': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'touchId', enrolled: true } }} /> }),
   'lock-android': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'fingerprint', enrolled: true } }} /> }),
@@ -642,7 +640,6 @@ const SCREENS: Record<
   'lock-passcode-fallback': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: FACE, err: 'cancelled' }} /> }),
   'lock-no-biometric-passcode': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: { kind: 'faceId', enrolled: false } }} /> }),
   'lock-no-passcode': () => ({ session: fake(paired(), 'online'), node: <LockScreen firstRun={false} onUnlocked={noop} onReset={noop} preview={{ bio: FACE, err: 'passcode_required' }} /> }),
-  // ---- 첫 실행 온보딩(스플래시 직후, 열쇠 만들기 앞) ----
   'onboarding-easy': () => ({ session: fake(emptyData(), 'unpaired'), node: <OnboardingScreen onDone={noop} start={0} /> }),
   'onboarding-what': () => ({ session: fake(emptyData(), 'unpaired'), node: <OnboardingScreen onDone={noop} start={1} /> }),
   'onboarding-safe': () => ({ session: fake(emptyData(), 'unpaired'), node: <OnboardingScreen onDone={noop} start={2} /> }),

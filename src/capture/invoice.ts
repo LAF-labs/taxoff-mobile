@@ -71,7 +71,6 @@ interface InvoiceRead {
   electronicCopy: boolean;
 }
 
-// ── 글자 다듬기 ──
 const nfkc = (s: string) => s.normalize('NFKC');
 /** 라벨 비교용: 공백·괄호·가운뎃점을 지운다 */
 const key = (s: string) => nfkc(s).replace(/[\s()（）·.:：]/g, '');
@@ -121,7 +120,6 @@ export function linesToBoxes(lines: string[]): OcrBox[] {
   return lines.map((text, i) => ({ text, x: 0, y: i / n, w: 1, h: 0.8 / n }));
 }
 
-// ── 숫자 ──
 const won = (s: string): number | null => {
   const t = nfkc(s).replace(/[\s원₩\\]/g, '');
   if (!/^-?(\d{1,3}([,.]\d{3})+|\d+)$/.test(t)) return null;
@@ -191,7 +189,6 @@ const tidyName = (s: string): string | null => {
   return t.slice(0, 60);
 };
 
-// ── 칸 읽기 ──
 /** 라벨 상자 오른쪽(같은 줄, 다음 라벨 전까지)의 글자. 라벨과 값이 한 상자면 라벨을 떼고 남은 글자. */
 const LABEL_HEAD = /^(사업자등록번호|등록번호|사업자번호|상호법인명|상호|법인명|성명대표자|대표자성명|성명|대표자|사업장주소|사업장|주소|업태|종목)/;
 const LABEL_HEAD_RAW = /^[\s(]*(사업자\s*등록\s*번호|등\s*록\s*번\s*호|사업자\s*번호|상\s*호\s*\(?\s*법\s*인\s*명\s*\)?|상\s*호|법\s*인\s*명|성\s*명\s*\(?\s*대\s*표\s*자\s*\)?|대\s*표\s*자(\s*성\s*명)?|성\s*명|사\s*업\s*장\s*주\s*소|사\s*업\s*장|주\s*소|업\s*태|종\s*목)[\s):：]*/;
@@ -478,7 +475,6 @@ export function looksLikeInvoice(lines: string[]): InvoiceKind | null {
   return null;
 }
 
-// ── 확인 화면 검산 ──
 type InvoiceIssue =
   | { field: 'total'; code: 'sum_mismatch'; expected: number }
   | { field: 'vatAmount'; code: 'vat_not_10pct' }

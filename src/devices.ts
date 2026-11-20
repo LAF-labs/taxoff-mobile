@@ -136,8 +136,6 @@ export function stopConfirm(row: Pick<DeviceRow, 'label' | 'role'>): { title: st
   };
 }
 
-// ---- 계정 서비스 호출 ----
-
 export class DevicesError extends Error {
   readonly status: number;
   /** 서버 코드(account.last_desktop 등). 서버에 닿지 못했으면 devices.unreachable, 응답 모양이 다르면 devices.bad_response */

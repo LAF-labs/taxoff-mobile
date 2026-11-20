@@ -99,7 +99,6 @@ export function ApprovalSheet({
     }
   };
 
-  // ---- 바닥 동작 ----
   let footer;
   let notice = null;
   if (state.kind === 'inDoubt') {
