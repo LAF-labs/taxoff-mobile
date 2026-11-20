@@ -6,7 +6,7 @@ interface Recv<E> {
 }
 
 /** 발급 명령 처리가 읽는 봉투 */
-export const CMD_TYPES: ReadonlySet<string> = new Set(['cmd.ack', 'run.event', 'gate.request']);
+const CMD_TYPES: ReadonlySet<string> = new Set(['cmd.ack', 'run.event', 'gate.request']);
 
 /** recv로 지나간 봉투 가운데 keep에 드는 것을 held에 모은다(지나가는 것은 그대로 돌려준다) */
 export function tapping<C extends Recv<E>, E extends { type: string }>(ch: C, held: E[], keep: ReadonlySet<string> = CMD_TYPES): C {

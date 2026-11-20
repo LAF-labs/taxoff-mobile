@@ -35,7 +35,7 @@ export const GATE_TTL_MS = 120_000;
 /** 시트가 뜬 뒤 누름을 받지 않는 시간(무장 지연). PC 승인 카드 600ms보다 조금 길게. */
 export const ARM_DELAY_MS = 800;
 /** 남은 시간을 강조하는 구간 */
-export const URGENT_MS = 20_000;
+const URGENT_MS = 20_000;
 /** policy.remote.irreversiblePerDay 기본값(정책은 더 엄격하게만 바꾼다) */
 export const DAILY_LIMIT = 5;
 
@@ -96,7 +96,7 @@ export const FIELD_LABELS: Readonly<Record<string, string>> = {
 };
 
 /** 예약 키(엔진만 만든다). $first.*는 멈춤, $dup.*는 확인해야 하는 경고 한 줄. */
-export const RESERVED_KEYS = ['$first.bizNo', '$first.email', '$dup.businessKey', '$dup.priorNotCommitted', '$dup.otherDevice'] as const;
+const RESERVED_KEYS = ['$first.bizNo', '$first.email', '$dup.businessKey', '$dup.priorNotCommitted', '$dup.otherDevice'] as const;
 const DUP_LINE: Readonly<Record<string, string>> = {
   '$dup.businessKey': '같은 건을 이미 발급했어요',
   '$dup.priorNotCommitted': '같은 건을 전에 시도했는데 발급되지 않았어요',
@@ -132,7 +132,7 @@ export function dupDetail(v: string): string | undefined {
   return parts.length ? parts.join(' · ') : undefined;
 }
 
-export interface GateReading {
+interface GateReading {
   /** 사전에 없는 키 */
   unknown: string[];
   values: Record<string, string>;
@@ -181,7 +181,7 @@ export type SheetStop =
   | 'first'
   | 'limit';
 
-export type SheetState =
+type SheetState =
   | { kind: 'stopped'; stop: SheetStop }
   | { kind: 'expired' }
   /** 승인했지만 결과를 모른다. 어떤 단추도 다시 발급하지 않는다. */

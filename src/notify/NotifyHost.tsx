@@ -17,7 +17,7 @@ import type { Job } from '../queue';
 
 const SHOW_MS = 6000;
 
-export function moneyCounts(d: AppData): MoneyCounts | null {
+function moneyCounts(d: AppData): MoneyCounts | null {
   if (d.money) {
     const s = d.money.summary;
     return { recvOverdue: s.overdueCount, recvSoon: dueSoon(d.money.receivables).count, payOverdue: s.payable.overdueCount, paySoon: s.payable.dueSoonCount };

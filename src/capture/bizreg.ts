@@ -12,7 +12,7 @@ export interface BizRegFields {
 }
 export type BizRegKey = keyof BizRegFields;
 
-export interface BizRegRead {
+interface BizRegRead {
   fields: BizRegFields;
   conf: Record<BizRegKey, number>;
   /** 글자를 거의 못 읽었다(흐리거나 어둡거나 등록증이 아님) */

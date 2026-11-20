@@ -11,7 +11,7 @@ export interface BioInfo {
   enrolled: boolean;
 }
 
-export async function bioInfo(): Promise<BioInfo> {
+async function bioInfo(): Promise<BioInfo> {
   try {
     const t = await LocalAuthentication.supportedAuthenticationTypesAsync();
     const A = LocalAuthentication.AuthenticationType;

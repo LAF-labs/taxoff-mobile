@@ -9,7 +9,7 @@
 //   queue    릴레이 HTTPS 큐(번들 읽기·봉투 올리기)
 //   stale    큐 번들이 없거나 만료(PC가 7일 넘게 꺼져 있었다)
 
-export type PcStage = 'join' | 'peer' | 'session' | 'live' | 'queue' | 'stale';
+type PcStage = 'join' | 'peer' | 'session' | 'live' | 'queue' | 'stale';
 
 export interface PcWhy {
   /** '단계:원인'(예: 'join:auth.device_revoked', 'peer:timeout') */

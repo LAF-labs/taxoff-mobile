@@ -76,7 +76,7 @@ export interface CashFlowMonth {
   unknown: { inTotal: number; outTotal: number; inCount: number; outCount: number; topIds: string[] };
 }
 
-export interface CashFlowSnapshot {
+interface CashFlowSnapshot {
   today: string;
   balance: { total: number | null; partial: boolean; accounts: Array<{ accountId: string; last4: string; bank: string; balance: number | null; day: string | null }> };
   next30: { payOut: number; payOverdue: number; payIn: number; noDuePay: number; noDueRecv: number };
@@ -86,7 +86,7 @@ export interface CashFlowSnapshot {
   concentration: { months: string[]; invoiceCount: number; top1: { key: string; cpName: string | null; share: number } | null; top3Share: number | null };
 }
 
-export type CashFlowAlert =
+type CashFlowAlert =
   | { id: string; kind: 'shortfall'; gap: number }
   | { id: string; kind: 'slowdown'; counterpartyKey: string; cpName: string | null; priorDays: number; recentDays: number }
   | { id: string; kind: 'concentration'; counterpartyKey: string; cpName: string | null; share: number }
@@ -167,7 +167,7 @@ export function dueSoon(list: ReceivableView[]): { count: number; total: number 
   return { count: xs.length, total: xs.reduce((a, v) => a + v.remaining, 0) };
 }
 
-export const isOpen = (v: ReceivableView) => v.status === 'unpaid' || v.status === 'unknown' || v.status === 'partial';
+const isOpen = (v: ReceivableView) => v.status === 'unpaid' || v.status === 'unknown' || v.status === 'partial';
 
 /** 목록 순서: 기한 지남(오래된 순) → 기한 있는 것(가까운 순) → 기한 없음 → 확인 못 함 */
 export function sortOpen(list: ReceivableView[]): ReceivableView[] {

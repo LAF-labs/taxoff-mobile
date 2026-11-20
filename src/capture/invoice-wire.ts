@@ -26,7 +26,7 @@ function wireItems(inv: PaperInvoice): PaperInvoiceItem[] | undefined {
   return items;
 }
 
-export type WireResult = { ok: true; invoice: WireInvoice; droppedItems: boolean } | { ok: false; bad: string[] };
+type WireResult = { ok: true; invoice: WireInvoice; droppedItems: boolean } | { ok: false; bad: string[] };
 
 /**
  * 와이어 모양으로 바꾸고 검사한다. 품목 합이 공급가액과 다르면(품목 줄을 덜 읽었을 때) 품목만 빼고 보낸다 —

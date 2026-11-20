@@ -42,7 +42,7 @@ interface Page {
   Art: (props: ArtProps) => ReactElement;
 }
 
-export const ONBOARDING: Page[] = [
+const ONBOARDING: Page[] = [
   {
     key: 'easy',
     title: '홈택스 일은 PC가, 사장님은 승인만',
@@ -263,7 +263,7 @@ export function OnboardingScreen({ onDone, start = 0, fromSplash = false, reveal
   );
 }
 
-export function BrandMark() {
+function BrandMark() {
   const dark = useColorScheme() === 'dark';
   return (
     <View style={st.brand} accessible accessibilityRole="header" accessibilityLabel={BRAND}>

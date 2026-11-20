@@ -11,7 +11,7 @@ export interface Thumb {
   data: string;
 }
 
-export const THUMB_W = 16;
+const THUMB_W = 16;
 
 export async function makeThumb(uri: string, w: number, h: number): Promise<Thumb | null> {
   if (!(w > 0 && h > 0)) return null;

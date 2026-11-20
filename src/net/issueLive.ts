@@ -8,12 +8,12 @@
 import { CAP, issueCmd, type Channel, type CmdAckBody, type GateRequestBody, type GateResolvedBody, type PhoneCopyBody, type RunEventBody } from '@sax/remote';
 import { applyAck, applyEvent, applyGate, applyHumanRequest, applyResolved, busyWaiting, forRetry, markAnswered, responseDue, retryDue, settled, type PhoneCmd } from '../phoneCmd.ts';
 
-export const WATCH_MS = 10 * 60_000;
+const WATCH_MS = 10 * 60_000;
 const TICK_MS = 2_000;
 /** 승인 요청이 열려 있는 동안: 사장님의 답을 바로 보내려고 더 자주 본다 */
 const GATE_TICK_MS = 300;
 
-export interface CmdIo {
+interface CmdIo {
   cmds: () => PhoneCmd[];
   save: (f: (cs: PhoneCmd[]) => PhoneCmd[]) => Promise<void>;
   /** 세션 중에 다시 온 사본 */

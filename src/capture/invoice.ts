@@ -62,9 +62,9 @@ export interface PaperInvoice {
 }
 
 /** 어느 보관용을 찍었는지(사장님이 받은 쪽이면 매입) */
-export type CopyOf = 'supplier' | 'buyer' | null;
+type CopyOf = 'supplier' | 'buyer' | null;
 
-export interface InvoiceRead {
+interface InvoiceRead {
   invoice: PaperInvoice;
   copyOf: CopyOf;
   /** 홈택스에서 뽑은 전자세금계산서 출력물(승인번호가 있다). PC가 홈택스에서 이미 가져온다 */
@@ -479,7 +479,7 @@ export function looksLikeInvoice(lines: string[]): InvoiceKind | null {
 }
 
 // ── 확인 화면 검산 ──
-export type InvoiceIssue =
+type InvoiceIssue =
   | { field: 'total'; code: 'sum_mismatch'; expected: number }
   | { field: 'vatAmount'; code: 'vat_not_10pct' }
   | { field: 'supplier.bizNo' | 'buyer.bizNo'; code: 'biz_invalid' }

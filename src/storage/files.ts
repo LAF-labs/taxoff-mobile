@@ -13,7 +13,7 @@ export class ProtectionError extends Error {
   }
 }
 
-export interface InstallMarker {
+interface InstallMarker {
   installedAt: number;
   deviceId?: string;
   /** 첫 실행 온보딩을 넘긴 시각(건너뛰기·시작하기). 있으면 다시 보이지 않는다. */
@@ -40,7 +40,7 @@ export function wipeAppData(): void {
 }
 
 /** 보호 지정. iOS는 파일 보호 Complete + 백업 제외, Android는 앱 전용 폴더(백업 규칙으로 제외). */
-export async function protect(uri: string): Promise<PathProtection> {
+async function protect(uri: string): Promise<PathProtection> {
   if (!SaxNative) throw new ProtectionError();
   const p = await SaxNative.protectPath(uri);
   if (!p.excludedFromBackup) throw new ProtectionError();
@@ -51,7 +51,7 @@ export async function inspect(uri: string): Promise<PathProtection | null> {
   return SaxNative ? SaxNative.inspectPath(uri) : null;
 }
 
-export async function ensureDir(d: Directory): Promise<Directory> {
+async function ensureDir(d: Directory): Promise<Directory> {
   if (!d.exists) d.create({ intermediates: true, idempotent: true });
   await protect(d.uri);
   return d;
@@ -83,7 +83,7 @@ export function deleteQuietly(uri: string | null | undefined): void {
  * 촬영 임시 파일(카메라·자르기 결과, 봉인 전 평문 JPEG)이 남는 캐시 폴더를 비운다. 앱 시작 때와 촬영 화면을 떠날 때 부른다.
  * 정상 흐름은 촬영 화면이 파일마다 지우고, 이것은 앱이 백그라운드에서 종료되는 등 그 자리를 건너뛴 경우를 덮는다.
  */
-export const CAPTURE_CACHE_DIRS = ['Camera', 'ImageManipulator'] as const;
+const CAPTURE_CACHE_DIRS = ['Camera', 'ImageManipulator'] as const;
 export function sweepCaptureTemps(): void {
   for (const name of CAPTURE_CACHE_DIRS) {
     try {

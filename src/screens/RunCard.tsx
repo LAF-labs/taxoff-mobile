@@ -255,7 +255,7 @@ function StateLines({ r }: { r: RunView }) {
 }
 
 /** 결과 줄. 승인번호는 4자리씩 띄워 보이고, 길게 누르면 원문을 복사한다. */
-export function ResultRows({ result }: { result: IssueResult }) {
+function ResultRows({ result }: { result: IssueResult }) {
   const p = usePalette();
   const [copied, setCopied] = useState(false);
   const copy = async () => {
@@ -310,7 +310,7 @@ export function ResultRows({ result }: { result: IssueResult }) {
 }
 
 /** 이메일: 넘칠 때 @ 앞에서만, 그래도 넘치면 점 뒤에서만 줄을 바꾼다(승인 시트와 같은 규칙). */
-export function EmailText({ value }: { value: string }) {
+function EmailText({ value }: { value: string }) {
   const at = value.lastIndexOf('@');
   const parts = at > 0 ? [value.slice(0, at), value.slice(at)] : [value];
   return (

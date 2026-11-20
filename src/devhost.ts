@@ -17,7 +17,7 @@ export const RELEASE_ACCOUNT_KEYS: readonly string[] = ['m505XiZjib3UhZGHVJKoS7F
 /** 개발 스택 시험 키(dev/test-account-key.ts). 릴리스 빌드에서는 쓰지 않는다. */
 export const DEV_ACCOUNT_KEY = '3uABVr6gwZIYy5ir9UMb2ohr2fxONenkzT9XtRRIBCY=';
 
-export interface DevConfig {
+interface DevConfig {
   /** 시뮬레이터 개발 빌드: 시뮬레이터 전용 완화(생체 없는 키·견본 카메라). */
   devLocal: boolean;
   /** 개발 스택(계정·릴레이·더미 PC)에 붙는다: 시뮬레이터, 또는 EXPO_PUBLIC_TEX_DEV_HOST를 넣은 실기기 개발 빌드. */

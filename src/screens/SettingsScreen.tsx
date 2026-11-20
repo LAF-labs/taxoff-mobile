@@ -13,7 +13,7 @@ import { Group, Row, Screen, Seg, T } from '../ui/kit';
 import { pcLine } from './HomeScreen';
 import { NotifyScreen } from './NotifyScreen';
 
-export const HELP = {
+const HELP = {
   guide: `${PUBLIC_ORIGIN}/guide/`,
   privacy: `${PUBLIC_ORIGIN}/privacy/`,
   terms: `${PUBLIC_ORIGIN}/terms/`,

@@ -9,7 +9,7 @@ export type WakeKind = 'approve' | 'update';
 export type PushPlatform = 'apns' | 'apns_dev';
 
 /** 앱 번들 Localizable.strings 키(plugins/with-wake-strings.cjs와 같아야 한다) */
-export const WAKE_KEYS: Record<WakeKind, string> = { approve: 'SAX_WAKE_APPROVE', update: 'SAX_WAKE_UPDATE' };
+const WAKE_KEYS: Record<WakeKind, string> = { approve: 'SAX_WAKE_APPROVE', update: 'SAX_WAKE_UPDATE' };
 
 /** 개발 빌드는 Apple 샌드박스(apns_dev), TestFlight·스토어 빌드는 운영(apns). 토큰만 봐서는 구분이 안 돼 폰이 알린다. */
 export function pushPlatform(isDev: boolean, override?: string): PushPlatform {
@@ -30,7 +30,7 @@ export function apnsToken(raw: unknown): string | null {
   return /^[0-9a-f]{64,200}$/.test(t) ? t : null;
 }
 
-export type PushPlan = 'put' | 'delete' | 'none';
+type PushPlan = 'put' | 'delete' | 'none';
 
 /**
  * 지금 서버에 무엇을 할지. 올리는 때: PC와 연결돼 있고, OS 허용을 받았고, 설정 스위치가 켜져 있고, 토큰이 바뀌었을 때.

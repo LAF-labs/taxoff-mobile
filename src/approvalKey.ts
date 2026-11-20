@@ -42,7 +42,7 @@ export function fakeApprovalKey(attestState: AttestState, opts: { cancel?: boole
 /** 키체인 application tag. 바꾸면 새 키가 만들어지고 PC에 다시 알려진다. */
 export const PX_TAG = 'com.lafco.tex.px.v1';
 /** Touch ID 창에 보이는 한 줄(Face ID는 OS 문구만 보인다) */
-export const PX_PROMPT = '세금계산서 발급 승인';
+const PX_PROMPT = '세금계산서 발급 승인';
 
 /** 네이티브 모듈 중 승인 키가 쓰는 부분(modules/sax-native). 시험은 가짜를 넣는다. */
 export interface PxNative {

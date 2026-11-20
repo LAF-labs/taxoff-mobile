@@ -62,7 +62,7 @@ export interface Todo {
  * 새 말이 오면 iOS·Android 기본 maintainVisibleContentPosition이 읽던 자리를 지키고, 끝에서 FOLLOW_PX 안일 때만 따라 내린다.
  * FOLLOW_PX는 PC와 같은 80(Mattermost 60, Happy 200 사이. 대표 지시 값).
  */
-export const FOLLOW_PX = 80;
+const FOLLOW_PX = 80;
 const KEEP_POSITION = { minIndexForVisible: 0, autoscrollToTopThreshold: FOLLOW_PX } as const;
 /** 끝에서 이만큼 올라가 있으면 맨 아래로 단추(화살표)를 띄운다(Mattermost CONTENT_OFFSET_THRESHOLD 160). 새 말이 왔으면 글자 [새 답]. */
 const SHOW_END_PX = 160;
@@ -447,10 +447,10 @@ function NewReply({ fresh, onPress }: { fresh: boolean; onPress: () => void }) {
 const SCREEN_LABEL: Record<PhoneScreen, string> = { capture: '증빙 찍기', cash: '현금 매출 적기', bizreg: '사업자등록증 찍기', issue: '세금계산서 발급' };
 
 /** 이 폰이 대화를 부를 수 없을 때 한 줄 */
-export const CANT_SEND_TEXT = '이 폰에서는 아직 대화를 보낼 수 없어요. 앱을 다시 열거나 설정에서 PC 연결을 확인해 주세요.';
+const CANT_SEND_TEXT = '이 폰에서는 아직 대화를 보낼 수 없어요. 앱을 다시 열거나 설정에서 PC 연결을 확인해 주세요.';
 
 /** 머리 바 아래 회색 한 줄(PC가 켜져 있지 않을 때만) */
-export function pcHint(pc: PcStatus): string {
+function pcHint(pc: PcStatus): string {
   switch (pc) {
     case 'connecting':
       return 'PC를 찾고 있어요';

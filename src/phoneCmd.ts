@@ -114,7 +114,7 @@ export function issueRequest(p: { ref: string; supply: number; item: string; now
 }
 
 /** 같은 runId로 다시 붙은 duplicate는 거절이 아니다(앞서 보낸 명령이 이미 돌고 있다). */
-export const isReattach = (a: CmdAckBody): boolean => a.state === 'rejected' && a.reason === 'duplicate' && !!a.runId;
+const isReattach = (a: CmdAckBody): boolean => a.state === 'rejected' && a.reason === 'duplicate' && !!a.runId;
 
 export function applyAck(c: PhoneCmd, a: CmdAckBody, now = Date.now()): PhoneCmd {
   if (a.cmdId !== c.cmdId) return c;
@@ -171,7 +171,7 @@ export function applyEvent(c: PhoneCmd, e: RunEventBody): PhoneCmd {
 // ---- 폰 승인(gate.request → gate.response) ----
 
 /** PC가 폰으로 보내지 않는 이유(run.event.code) → 밀린 일 이유 */
-export const PC_CODE_REASON: Readonly<Record<string, NeedPcReason>> = { pc_first: 'firstCounterparty', pc_limit: 'dailyLimit', pc_key: 'notApprover', pc_only: 'notApprover' };
+const PC_CODE_REASON: Readonly<Record<string, NeedPcReason>> = { pc_first: 'firstCounterparty', pc_limit: 'dailyLimit', pc_key: 'notApprover', pc_only: 'notApprover' };
 
 /** gate.request를 그 실행의 명령에 붙인다. 발급 확정(commit)·P-256 요청만 받는다. 새 요청이 오면 앞 요청과 답을 버린다. */
 export function applyGate(c: PhoneCmd, g: GateRequestBody): PhoneCmd {

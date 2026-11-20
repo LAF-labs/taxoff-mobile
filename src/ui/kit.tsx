@@ -18,7 +18,7 @@ import { MAX_FONT_SCALE, TextSizeContext, motion, radius, size, space, textScale
 const keepAll = { wordBreak: 'keep-all', overflowWrap: 'anywhere' } as unknown as TextStyle;
 
 /** 가운뎃점(·)이 줄 끝에 홀로 남지 않게: 점 뒤 칸을 붙은 칸으로 바꿔 점이 다음 낱말과 함께 넘어가게 한다. */
-export const glueDots = (t: string) => t.replace(/ · /g, ' ·\u00A0');
+const glueDots = (t: string) => t.replace(/ · /g, ' ·\u00A0');
 const glue = (c: ReactNode): ReactNode => (typeof c === 'string' ? glueDots(c) : Array.isArray(c) ? c.map(glue) : c);
 
 /** 누를 때 가벼운 진동. 실패해도 조용히 넘긴다(진동이 없는 기기·설정). */

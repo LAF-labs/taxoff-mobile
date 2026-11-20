@@ -3,7 +3,7 @@
 // 폰이 계정 서비스에 직접 부르는 것은 기기 토큰(POST /v1/device-tokens)뿐이다.
 import { DEV_LOCAL, DEV_RELAY_HOST, DEV_STACK, PUBLIC_ORIGIN } from '../config';
 
-export class AccountUnavailable extends Error {
+class AccountUnavailable extends Error {
   constructor() {
     super('account: unavailable');
   }

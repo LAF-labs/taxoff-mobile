@@ -30,7 +30,7 @@ const MESSAGES: Record<KeyringErrorCode, { line: string; sub?: string }> = {
   unavailable: { line: '열쇠 저장소를 열 수 없어요', sub: '잠시 뒤 다시 시도해 주세요.' },
 };
 
-export interface LockPreview {
+interface LockPreview {
   bio: BioInfo;
   err?: KeyringErrorCode | null;
 }

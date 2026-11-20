@@ -53,41 +53,11 @@ export interface DoneJob {
 }
 
 /** 화면에 보이는 순서: 사장님이 할 일 → PC가 하는 일 → 기다리는 일 → 끝난 일. */
-export const ORDER: JobState[] = ['confirmStart', 'approval', 'needPc', 'verify', 'running', 'entrusted', 'phoneWaiting', 'expired', 'done'];
-
-export const STATE_NAME: Record<JobState, string> = {
-  entrusted: '맡김',
-  phoneWaiting: '폰에 대기',
-  confirmStart: '시작 확인',
-  running: '진행 중',
-  approval: '승인 대기',
-  needPc: 'PC가 맡음',
-  verify: '확인 필요',
-  expired: '만료',
-  done: '끝남',
-};
-
-export const STATE_LINE: Record<JobState, string> = {
-  entrusted: 'PC 켜지면 시작해요',
-  phoneWaiting: '앞의 일이 시작되면 이어서 맡겨요',
-  confirmStart: 'PC가 켜졌어요. 시작할까요?',
-  running: 'PC가 홈택스에서 하고 있어요',
-  approval: '승인하면 발급해요',
-  needPc: 'PC가 맡는 일이에요',
-  verify: '발급됐는지 확인이 필요해요',
-  expired: '3일이 지나 취소됐어요',
-  done: '발급했어요',
-};
-
-export const REASON_LINE: Record<NeedPcReason, string> = {
-  firstCounterparty: '처음 거래하는 곳',
-  dailyLimit: '오늘 폰 승인 한도',
-  notApprover: '이 폰은 승인 기기가 아님',
-};
+const ORDER: JobState[] = ['confirmStart', 'approval', 'needPc', 'verify', 'running', 'entrusted', 'phoneWaiting', 'expired', 'done'];
 
 /** 줄마다 하나뿐인 동작. 시작 확인은 바닥 [모두 시작]이 주요 동작이고, 줄에는 건별 [빼기](글자만)만 있다. */
 export type JobAction = 'cancel' | 'progress' | 'approve' | 'retry' | 'result' | 'dismiss' | 'redate';
-export const STATE_ACTION: Record<JobState, { key: JobAction; label: string } | null> = {
+const STATE_ACTION: Record<JobState, { key: JobAction; label: string } | null> = {
   entrusted: { key: 'cancel', label: '취소' },
   phoneWaiting: { key: 'cancel', label: '취소' },
   confirmStart: { key: 'cancel', label: '빼기' },

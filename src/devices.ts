@@ -65,7 +65,7 @@ export interface DeviceRow {
   stopBlocked: 'last_pc' | 'already' | null;
 }
 
-export interface DevicesView {
+interface DevicesView {
   pcs: DeviceRow[];
   phones: DeviceRow[];
   /** "PC 2대 · 3대까지" 같은 묶음 제목 옆 글 */
@@ -149,7 +149,7 @@ export class DevicesError extends Error {
   }
 }
 
-export type DevicesAuth = (htm: 'GET' | 'POST', htu: string) => Promise<Record<string, string>>;
+type DevicesAuth = (htm: 'GET' | 'POST', htu: string) => Promise<Record<string, string>>;
 
 const errCode = (b: unknown): string => {
   const e = (b as { error?: unknown } | null)?.error;

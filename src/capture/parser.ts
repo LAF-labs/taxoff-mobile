@@ -2,7 +2,7 @@
 // 결과는 입력 보조 후보일 뿐이고, 사장님이 확인·수정한다. PC docparse 샌드박스 OCR이 정본이다.
 // 순수 함수(React Native·Expo 의존 없음) — node --test로 시험한다.
 
-export interface Candidates {
+interface Candidates {
   amount?: number;
   issuedOn?: string;
   merchant?: string;
