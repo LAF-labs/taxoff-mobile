@@ -10,9 +10,9 @@ import { clearDeviceToken, deviceAuthFor, fetchJson } from '../net/devauth';
 import { forgetPushToken, pushClient } from '../notify/pushApi';
 import type { AppData } from '../storage/state';
 
-export const LEAVE_TITLE = '이 폰 연결 해제';
-export const LEAVE_BODY = '이 폰의 열쇠와 아직 보내지 않은 사진·현금 매출을 지우고, 계정의 기기 목록에서 이 폰을 빼요.';
-export const LEAVE_NOT_TOLD = '연결 끊기를 다 마치지 못했어요. PC에는 이 폰이 잠시 남아 있을 수 있어요.';
+const LEAVE_TITLE = '이 폰 연결 해제';
+const LEAVE_BODY = '이 폰의 열쇠와 아직 보내지 않은 사진·현금 매출을 지우고, 계정의 기기 목록에서 이 폰을 빼요.';
+const LEAVE_NOT_TOLD = '연결 끊기를 다 마치지 못했어요. PC에는 이 폰이 잠시 남아 있을 수 있어요.';
 
 /** 확인 창을 띄우고, 확인하면 나간다. 끝나면 onReset(앱을 처음 상태로). */
 export function confirmLeaveThisPhone(o: { pair: NonNullable<AppData['pair']>; keys: DeviceKeys; onReset: () => void }): void {

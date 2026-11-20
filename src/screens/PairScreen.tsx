@@ -35,7 +35,7 @@ const FAIL: Record<MobilePairFailure | 'relay' | 'save', string> = {
   save: '연결 정보를 이 폰에 저장하지 못했어요. PC에서 [새 QR]을 눌러 다시 연결해 주세요.',
 };
 
-export interface PairOnboarding {
+interface PairOnboarding {
   /** 뒤로(‹·왼쪽 가장자리 쓸기): 온보딩 마지막 장으로. 열쇠는 이미 있으니 [다음]은 다시 이 화면으로 온다 */
   onBack: () => void;
 }

@@ -310,7 +310,7 @@ function when(ts: number): string {
   return `${d.getMonth() + 1}월 ${d.getDate()}일 ${clock(ts)}`;
 }
 /** "오늘 오전 9:10" · "어제 오후 6:20" · "11월 15일 오후 6:20" */
-export function relWhen(ts: number, now = Date.now()): string {
+function relWhen(ts: number, now = Date.now()): string {
   const d = new Date(ts);
   const t = new Date(now);
   if (d.toDateString() === t.toDateString()) return `오늘 ${clock(ts)}`;

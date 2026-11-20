@@ -24,7 +24,7 @@ export interface OfflineChatView {
 }
 
 /** 연결이 끊기는 등 코어가 답을 주지 못하고 던졌을 때 보이는 한 줄 */
-export const SEND_FAILED_TEXT = '연결이 잠깐 끊겨서 보내지 못했어요. 다시 보내 주세요.';
+const SEND_FAILED_TEXT = '연결이 잠깐 끊겨서 보내지 못했어요. 다시 보내 주세요.';
 
 export function useOfflineChat(): OfflineChatView {
   const s = useSession();

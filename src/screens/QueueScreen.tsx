@@ -68,7 +68,7 @@ const PLAIN: Record<JobState, string> = {
 };
 
 /** 카드 둘째 줄: 지금 상태 한 문장 */
-export function statusLine(job: Job, state: JobState): string {
+function statusLine(job: Job, state: JobState): string {
   const r: RunView | undefined = job.run;
   if (job.wait === 'pcBusy') return '다른 일이 끝나면 할게요';
   if (job.wait === 'newDay' && job.waitDay) return `${Number(job.waitDay.slice(5, 7))}월 ${Number(job.waitDay.slice(8, 10))}일로 맡긴 일이에요. 오늘 날짜로 바꿔야 발급할 수 있어요`;

@@ -36,7 +36,7 @@ interface Shot {
 }
 
 type Phase = 'camera' | 'reading' | 'confirm' | 'saving' | 'saved';
-export type Mode = 'receipt' | 'invoice';
+type Mode = 'receipt' | 'invoice';
 
 /** 화면 갤러리(gallery/)에서 확인 화면을 바로 그릴 때만 쓴다. 앱은 넘기지 않는다. */
 export interface CapturePreview {

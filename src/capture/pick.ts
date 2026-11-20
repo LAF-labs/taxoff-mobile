@@ -3,7 +3,7 @@
 // 돌아온 파일은 고르기가 앱 캐시에 만든 사본이다: 앱은 그 사본만 지우고, 사용자 앨범의 원본은 건드리지 않는다.
 import * as ImagePicker from 'expo-image-picker';
 
-export type Picked = { kind: 'image'; uri: string; width: number; height: number } | { kind: 'pdf' } | null;
+type Picked = { kind: 'image'; uri: string; width: number; height: number } | { kind: 'pdf' } | null;
 
 export async function pickPhoto(): Promise<Picked> {
   const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: false, allowsMultipleSelection: false, quality: 1, exif: false });

@@ -22,7 +22,7 @@ import { causeOf, pushWhy, whyCode } from './pcWhy';
 /** queued: PC는 꺼져 있고 릴레이 큐에 맡겼다. stale: PC가 오래 꺼져 있어 유효한 번들이 없다(맡길 수 없다). */
 export type PcStatus = 'unpaired' | 'connecting' | 'online' | 'queued' | 'stale' | 'offline';
 
-export interface SyncDeps {
+interface SyncDeps {
   keys: DeviceKeys;
   data: () => AppData;
   update: (f: (d: AppData) => AppData) => Promise<void>;
@@ -35,7 +35,7 @@ export interface SyncDeps {
   px?: PxDevice | null;
 }
 
-export interface SyncResult {
+interface SyncResult {
   status: PcStatus;
   /** 라이브가 안 된 이유('단계:원인', net/pcWhy.ts). 라이브로 붙었으면 없다 */
   why?: string;

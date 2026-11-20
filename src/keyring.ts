@@ -96,7 +96,7 @@ async function deleteAll(): Promise<void> {
   await SaxNative?.vaultDelete?.(SERVICE, ITEM).catch(() => {});
 }
 
-export function classify(e: unknown): KeyringError {
+function classify(e: unknown): KeyringError {
   if (e instanceof KeyringError) return e;
   const raw = String((e as { message?: string })?.message ?? e);
   const msg = raw.toLowerCase();

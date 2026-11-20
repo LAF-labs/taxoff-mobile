@@ -16,7 +16,7 @@ import type { Counterparty } from './issue';
 import sampleDoc from '../assets/sample/tax-invoice.pdf';
 import { b64, randomBytes } from '../vendor/sax-remote/src/index.ts';
 
-export type Readback = Record<(typeof READBACK_KEYS)[number], string>;
+type Readback = Record<(typeof READBACK_KEYS)[number], string>;
 
 export interface ApprovalSettings {
   attest: AttestState;
@@ -25,7 +25,7 @@ export interface ApprovalSettings {
   usedToday: number;
 }
 
-export interface QueueStore {
+interface QueueStore {
   jobs: Job[];
   /** 마지막으로 끝난 일(빈 화면 한 줄) */
   last: DoneJob | null;

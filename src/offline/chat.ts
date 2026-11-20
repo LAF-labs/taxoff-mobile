@@ -7,7 +7,7 @@ import { PhoneChat, PhoneGateway, type ChatMessage, type ReactionId, type PhoneC
 import type { ChatCard, ChatItem } from '../chat.ts';
 import { maskingSelfCheck, type SelfCheck } from './selfcheck.ts';
 
-export interface OfflinePorts {
+interface OfflinePorts {
   /** 게이트웨이 origin(운영 https://tax.laf-co.com, 계정 서비스와 같다) */
   origin: string;
   fetch: PhoneGatewayOptions['fetch'];

@@ -4,9 +4,9 @@ import { Platform } from 'react-native';
 import SaxNative from '../../modules/sax-native/src/SaxNativeModule';
 import { linesToBoxes, type OcrBox } from './invoice.ts';
 
-export type OcrEngineId = 'ios_vision' | 'none';
+type OcrEngineId = 'ios_vision' | 'none';
 
-export interface OcrEngine {
+interface OcrEngine {
   id: OcrEngineId;
   /** 파일 URI의 글자를 위에서 아래 줄 순서로. 실패하면 빈 배열(사진은 그대로 보낸다). */
   read(uri: string): Promise<string[]>;

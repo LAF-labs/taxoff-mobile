@@ -60,9 +60,9 @@ export function stateOf(it: Extract<ChatItem, { kind: 'msg' }>): string {
 const atOf = (it: ChatItem) => (it.kind === 'merged' ? it.from : it.at);
 const dayKey = (ts: number) => new Date(ts).toDateString();
 /** 시각 줄을 새로 넣는 간격(Muse와 같다) */
-export const STAMP_GAP_MS = 30 * 60_000;
+const STAMP_GAP_MS = 30 * 60_000;
 /** 같은 쪽 말을 한 묶음으로 붙이는 간격(Muse와 같다) */
-export const GROUP_GAP_MS = 2 * 60_000;
+const GROUP_GAP_MS = 2 * 60_000;
 
 /**
  * 시각 줄(Muse 방식): 말풍선마다 쓰지 않고 가운데 한 줄로 쓴다.

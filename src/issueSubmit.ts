@@ -10,7 +10,7 @@ import { useSession } from './session';
 
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
 
-export interface IssueInput {
+interface IssueInput {
   /** 고른 거래처. 직접 입력이면 null */
   cp: Counterparty | null;
   /** 직접 입력한 상호·등록번호 */

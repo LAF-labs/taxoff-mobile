@@ -16,7 +16,7 @@ export type MarkState =
   | { kind: 'already' }
   | { kind: 'undone' };
 
-export interface MoneyStore {
+interface MoneyStore {
   status: MoneyStatus;
   snap: MoneySnapshot | null;
   /** 지금 PC에서 받은 값인지(아니면 마지막으로 받은 값) */

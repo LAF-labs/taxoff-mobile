@@ -34,7 +34,7 @@ export const num = (s: string): number | null => {
   const d = s.replace(/\D/g, '');
   return d ? Number(d) : null;
 };
-export const fmt = (n: number | null) => (n === null ? '' : masked('won', String(n)));
+const fmt = (n: number | null) => (n === null ? '' : masked('won', String(n)));
 
 export function emptyInvoiceForm(kind: InvoiceKind = 'tax_invoice'): InvoiceForm {
   return {

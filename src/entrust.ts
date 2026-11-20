@@ -10,7 +10,7 @@ import { useSession } from './session';
 
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
 
-export interface EntrustInput {
+interface EntrustInput {
   cp: { id: string; name: string };
   supply: number;
   total: number;

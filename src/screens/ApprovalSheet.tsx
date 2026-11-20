@@ -37,7 +37,7 @@ const STOP_SUB: Record<SheetStop, string> = {
 /** 멈춤 → 밀린 일의 "PC 앞 필요" 이유 */
 const STOP_REASON: Partial<Record<SheetStop, NeedPcReason>> = { first: 'firstCounterparty', limit: 'dailyLimit', noKey: 'notApprover', iosDenied: 'notApprover', unknown: 'notApprover' };
 
-export interface ApprovalAnswer {
+interface ApprovalAnswer {
   reqId: string;
   decision: 'approve' | 'deny';
   actionHash: string;

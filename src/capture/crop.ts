@@ -1,6 +1,6 @@
 // 촬영 안내 틀 → 사진 좌표 자르기 사각형. 미리보기는 사진을 cover로 채운다(가운데 맞춤). 순수 함수.
 
-export interface Rect {
+interface Rect {
   x: number;
   y: number;
   w: number;

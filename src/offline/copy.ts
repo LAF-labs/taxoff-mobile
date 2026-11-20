@@ -6,7 +6,7 @@ import { taxOf, type Counterparty } from '../issue.ts';
 /** KST 날짜(YYYY-MM-DD). 한국은 서머타임이 없다. */
 const kst = (ms: number) => new Date(ms + 9 * 3_600_000).toISOString().slice(0, 10);
 
-export interface CopySource {
+interface CopySource {
   /** PC가 이 목록을 만든 시각(ms) */
   asOf: number;
   profile: PhoneCopy['profile'];
