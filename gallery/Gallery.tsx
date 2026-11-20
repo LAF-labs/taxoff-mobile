@@ -522,6 +522,7 @@ const SCREENS: Record<
   'home-unpaired': () => ({ session: fake(emptyData(), 'unpaired'), node: <Main /> }),
   'home-chat-empty': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} /> }),
   'home-phone-empty': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('empty')} /> }),
+  'home-phone-sales': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('sales')} /> }),
   'home-phone-typing': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('typing')} /> }),
   'home-phone-reply': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('reply')} /> }),
   'home-phone-failed': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('failed')} /> }),

@@ -25,7 +25,7 @@ export const DEVICES_SUSPENDED = (): AccountDevice[] => [
 ];
 
 const MIN = 60_000;
-export function phoneChat(state: 'empty' | 'typing' | 'reply' | 'failed' | 'limit' | 'card' | 'ask' | 'screen' | 'lunch' | 'react-working' | 'react-result' | 'react-only', base = Date.now()): OfflineChatView {
+export function phoneChat(state: 'empty' | 'typing' | 'reply' | 'failed' | 'limit' | 'card' | 'ask' | 'screen' | 'lunch' | 'react-working' | 'react-result' | 'react-only' | 'sales', base = Date.now()): OfflineChatView {
   const t = (m: number) => base - m * MIN;
   const ask: ChatItem = { kind: 'msg', id: 'p1', from: 'me', at: t(6), text: '동네마트에 세금계산서 발급해 줘' };
   const reply: ChatItem[] = [
@@ -34,10 +34,23 @@ export function phoneChat(state: 'empty' | 'typing' | 'reply' | 'failed' | 'limi
     { kind: 'msg', id: 'p3', from: 'me', at: t(5), text: '32만원' },
     { kind: 'msg', id: 'p4', from: 'pc', via: 'phone', at: t(5), text: '부가세는 별도인가요, 포함인가요?' },
   ];
-  const base0 = { available: true, busy: false, chips: [] as OfflineChatView['chips'], send: async () => {}, retry: async () => {} };
+  const base0 = { available: true, busy: false, chips: [] as OfflineChatView['chips'], send: async () => {}, retry: async () => {}, react: async () => {} };
   switch (state) {
     case 'empty':
       return { ...base0, items: [] };
+    case 'sales':
+      return {
+        ...base0,
+        items: [
+          { kind: 'msg', id: 's1', from: 'me', at: t(4), text: '이번 달 매출 알려줘' },
+          { kind: 'msg', id: 's2', from: 'pc', via: 'phone', at: t(4), text: '이번 달은 세금계산서 14건, 합계 9,262,000원이에요.' },
+          {
+            kind: 'msg', id: 's3', from: 'pc', via: 'phone', at: t(4),
+            card: { title: '11월 발급 14건 · 공급가 8,420,000원 · 합계 9,262,000원', rows: [{ label: '11/19 동네마트 성수점', value: '352,000원' }, { label: '11/17 한빛전자', value: '1,100,000원' }, { label: '11/12 서울상사', value: '330,000원' }] },
+          },
+          { kind: 'msg', id: 's4', from: 'me', at: t(1), text: '지난달이랑 비교하면?', replyTo: { text: '이번 달은 세금계산서 14건, 합계 9,262,000원이에요.', mine: false } },
+        ],
+      };
     case 'typing':
       return { ...base0, busy: true, items: [{ ...ask, id: 'pp', state: 'sending' }] };
     case 'reply':

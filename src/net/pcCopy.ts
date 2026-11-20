@@ -3,7 +3,7 @@ import type { PhoneCopy } from '@sax/chat-core';
 import type { Counterparty } from '../issue.ts';
 import { phoneCopyFrom } from '../offline/copy.ts';
 
-export const PHONE_CAPS: readonly string[] = [CAP.copy, CAP.issue, CAP.sync];
+export const PHONE_CAPS: readonly string[] = [CAP.copy, CAP.issue, CAP.sync, CAP.issued];
 
 const COPY_WAIT_MS = 2000;
 const DAY = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
@@ -41,5 +41,6 @@ export function counterpartiesOf(body: PhoneCopyBody): Counterparty[] {
 export function chatCopyOf(body: PhoneCopyBody | null | undefined): PhoneCopy | null {
   if (!body) return null;
   const copy = phoneCopyFrom({ asOf: body.asOf, profile: null, counterparties: counterpartiesOf(body), receivables: null });
-  return { ...copy, counterparties: copy.counterparties.map((c) => ({ ...c, bizNo: c.bizNo || null })) };
+  const issued = body.issued?.map((r) => ({ counterpartyId: r.ref ?? null, counterparty: r.name, date: r.day, total: r.total, approvalNo: null }));
+  return { ...copy, counterparties: copy.counterparties.map((c) => ({ ...c, bizNo: c.bizNo || null })), ...(issued ? { issued, sales: issued } : {}) };
 }
