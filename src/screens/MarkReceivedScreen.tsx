@@ -1,5 +1,3 @@
-// 받음 표시(bank.markReceived): 받은 방법(현금·다른 계좌·상계·기타)과 금액(기본은 남은 돈 전부)·날짜.
-// PC가 켜져 있으면 바로 보내고, 꺼져 있으면 밀린 일로 맡긴다. 계좌로 들어온 돈은 PC가 거래내역으로 맞추니 여기 없다.
 import { useState } from 'react';
 import { View } from 'react-native';
 import { METHOD_LABEL, exactWon, md, type PhoneMarkMethod } from '../money';

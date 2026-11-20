@@ -1,5 +1,3 @@
-// 개발용 계정 서비스 대역: POST /v1/device-tokens(AIK 인증서 + DPoP → 15분 토큰)와, 릴레이가 쓰는 토큰·DPoP 검사.
-// 형식은 services/shared/CONTRACT.md §2·§3, services/account/API.md와 같다(서버 구현 대신 쓰는 시험 대역이다).
 import {
   CTX, athOf, b64url, ed25519Verify, jcs, parseJcs, randomBytes, verifyCert, type SignedCert,
 } from '../vendor/sax-remote/src/index.ts';
@@ -24,7 +22,6 @@ export class DevAuth {
     this.#origin = origin;
   }
 
-  /** POST /v1/device-tokens 본문·DPoP 헤더 → 응답. */
   issue(body: string, dpop: string | undefined, now = Date.now()): { status: number; body: unknown } {
     let cert: SignedCert;
     try {
@@ -41,7 +38,6 @@ export class DevAuth {
     return { status: 200, body: { token, expiresAt: exp, scopes: ['relay'] } };
   }
 
-  /** 토큰을 쓰는 요청(릴레이 업그레이드 등)의 Authorization·DPoP 검사. 통과하면 기기 역할과 만료. */
   check(authorization: string | undefined, dpop: string | undefined, htm: string, htu: string, now = Date.now()): Issued | null {
     const m = /^DPoP (sxd1\.[A-Za-z0-9_-]+)$/.exec(authorization ?? '');
     const t = m ? this.#tokens.get(m[1]!) : undefined;

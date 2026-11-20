@@ -1,9 +1,3 @@
-// P-08 종이 증빙 촬영: 앱 안 카메라 → 안내 틀로 자르기 → 기기 안 OCR(글자 상자) → 규칙 파서 후보 → 사장님 확인 → 보관함 → PC로.
-// 영수증과 종이 세금계산서·계산서 두 가지다. 찍기 전에 고르고(틀 비율이 다르다), 찍은 뒤 서식 이름을 보고 바로잡는다.
-// 세금계산서는 칸 위치로 공급자·공급받는자·금액·품목을 읽고 검산한다(src/capture/invoice.ts). PC는 원본과 확인한 값을 꾸러미에 함께 넣는다.
-// 카메라와 앨범 둘 다(2026-11-16 대표 결정, ADR-034 결정 9 개정). 카메라 롤에 저장하지 않는다. 카메라·편집·앨범 사본 임시 파일은
-// 캐시에 생기며 봉인해 옮긴 뒤 바로 지운다(앨범 원본은 건드리지 않는다).
-// 사진·금액은 로그에 넣지 않는다.
 import { Asset } from 'expo-asset';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { File } from 'expo-file-system';
@@ -38,9 +32,7 @@ interface Shot {
 type Phase = 'camera' | 'reading' | 'confirm' | 'saving' | 'saved';
 type Mode = 'receipt' | 'invoice';
 
-/** 화면 갤러리(gallery/)에서 확인 화면을 바로 그릴 때만 쓴다. 앱은 넘기지 않는다. */
 export interface CapturePreview {
-  /** 앨범에서 고른 사진 */
   fromAlbum?: boolean;
   phase: Phase;
   docMode: Mode;
@@ -85,13 +77,11 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
     for (const u of temp.current) deleteQuietly(u);
     temp.current = [];
   };
-  /** 임시 파일을 기록한다. 화면이 이미 내려갔으면(30초 잠금 등) 곧바로 지운다. */
   const track = (uri: string) => {
     temp.current.push(uri);
     if (gone.current) cleanup();
   };
 
-  // 잠금·이동으로 화면이 내려가면 봉인 전 사진을 남기지 않는다(ADR-034 결정 9, 규칙 ②).
   useEffect(
     () => () => {
       gone.current = true;
@@ -123,7 +113,6 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
       const boxes = await ocr.boxes(out.uri);
       const lines = toRows(boxes).map((r) => r.text);
       setEngine(ocr.id);
-      // 찍기 전 고른 것과 서식 이름이 다르면 서식 이름을 따른다(세금계산서를 영수증으로 찍어도 바로잡는다)
       const kind = looksLikeInvoice(lines);
       const asInvoice = mode === 'invoice' || kind !== null;
       setDocMode(asInvoice ? 'invoice' : 'receipt');
@@ -174,7 +163,6 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
     }
   }
 
-  /** 시뮬레이터 개발 빌드만: 카메라가 없어서 앱에 묶인 견본 영수증을 카메라 프레임 대신 쓴다(갤러리 아님). */
   async function devSample() {
     const a = Asset.fromModule(sampleReceipt);
     await a.downloadAsync();
@@ -210,13 +198,11 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
   const sumIssue = issues.find((i) => i.code === 'sum_mismatch') ?? null;
   const issueFor = (field: string) => {
     const i = issues.find((x) => x.field === field);
-    // 합계 불일치·세액 10%는 바로, 빈 칸 문제는 [보내기]를 눌러 본 뒤에 보인다
     if (!i) return null;
     if (!tried && (i.code === 'amount_required' || i.code === 'direction_required' || i.code === 'required')) return null;
     return issueText(i);
   };
 
-  /** photoOnly: 세금계산서 칸을 다 못 채웠을 때 사진과 v1 후보만 보낸다(PC·세무사가 사진에서 읽는다). */
   async function save(photoOnly = false) {
     if (!shot) return;
     let c: ReceiptCandidates | string;
@@ -243,7 +229,6 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
     let jpeg: Uint8Array | null = null;
     try {
       jpeg = await new File(shot.uri).bytes();
-      // 대화 카드가 사진 자리를 먼저 잡을 비율과 흐린 미리보기(지우기 전에 만든다)
       const thumb = await makeThumb(shot.uri, shot.width, shot.height);
       const offer = makeReceiptOffer(jpeg, { capturedAt: shot.capturedAt, width: shot.width, height: shot.height, ocrEngine: engine, ownerConfirmed: true, candidates: c, paperInvoice: paper });
       await s.outbox.put({ kind: 'receipt', msgId: offer.msgId, offer, createdAt: Date.now(), attempts: 0 }, jpeg);
@@ -266,7 +251,6 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
       setErr('사진을 보관하지 못했어요. 이 폰에 보호된 저장 공간이 없으면 보낼 수 없어요.');
       setPhase('confirm');
     } finally {
-      // 보관에 실패해도 메모리의 평문 JPEG를 지운다
       jpeg?.fill(0);
     }
   }
@@ -282,7 +266,6 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
     setPhase('camera');
   };
 
-  /** 칸 바꾸기. 공급가액·세액을 고치면 사장님이 만지지 않은 합계를 따라 맞춘다. */
   const setI = (k: keyof InvoiceForm, v: InvoiceForm[keyof InvoiceForm]) => {
     setTouched((t) => new Set(t).add(k));
     setInv((cur) => editInvoiceForm(cur, k, v, touched));
@@ -444,7 +427,7 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
           <Button testID="dev-sample" kind="secondary" label="개발: 견본 영수증으로 찍기" onPress={() => void devSample()} busy={phase === 'reading'} style={{ alignSelf: 'stretch' }} />
         ) : (
           <View style={st.shutterRow}>
-            {/* 셔터 왼쪽 [앨범]: 카메라 권한 없이도 고를 수 있다 */}
+            {}
             <Pressable testID="capture-album" accessibilityRole="button" accessibilityLabel="앨범에서 고르기" onPress={() => void album()} disabled={phase === 'reading'} style={({ pressed }) => [st.side, pressed && { opacity: 0.6 }]}>
               <T v="subStrong" c="onCamera">
                 앨범
@@ -465,7 +448,6 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
   );
 }
 
-/** 카메라 화면의 두 칸 전환(검정 바탕용) */
 function CamSeg({ value, onChange }: { value: Mode; onChange: (m: Mode) => void }) {
   return (
     <View style={st.camSeg} accessibilityRole="radiogroup">

@@ -1,4 +1,3 @@
-// SP-1 기기 진단: 키 항목 정책과 앱 데이터 파일의 보호 등급·백업 제외를 보고한다. 값·키·사진 내용은 넣지 않는다.
 import { Directory, File } from 'expo-file-system';
 import { keyringPolicy } from './keyring';
 import { ROOT, inspect } from './storage/files';

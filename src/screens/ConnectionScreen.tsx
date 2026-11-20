@@ -1,4 +1,3 @@
-// P-06 연결 상태: PC 켜짐·꺼짐, 마지막 접속, 페어링, PC로 아직 못 보낸 사진·현금매출 건수.
 import { useState } from 'react';
 import { View } from 'react-native';
 import { sp1Report, type Sp1Report } from '../diag';
@@ -23,7 +22,6 @@ export function ConnectionScreen({ onDone, onReset, onRepair }: { onDone: () => 
         : s.pc === 'online'
           ? '보내면 PC가 바로 받아요.'
           : null;
-  // PC 꺼짐으로 보일 때 왜 그런지 한 줄(마지막 원인). 연결 중·켜짐이면 보이지 않는다
   const lastWhy = s.data.pcLog?.[s.data.pcLog.length - 1] ?? null;
   const whyLine = pair && (s.pc === 'offline' || s.pc === 'queued' || s.pc === 'stale') ? pcWhyText(lastWhy?.code) : null;
   const [showLog, setShowLog] = useState(false);

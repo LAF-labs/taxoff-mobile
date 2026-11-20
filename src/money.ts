@@ -1,11 +1,3 @@
-// 돈 탭(기획 v2 PR 8, 11-cash-flow §3.4·§3.5·§3.7, 09-bank-matching 받을 돈).
-// 엔진 명령의 출력 모양을 필드 이름 그대로 옮겼다(tex poc/packages/engine/src/bank/service.ts·cashflow.ts):
-//   db.query.bank.summary → BankSummary, db.query.bank.cashflow → CashFlowResult, 받을·낼 돈 목록 → ReceivableView[],
-//   bank.markReceived → {seq}, bank.undo → {seq}, 실패는 already_received 등 코드.
-// 서버는 이 숫자를 갖지 않는다(09 §13). 폰은 PC가 켜져 있을 때 물어 받고, 꺼져 있으면 마지막으로 받은 요약을 날짜와 함께 보인다.
-// 폰에 보관할 때는 거래처 이름만 남기고 사업자번호·계좌 정보는 지운다(storeable).
-
-// ---- 엔진 모양 ----
 
 export type ReceivableStatus = 'unpaid' | 'unknown' | 'partial' | 'waiting' | 'received' | 'excluded';
 export type AllocMethod = 'account' | 'cash' | 'other_account' | 'offset' | 'other' | 'fee';
@@ -23,7 +15,6 @@ export interface ReceivableView {
   remaining: number;
   dueOn: string | null;
   promisedOn: string | null;
-  /** 받기로 한 날 − 오늘(지나면 음수). 기한 없음이면 null */
   dueIn: number | null;
   overdue: boolean;
   status: ReceivableStatus;
@@ -98,7 +89,6 @@ export interface CashFlowResult {
   alerts: CashFlowAlert[];
 }
 
-/** 폰에서 쓰는 받은 방법(계좌 입금 account·수수료 fee는 PC가 맞춘다) */
 export type PhoneMarkMethod = 'cash' | 'other_account' | 'offset' | 'other';
 export interface MarkReceivedParams {
   profileId: string;
@@ -116,12 +106,8 @@ export type BankErrorCode = 'already_received' | 'already_undone' | 'cannot_undo
 
 export const METHOD_LABEL: Record<PhoneMarkMethod, string> = { cash: '현금', other_account: '다른 계좌', offset: '상계', other: '기타' };
 
-// ---- 폰에 보관하는 마지막 요약 ----
-
 export interface MoneySnapshot {
-  /** PC에서 받은 시각(ms) */
   at: number;
-  /** 연결한 계좌 수(이름·번호는 보관하지 않는다) */
   accounts: number;
   summary: BankSummary;
   cashflow: CashFlowResult;
@@ -129,7 +115,6 @@ export interface MoneySnapshot {
   payables: ReceivableView[];
 }
 
-/** 보관 전에 사업자번호·계좌 끝자리·계좌 id·은행 이름을 지운다(거래처 이름·금액·날짜만 남긴다). */
 export function storeable(s: MoneySnapshot): MoneySnapshot {
   const strip = (r: ReceivableView): ReceivableView => ({ ...r, cpBizNo: null, approvalTail: null });
   return {
@@ -144,12 +129,9 @@ export function storeable(s: MoneySnapshot): MoneySnapshot {
   };
 }
 
-// ---- 표기 ----
-
 const NB = ' ';
 const comma = (n: number) => Math.trunc(n).toLocaleString('ko-KR');
 
-/** 1억이 넘으면 "1억 2,340만원"처럼 줄인다(만 원 아래는 버림, 누르면 정확한 값). 그 아래는 "12,340,000원". */
 export function shortWon(n: number): string {
   const sign = n < 0 ? '−' : '';
   const a = Math.abs(Math.trunc(n));
@@ -161,7 +143,6 @@ export function shortWon(n: number): string {
 
 export const exactWon = (n: number) => `${n < 0 ? '−' : ''}${comma(Math.abs(n))}원`;
 
-/** 받을·낼 돈 7일 안(오늘 포함, 기한 안 지남) */
 export function dueSoon(list: ReceivableView[]): { count: number; total: number } {
   const xs = list.filter((v) => isOpen(v) && !v.overdue && v.dueIn !== null && v.dueIn >= 0 && v.dueIn <= 7);
   return { count: xs.length, total: xs.reduce((a, v) => a + v.remaining, 0) };
@@ -169,13 +150,11 @@ export function dueSoon(list: ReceivableView[]): { count: number; total: number 
 
 const isOpen = (v: ReceivableView) => v.status === 'unpaid' || v.status === 'unknown' || v.status === 'partial';
 
-/** 목록 순서: 기한 지남(오래된 순) → 기한 있는 것(가까운 순) → 기한 없음 → 확인 못 함 */
 export function sortOpen(list: ReceivableView[]): ReceivableView[] {
   const rank = (v: ReceivableView) => (v.status === 'unknown' ? 3 : v.overdue ? 0 : v.dueIn !== null ? 1 : 2);
   return list.filter(isOpen).sort((a, b) => rank(a) - rank(b) || (a.dueIn ?? 0) - (b.dueIn ?? 0) || a.writtenOn.localeCompare(b.writtenOn));
 }
 
-/** 줄의 기한 표시 */
 export function dueLine(v: ReceivableView, kind: 'recv' | 'pay'): string {
   if (v.status === 'unknown') return '거래내역이 오래돼 입금을 확인하지 못했어요';
   if (v.overdue && v.dueIn !== null) return `기한${NB}${-v.dueIn}일${NB}지남`;
@@ -184,13 +163,11 @@ export function dueLine(v: ReceivableView, kind: 'recv' | 'pay'): string {
   return kind === 'recv' ? '기한 없음' : '낼 날 없음';
 }
 
-/** "11월 2일" */
 export function md(day: string): string {
   const [, m, d] = day.split('-').map(Number) as [number, number, number];
   return `${m}월${NB}${d}일`;
 }
 
-/** 11-cash-flow §3.5 알림 문구(사실만, 초안 그대로) */
 export function alertLine(a: CashFlowAlert): string {
   switch (a.kind) {
     case 'shortfall':
@@ -204,7 +181,6 @@ export function alertLine(a: CashFlowAlert): string {
   }
 }
 
-/** 이번 달 숫자를 믿을 수 없을 때(§3.4 "확인 못 함") 이유 한 줄. 믿을 수 있으면 null */
 export function unsureLine(m: CashFlowMonth, today: string, staleDays = 7): string | null {
   if (!m.hasAccounts || m.complete) return null;
   const names = m.missing.map((x) => `${x.bank}${x.last4 ? `${NB}${x.last4}` : ''}`).filter(Boolean);

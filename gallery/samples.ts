@@ -1,4 +1,3 @@
-// 갤러리 견본: public/sample-invoice.jpg(가짜 사업자로 그린 종이 세금계산서)와 그 OCR 상자.
 import { paperTaxInvoice } from '../test/fixtures/invoice-boxes';
 import type { AccountDevice } from '../src/devices';
 import type { ChatItem } from '../src/chat';
@@ -7,7 +6,6 @@ import type { OfflineChatView } from '../src/offline/useOfflineChat';
 export const SAMPLE_INVOICE = paperTaxInvoice();
 export const SAMPLE_SHOT = { uri: '/sample-invoice.jpg', width: 1520, height: 1040, capturedAt: Date.now() };
 
-// 연결된 기기 견본(가짜 기기 번호). SELF는 이 폰, PC_PAIRED는 이 폰과 연결한 PC(paired()의 desktopDeviceId와 같다).
 const DAY = 86_400_000;
 export const DEVICE_SELF = '00000000-0000-4000-8000-0000000000a1';
 export const DEVICE_PC_PAIRED = 'dev-01HZX9K2Q4';
@@ -26,7 +24,6 @@ export const DEVICES_SUSPENDED = (): AccountDevice[] => [
   self(), dev(0xa2, 'mobile', 'android', '잃어버린 폰', 40, { state: 'suspended', deleteAfter: Date.now() + 1_800_000 }),
 ];
 
-// 폰 직접 대화 견본(PC가 꺼져 있을 때 폰이 답한다, ADR-047). 문구는 코어(vendor/sax-chat-core PHONE_ERROR_TEXT)와 같다.
 const MIN = 60_000;
 export function phoneChat(state: 'empty' | 'typing' | 'reply' | 'failed' | 'limit' | 'card' | 'ask' | 'screen' | 'lunch' | 'react-working' | 'react-result' | 'react-only', base = Date.now()): OfflineChatView {
   const t = (m: number) => base - m * MIN;
@@ -79,7 +76,6 @@ export function phoneChat(state: 'empty' | 'typing' | 'reply' | 'failed' | 'limi
         ],
         screens: ['capture'],
       };
-    // 말풍선 반응(ADR-057): 일을 맡기면 👀가 먼저 붙고 점 셋이 돈다 → 결과만 말한다. 고맙다는 말에는 반응만 하고 답 말이 없다.
     case 'react-working':
       return { ...base0, busy: true, items: [{ kind: 'msg', id: 'r1', from: 'me', at: t(0), text: '동네마트 32만원 끊어줘', state: 'sending', reaction: 'eyes' }] };
     case 'react-result':
@@ -103,7 +99,6 @@ export function phoneChat(state: 'empty' | 'typing' | 'reply' | 'failed' | 'limi
         items: [
           ...work,
           { kind: 'msg', id: 'r4', from: 'me', at: t(0), text: '고마워', reaction: 'pray' },
-          // 맞장구가 이어지면(대표 피드백 2026-11-19) 두 번째는 반응을 달고 한 문장으로 답한다
           { kind: 'msg', id: 'r5', from: 'me', at: t(0), text: '고마워', reaction: 'pray' },
           { kind: 'msg', id: 'r6', from: 'pc', via: 'phone', at: t(0), text: '별말씀을요. 또 필요하면 불러 주세요.' },
         ],

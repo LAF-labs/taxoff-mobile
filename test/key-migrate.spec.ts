@@ -1,4 +1,3 @@
-// 앱 진입 키 항목 마이그레이션(D08 §3.1 '앱 잠금'): 옛 생체 전용 항목 → 생체 또는 폰 암호 항목, 한 번만.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { readWithMigration, type MigrateStores } from '../src/keyMigrate.ts';
@@ -36,7 +35,6 @@ describe('키 항목 마이그레이션', () => {
     assert.deepEqual(await readWithMigration(s), { raw: 'O', migrated: true });
     assert.equal(st.cur, 'O');
     assert.equal(st.old, null);
-    // 두 번째 시작은 새 항목만 읽는다(한 번만)
     assert.deepEqual(await readWithMigration(s), { raw: 'O', migrated: false });
     assert.equal(st.legacyReads, 1);
   });

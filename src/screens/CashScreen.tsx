@@ -1,4 +1,3 @@
-// P-09 현금매출 입력: 하루 숫자 하나, 날짜별로 쌓이고, PC cash_sales로 E2EE 전송(cash.entry). 같은 날을 다시 적으면 바꾼다.
 import { useRef, useState, type ComponentRef } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { enqueueCash, makeCashEntry } from '@sax/remote';

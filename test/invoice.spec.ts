@@ -60,7 +60,6 @@ describe('종이 세금계산서 파서', () => {
     assert.equal(r.invoice.direction, 'sales');
     assert.equal(r.invoice.approvalNo, '20261105-41000012-00001234');
     assert.equal(r.electronicCopy, true);
-    // 매출이면 상대는 공급받는자
     assert.deepEqual(toV1Candidates(r.invoice), { amount: 1_353_000, issuedOn: '2026-11-05', merchant: '시험카페', merchantBizNo: '999-99-99997' });
   });
 

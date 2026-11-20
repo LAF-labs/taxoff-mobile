@@ -1,5 +1,3 @@
-// 폰 승인(ADR-052, remote-envelope v1.10): 승인 키 알리기(px.enroll), 승인 요청 받기(gate.request), 서명한 답 보내기(gate.response).
-// 하드웨어 키는 소프트웨어 P-256으로 흉내 낸다(네이티브와 같은 모양: 공개키 SEC1 65바이트, 서명 X9.62 DER). 검증은 PC와 같은 함수(@sax/remote).
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import { describe, it } from 'node:test';
@@ -33,7 +31,6 @@ const PC = JSON.parse(readFileSync(new URL('./fixtures/gate-vectors.json', impor
 };
 const V = PC.vectors[0]!;
 
-/** 네이티브 모듈 흉내: 키는 메모리에, 서명은 SHA-256 뒤 DER */
 function fakeNative(o: { cancel?: boolean; fail?: string } = {}) {
   const keys = new Map<string, Uint8Array>();
   const log: string[] = [];
@@ -123,7 +120,6 @@ describe('하드웨어 승인 키(네이티브 흉내)', () => {
       assert.equal(sig.length, 64);
       const input = { pairId: PAIR, reqId: g.reqId, challenge: fromB64(g.challenge), actionHash: g.actionHash, decision };
       assert.ok(verifyApprove(pub, input, sig));
-      // 다른 결정·다른 요청·다른 페어링에는 맞지 않는다
       assert.equal(verifyApprove(pub, { ...input, decision: decision === 'approve' ? 'deny' : 'approve' }, sig), false);
       assert.equal(verifyApprove(pub, { ...input, reqId: '01JDREQ0000000000000000002' }, sig), false);
       assert.equal(verifyApprove(pub, { ...input, pairId: '01JDPAIR000000000000000002' }, sig), false);
@@ -150,7 +146,6 @@ describe('하드웨어 승인 키(네이티브 흉내)', () => {
   });
 });
 
-/** 가짜 채널: 보낸 봉투를 모으고, 받을 봉투를 차례로 내준다. */
 function mockChannel(script: (sent: Array<{ type: string; body: unknown }>) => Envelope[]) {
   const sent: Array<{ type: string; body: unknown }> = [];
   const inbox: Envelope[] = [];
@@ -187,7 +182,6 @@ describe('승인 키 알리기(px.enroll → px.ack)', () => {
     const body = m.sent[0]!.body as PxEnrollBody;
     assert.equal(body.hw, 'ios_se');
     assert.deepEqual(fromB64(body.pxPub), pub);
-    // PC가 쓰는 검증 함수로 확인
     assert.ok(verifyPxEnroll(vm.publicKey, PAIR, DEVICE, pub, 'ios_se', fromB64(body.sig)));
     assert.equal(verifyPxEnroll(vm.publicKey, '01JDPAIR000000000000000002', DEVICE, pub, 'ios_se', fromB64(body.sig)), false);
   });
@@ -250,14 +244,11 @@ describe('승인 요청 모델', () => {
     let c = answerGate(applyGate(cmd(), g), { reqId: g.reqId, decision: 'approve', actionHash: g.actionHash, sig: 's' }, T0);
     assert.equal(responseDue(c, g.exp + 1), null);
     assert.equal(openGate(c, g.exp + 1)!.reqId, g.reqId);
-    // 마감이 지난 요청은 승인 대기로 남는다(시트가 "시간이 지나 취소됐어요"와 [PC에 다시 요청]을 보인다)
     assert.equal(jobOf(c).state, 'approval');
     c = askRefresh(c, g.exp + 1);
     assert.equal(c.refresh, g.reqId);
     assert.equal(c.answer, undefined);
-    // 마감 전에는 다시 요청하지 않는다
     assert.equal(askRefresh(applyGate(cmd(), g), T0).refresh, undefined);
-    // 새 요청이 오면 앞 요청을 바꾼다
     const next = applyGate(c, gateReq({ reqId: '01JDREQ0000000000000000002', exp: g.exp + 120_000 }));
     assert.equal(next.gate!.reqId, '01JDREQ0000000000000000002');
     assert.equal(next.refresh, undefined);
@@ -269,7 +260,6 @@ describe('승인 요청 모델', () => {
     const pc = applyEvent(c, { runId: c.runId!, event: 'phase', at: T0 + 1, phase: 'approve', code: 'pc_only' });
     assert.equal(pc.gate, undefined);
     assert.deepEqual(runViewOf(pc), { kind: 'running', step: 'approve', startedAt: T0, pcApproval: true });
-    // 코드 없는 승인 단계 사건은 요청을 그대로 둔다
     assert.ok(applyEvent(c, { runId: c.runId!, event: 'phase', at: T0 + 1, phase: 'approve' }).gate);
   });
   it('PC가 폰으로 보내지 않은 이유를 일에 싣는다(승인은 PC에서)', () => {
@@ -317,7 +307,6 @@ describe('라이브 세션: 승인 요청을 받고 서명한 답을 보낸다(m
       if (last.type === 'gate.response') return [env('run.event', { runId: g.runId, event: 'phase', at: now + 3, phase: 'done', result: { approvalNo: 'A1', total: 352_000 } })];
       return [];
     });
-    // 사장님: 승인 요청이 보이면 시트에서 승인한다(생체 확인 → 서명)
     const io = {
       ...s.io,
       cmds: () => {
@@ -374,13 +363,10 @@ describe('v1.11 sync.v1: 판 번호와 다른 곳에서 닫힌 승인', () => {
     const run = '01JDRUN0000000000000000001';
     let c = applyEvent(cmd({ phase: 'prepare' }), { runId: run, event: 'phase', at: T0 + 10, phase: 'login', rev: 2 });
     assert.equal(c.rev, 2);
-    // 늦게 온 옛 이벤트(시각은 더 늦어도)
     assert.equal(applyEvent(c, { runId: run, event: 'phase', at: T0 + 99, phase: 'prepare', rev: 1 }).phase, 'login');
     assert.equal(applyEvent(c, { runId: run, event: 'phase', at: T0 + 99, phase: 'prepare', rev: 2 }).phase, 'login');
-    // 새 이벤트(PC 시계가 뒤로 갔어도)
     c = applyEvent(c, { runId: run, event: 'phase', at: T0, phase: 'readback', rev: 5 });
     assert.deepEqual([c.phase, c.rev], ['readback', 5]);
-    // 번호 없는 PC(옛 판)는 지금처럼 시각으로
     const old = applyEvent(cmd({ at: T0 + 10 }), { runId: run, event: 'phase', at: T0, phase: 'issue' });
     assert.equal(old.phase, 'approve');
   });
@@ -392,21 +378,16 @@ describe('v1.11 sync.v1: 판 번호와 다른 곳에서 닫힌 승인', () => {
     assert.equal(done.gate, undefined);
     assert.equal(done.resolvedBy, 'pc');
     assert.notEqual(jobOf(done).state, 'approval');
-    // 사장님이 서명했지만 아직 못 보낸 답은 버린다(PC가 받지 않는다)
     const signed = answerGate(c, { reqId: g.reqId, decision: 'approve', actionHash: g.actionHash, sig: 's' }, T0);
     const r = applyResolved(signed, { runId: g.runId, reqId: g.reqId, by: 'expired' });
     assert.equal(r.answer, undefined);
     assert.equal(responseDue(r, T0 + 1), null);
-    // 보낸 답은 남긴다(폰에서 거절한 기록)
     const sent = markAnswered(answerGate(c, { reqId: g.reqId, decision: 'deny', actionHash: g.actionHash, sig: 's' }, T0), g.reqId, T0 + 1);
     assert.ok(deniedByPhone(applyResolved(sent, { runId: g.runId, reqId: g.reqId, by: 'phone' })));
-    // 다른 실행·다른 요청
     assert.equal(applyResolved(c, { runId: '01JDRUN0000000000000000009', reqId: g.reqId, by: 'pc' }), c);
     assert.equal(applyResolved(c, { runId: g.runId, reqId: '01JDREQ0000000000000000009', by: 'pc' }), c);
-    // 다시 요청 중인 것도 닫힌다
     const asked = askRefresh(c, g.exp + 1);
     assert.equal(applyResolved(asked, { runId: g.runId, reqId: g.reqId, by: 'stopped' }).refresh, undefined);
-    // 새 요청이 오면 까닭을 지운다
     assert.equal(applyGate(done, gateReq({ reqId: '01JDREQ0000000000000000002' })).resolvedBy, undefined);
   });
   it('라이브 세션에서 gate.resolved를 받으면 시트가 닫힌다(approve.v1 PC)', async () => {

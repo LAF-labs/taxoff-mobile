@@ -1,6 +1,3 @@
-// 받을 돈·낼 돈 목록(돈 탭에서). 거래처 · 작성일 · 남은 돈 · 기한 지난 날수.
-// 받을 돈은 줄마다 [받았어요] → 받은 방법·금액·날짜 → PC로(꺼져 있으면 밀린 일로). 처리하면 줄 아래 "받음 처리했어요 · [되돌리기]".
-// 낼 돈은 보기만(낸 처리는 PC에서).
 import { StyleSheet, View } from 'react-native';
 import { dueLine, exactWon, md, sortOpen, type ReceivableView } from '../money';
 import { useMoney, type MarkState } from '../moneyStore';

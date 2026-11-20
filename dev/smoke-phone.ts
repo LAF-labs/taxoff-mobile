@@ -1,7 +1,3 @@
-// 더미 PC 상대 스모크(시뮬레이터 없이): Node가 폰 역할로 릴레이(services/relay/API.md 경로·헤더) 위에서
-// 페어링 → 기기 토큰(AIK 인증서 + DPoP) → 우편함 라이브 → IK 세션 → 사진·현금매출 전송.
-//   node dev/dummy-pc.ts &  node dev/smoke-phone.ts          (라이브)
-//   node dev/dummy-pc.ts &  node dev/smoke-phone.ts --queue  (라이브 없이 HTTPS 큐: 번들 확인 → HPKE 봉인 → POST → PC가 꺼내 감)
 import { WebSocket as WS } from 'ws';
 import {
   CAP, DeviceTokenCache, MobilePairing, RECEIPT_CHUNK, VM_PURPOSES, deviceAuthHeaders, ed25519Keygen, enqueueCash, flushOutbox, fromB64, makeCashEntry,
@@ -36,7 +32,7 @@ const noise = softNoiseStatic(s.secretKey);
 const vmSigner = softSigner(vm.secretKey, VM_PURPOSES);
 const mp = new MobilePairing({
   keys: { noise, vmPub: vm.publicKey, kmPub: km.publicKey, deviceId: uuid4(), name: 'smoke', platform: 'ios' },
-  relayAllowlist: [HOST], pairOkTimeoutMs: 15_000, accountKeys: [fromB64('3uABVr6gwZIYy5ir9UMb2ohr2fxONenkzT9XtRRIBCY=')], // dev/test-account-key.ts
+  relayAllowlist: [HOST], pairOkTimeoutMs: 15_000, accountKeys: [fromB64('3uABVr6gwZIYy5ir9UMb2ohr2fxONenkzT9XtRRIBCY=')],
 });
 if (!mp.scan(qr)) throw new Error(`scan failed: ${mp.failure}`);
 const link = await client.joinRoom(mp.roomId, 'mobile');
@@ -59,7 +55,6 @@ const store: OutboxStore = {
 const jpeg = new Uint8Array(RECEIPT_CHUNK * 3 + 77);
 jpeg.set([0xff, 0xd8, 0xff, 0xe0]);
 for (let i = 4; i < jpeg.length; i++) jpeg[i] = (i * 31) & 0xff;
-// 종이 세금계산서 견본(가짜 사업자)을 읽어 receipt.v2 paperInvoice로 싣는다(PC 쪽 스키마 검증까지 지나는지)
 const paper = toWire(parsePaperInvoice(paperTaxInvoice())!.invoice);
 if (!paper.ok) throw new Error(`paperInvoice: ${paper.bad.join(',')}`);
 const offer = makeReceiptOffer(jpeg, { capturedAt: Date.now(), ocrEngine: 'ios_vision', ownerConfirmed: true, paperInvoice: paper.invoice });

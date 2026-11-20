@@ -1,7 +1,3 @@
-// 밀린 일 가짜 저장소(기획 v2 PR 2·5): 메모리에만 둔다. PC와 주고받는 프로토콜이 생기면 세션으로 옮긴다.
-// 승인 시트(P-03)도 여기서 연다: 승인 대기 일에 PC 승인 요청(gate)이 붙어 있으면 그 일의 시트를 띄운다.
-// simulate(갤러리·시연 전용): PC가 켜져 맡긴 발급이 준비 → 홈택스 로그인 → 값 확인을 지나 "PC가 승인 요청함"이 되고 시트가 뜬다.
-//   승인하면 발급 → 확인 → 결과 카드. simulate='inDoubt'이면 발급 뒤 응답이 끊겨 확인 중(조회 n회째) → 확인 필요로 간다.
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { answerGate, askRefresh, askRetryCert, askSimple, busyWaiting, deniedByPhone, jobOf, redate, settled, simpleRequestValue } from './phoneCmd';
 import type { SimpleId } from './storage/state';
@@ -20,72 +16,49 @@ type Readback = Record<(typeof READBACK_KEYS)[number], string>;
 
 export interface ApprovalSettings {
   attest: AttestState;
-  /** iPhone(앱 무결성만)을 승인 기기로 받는지. ADR-046 결정 4 채택(tex #403)으로 기본은 받는다. false는 정책으로 막은 경우 */
   iosAllowed: boolean;
   usedToday: number;
 }
 
 interface QueueStore {
   jobs: Job[];
-  /** 마지막으로 끝난 일(빈 화면 한 줄) */
   last: DoneJob | null;
   act: (id: string, action: JobAction) => void;
   startAll: () => void;
-  /** 폰 발급 명령(AppData.cmds)의 진행 카드를 대화에 붙인다(cmd.run을 보낸 뒤). 맡겨 둔 것이면 확인 한 줄. */
   noteCmd: (jobId: string, text: string | null) => void;
-  /** 맡기고 대화에 확인 한 줄을 남긴다. readback은 시연(simulate)에서 PC가 되읽을 값. */
   add: (job: Job, note: string, readback?: Readback) => void;
-  /** 이 폰에서 남긴 확인 줄(홈 대화 끝에 붙는다) */
   notes: ChatItem[];
-  /** [+] 발급 시트에서 고른 거래처의 세금계산서 카드를 대화에 띄운다 */
   addCard: (item: ChatItem) => void;
-  /** 이 폰이 띄운 카드를 맡김으로 바꾼다 */
   markSent: (itemId: string) => void;
   approval: ApprovalSettings;
-  /** 승인 시트가 열린 일 */
   sheetJob: Job | null;
   openSheet: (id: string) => void;
   closeSheet: () => void;
-  /** 승인: 진행 중으로(결과가 오기 전), 거절: 밀린 일에서 뺀다. 폰 발급 명령(cmd-)은 서명한 답(signed)을 PC로 보낸다. */
   decide: (id: string, decision: 'approve' | 'deny', signed?: { reqId: string; actionHash: string; sig: string }) => void;
-  /** 폰에서 승인할 수 없어 PC 앞 필요로 둔다. */
   park: (id: string, reason: NeedPcReason) => void;
-  /** 만료된 승인 요청을 PC에 다시 요청(시연에서는 새 마감으로 다시 온다). */
   rerequest: (id: string) => void;
-  /** 진행 카드의 동작(다시 준비·다시 요청·중지·PC에서 열기 예약) */
   runAction: (id: string, action: RunAction) => void;
-  /** 폰에서 시작하는 간편인증 값 보내기(PC가 맡은 일). 값은 봉인 상태 파일에 남겨 다음에 미리 채운다. */
   simpleAuth: (id: string, v: SimpleId) => void;
-  /** 간편인증 시트를 띄운 일(채팅·진행 화면 위 바텀시트) */
   simpleJob: Job | null;
   closeSimple: () => void;
-  /** 진행·결과·서류 화면이 보는 일 */
   focus: Job | null;
   setFocus: (id: string | null) => void;
-  /** 거래처(이 폰에서 만든 것. PC 사본은 ADR-046 결정 5 뒤) */
   counterparties: Counterparty[];
-  /** 등록증으로 만든 거래처를 더하고 발급 작성에서 골라 둔다. PC가 켜져 있으면 휴·폐업 확인 중, 꺼져 있으면 켜지면 확인. */
   addCounterparty: (cp: Counterparty, pcOnline: boolean) => void;
-  /** 발급 작성이 열릴 때 골라 둘 거래처 */
   pickId: string | null;
   setPick: (id: string) => void;
-  /** 대화 카드에서 [발급 맡기기]로 열 때 발급 작성에 채워 둘 값(거래처는 pickId) */
   prefill: IssuePrefill | null;
   setPrefill: (p: IssuePrefill | null) => void;
   clearPick: () => void;
 }
 
-/** 대화 카드(폰 대화 코어의 초안) → 발급 작성 */
 export interface IssuePrefill {
-  /** 말한 금액(원). vat가 included면 합계, 아니면 공급가 */
   amount: number;
   vat: 'separate' | 'included' | null;
   item: string | null;
-  /** 폰 대화 카드 id. 발급을 맡기면 그 카드를 맡김으로 바꾼다 */
   draftId?: string;
 }
 
-/** 번들 견본 서류(다음 PR에서 PC가 보낸 암호 파일을 풀어 쓴다) */
 export const SAMPLE_DOC = sampleDoc;
 
 const Ctx = createContext<QueueStore | null>(null);
@@ -96,7 +69,6 @@ export function QueueProvider({
   initial = [], last = null, notes: initialNotes = [], approval: approvalProp, sheet = null, simulate = false, focus: initialFocus = null, counterparties: initialCps = [], pick = null, children,
 }: {
   initial?: Job[]; last?: DoneJob | null; notes?: ChatItem[]; approval?: ApprovalSettings;
-  /** 처음부터 열어 둘 승인 시트(갤러리) */
   sheet?: string | null;
   simulate?: boolean | 'inDoubt';
   focus?: string | null;
@@ -105,12 +77,9 @@ export function QueueProvider({
   children: ReactNode;
 }) {
   const [localJobs, setJobs] = useState<Job[]>(initial);
-  // 폰 발급 명령(봉인 상태 파일)은 세션에서 읽어 일로 바꿔 붙인다. 갤러리 가짜 세션에도 있다.
   const sess = useContext(SessionContext);
   const cmds = sess?.data.cmds;
-  // 폰에서 거절해 그 답을 보낸 명령은 밀린 일에서 뺀다(PC가 그 실행을 멈춘다)
   const jobs = useMemo(() => [...localJobs, ...(cmds ?? []).filter((c) => !deniedByPhone(c)).map(jobOf)], [localJobs, cmds]);
-  // 승인 설정: 갤러리는 값을 준다. 앱은 PC의 답으로 정한다(승인 키를 PC가 받았을 때만 승인 기기, 오늘 남은 횟수는 PC 사본).
   const pxOk = sess?.data.px?.state === 'enrolled';
   const left = sess?.data.pcCopy?.todayApprovalsLeft;
   const approval = useMemo<ApprovalSettings>(
@@ -122,16 +91,13 @@ export function QueueProvider({
   const [simpleId, setSimpleId] = useState<string | null>(null);
   const [usedLocal, setUsed] = useState(0);
   const used = approval.usedToday + usedLocal;
-  // 새 승인 요청은 시트를 띄우지 않고 첫 화면 대화의 카드에서 승인한다(notify/PushHost가 그 카드로 데려간다)
   const [focusId, setFocusId] = useState<string | null>(initialFocus);
   const [cps, setCps] = useState<Counterparty[]>(initialCps);
   const [pickId, setPickId] = useState<string | null>(pick);
   const [prefill, setPrefill] = useState<IssuePrefill | null>(null);
   const setRun = (id: string, f: (r: RunView | undefined, j: Job) => RunView, extra: Partial<Job> = {}) => patch(id, (j) => ({ ...j, ...extra, run: f(j.run, j) }));
-  // 일별 타이머: 같은 일의 흐름을 다시 시작하면 앞 흐름을 지운다(겹치지 않게). 저장소가 사라질 때도 지운다.
   const timers = useRef(jobTimers()).current;
   useEffect(() => () => timers.clearAll(), [timers]);
-  /** 시연: 준비 → 로그인 → 값 확인 → 승인 요청 */
   const drivePrepare = (id: string, readback: Readback, startedAt: number) => {
     timers.clear(id);
     setRun(id, () => ({ kind: 'running', step: 'prepare', startedAt }));
@@ -175,7 +141,6 @@ export function QueueProvider({
       },
       act: (id, action) => {
         if (action === 'dismiss' && id.startsWith('cmd-')) {
-          // 끝난(거절·중지) 명령만 목록에서 지운다. 아직 PC가 들고 있을 수 있는 명령은 건드리지 않는다
           const cmdId = id.slice(4);
           void sess?.update((d) => ({ ...d, cmds: (d.cmds ?? []).filter((c) => c.cmdId !== cmdId || !settled(c)) }));
           return;
@@ -186,7 +151,6 @@ export function QueueProvider({
           return;
         }
         if (action === 'cancel' && id.startsWith('cmd-')) {
-          // 아직 보내지 않았거나 PC가 다른 일 중이라 기다리는 명령만 지운다(PC가 시작한 명령은 PC에서 멈춘다)
           const cmdId = id.slice(4);
           void sess?.update((d) => ({ ...d, cmds: (d.cmds ?? []).filter((c) => c.cmdId !== cmdId || (!!c.sentAt && !busyWaiting(c))) }));
           return;
@@ -211,7 +175,6 @@ export function QueueProvider({
         const j = jobs.find((x) => x.id === id);
         setSheetId(null);
         if (id.startsWith('cmd-')) {
-          // 폰 발급 명령: 서명한 답을 적어 두면 라이브 세션이 보낸다(net/issueLive.ts). 서명이 없으면 아무것도 하지 않는다
           if (!signed) return;
           const cmdId = id.slice(4);
           void sess?.update((d) => ({ ...d, cmds: (d.cmds ?? []).map((c) => (c.cmdId === cmdId ? answerGate(c, { ...signed, decision }) : c)) })).then(() => sess.sync());
@@ -245,7 +208,6 @@ export function QueueProvider({
       park: (id, reason) => {
         timers.clear(id);
         setSheetId(null);
-        // 폰 발급 명령: 폰에서 승인할 수 없는 요청은 그대로 둔다(PC 승인 바에서 한다)
         if (id.startsWith('cmd-')) return;
         patch(id, (x) => ({ ...x, state: 'needPc', reason, gate: undefined }));
       },
@@ -260,7 +222,6 @@ export function QueueProvider({
       runAction: (id, a) => {
         if (a === 'simpleAuth') return setSimpleId(id);
         if ((a === 'authDone' || a === 'resendAuth') && id.startsWith('cmd-')) {
-          // [승인했어요]: PC가 [인증 완료]를 누르고 이어서 한다. [다시 요청]: 지난 값으로 다시 보낸다
           const cmdId = id.slice(4);
           void sess
             ?.update((d) => {
@@ -271,7 +232,6 @@ export function QueueProvider({
           return;
         }
         if (a === 'retryCert' && id.startsWith('cmd-')) {
-          // PC가 공동인증서 로그인 실패로 기다리는 명령: 라이브 세션에서 cmd.resume을 보낸다(PC가 같은 값으로 인증서 로그인부터 다시)
           const cmdId = id.slice(4);
           void sess?.update((d) => ({ ...d, cmds: (d.cmds ?? []).map((c) => (c.cmdId === cmdId ? askRetryCert(c) : c)) })).then(() => sess?.sync());
           return;
@@ -297,7 +257,6 @@ export function QueueProvider({
       addCounterparty: (cp, pcOnline) => {
         setCps((xs) => [...xs, { ...cp, status: pcOnline ? { kind: 'checking' } : { kind: 'waitPc' } }]);
         setPickId(cp.id);
-        // 시연: PC가 조회를 마치면 정상으로
         if (simulate && pcOnline) timers.at(cp.id, 1800, () => setCps((xs) => xs.map((c) => (c.id === cp.id ? { ...c, status: { kind: 'ok' } } : c))));
       },
       pickId,
@@ -309,7 +268,6 @@ export function QueueProvider({
       setFocus: (id) => setFocusId(id),
       rerequest: (id) => {
         if (id.startsWith('cmd-')) {
-          // 마감이 지난 요청을 PC에 다시 달라고 한다. 새 요청이 오면 시트가 새 마감으로 바뀐다
           const cmdId = id.slice(4);
           void sess?.update((d) => ({ ...d, cmds: (d.cmds ?? []).map((c) => (c.cmdId === cmdId ? askRefresh(c) : c)) })).then(() => sess.sync());
           return;
@@ -323,7 +281,6 @@ export function QueueProvider({
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }
 
-/** 시연 결과: 게이트 값에서 거래처·합계·이메일을 가져온다(승인번호는 견본). */
 function sampleResult(f: Record<string, string>): IssueResult {
   const email = f.counterpartEmail || null;
   const name = f.counterpartName ?? '거래처';

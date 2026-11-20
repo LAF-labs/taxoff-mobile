@@ -1,9 +1,6 @@
-// 첫 실행 단계 표시(온보딩 세 장 → 열쇠 만들기 → PC와 연결). 고른 점은 길게(ink), 나머지는 짧게(ink4).
-// 온보딩 화면은 넘기는 위치를 따라 늘고 주는 같은 모양을 직접 그린다(OnboardingScreen Dots). 여기는 멈춘 단계용.
 import { StyleSheet, View } from 'react-native';
 import { space, usePalette } from '../theme';
 
-/** 첫 실행 단계 수: 온보딩 3 + 열쇠 1 + PC 연결 1 */
 export const FIRST_RUN_STEPS = 5;
 export const STEP_KEY = 3;
 export const STEP_PAIR = 4;

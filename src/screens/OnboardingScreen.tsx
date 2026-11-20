@@ -1,19 +1,3 @@
-// 첫 실행 온보딩(스플래시 직후, 열쇠 만들기 앞). 세 장: 편리함 · 할 수 있는 일 · 보안.
-// - 옆으로 넘기거나 [다음]. 1·2장 오른쪽 위 [건너뛰기], 마지막 장도 [다음] → 열쇠 만들기(LockScreen firstRun, 그 화면의 [시작하기]).
-// - 한 번 넘기면(건너뛰기·마지막 [다음]) 설치 표지에 적어 다시 보이지 않는다(App.tsx · keyring.markOnboarded).
-// - 글은 모두 사실만: 보안 장의 각 줄은 코드에 있는 동작이다(키 ThisDeviceOnly·백업 제외, 릴레이는 내용을 못 봄,
-//   승인은 매번 생체, 홈택스 비밀번호·인증서는 PC 금고). iPhone은 하드웨어 키 증명이 없어 "하드웨어"라고 쓰지 않는다.
-// - 큰 글씨로 강조하지 않는다(design.md): 제목 17/600, 예쁨은 그림(실제 화면을 줄인 모형)과 움직임으로.
-//
-// 3D 모션(끊김·가려짐 없이):
-// - 장 안의 모든 등장은 "넘기는 위치"(pos = 스크롤 x + 처음 등장용 lead)에 묶은 보간이다. 시간으로 따로 돌지 않으므로
-//   넘기는 중에도 다음 장의 겹이 손가락을 따라 이미 들어오고 있다(빈 장이 보이지 않는다). 되돌리면 그대로 되감긴다.
-//   [다음]은 scrollTo 애니메이션이라 같은 길을 탄다. 첫 장은 lead(-1 → 0)가 한 번 밀어 준다.
-// - 모두 transform·opacity, 네이티브 드라이버. 매 프레임 JS 일 없음(장 번호는 반쯤 넘겼을 때 한 번만 바뀐다).
-// - 움직이는 겹에는 그림자·잘라내기(overflow)를 두지 않는다(iOS가 매 프레임 화면 밖 렌더를 다시 해서 끊긴다).
-//   깊이는 원근(perspective는 transform 맨 앞)·크기·흐림 정도와 은은한 경계선으로만 낸다.
-// - 잔잔한 반복(떠 있기·빛·물결)은 지금 장에서만 돌고, 넘기면 멈춘다.
-// - 동작 줄이기면 움직임 없이 완성 상태.
 import { useEffect, useMemo, useRef, useState, type ComponentRef, type ReactElement, type ReactNode } from 'react';
 import { Animated, Easing, Image, PanResponder, Pressable, ScrollView, StyleSheet, View, useColorScheme, type GestureResponderEvent, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,10 +12,8 @@ type Anim = Animated.Value | Animated.AnimatedInterpolation<number> | Animated.A
 
 interface ArtProps {
   p: Palette;
-  /** 이 장이 지금 장인지(잔잔한 반복만 이것으로 켠다) */
   active: boolean;
   reduce: boolean;
-  /** 이 장의 진행 0(옆) → 1(가운데)에 묶은 보간을 만든다. from·to는 0~1 구간(겹마다 늦게 들어오게) */
   at: (from: number, to: number) => Anim;
 }
 
@@ -65,7 +47,7 @@ const ONBOARDING: Page[] = [
 
 const ONE = new Animated.Value(1);
 
-export function OnboardingScreen({ onDone, start = 0, fromSplash = false, revealed = true }: { onDone: () => void; /** 갤러리: 몇 번째 장부터 그릴지 */ start?: number; /** 스플래시 바로 뒤: 같은 모습의 덮개에서 시작해 제자리에서 바래며 첫 장이 들어온다 */ fromSplash?: boolean; /** 스플래시가 걷혔는지. 걷히기 전에는 움직이지 않고 스플래시와 같은 모습으로 기다린다 */ revealed?: boolean }) {
+export function OnboardingScreen({ onDone, start = 0, fromSplash = false, revealed = true }: { onDone: () => void; start?: number; fromSplash?: boolean; revealed?: boolean }) {
   const p = usePalette();
   const inset = useSafeAreaInsets();
   const reduce = useReducedMotion();
@@ -74,14 +56,8 @@ export function OnboardingScreen({ onDone, start = 0, fromSplash = false, reveal
   const [page, setPage] = useState(start);
   const pageRef = useRef(start);
   const x = useRef(new Animated.Value(0)).current;
-  /** 처음 등장: -1 → 0. pos = x + lead·w 라서 첫 장도 넘겨 들어오는 것과 같은 길로 들어온다 */
   const lead = useRef(new Animated.Value(reduce ? 0 : -1)).current;
   const list = useRef<ComponentRef<typeof ScrollView>>(null);
-  /**
-   * 스플래시 덮개(처음 설치 뒤 첫 실행만): 시스템 스플래시와 같은 바탕·같은 자리·같은 크기의 표시를 덮어 두고,
-   * 시스템 스플래시는 바로(바래지 않게) 걷는다. 표시가 숨 쉬듯 한 번 커졌다 돌아온 뒤(HOLD),
-   * 덮개가 제자리에서 바래고 표시는 살짝 커지며 사라지는 동안 첫 장이 넘겨 들어온다. 모두 opacity·transform.
-   */
   const cover = useRef(new Animated.Value(fromSplash && !reduce ? 1 : 0)).current;
   const breath = useRef(new Animated.Value(0)).current;
   const [coverGone, setCoverGone] = useState(!fromSplash || reduce);
@@ -124,16 +100,11 @@ export function OnboardingScreen({ onDone, start = 0, fromSplash = false, reveal
     pageRef.current = n;
     setPage(n);
   };
-  // 장 번호는 넘기기가 끝났을 때만 바꾼다(손가락이 움직이는 동안 다시 그리지 않는다: 등장은 위치에 묶여 있어 필요 없다)
   const onScroll = useMemo(() => Animated.event([{ nativeEvent: { contentOffset: { x } } }], { useNativeDriver: true }), [x]);
   const settle = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (w > 0) go(Math.min(ONBOARDING.length - 1, Math.max(0, Math.round(e.nativeEvent.contentOffset.x / w))));
   };
   const last = page === ONBOARDING.length - 1;
-  /**
-   * 마지막 장에서 한 번 더 앞으로(왼쪽으로) 쓸면 다음 단계로 간다([다음]과 같다). 넘기기 칸은 끝에서 튕기지 않으니
-   * 손가락 위치로 본다: 마지막 장에 머문 채 왼쪽으로 60pt 넘게 쓸었으면 넘어간다.
-   */
   const touch = useRef<{ x: number; y: number; page: number } | null>(null);
   const onTouchStart = (e: GestureResponderEvent) => (touch.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY, page: pageRef.current });
   const onTouchEnd = (e: GestureResponderEvent) => {
@@ -150,10 +121,6 @@ export function OnboardingScreen({ onDone, start = 0, fromSplash = false, reveal
     list.current?.scrollTo({ x: n * w, animated: !reduce });
   };
 
-  /**
-   * i번째 장의 진행: pos가 (i-1)w → iw 로 오면 0 → 1, iw → (i+1)w 로 떠나면 1 → 0. 겹마다 from·to로 늦게.
-   * 같은 구간은 한 번만 만든다(다시 그릴 때 네이티브 보간 노드를 새로 잇지 않게).
-   */
   const ats = useMemo(
     () =>
       ONBOARDING.map((_, i) => {
@@ -210,7 +177,7 @@ export function OnboardingScreen({ onDone, start = 0, fromSplash = false, reveal
               return (
                 <View key={pg.key} style={{ width: w, height: h }} testID={`onboarding-${pg.key}`} accessibilityElementsHidden={i !== page} importantForAccessibility={i === page ? 'auto' : 'no-hide-descendants'}>
                   <ScrollView contentContainerStyle={st.page} showsVerticalScrollIndicator={false} scrollEnabled={h > 0 && h < 640}>
-                    {/* 그림 면: 원근 속에서 돌아 들어온다. 안쪽(화면 가운데 쪽) 모서리가 뒤로 물러나게 돌려서 옆 장을 덮지 않는다. 옆 장도 흐리게만 */}
+                    {}
                     <Animated.View
                       renderToHardwareTextureAndroid
                       style={[
@@ -257,7 +224,7 @@ export function OnboardingScreen({ onDone, start = 0, fromSplash = false, reveal
         <Button testID="onboarding-next" label="다음" onPress={next} />
       </View>
     </SafeAreaView>
-      {/* 화면 전체 기준(안전 영역 밖): 시스템 스플래시와 같은 모습에서 시작한다 */}
+      {}
       {!coverGone && <SplashCover cover={cover} breath={breath} />}
     </View>
   );
@@ -273,10 +240,8 @@ function BrandMark() {
   );
 }
 
-/** 표시가 한 번 숨 쉬는 시간(스플래시를 약 1.8~2초 보이게: 시스템 스플래시 0.3~0.5초 + 이것) */
 const SPLASH_BREATH_MS = 1500;
 
-/** 시스템 스플래시와 똑같은 덮개(바탕 canvas + 화면 가운데 96 표시). 바탕은 바래고, 표시는 숨 쉬다 살짝 커지며 사라진다. */
 function SplashCover({ cover, breath }: { cover: Animated.Value; breath: Animated.Value }) {
   const p = usePalette();
   const dark = useColorScheme() === 'dark';
@@ -297,14 +262,9 @@ function SplashCover({ cover, breath }: { cover: Animated.Value; breath: Animate
   );
 }
 
-/**
- * 온보딩 다음 단계(열쇠 만들기 4/5 · PC와 연결 5/5)의 틀. 앞 장과 같은 머리(표시+이름, 왼쪽 위 ‹ 뒤로)·
- * 같은 그림 면(tint xl, 빛)·제목·풀이·단계 점·바닥 단추 자리를 쓴다. 들어올 때 앞 장을 넘긴 것처럼 그림 면이
- * 원근 속에서 돌아 들어온다(네이티브). 화면 어디서든 오른쪽으로 쓸면 뒤로(onBack), 왼쪽으로 쓸면 앞으로(onNext).
- */
 export function OnboardingStep({
   step, onBack, onNext, art, title, body, action, testID,
-}: { step: number; onBack?: () => void; /** 왼쪽으로 쓸면(앞으로). 없으면 쓸어도 넘어가지 않는다(열쇠를 만들어야 넘어가는 단계) */ onNext?: () => void; art: ReactNode; title: string; body: string; action: ReactNode; testID?: string }) {
+}: { step: number; onBack?: () => void; onNext?: () => void; art: ReactNode; title: string; body: string; action: ReactNode; testID?: string }) {
   const p = usePalette();
   const inset = useSafeAreaInsets();
   const reduce = useReducedMotion();
@@ -315,7 +275,6 @@ export function OnboardingStep({
     a.start();
     return () => a.stop();
   }, [e, reduce]);
-  // 화면 어디서든 옆으로 쓸기: 오른쪽 → 뒤로(앞 장), 왼쪽 → 앞으로(onNext가 있을 때). 온보딩 장 넘기기와 같은 손짓
   const back = useRef(onBack);
   back.current = onBack;
   const fwd = useRef(onNext);
@@ -375,7 +334,6 @@ export function OnboardingStep({
   );
 }
 
-/** 단추 자리에 놓는 안내 한 줄(누르는 것 없음, 단추와 같은 높이라 자리가 흔들리지 않는다) */
 export function StepHint({ children, testID }: { children: string; testID?: string }) {
   return (
     <View style={st.hint} testID={testID}>
@@ -386,13 +344,11 @@ export function StepHint({ children, testID }: { children: string; testID?: stri
   );
 }
 
-/** 지금 장 표시: 고른 점은 길게(ink), 나머지는 짧게(ink4). 넘기는 손가락을 따라 늘었다 줄어든다(scaleX, 네이티브). */
 function Dots({ x, w, n, page, reduce }: { x: Animated.Value; w: number; n: number; page: number; reduce: boolean }) {
   const p = usePalette();
   return (
     <View style={st.dots} accessible accessibilityRole="text" accessibilityLabel={`${n}단계 중 ${page + 1}단계`} testID="onboarding-dots">
       {Array.from({ length: n }, (_, i) => {
-        // 4·5번째 점(열쇠·PC 연결)은 다음 화면들의 단계라 여기서는 늘 짧다
         const on = i >= ONBOARDING.length ? 0 : reduce || w === 0 ? (i === page ? 1 : 0) : x.interpolate({ inputRange: [(i - 1) * w, i * w, (i + 1) * w], outputRange: [0, 1, 0], extrapolate: 'clamp' });
         const scaleX = typeof on === 'number' ? (on ? 1 : 0.3) : on.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] });
         return (
@@ -406,9 +362,6 @@ function Dots({ x, w, n, page, reduce }: { x: Animated.Value; w: number; n: numb
   );
 }
 
-// ── 움직임 도구 ──
-
-/** 잔잔한 반복(0 ↔ 1, 사인 곡선). 지금 장에서만 돌고 넘기면 멈춘다. 네이티브 드라이버. */
 function useFloat(active: boolean, reduce: boolean, period = 3600, phase = 0): Animated.Value {
   const v = useRef(new Animated.Value(phase)).current;
   useEffect(() => {
@@ -427,7 +380,6 @@ function lerp(v: Anim, a: number | string, b: number | string) {
   return (v as Animated.Value).interpolate({ inputRange: [0, 1], outputRange: [a, b] as never });
 }
 
-/** 그림 뒤 은은한 빛 두 개(면 안쪽에 들어가는 크기라 잘라내기 없이). 지금 장에서만 천천히 떠돈다. */
 function Glow({ p, active, reduce }: { p: Palette; active: boolean; reduce: boolean }) {
   const a = useFloat(active, reduce, 7000, 0);
   const b = useFloat(active, reduce, 9000, 0.6);
@@ -439,9 +391,6 @@ function Glow({ p, active, reduce }: { p: Palette; active: boolean; reduce: bool
   );
 }
 
-// ── 그림: 실제 화면을 줄인 모형(같은 면·같은 색 규칙). 겹마다 들어오는 구간이 달라 깊이가 난다. ──
-
-/** 1장: 내가 말하고 → PC가 홈택스에서 되읽은 카드 → [승인하고 발급](앱에서 유일한 파랑 채움, 그대로 보인다) */
 function ChatArt({ p, active, reduce, at }: ArtProps) {
   const e1 = at(0.15, 0.7);
   const e2 = at(0.3, 0.9);
@@ -498,7 +447,7 @@ function ChatArt({ p, active, reduce, at }: ArtProps) {
           <T v="figure">352,000원</T>
         </View>
         <Animated.View style={[st.mockApprove, { backgroundColor: p.accent, opacity: lerp(e3, 0.4, 1), transform: [{ scale: lerp(e3, 0.88, 1) }] }]}>
-          {/* 단추 안에서 커졌다 사라지는 빛(잘라내기 없이: 단추보다 작고 둥글다) */}
+          {}
           <Animated.View
             pointerEvents="none"
             style={[st.shine, { opacity: shine.interpolate({ inputRange: [0, 0.2, 0.8, 1], outputRange: [0, 0.28, 0.28, 0] }), transform: [{ translateX: lerp(shine, -110, 110) }, { scaleX: 2.4 }] }]}
@@ -519,7 +468,6 @@ const FEATURES: Array<{ title: string; sub: string; glyph: 'doc' | 'camera' | 'c
   { title: '받을 돈·낼 돈 보기', sub: '이번 달 돈 흐름을 한눈에', glyph: 'chart' },
 ];
 
-/** 2장: 실제로 되는 일 넷. 넘기는 만큼 줄이 차례로 뒤집히며 내려앉는다. 그림 칸은 저마다 떠 있다. */
 function FeatureArt({ p, active, reduce, at }: ArtProps) {
   return (
     <View style={[st.artInner, { gap: space.s2 }]}>
@@ -561,7 +509,6 @@ const SAFE: Array<{ title: string; sub: string }> = [
   { title: '이 폰의 열쇠는 폰 밖으로 나가지 않아요', sub: '백업되지 않고, 폰을 잃어버리면 PC에서 끊을 수 있어요' },
 ];
 
-/** 3장: 넘기는 만큼 자물쇠가 돌아 들어오고, 끝에서 고리가 내려앉아 잠긴다. 잠긴 뒤 둘레로 물결. 사실 네 줄이 차례로. */
 function SafeArt({ p, active, reduce, at }: ArtProps) {
   const spin = at(0.1, 0.75);
   const shut = at(0.7, 1);
@@ -613,7 +560,6 @@ function SafeRow({ s, e, p }: { s: (typeof SAFE)[number]; e: Anim; p: Palette })
   );
 }
 
-/** 선과 면으로만 그린 작은 그림(아이콘 묶음 없이, design.md) */
 function Glyph({ kind, p }: { kind: 'doc' | 'camera' | 'cash' | 'chart'; p: Palette }) {
   const c = p.ink2;
   if (kind === 'doc')

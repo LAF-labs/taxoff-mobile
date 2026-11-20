@@ -1,8 +1,3 @@
-// 카드에서 바로 승인(대표 결정 2026-11-19): 첫 화면 대화의 진행 카드와 밀린 일 카드가 같이 쓴다.
-// - 받는 곳, 공급가액, 세액, 합계(PC가 홈택스에서 되읽은 값)와 [거절] [승인하고 발급]. 시간과 '기다려요' 글은 두지 않는다(대표 결정 2026-11-19).
-// - 서명은 승인 시트와 같다: 같은 키(ApprovalHost approvalKeyFor), 같은 메시지(approveMessage), 같은 상태 판단(sheetState).
-// - 경고를 확인해야 하거나(중복 의심), 멈춤(처음 거래처, 한도, 키 없음 등), 결과 모름이면 카드에서 승인하지 않고 [자세히 보기]로 시트를 연다.
-// - [거절]은 앱 안 확인 시트를 한 번 거친다.
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { APPROVE_CTX, approveMessage, readGate, sheetState, showValue, type PhoneGate } from '../approval';
@@ -42,7 +37,7 @@ export function CardApprove({ job, gate, onDetail, now: fixedNow }: { job: Job; 
     setBusy(true);
     try {
       const signed = await key.sign(APPROVE_CTX, approveMessage(s.data.pair?.pairId ?? '', gate.reqId, gate.challenge, gate.actionHash, decision));
-      if (!signed) return; // 생체 확인을 취소했다: 카드는 그대로
+      if (!signed) return;
       if (decision === 'approve') success();
       q.decide(job.id, decision, { reqId: gate.reqId, actionHash: gate.actionHash, sig: signed.sig });
     } finally {

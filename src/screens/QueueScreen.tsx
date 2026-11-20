@@ -1,9 +1,3 @@
-// 밀린 일(P-13, 홈 "지금 할 일" 줄에서). 레퍼런스: iOS 알림 센터(알림마다 카드 하나, 옆으로 밀어 지우기, 묶음 머리 [지우기]).
-// - 일마다 카드 하나(tint 면, 둥근 모서리, 카드 사이 여백). 첫 줄 거래처 + 금액, 둘째 줄 지금 상태 한 문장.
-// - 상태 문장은 짧은 말로("중지됐어요", "PC가 다른 일 중이었어요"). 가운데점으로 낱말을 잇지 않는다. 긴 이유는 카드를 눌러 진행 화면에서.
-// - 할 일이 있는 카드만 단추 하나(승인하기 · 취소 · 다시 맡기기). PC가 거절하거나 멈춰 끝난 일은 "발급 안 된 일"에 모으고,
-//   카드를 좌우로 밀어 치우거나 머리의 [모두 치우기]로 한 번에 치운다.
-// - 시작 확인이 있으면 바닥 주요 단추 [모두 시작]. 비었으면 "밀린 일이 없어요".
 import { Pressable, StyleSheet, View } from 'react-native';
 import { clock } from '../chat';
 import { pcTurnOf, type RefuseReason, type RunView, type Step } from '../run';
@@ -17,7 +11,6 @@ import { CardApprove } from './CardApprove';
 
 const NB = ' ';
 
-/** 묶음 이름(사장님 쪽에서 본 말) */
 const SECTION: Record<JobState, string> = {
   confirmStart: '시작할 일',
   approval: '승인할 일',
@@ -67,7 +60,6 @@ const PLAIN: Record<JobState, string> = {
   done: '발급했어요',
 };
 
-/** 카드 둘째 줄: 지금 상태 한 문장 */
 function statusLine(job: Job, state: JobState): string {
   const r: RunView | undefined = job.run;
   if (job.wait === 'pcBusy') return '다른 일이 끝나면 할게요';
@@ -81,7 +73,6 @@ function statusLine(job: Job, state: JobState): string {
   return PLAIN[state];
 }
 
-/** PC가 거절·중지해 끝난 폰 발급 명령(치울 수 있는 카드) */
 const closed = (j: Job, state: JobState) => actionFor(j, state)?.key === 'dismiss';
 
 export function QueueScreen({ onDone, onConnection, onOpen, now = Date.now() }: { onDone: () => void; onConnection: () => void; onOpen: (job: Job, action: JobAction) => void; now?: number }) {
@@ -189,7 +180,6 @@ function Section({ title, note, right, children, testID }: { title: string; note
   );
 }
 
-/** 카드 하나에 동작은 많아야 하나. 진행·결과가 있으면 카드 전체를 눌러 진행 화면. */
 function JobCard({ job, state, onAction }: { job: Job; state: JobState; onAction: (a: JobAction) => void }) {
   const p = usePalette();
   const action = actionFor(job, state);
@@ -199,10 +189,8 @@ function JobCard({ job, state, onAction }: { job: Job; state: JobState; onAction
   const dim = state === 'expired' || isClosed;
   const button = action && !isClosed && action.key !== 'progress' && action.key !== 'result' ? action : null;
   const canOpen = !!job.run || state === 'done';
-  // 채운 단추(아래 줄): 승인하기, 오늘 날짜로 맡기기. 나머지는 상태 줄 끝 글자 단추
   const approve = button?.key === 'approve' || button?.key === 'redate';
   const label = button?.key === 'approve' ? '승인하기' : button?.label;
-  // 날짜를 바꿔야 하는 일은 취소도 할 수 있다
   const side = approve ? (button?.key === 'redate' ? { key: 'cancel' as const, label: '취소' } : null) : button && label ? { key: button.key, label } : null;
 
   const body = (
@@ -221,7 +209,7 @@ function JobCard({ job, state, onAction }: { job: Job; state: JobState; onAction
         <T v="sub" c={attention ? 'attention' : dim ? 'ink3' : 'ink2'} style={{ flex: 1 }} testID={`job-${job.id}-line`}>
           {line}
         </T>
-        {/* 덜 중요한 동작(빼기·취소·다시 맡기기)은 상태 줄 끝 글자 단추. 승인만 채운 단추로 아래 줄에 */}
+        {}
         {side && (
           <Pressable
             testID={`job-${job.id}-${side.key}`}

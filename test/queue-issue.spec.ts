@@ -12,7 +12,6 @@ describe('밀린 일(P-13)', () => {
     assert.equal(stateAt(job('a', 'entrusted', 72), now), 'expired');
     assert.equal(stateAt(job('a', 'phoneWaiting', 80), now), 'expired');
     assert.equal(stateAt(job('a', 'running', 80), now), 'running');
-    // PC가 가져가 시작 답을 기다리는 일은 만료되지 않는다
     assert.equal(stateAt(job('a', 'confirmStart', 100), now), 'confirmStart');
     assert.equal(EXPIRE_MS, 259_200_000);
   });

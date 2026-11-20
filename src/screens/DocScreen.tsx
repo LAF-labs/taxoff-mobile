@@ -1,6 +1,3 @@
-// 서류 보기(P-05, 전체 화면): 위에 파일 이름·발급일, 가운데 PDF 미리보기, 아래 고정 [공유] [파일에 저장].
-// 지금은 번들 견본(가짜 PDF + 첫 쪽 그림)이고, PC가 보낸 암호 파일 풀기·쪽 넘기기는 다음 PR이다.
-// 상태: 여는 중 · PC에서 받는 중(진행률) · PC 꺼짐(켜지면 받기) · 백업에서 열림 · 열 수 없음 · 열림.
 import { useState } from 'react';
 import { ActivityIndicator, Image, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { shareDoc } from '../doc';
@@ -21,7 +18,6 @@ export function DocScreen({ onDone, state: initial = { kind: 'ready' } }: { onDo
   const doc = r?.kind === 'done' ? r.result.doc : SAMPLE_REF;
   const [state, setState] = useState<DocState>(initial);
   const [fail, setFail] = useState(false);
-  // 쪽 그림은 화면 너비에 맞춘 높이를 직접 준다(웹에서 aspectRatio가 그림 원래 높이로 늘어나는 것을 막는다).
   const { width } = useWindowDimensions();
   const imgW = width - space.s5 * 2 - space.s2 * 2;
   const share = async (purpose: 'share' | 'save') => setFail(!(await shareDoc(doc.name, purpose)));

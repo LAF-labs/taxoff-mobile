@@ -1,5 +1,3 @@
-// 촬영 안내 틀 → 사진 좌표 자르기 사각형. 미리보기는 사진을 cover로 채운다(가운데 맞춤). 순수 함수.
-
 interface Rect {
   x: number;
   y: number;
@@ -7,7 +5,6 @@ interface Rect {
   h: number;
 }
 
-/** 안내 틀(미리보기 좌표)을 사진 좌표로. 사진 밖으로 나가지 않게 자른다. */
 export function guideCrop(photo: { width: number; height: number }, view: { width: number; height: number }, guide: Rect): { originX: number; originY: number; width: number; height: number } {
   const scale = Math.max(view.width / photo.width, view.height / photo.height);
   const ox = (photo.width - view.width / scale) / 2;
@@ -19,7 +16,6 @@ export function guideCrop(photo: { width: number; height: number }, view: { widt
   return { originX: x, originY: y, width: Math.max(1, w), height: Math.max(1, h) };
 }
 
-/** 긴 변이 max를 넘으면 줄인다. */
 export function fitEdge(w: number, h: number, max: number): { width: number; height: number } | null {
   const long = Math.max(w, h);
   if (long <= max) return null;
@@ -27,10 +23,6 @@ export function fitEdge(w: number, h: number, max: number): { width: number; hei
   return { width: Math.round(w * k), height: Math.round(h * k) };
 }
 
-/**
- * 안내 틀: 미리보기 가운데, 폭 88%, 높이는 미리보기의 80%를 넘지 않는다.
- * 비율(세로 ÷ 가로): 영수증 1.6(길쭉), 종이 세금계산서 0.71(별지 서식 반쪽 A4를 세로 폰으로 찍을 때 가로가 긴 틀), 사업자등록증 1.41(A4 세로).
- */
 export const GUIDE_RATIO = { receipt: 1.6, invoice: 0.71, bizReg: 1.41 } as const;
 export function guideRect(view: { width: number; height: number }, ratio: number = GUIDE_RATIO.receipt): Rect {
   let w = view.width * 0.88;

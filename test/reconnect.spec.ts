@@ -1,4 +1,3 @@
-// PC 다시 붙기 시점(src/net/reconnect.ts): 망 바뀜 판단, 실패 뒤 늘려 가는 기다림과 지터.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { failed, JITTER, netChanged, RETRY_FIRST_MS, retryDelay } from '../src/net/reconnect.ts';
@@ -19,7 +18,6 @@ describe('망 바뀜', () => {
     assert.equal(netChanged(wifi, wifi), false);
     assert.equal(netChanged(wifi, none), false);
     assert.equal(netChanged(wifi, { type: 'cellular', reachable: false }), false);
-    // 닿는지 아직 모름(null)에서 닿음으로는 변화가 아니다(앱을 열 때 이미 붙는다)
     assert.equal(netChanged({ type: 'wifi', reachable: null }, wifi), false);
   });
 });

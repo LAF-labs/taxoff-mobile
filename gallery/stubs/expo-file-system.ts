@@ -1,4 +1,3 @@
-// 갤러리(웹) 전용 빈 파일 시스템. 화면을 그리는 데만 쓰고 아무것도 읽고 쓰지 않는다.
 class Node {
   uri: string;
   constructor(...parts: Array<string | Node>) {

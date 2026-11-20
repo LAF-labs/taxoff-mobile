@@ -5,7 +5,6 @@ import {
   ARM_DELAY_MS, actionHash, dupDetail, buildGate, cardHash, gateMatches, mmss, readGate, sheetState, showValue, type GateField, type PhoneGate, type SheetContext,
 } from '../src/approval.ts';
 
-// PC 엔진(tex poc/packages/engine/src/gate.ts buildGateRequest·cardHash)으로 만든 벡터. source에 커밋이 있다.
 const PC = JSON.parse(readFileSync(new URL('./fixtures/gate-vectors.json', import.meta.url), 'utf8')) as {
   source: string;
   vectors: Array<{ name: string; fields: GateField[]; cardHashInputs: PhoneGate['cardHashInputs']; cardHash: string; actionHash: string }>;

@@ -1,11 +1,8 @@
-// PC가 꺼졌을 때 폰 대화(src/offline, ADR-047): tex 고정 사본(@sax/chat-core·@sax/redaction)이 이 레포에서 그대로 돌고,
-// 게이트웨이에는 가린 글과 기기 인증 헤더만 가며, 결과가 홈 대화 줄로 바뀌는지 본다. 게이트웨이는 가짜다(모의 기준).
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { registerHooks } from 'node:module';
 import { describe, it } from 'node:test';
 
-// 앱은 tsconfig paths·metro 별칭으로 사본을 찾는다. Node 시험은 같은 별칭을 여기서 건다.
 const VENDOR: Record<string, string> = {
   '@sax/remote': '../vendor/sax-remote/src/index.ts',
   '@sax/redaction': '../vendor/sax-redaction/src/index.ts',
@@ -33,7 +30,6 @@ interface Call {
   body: Record<string, unknown> | null;
 }
 
-/** 가짜 게이트웨이: 호출을 적고, respond마다 줄 세운 출력을 낸다. */
 function fakeGateway(outputs: Array<Array<Record<string, unknown>>>, status = 200, error?: string) {
   const calls: Call[] = [];
   const fetch = async (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => {
@@ -43,7 +39,6 @@ function fakeGateway(outputs: Array<Array<Record<string, unknown>>>, status = 20
     if (status !== 200) out = { error };
     else if (url.endsWith('/v1/run-tokens')) out = { runToken: `rt_${'x'.repeat(30)}` };
     else if (url.endsWith('/v1/usage')) out = { usedKrw: 3, limitKrw: 50, resetAt: 1, tier: 'trial' };
-    // 판정(ADR-057): 답이 없으면 반응 없이 늘 하던 대로 답한다
     else if (url.endsWith('/v1/decide')) out = { answers: [] };
     else out = { status: 'completed', output: (outputs.shift() ?? []).map((item) => ({ item, tag: tag() })) };
     return { status, text: async () => JSON.stringify(out) };
@@ -102,7 +97,6 @@ describe('폰 대화(PC 꺼짐): 고정 사본 → 가짜 게이트웨이', () =
     const card = r.items.find((x) => x.kind === 'msg' && x.card);
     assert.ok(card && card.kind === 'msg');
     assert.equal(card.card?.note, '발급하기를 누르면 PC가 바로 준비해요');
-    // 부가세를 말하지 않았으면 별도로 둔다(카드에 "정하지 않음"을 쓰지 않는다)
     if (card.card?.draft?.vat !== undefined) assert.notEqual(card.card.draft.vat, null);
     assert.ok(!JSON.stringify(card.card).includes('정하지 않음'));
   });
@@ -124,14 +118,12 @@ describe('폰 대화(PC 꺼짐): 고정 사본 → 가짜 게이트웨이', () =
     const items = (await chat.items()).filter((x) => x.kind === 'msg' && x.text !== undefined);
     assert.deepEqual(items.map((x) => x.kind === 'msg' && [x.from, x.text]), [['me', '한빛전자에 55만원 세금계산서 끊어줘'], ['pc', '한빛전자 카드를 만들었어요. 맡기면 PC를 켰을 때 시작해요.']]);
 
-    // 나간 것: 실행 토큰 1번 + 판정 1번(ADR-057, 가린 글) + respond 2번, 모두 운영 origin, 모두 기기 인증 헤더
     assert.deepEqual(gw.calls.map((c) => c.url.slice(ORIGIN.length)), ['/v1/run-tokens', '/v1/decide', '/v1/respond', '/v1/respond']);
     assert.equal((gw.calls[1]!.body as { bundleId: string }).bundleId, 'chat_route_v1');
     for (const c of gw.calls) assert.ok(c.headers.Authorization?.startsWith('DPoP ') && c.headers.DPoP, c.url);
     const sent = JSON.stringify(gw.calls.map((c) => c.body));
     for (const raw of ['한빛전자', '220-81-62517', '55만원', '550000', '500000', '율무상회', '123-45-67890']) assert.ok(!sent.includes(raw), `원값이 나갔다: ${raw}`);
     assert.equal((gw.calls[2]!.body as { toolset: string }).toolset, 'chat_phone');
-    // 봉인 저장에 넘기는 것도 원값 없는 가린 글 + 화면 문장뿐이다(파일은 기기 키로 봉인된다)
     assert.ok(saved());
 
     assert.ok(await chat.entrust(r.drafts[0]!.id));
@@ -201,7 +193,6 @@ describe('폰 대화 줄 표시', () => {
 });
 
 describe('앱을 껐다 켜도 폰 대화가 남는다', () => {
-  /** 두 번 실행 사이에 남는 파일 둘(코어 기록, 카드·표)을 흉내 낸다 */
   function twoRuns(outputs: Array<Array<Record<string, unknown>>>, status = 200) {
     const disk = { chat: null as string | null, shown: null as string | null };
     const open = (o: Array<Array<Record<string, unknown>>>, st = 200) => {

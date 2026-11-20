@@ -4,7 +4,6 @@ import { josa } from '../src/ui/josa.ts';
 import { glueAddress } from '../src/ui/address.ts';
 import { UNSURE_BELOW, formatBizNo, parseBizReg } from '../src/capture/bizreg.ts';
 
-// 가짜 사업자로 만든 등록증 OCR 줄(개인·법인 서식)
 const PERSONAL = [
   '사 업 자 등 록 증',
   '(일반과세자)',

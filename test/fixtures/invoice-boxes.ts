@@ -1,10 +1,8 @@
-// 종이 세금계산서 OCR 상자 견본(시험·화면 갤러리 공용). 실제 사업자 정보가 아니다(사업자번호는 검증 숫자만 맞춘 가짜).
 import type { OcrBox } from '../../src/capture/invoice.ts';
 
 const H = 0.018;
 const B = (text: string, x: number, y: number, w = 0.08): OcrBox => ({ text, x, y, w, h: H });
 
-/** 공급받는자 보관용 종이 세금계산서(별지 제14호 모양). 왼쪽 공급자, 오른쪽 공급받는자. */
 export function paperTaxInvoice(opts: { digitCells?: boolean; noLabels?: boolean } = {}): OcrBox[] {
   const b: OcrBox[] = [
     B('세금계산서', 0.3, 0.04, 0.25),
@@ -30,7 +28,6 @@ export function paperTaxInvoice(opts: { digitCells?: boolean; noLabels?: boolean
   }
   b.push(B('작성', 0.04, 0.25, 0.05), B('공급가액', 0.3, 0.25, 0.1), B('세액', 0.6, 0.25, 0.06), B('비고', 0.85, 0.25, 0.06));
   if (opts.digitCells) {
-    // 자리마다 한 칸: 1 2 3 0 0 0 0 / 1 2 3 0 0 0
     b.push(B('2026', 0.02, 0.28, 0.06), B('11', 0.09, 0.28, 0.03), B('05', 0.13, 0.28, 0.03));
     [...'1230000'].forEach((d, i) => b.push(B(d, 0.25 + i * 0.03, 0.28, 0.02)));
     [...'123000'].forEach((d, i) => b.push(B(d, 0.58 + i * 0.03, 0.28, 0.02)));

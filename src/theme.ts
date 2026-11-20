@@ -1,11 +1,3 @@
-// 폰 디자인 토큰. 원본은 tex sovereign-ax/design-system/tokens.json v2.0(2026-11-14, "Muse처럼 미니멀하게").
-// 색 값과 뜻은 PC와 같다. 크기만 폰 기준으로 옮겼다(docs/design.md):
-//   PC 14·13·12 → 폰 17·15·13 (iOS 본문 17pt, Android 본문 16sp를 앱 안에서 17로 맞춘다).
-// 규칙(PC와 같음):
-//   - 선 대신 면. 바탕 canvas 하나, 묶음·입력은 tint 채움. 테두리는 포커스·확인 필요·빈 입력 칸에만.
-//   - 큰 글씨로 강조하지 않는다. 중요한 값은 ink + 600으로만 올린다. 숫자는 고정폭.
-//   - 색은 두 뜻뿐: accent(파랑) = 내 차례·승인, attention(황토) = 확인 필요. 완료·실패에 초록·빨강 없음.
-//   - 주요 단추는 ink 채움 하나. 파랑 채움은 승인에만(폰 Phase 1에는 승인이 없어 쓰지 않는다).
 import { createContext, useEffect, useState } from 'react';
 import { AccessibilityInfo, useColorScheme } from 'react-native';
 
@@ -27,14 +19,12 @@ const light = {
   attention: '#8A5A0B',
   attentionSoft: '#FBF3E4',
   scrim: '#11111233',
-  /** 대화 말풍선(Muse 12.1 hatch와 같은 값): 내 말, 상대 말, 시각 줄, 기다림 점 */
   bubbleMe: '#CBE5FF',
   onBubbleMe: '#111112',
   bubbleThem: '#E9EAEB',
   stamp: '#00040996',
   typingDot: '#0007115E',
   typingDotDim: '#00071118',
-  /** 카메라 화면 전용(테마와 무관하게 검정 위 흰 글자) */
   camera: '#000000',
   onCamera: '#FFFFFF',
   cameraVeil: '#00000099',
@@ -70,18 +60,11 @@ const dark: typeof light = {
 export type Palette = typeof light;
 export type Ink = 'ink' | 'ink2' | 'ink3' | 'ink4' | 'onInk' | 'accent' | 'attention' | 'onCamera';
 
-/** 4의 배수. 화면 옆 여백은 s5(20), 묶음 사이는 s6(28). */
 export const space = { s0: 2, s1: 4, s2: 8, s3: 12, s4: 16, s5: 20, s6: 28, s7: 40 } as const;
-/** 누르는 것은 덜, 담는 것은 더 둥글게(PC radius-md 10 · lg 16 · xl 22를 폰에 그대로). */
 export const radius = { sm: 8, md: 12, lg: 16, xl: 22, full: 9999 } as const;
-/** 컨트롤 높이. 누름 영역은 44 미만이 없다(HIG 44pt, WCAG 2.5.8). */
 export const size = { hit: 44, row: 52, button: 52, buttonSm: 40, header: 48 } as const;
 
 const tnum = ['tabular-nums' as const];
-/**
- * 글자 단계는 셋(17·15·13)과 머리 하나(17/600). 굵기는 400·500·600.
- * 한글 라벨에 자간을 넣지 않는다. 숫자가 들어가는 값은 figure 계열(고정폭).
- */
 export const type = {
   title: { fontSize: 17, lineHeight: 24, fontWeight: '600' as const },
   body: { fontSize: 17, lineHeight: 24, fontWeight: '400' as const },
@@ -93,18 +76,11 @@ export const type = {
   label: { fontSize: 13, lineHeight: 18, fontWeight: '500' as const },
   meta: { fontSize: 13, lineHeight: 18, fontWeight: '400' as const, fontVariant: tnum },
   button: { fontSize: 17, lineHeight: 22, fontWeight: '600' as const },
-  /** 페어링 6자리만 크게 쓴다(사람이 PC 화면과 한 글자씩 대조하는 값) */
   sas: { fontSize: 40, lineHeight: 48, fontWeight: '600' as const, fontVariant: tnum, letterSpacing: 8 },
 };
 export type TypeName = keyof typeof type;
 
-/** 글자 크기 설정은 따르되 화면이 깨지지 않게 상한을 둔다. */
 export const MAX_FONT_SCALE = 1.6;
-/**
- * 앱 안 글자 크기 배율. 설정 > 화면 > 글자 크기(작게·중간·크게)가 바꾸고, OS 글자 크기 설정은 그 위에 따로 곱해진다(MAX_FONT_SCALE까지).
- * 갤러리(웹)는 ?fs=1.6으로 OS 설정을 흉내 낸다. 이름은 예전 그대로 web이지만 앱에서도 쓴다.
- * 값이 바뀌면 TextSizeContext가 바뀌어 T가 다시 그려진다.
- */
 export const textScale = { web: 1 };
 export type TextSize = 'small' | 'medium' | 'large';
 export const TEXT_SIZE_FACTOR: Record<TextSize, number> = { small: 0.88, medium: 1, large: 1.15 };
@@ -116,7 +92,6 @@ export function usePalette(): Palette {
   return useColorScheme() === 'dark' ? dark : light;
 }
 
-/** 동작 줄이기 설정이면 움직임을 0으로 한다(tokens.json motion 규칙). */
 export function useReducedMotion(): boolean {
   const [r, setR] = useState(false);
   useEffect(() => {

@@ -1,4 +1,3 @@
-// PC가 라이브 세션마다 넘기는 폰 사본(remote-envelope v1.8 phone.copy) 받기와 폰 모양 바꾸기. 채널은 가짜다(모의 기준).
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import { describe, it } from 'node:test';
@@ -34,7 +33,6 @@ const BODY: Body = {
   },
 };
 
-/** recv가 차례로 이 봉투들을 돌려주는 가짜 채널 */
 function fakeChannel(envs: Array<{ type: string; body: unknown }>): Ch {
   const q = [...envs];
   return { closed: false, recv: async () => q.shift() ?? null } as unknown as Ch;

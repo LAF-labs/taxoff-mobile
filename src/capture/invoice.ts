@@ -1,19 +1,7 @@
-// 종이 세금계산서·계산서 규칙 파서. 폰 OCR 글자 상자(위치 포함) → 서식 칸 값 후보 + 칸마다 확신.
-// 모델을 부르지 않는다(ADR-032 결정 11·ADR-034 결정 9). 값은 사장님 확인을 거친 후보이고, PC가 원본 사진과 함께 정본으로 다시 본다.
-// 순수 함수(React Native 의존 없음) — node --test로 시험한다.
-//
-// 서식(부가가치세법 시행규칙 별지 제14호·제15호, 종이 세금계산서·계산서)의 모양을 기대한다:
-//   머리: 세금계산서 / 계산서, (공급자 보관용 | 공급받는자 보관용), 책번호 권·호, 일련번호
-//   왼쪽 공급자 · 오른쪽 공급받는자: 등록번호, 상호(법인명), 성명(대표자), 사업장 주소, 업태, 종목
-//   작성 년 월 일 · 공급가액 · 세액 · 비고 (공급가액·세액이 자리마다 한 칸인 옛 서식도 있다)
-//   품목 줄: 월 일 품목 규격 수량 단가 공급가액 세액 비고
-//   바닥: 합계금액 · 현금 · 수표 · 어음 · 외상미수금 · 이 금액을 영수/청구 함
-// 칸 위치로 읽고, 숫자는 검산(공급가액 × 10% ≈ 세액, 합계 = 공급가액 + 세액, 사업자번호 검증 숫자)으로 고른다.
 import { validBizNo } from './parser.ts';
 
 export interface OcrBox {
   text: string;
-  /** 0~1, 위·왼쪽이 0 */
   x: number;
   y: number;
   w: number;
@@ -42,7 +30,6 @@ export interface InvoiceItem {
   vat: number | null;
 }
 
-/** 릴레이 스레드와 합의한 paperInvoice 모양(receipt.v2). 폰은 사장님이 확인한 값만 보낸다. */
 export interface PaperInvoice {
   docKind: InvoiceKind;
   direction: Direction | null;
@@ -57,23 +44,18 @@ export interface PaperInvoice {
   total: number | null;
   items: InvoiceItem[];
   receiptOrClaim: 'receipt' | 'claim' | null;
-  /** 칸 이름 → 0~1. 사장님이 고친 칸은 1 */
   fieldConfidence: Record<string, number>;
 }
 
-/** 어느 보관용을 찍었는지(사장님이 받은 쪽이면 매입) */
 type CopyOf = 'supplier' | 'buyer' | null;
 
 interface InvoiceRead {
   invoice: PaperInvoice;
   copyOf: CopyOf;
-  /** 홈택스에서 뽑은 전자세금계산서 출력물(승인번호가 있다). PC가 홈택스에서 이미 가져온다 */
   electronicCopy: boolean;
 }
 
-// ── 글자 다듬기 ──
 const nfkc = (s: string) => s.normalize('NFKC');
-/** 라벨 비교용: 공백·괄호·가운뎃점을 지운다 */
 const key = (s: string) => nfkc(s).replace(/[\s()（）·.:：]/g, '');
 
 const LABELS: Record<string, RegExp> = {
@@ -92,7 +74,6 @@ interface Row {
   text: string;
 }
 
-/** 같은 높이의 상자를 한 줄로 묶고 왼쪽부터 늘어놓는다. 줄 간격 기준은 상자 높이의 중앙값. */
 export function toRows(boxes: OcrBox[]): Row[] {
   const bs = boxes.filter((b) => b.text.trim()).map((b) => ({ ...b, text: nfkc(b.text).trim() }));
   if (!bs.length) return [];
@@ -115,13 +96,11 @@ export function toRows(boxes: OcrBox[]): Row[] {
   return rows.sort((a, b) => a.y - b.y);
 }
 
-/** 줄 목록만 있는 OCR(옛 빌드·다른 엔진)을 상자로 바꾼다: 한 줄 = 전폭 상자 하나. */
 export function linesToBoxes(lines: string[]): OcrBox[] {
   const n = Math.max(lines.length, 1);
   return lines.map((text, i) => ({ text, x: 0, y: i / n, w: 1, h: 0.8 / n }));
 }
 
-// ── 숫자 ──
 const won = (s: string): number | null => {
   const t = nfkc(s).replace(/[\s원₩\\]/g, '');
   if (!/^-?(\d{1,3}([,.]\d{3})+|\d+)$/.test(t)) return null;
@@ -129,10 +108,6 @@ const won = (s: string): number | null => {
   return Number.isSafeInteger(n) && n >= 0 && n <= 100_000_000_000 ? n : null;
 };
 
-/**
- * 한 줄의 금액 토큰. 자리마다 한 칸인 옛 서식(백·십·억·천…)은 붙어 있는 한 자리 숫자 칸을 이어 붙인다.
- * 날짜·사업자번호·승인번호 꼴은 뺀다.
- */
 function amountsOf(row: Row): { n: number; x: number }[] {
   const out: { n: number; x: number }[] = [];
   let run: OcrBox[] = [];
@@ -162,7 +137,6 @@ function amountsOf(row: Row): { n: number; x: number }[] {
   return out;
 }
 
-/** 세액이 공급가액의 10%로 맞는가(원 단위 버림·반올림·올림 어느 쪽이든) */
 export const vatFits = (supply: number, vat: number) => supply > 0 && Math.abs(vat - supply / 10) <= 1;
 
 function fmtBiz(d: string) {
@@ -191,13 +165,10 @@ const tidyName = (s: string): string | null => {
   return t.slice(0, 60);
 };
 
-// ── 칸 읽기 ──
-/** 라벨 상자 오른쪽(같은 줄, 다음 라벨 전까지)의 글자. 라벨과 값이 한 상자면 라벨을 떼고 남은 글자. */
 const LABEL_HEAD = /^(사업자등록번호|등록번호|사업자번호|상호법인명|상호|법인명|성명대표자|대표자성명|성명|대표자|사업장주소|사업장|주소|업태|종목)/;
 const LABEL_HEAD_RAW = /^[\s(]*(사업자\s*등록\s*번호|등\s*록\s*번\s*호|사업자\s*번호|상\s*호\s*\(?\s*법\s*인\s*명\s*\)?|상\s*호|법\s*인\s*명|성\s*명\s*\(?\s*대\s*표\s*자\s*\)?|대\s*표\s*자(\s*성\s*명)?|성\s*명|사\s*업\s*장\s*주\s*소|사\s*업\s*장|주\s*소|업\s*태|종\s*목)[\s):：]*/;
 
 function valueRight(row: Row, label: OcrBox, maxX: number): string | null {
-  // 라벨과 값이 한 상자("상호 가나상사")면 라벨을 떼고 남은 글자
   if (key(label.text).replace(LABEL_HEAD, '').length >= 1) {
     const m = nfkc(label.text).match(LABEL_HEAD_RAW);
     const rest = m ? nfkc(label.text).slice(m[0].length).trim() : '';
@@ -245,7 +216,6 @@ function readParty(rows: Row[], side: Side, headerEnd: number): { party: Party; 
         }
       }
     }
-    // 라벨 없이 사업자번호만 보이면(라벨 칸이 세로로 합쳐진 서식) 그 쪽의 첫 번호
     if (!party.bizNo) {
       for (const b of inSide) {
         const n = bizIn(b.text);
@@ -268,20 +238,16 @@ export function parsePaperInvoice(boxes: OcrBox[], today = new Date()): InvoiceR
   if (!kind) return null;
   const fc: Record<string, number> = {};
 
-  // 보관용 → 방향 후보. 공급받는자 보관용이면 사장님이 받은 것(매입)
   const copyOf: CopyOf = /공급받는자보관용/.test(all) ? 'buyer' : /공급자보관용/.test(all) ? 'supplier' : null;
   const direction: Direction | null = copyOf === 'buyer' ? 'purchase' : copyOf === 'supplier' ? 'sales' : null;
   if (direction) fc.direction = 0.85;
 
-  // 승인번호(홈택스 출력물): 8-8-8 숫자, 또는 24자리
   const appr = nfkc(rows.map((r) => r.text).join(' ')).match(/(?<!\d)(\d{8})\s*-\s*(\d{8})\s*-\s*(\d{8})(?!\d)/);
   const approvalNo = appr ? `${appr[1]}-${appr[2]}-${appr[3]}` : null;
 
-  // 책번호 ○권 ○호, 일련번호
   const book = all.match(/책번호(\d{1,4})권(\d{1,4})호/);
   const serial = all.match(/일련번호[^\d\n]{0,2}(\d{1,10})/);
 
-  // 공급자·공급받는자 경계: 두 번째 '등록번호' 라벨의 x, 없으면 두 번째 사업자번호의 x, 그것도 없으면 가운데
   const regLabels = rows.flatMap((r) => r.boxes.filter((b) => LABELS.bizNo!.test(key(b.text))));
   const bizBoxes = rows.flatMap((r) => r.boxes.filter((b) => bizIn(b.text)));
   let mid = 0.5;
@@ -298,12 +264,10 @@ export function parsePaperInvoice(boxes: OcrBox[], today = new Date()): InvoiceR
     }
   }
 
-  // 머리 영역 끝: '작성' 또는 '공급가액' 라벨이 있는 첫 줄
   const sumHead = rows.findIndex((r) => /작성|공급가액/.test(key(r.text)) && !/등록번호/.test(key(r.text)));
   const headerEnd = sumHead >= 0 ? rows[sumHead]!.y - 0.001 : 1;
   const sp = readParty(rows, { minX: 0, maxX: mid }, headerEnd);
   const bp = readParty(rows, { minX: mid, maxX: 1.01 }, headerEnd);
-  // 칸 위치로 못 나눴으면 문서 순서대로 첫 번째·두 번째 번호
   if (!sp.party.bizNo || !bp.party.bizNo || sp.party.bizNo === bp.party.bizNo) {
     const seen = [...new Set(bizBoxes.map((b) => bizIn(b.text)!))];
     if (seen.length >= 2) {
@@ -316,7 +280,6 @@ export function parsePaperInvoice(boxes: OcrBox[], today = new Date()): InvoiceR
   for (const [k, v] of Object.entries(sp.conf)) fc[`supplier.${k}`] = v;
   for (const [k, v] of Object.entries(bp.conf)) fc[`buyer.${k}`] = v;
 
-  // 작성일자: 날짜 꼴, 없으면 '작성' 줄 아래(또는 그 줄)의 연·월·일 칸
   let writtenOn: string | null = null;
   const fullRe = /(20\d{2})\s*[-./년]\s*(\d{1,2})\s*[-./월]\s*(\d{1,2})/;
   const scanFrom = Math.max(0, sumHead);
@@ -343,7 +306,6 @@ export function parsePaperInvoice(boxes: OcrBox[], today = new Date()): InvoiceR
   }
   if (writtenOn) fc.writtenOn = sumHead >= 0 ? 0.85 : 0.6;
 
-  // 공급가액·세액: 머리 아래 첫 금액 줄에서 10% 검산이 맞는 쌍. 없으면 문서 전체에서 가장 큰 맞는 쌍.
   const itemHead = rows.findIndex((r) => /품목/.test(key(r.text)));
   const totalRowIdx = rows.findIndex((r, i) => i > Math.max(itemHead, sumHead) && /합계금액|영수|청구/.test(key(r.text)));
   const summaryRows = rows.slice(Math.max(0, sumHead), itemHead > sumHead ? itemHead : Math.max(0, sumHead) + 3);
@@ -372,7 +334,6 @@ export function parsePaperInvoice(boxes: OcrBox[], today = new Date()): InvoiceR
     }
   }
 
-  // 합계금액
   let total: number | null = null;
   const totalRow = totalRowIdx >= 0 ? rows[totalRowIdx]! : rows.find((r) => /합계금액/.test(key(r.text)));
   const totalNums = totalRow ? amountsOf(totalRow).map((a) => a.n) : [];
@@ -391,7 +352,6 @@ export function parsePaperInvoice(boxes: OcrBox[], today = new Date()): InvoiceR
     total = Math.max(...totalNums, ...nextNums);
     fc.total = 0.6;
   }
-  // 계산서(면세): 세액 칸이 없다. 합계만 읽혔으면 공급가액 = 합계
   if (kind === 'invoice') {
     if (supplyAmount === null && total !== null) {
       supplyAmount = total;
@@ -405,7 +365,6 @@ export function parsePaperInvoice(boxes: OcrBox[], today = new Date()): InvoiceR
     }
   }
 
-  // 품목 줄: '품목' 머리 아래 ~ 합계 줄 위. 이름이 있고 금액이 있는 줄만
   const items: InvoiceItem[] = [];
   if (itemHead >= 0) {
     const end = totalRowIdx > itemHead ? totalRowIdx : rows.length;
@@ -470,7 +429,6 @@ export function parsePaperInvoice(boxes: OcrBox[], today = new Date()): InvoiceR
   };
 }
 
-/** 서식 이름만 보고 세금계산서·계산서인지(촬영 뒤 영수증/세금계산서 화면을 고를 때) */
 export function looksLikeInvoice(lines: string[]): InvoiceKind | null {
   const k = lines.map(key).join('\n');
   if (/세금계산서/.test(k)) return 'tax_invoice';
@@ -478,7 +436,6 @@ export function looksLikeInvoice(lines: string[]): InvoiceKind | null {
   return null;
 }
 
-// ── 확인 화면 검산 ──
 type InvoiceIssue =
   | { field: 'total'; code: 'sum_mismatch'; expected: number }
   | { field: 'vatAmount'; code: 'vat_not_10pct' }
@@ -516,7 +473,6 @@ export function checkInvoice(inv: PaperInvoice, today = new Date()): InvoiceIssu
   return out;
 }
 
-/** 검산 문구(칸 아래에 남긴다). 영세율(세액 0)은 막지 않는다 */
 export function issueText(i: InvoiceIssue): string {
   switch (i.code) {
     case 'sum_mismatch':
@@ -538,13 +494,8 @@ export function issueText(i: InvoiceIssue): string {
   }
 }
 
-/** 막는 문제(보내기 전에 꼭 고칠 것). 세액 10% 불일치는 알리기만 한다(영세율·종이에 적힌 값 그대로 보낼 수 있다) */
 export const blocking = (i: InvoiceIssue) => i.code !== 'vat_not_10pct';
 
-/**
- * receipt.v1 candidates(합의 전 PC도 읽는 4칸)로 줄인다. 상대 쪽(매입이면 공급자, 매출이면 공급받는자)을 상호·번호로.
- * receipt.v2를 아는 PC에는 paperInvoice 전체를 함께 보낸다(@sax/remote 동기화 뒤).
- */
 export function toV1Candidates(inv: PaperInvoice): { amount?: number; issuedOn?: string; merchant?: string; merchantBizNo?: string } {
   const other = inv.direction === 'sales' ? inv.buyer : inv.supplier;
   const c: { amount?: number; issuedOn?: string; merchant?: string; merchantBizNo?: string } = {};

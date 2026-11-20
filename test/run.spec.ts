@@ -31,7 +31,6 @@ describe('진행·결과(P-04)', () => {
     assert.deepEqual(actionsOf(r, 1000), ['resendAuth', 'stop']);
   });
   it('단계·칩·경과·승인번호', () => {
-    // 결과 모름·확인 필요·발급됨은 발급 뒤 확인 칸
     assert.equal(stepOf({ kind: 'inDoubt', tries: 1, startedAt: 0 }), 'verify');
     assert.equal(stepOf({ kind: 'verify', startedAt: 0 }), 'verify');
     assert.equal(stepOf({ kind: 'running', step: 'issue', startedAt: 0 }), 'issue');
@@ -44,7 +43,6 @@ describe('진행·결과(P-04)', () => {
 });
 
 describe('시연 타이머(일별)', () => {
-  // 가짜 시계: 등록 순서대로 ms를 쌓아 두고 run()으로 흘린다
   const clock = () => {
     let t = 0;
     let n = 0;
@@ -71,8 +69,8 @@ describe('시연 타이머(일별)', () => {
       for (const [ms, s] of [[700, 'login'], [1400, 'readback'], [2100, 'approve']] as const) tm.at('j', ms, () => log.push(`${tag}:${s}`));
     };
     drive('a');
-    c.run(800); // a:login
-    drive('b'); // 다시 준비
+    c.run(800);
+    drive('b');
     c.run(3000);
     assert.deepEqual(log, ['a:login', 'b:login', 'b:readback', 'b:approve']);
     assert.equal(tm.pending('j'), 0);

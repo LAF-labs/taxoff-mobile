@@ -1,9 +1,3 @@
-// 폰에서 시작하는 간편인증(대표 결정 2026-11-19 A, 대표 지적 2026-11-19 "새 페이지 말고 채팅 화면 바텀시트에서 단계별로 하나씩").
-// PC가 공동인증서로 홈택스에 로그인하지 못했을 때, 지금 화면(채팅·진행) 위에 시트를 올려 한 번에 하나만 묻는다:
-//   인증 앱 → (PASS면) 통신사 → 이름 → 생년월일 → 휴대폰 번호 → 보내기.
-// 앞서 쓴 값이 있으면 "이 정보로 요청할까요?" 한 장에서 바로 보낸다. 값은 봉인 상태 파일(AppData.simpleId)에만 둔다.
-// 보내면 PC가 홈택스 간편인증 창을 채워 [인증 요청]을 누르고, 진행 카드가 "<앱>에서 승인해 주세요"로 바뀐다.
-// 고른 칸은 어둡게 칠하지 않는다(테두리와 체크만, 대표 지적 2026-11-19).
 import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,7 +18,6 @@ const ASK: Record<Exclude<SimpleStep, 'confirm'>, string> = {
   phone: '휴대폰 번호를 알려 주세요',
 };
 
-/** '로'/'으로'(받침 ㄹ은 '로'): 카카오톡으로, 네이버로, 토스로 */
 const ro = (w: string) => {
   const c = w.charCodeAt(w.length - 1) - 0xac00;
   return c >= 0 && c < 11172 && c % 28 === 8 ? `${w}로` : `${w}${josa(w, '으로', '로').slice(w.length)}`;
@@ -34,11 +27,9 @@ const maskPhone = (p: string) => p.replace(/^(\d{3})(\d{3,4})(\d{4})$/, (_, a: s
 
 export function SimpleAuthSheet({ remembered, failed, onSend, onClose, start }: {
   remembered?: SimpleId | null;
-  /** 바로 앞 요청이 안 됐다 */
   failed?: boolean;
   onSend: (id: SimpleId) => void;
   onClose: () => void;
-  /** 갤러리: 시작 단계 */
   start?: { step: SimpleStep; draft?: SimpleDraft };
 }) {
   const p = usePalette();
@@ -48,7 +39,6 @@ export function SimpleAuthSheet({ remembered, failed, onSend, onClose, start }: 
   const [draft, setDraft] = useState<SimpleDraft>(start?.draft ?? draftOf(remembered));
   const [step, setStep] = useState<SimpleStep>(start?.step ?? (known && !failed ? 'confirm' : 'app'));
   const input = useRef<ComponentRef<typeof TextInput>>(null);
-  // 단계가 바뀌면 같은 시트 안에서 내용만 옆으로 넘어간다(앞으로는 오른쪽에서, 뒤로는 왼쪽에서). 시트 높이는 그대로다.
   const slide = useRef(new Animated.Value(0)).current;
   const dir = useRef(1);
   const go = (to: SimpleStep, back = false) => {
@@ -120,7 +110,6 @@ export function SimpleAuthSheet({ remembered, failed, onSend, onClose, start }: 
         returnKeyType="next"
         onSubmitEditing={() => stepOk(step, draft) && next()}
         accessibilityLabel={ASK[key]}
-        // 웹 미리보기의 파란 포커스 테두리를 끈다(밑줄이 포커스 표시)
         style={[typeScale.title, { color: p.ink, paddingVertical: space.s3 }, { outlineStyle: 'none' } as object]}
       />
     </View>
@@ -188,7 +177,7 @@ export function SimpleAuthSheet({ remembered, failed, onSend, onClose, start }: 
   return (
     <View style={StyleSheet.absoluteFill} testID="simple-sheet">
       <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: p.scrim }]} onPress={onClose} accessibilityLabel="간편인증 닫기" accessibilityRole="button" />
-      {/* 시트 높이는 모든 단계에서 같다(대표 지시 2026-11-19). 키보드가 뜨면 시트째 올라간다. */}
+      {}
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'position' : undefined} style={st.kav} pointerEvents="box-none">
       <View style={[st.sheet, { backgroundColor: p.canvas, height: Math.min(SHEET_H + Math.max(inset.bottom, space.s4), height * 0.9), paddingBottom: Math.max(inset.bottom, space.s4) }]} accessibilityViewIsModal>
         <View style={[st.grabber, { backgroundColor: p.sunken }]} />
@@ -226,7 +215,6 @@ export function SimpleAuthSheet({ remembered, failed, onSend, onClose, start }: 
   );
 }
 
-/** 시트 높이(바닥 안전 영역 빼고): 가장 긴 단계(인증 앱 13개) 기준. 키보드가 떠도 위로 넘치지 않게 작게 잡는다. */
 const SHEET_H = 452;
 
 const st = StyleSheet.create({
