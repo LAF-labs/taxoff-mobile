@@ -1,24 +1,17 @@
-// 릴레이(D08 §8) 연결 추상화. 릴레이는 프레임 바이트만 나른다(내용·키를 볼 수 없다).
-// 실제 WSS 클라이언트는 ws-link.ts, 시험·더미용 메모리 릴레이는 MemoryRelay.
 
 export interface Link {
   send(frame: Uint8Array): void;
   onFrame(cb: (frame: Uint8Array) => void): void;
-  /** 상대가 들어오면(룸·우편함 모두) 한 번 부른다. 이미 있으면 바로. */
   onPeer(cb: () => void): void;
   onClose(cb: () => void): void;
+  onPeerGone?(cb: () => void): void;
   close(): void;
   readonly closed: boolean;
 }
 
 /** 페어링 룸(1회용, 정원 2, TTL 120초)과 우편함 라이브 연결. */
 export interface RelayClient {
-  /** 페어링 룸. PC는 응답자로 먼저 들어가 기다리고, 폰이 개시자로 들어온다. */
   joinRoom(roomId: Uint8Array, role: 'desktop' | 'mobile'): Promise<Link>;
-  /**
-   * 우편함 라이브 연결. 양쪽 모두 읽기·쓰기 토큰을 함께 낸다(services/relay/API.md: X-Mbx-Read + X-Mbx-Write,
-   * 서버는 토큰 해시만 저장). 쪽(PC·폰)은 서버가 기기 토큰의 역할로 정한다. role은 메모리 릴레이용이다.
-   */
   joinMailbox(mbxId: Uint8Array, tok: MailboxTokens, role: 'desktop' | 'mobile'): Promise<Link>;
 }
 
@@ -28,8 +21,8 @@ export interface MailboxTokens {
   write: Uint8Array;
 }
 
-/** 한 프레임을 받을 때까지 기다린다(시간 초과는 null). */
-export function nextFrame(link: Link, timeoutMs: number): Promise<Uint8Array | null> {
+/** 한 프레임을 받을 때까지 기다린다(시간 초과·signal 중단은 null. 중단되면 그 뒤 프레임은 다음 대기자가 받는다). */
+export function nextFrame(link: Link, timeoutMs: number, signal?: AbortSignal): Promise<Uint8Array | null> {
   return new Promise((resolve) => {
     const q = queueFor(link);
     let done = false;
@@ -42,13 +35,18 @@ export function nextFrame(link: Link, timeoutMs: number): Promise<Uint8Array | n
     };
     const onFrame = (f: Uint8Array) => finish(f);
     const t = setTimeout(() => finish(null), timeoutMs);
-    if (link.closed) return finish(null);
+    if (link.closed || signal?.aborted) return finish(null);
     q.wait(onFrame);
     link.onClose(() => finish(null));
+    signal?.addEventListener('abort', () => finish(null), { once: true });
   });
 }
 
-/** Link 위의 단순 수신 큐(onFrame 콜백을 하나만 걸고 여러 대기자에 나눈다). */
+/** 이미 받아 둔 프레임이 있으면 하나 꺼낸다(기다리지 않는다). */
+export function queuedFrame(link: Link): Uint8Array | null {
+  return queueFor(link).take();
+}
+
 class FrameQueue {
   #buf: Uint8Array[] = [];
   #waiters: ((f: Uint8Array) => void)[] = [];
@@ -64,6 +62,9 @@ class FrameQueue {
   }
   drop(cb: (f: Uint8Array) => void) {
     this.#waiters = this.#waiters.filter((x) => x !== cb);
+  }
+  take(): Uint8Array | null {
+    return this.#buf.shift() ?? null;
   }
 }
 const queues = new WeakMap<Link, FrameQueue>();
@@ -82,16 +83,10 @@ export function attachQueue(link: Link): void {
   queueFor(link);
 }
 
-// ---- 메모리 릴레이(시험·더미 PC) ----
-
 export interface Faults {
-  /** 0~1, 프레임을 버릴 확률 */
   drop?: number;
-  /** 0~1, 같은 프레임을 한 번 더 보낼 확률(재전송 공격) */
   duplicate?: number;
-  /** 0~1, 한 바이트를 바꿀 확률(변조) */
   tamper?: number;
-  /** 결정적 시험용 난수 */
   rand?: () => number;
 }
 
@@ -99,6 +94,7 @@ class MemLink implements Link {
   #frameCbs: ((f: Uint8Array) => void)[] = [];
   #peerCbs: (() => void)[] = [];
   #closeCbs: (() => void)[] = [];
+  #goneCbs: (() => void)[] = [];
   #peer: MemLink | null = null;
   #closed = false;
   private relay: MemoryRelay;
@@ -148,22 +144,26 @@ class MemLink implements Link {
     if (this.#closed) cb();
     else this.#closeCbs.push(cb);
   }
+  onPeerGone(cb: () => void) {
+    this.#goneCbs.push(cb);
+  }
   close() {
     if (this.#closed) return;
     this.#closed = true;
     for (const cb of this.#closeCbs.splice(0)) cb();
     const p = this.#peer;
     this.#peer = null;
-    // 실제 릴레이(services/relay app.ts)의 우편함은 한쪽이 나가도 다른 쪽 연결을 닫지 않고 {"t":"peer","online":false}만 보낸다
     if (p && !p.closed) {
       if (this.relay.mailboxKeepsPeer && this.chan.startsWith('mbx:')) p.detach();
       else p.close();
     }
     this.relay.leave(this.chan, this);
   }
-  /** 상대가 나갔다(내 연결은 그대로). 다음 상대가 오면 connect가 다시 잇는다 */
   detach() {
     this.#peer = null;
+    queueMicrotask(() => {
+      for (const cb of this.#goneCbs) cb();
+    });
   }
 }
 
@@ -173,10 +173,6 @@ class MemLink implements Link {
  */
 export class MemoryRelay implements RelayClient {
   faults: Faults = {};
-  /**
-   * 우편함을 실제 릴레이처럼: 한쪽이 나가도 다른 쪽은 붙어 있다(PC는 계속 지키고 폰은 동기화마다 들어왔다 나간다).
-   * 기본(false)은 예전 시험 의미(한쪽이 닫으면 양쪽을 닫는다).
-   */
   readonly mailboxKeepsPeer: boolean;
   constructor(o: { mailboxKeepsPeer?: boolean } = {}) {
     this.mailboxKeepsPeer = o.mailboxKeepsPeer ?? false;
@@ -195,11 +191,9 @@ export class MemoryRelay implements RelayClient {
     if (c.mobile === l) delete c.mobile;
   }
 
-  /** PC가 페어링 7단계 뒤 우편함을 등록한다(서버는 토큰 해시만 저장). */
   registerMailbox(mbxId: Uint8Array, tokReadHash: string, tokWriteHash: string) {
     this.#mailboxes.set(hex(mbxId), { read: tokReadHash, write: tokWriteHash, frozen: false });
   }
-  /** 기기 해제·긴급 정지(§9.2·§9.3): 우편함 토큰 무효화. */
   revokeMailbox(mbxId: Uint8Array) {
     const m = this.#mailboxes.get(hex(mbxId));
     if (m) m.frozen = true;
