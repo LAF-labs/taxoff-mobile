@@ -6,6 +6,12 @@ import type { PhoneScreen } from '@sax/chat-core';
 import { offlineChat, setPcOnline } from './device';
 import { chatCopyOf } from '../net/pcCopy';
 
+export interface ReplyTo {
+  id: string;
+  text: string;
+  mine: boolean;
+}
+
 export interface OfflineChatView {
   available: boolean;
   items: ChatItem[];
@@ -13,7 +19,8 @@ export interface OfflineChatView {
   chips: OfflineReply['chips'];
   openDrafts?: ReadonlySet<string>;
   screens?: PhoneScreen[];
-  send(text: string): Promise<void>;
+  send(text: string, reply?: ReplyTo | null): Promise<void>;
+  react?(id: string, emoji: string | null): Promise<void>;
   retry(noteId: string): Promise<void>;
 }
 
@@ -59,22 +66,23 @@ export function useOfflineChat(): OfflineChatView {
   }, [chat]);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, reply: ReplyTo | null = null) => {
       if (!chat || sending.current) return;
+      const replyTo = reply ? { replyTo: { text: reply.text, mine: reply.mine } } : {};
       sending.current = true;
       setBusy(true);
       setChips([]);
       setScreens([]);
-      setPending({ kind: 'msg', id: 'off-pending', from: 'me', at: Date.now(), text, state: 'sending' });
+      setPending({ kind: 'msg', id: 'off-pending', from: 'me', at: Date.now(), text, state: 'sending', ...replyTo });
       const fail = (why: string, retry: boolean): ChatItem[] => {
         const at = Date.now();
         return [
-          { kind: 'msg', id: `off-me-${at}`, from: 'me', at, text, state: 'failed' },
+          { kind: 'msg', id: `off-me-${at}`, from: 'me', at, text, state: 'failed', ...replyTo },
           { kind: 'note', id: `off-${at}`, at: at + 1, text: why, failed: retry ? { retry: text } : {} },
         ];
       };
       try {
-        const r = await chat.send(text);
+        const r = await chat.send(text, reply?.id ?? null);
         const failed = r.unavailable ? fail(r.unavailable.text, r.unavailable.retry) : [];
         if (failed.length) void chat.keep(failed);
         setExtra((x) => [...x, ...r.items, ...failed]);
@@ -111,6 +119,15 @@ export function useOfflineChat(): OfflineChatView {
     [chat, log, extra, send],
   );
 
+  const react = useCallback(
+    async (id: string, emoji: string | null) => {
+      if (!chat) return;
+      setLog((l) => l.map((x) => (x.kind === 'msg' && x.id === id ? { ...x, myReaction: emoji ?? undefined } : x)));
+      await chat.react(id, emoji);
+    },
+    [chat],
+  );
+
   const shownIds = new Set(log.map((x) => x.id));
-  return { available: !!chat, items: [...log, ...extra.filter((x) => !shownIds.has(x.id)), ...(pending ? [pending] : [])], busy, chips, openDrafts, screens, send, retry };
+  return { available: !!chat, items: [...log, ...extra.filter((x) => !shownIds.has(x.id)), ...(pending ? [pending] : [])], busy, chips, openDrafts, screens, send, retry, react };
 }

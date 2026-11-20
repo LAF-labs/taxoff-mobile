@@ -13,6 +13,7 @@ import type { PhoneCopy } from '@sax/chat-core';
 const AD = utf8('SAX-mobile-chat-v1');
 const FILE = new File(ROOT, 'chat.bin');
 const SHOWN = new File(ROOT, 'chat-shown.bin');
+const REACTS = new File(ROOT, 'chat-react.bin');
 
 function sealedStore(fileKey: Uint8Array, pair: PairState, file: File) {
   let writing: Promise<void> = Promise.resolve();
@@ -68,6 +69,7 @@ export function offlineChat(pair: PairState, keys: DeviceKeys, copy: () => Phone
       authHeaders: (method, url) => auth(method, url),
       store: sealedStore(keys.fileKey, pair, FILE),
       shownStore: sealedStore(keys.fileKey, pair, SHOWN),
+      reactStore: sealedStore(keys.fileKey, pair, REACTS),
       copy,
       now: Date.now,
       newId: () => ulid(),

@@ -1,9 +1,12 @@
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
-import { AccessibilityInfo, Animated, Easing, FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+import { AccessibilityInfo, Animated, Easing, FlatList, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { ReplyGlyph, SwipeReply } from '../ui/SwipeReply';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { bubbleGroup, chatFromData, clockRange, stampBefore, stateOf, type ChatCard, type ChatItem } from '../chat';
-import { useOfflineChat, type OfflineChatView } from '../offline/useOfflineChat';
+import { useOfflineChat, type OfflineChatView, type ReplyTo } from '../offline/useOfflineChat';
 import type { PhoneScreen, ReactionId } from '@sax/chat-core';
 import { BRAND } from '../config';
 import { queueCounts } from '../queue';
@@ -21,7 +24,7 @@ import { jpegUri } from '../capture/thumb';
 import { useSession } from '../session';
 import type { PcStatus } from '../net/pc';
 import { MAX_FONT_SCALE, TextSizeContext, radius, size, space, textScale, type, usePalette, useReducedMotion } from '../theme';
-import { Button, Check, Chevron, Pill, Seg, T, ago, tap, won, type Tone } from '../ui/kit';
+import { Button, Check, Chevron, Pill, Seg, T, ago, success, tap, won, type Tone } from '../ui/kit';
 
 export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'devices' | 'issue' | 'queue' | 'run' | 'doc' | 'bizreg' | 'recv' | 'pay' | 'mark';
 
@@ -62,6 +65,12 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
   const [mine, setMine] = useState<ChatItem[]>([]);
   const [text, setText] = useState(draft);
   const [menu, setMenu] = useState(menuOpen);
+  const [held, setHeld] = useState<Held | null>(null);
+  const [replying, setReplying] = useState<ReplyTo | null>(null);
+  const startReply = (r: ReplyTo) => {
+    setReplying({ id: r.id, text: r.text, mine: r.mine });
+    input.current?.focus();
+  };
   const quick = (to: HomeRoute) => {
     setMenu(false);
     go(to);
@@ -177,7 +186,8 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
     if (!v || offline.busy) return;
     setText('');
     if (canSend) {
-      void offline.send(v);
+      void offline.send(v, replying);
+      setReplying(null);
       return;
     }
     const now = Date.now();
@@ -275,7 +285,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
                   {it.kind === 'run' ? (
                     <RunItem jobId={it.jobId} go={go} />
                   ) : (
-                    <Item it={it} group={bubbleGroup(items, i)} onRetry={(id) => void offline.retry(id)} retryOff={offline.busy} openDrafts={offline.openDrafts} onIssue={issueFrom} cpOf={cpOf} stale={s.pc === 'stale'} />
+                    <Item it={it} group={bubbleGroup(items, i)} onRetry={(id) => void offline.retry(id)} retryOff={offline.busy} openDrafts={offline.openDrafts} onIssue={issueFrom} cpOf={cpOf} stale={s.pc === 'stale'} onHold={setHeld} onReply={canSend ? startReply : undefined} />
                   )}
                 </View>
               );
@@ -302,6 +312,21 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
                 />
                 <MenuRow label="증빙 찍기" hint="영수증이나 종이 세금계산서를 찍어 PC로 보내요" onPress={() => quick('capture')} testID="go-capture" />
                 <MenuRow label="현금 매출 적기" hint="현금으로 받은 돈을 적어 둬요" onPress={() => quick('cash')} testID="go-cash" />
+              </View>
+            )}
+            {replying && (
+              <View style={[st.replyBar, { backgroundColor: p.tint }]} testID="chat-replying">
+                <View style={{ flex: 1 }}>
+                  <T v="meta" c="ink2">
+                    {replying.mine ? '내 말에 답장' : '답장'}
+                  </T>
+                  <T v="sub" c="ink3" lines={1}>
+                    {replying.text}
+                  </T>
+                </View>
+                <Pressable testID="chat-reply-cancel" accessibilityRole="button" accessibilityLabel="답장 그만두기" hitSlop={8} onPress={() => setReplying(null)} style={st.replyX}>
+                  <Plus color={p.ink3} open />
+                </Pressable>
               </View>
             )}
             <View style={st.inputRow}>
@@ -346,7 +371,106 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
           </View>
         )}
       </KeyboardAvoidingView>
+      {held && (
+        <HoldOverlay
+          held={held}
+          onClose={() => setHeld(null)}
+          onReact={
+            held.replyable && offline.react
+              ? (emoji) => {
+                  tap();
+                  void offline.react!(held.id, emoji === held.myReaction ? null : emoji);
+                  setHeld(null);
+                }
+              : undefined
+          }
+          onReply={
+            canSend && held.replyable
+              ? () => {
+                  startReply(held);
+                  setHeld(null);
+                }
+              : undefined
+          }
+          onCopy={() => {
+            void Clipboard.setStringAsync(held.text).then(success);
+            setHeld(null);
+          }}
+        />
+      )}
     </SafeAreaView>
+  );
+}
+
+export interface Held {
+  id: string;
+  text: string;
+  mine: boolean;
+  replyable: boolean;
+  myReaction?: string;
+  rect: { x: number; y: number; w: number; h: number };
+  corners: Record<string, number>;
+}
+
+const PICKS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+const BAR_H = 52;
+const ROW_H = 48;
+
+function HoldOverlay({ held, onClose, onReact, onReply, onCopy }: { held: Held; onClose: () => void; onReact?: (emoji: string) => void; onReply?: () => void; onCopy: () => void }) {
+  const p = usePalette();
+  const inset = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const r = held.rect;
+  const rows = onReply ? 2 : 1;
+  const menuH = rows * ROW_H + space.s2;
+  const top = r.y - (onReact ? BAR_H + space.s2 : 0);
+  const bottom = r.y + r.h + space.s2 + menuH;
+  const over = Math.max(0, bottom - (height - inset.bottom - space.s3));
+  const shift = Math.min(over, Math.max(0, top - inset.top - space.s3));
+  const side = held.mine ? { right: Math.max(space.s3, width - r.x - r.w) } : { left: r.x };
+  return (
+    <Modal transparent visible animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <View style={StyleSheet.absoluteFill} testID="hold-sheet">
+        <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: p.dim }]} onPress={onClose} accessibilityLabel="닫기" accessibilityRole="button" />
+        <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { transform: [{ translateY: -shift }] }]}>
+          {onReact && (
+            <View style={[st.pickBar, { top: top, backgroundColor: p.overlay }, side]} testID="hold-react">
+              {PICKS.map((e) => (
+                <Pressable key={e} accessibilityRole="button" accessibilityLabel={`${e} 달기`} onPress={() => onReact(e)} style={[st.pick, held.myReaction === e && { backgroundColor: p.sunken }]}>
+                  <Text style={st.pickGlyph}>{e}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          <View pointerEvents="none" style={[st.bubble, st.lifted, { position: 'absolute', top: r.y, left: r.x, width: r.w, backgroundColor: held.mine ? p.bubbleMe : p.bubbleThem }, held.corners]}>
+            <T style={held.mine ? { color: p.onBubbleMe } : undefined}>{held.text}</T>
+          </View>
+          <View style={[st.holdMenu, { top: r.y + r.h + space.s2, backgroundColor: p.overlay }, side]}>
+            {onReply && <HoldRow icon={<ReplyGlyph color={p.ink} />} label="답장" onPress={onReply} testID="hold-reply" />}
+            <HoldRow icon={<CopyGlyph color={p.ink} />} label="복사" onPress={onCopy} testID="hold-copy" />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function CopyGlyph({ color }: { color: string }) {
+  return (
+    <View style={{ width: 18, height: 18 }}>
+      <View style={{ position: 'absolute', left: 0, top: 0, width: 12, height: 12, borderRadius: 3, borderWidth: 2, borderColor: color }} />
+      <View style={{ position: 'absolute', left: 5, top: 5, width: 12, height: 12, borderRadius: 3, borderWidth: 2, borderColor: color }} />
+    </View>
+  );
+}
+
+function HoldRow({ icon, label, onPress, testID }: { icon: React.ReactNode; label: string; onPress: () => void; testID: string }) {
+  const p = usePalette();
+  return (
+    <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => [st.holdRow, pressed && { backgroundColor: p.sunken }]}>
+      <View style={st.holdIcon}>{icon}</View>
+      <T>{label}</T>
+    </Pressable>
   );
 }
 
@@ -483,8 +607,9 @@ function RunItem({ jobId, go }: { jobId: string; go: (to: HomeRoute) => void }) 
   );
 }
 
-function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, cpOf, stale }: { it: Exclude<ChatItem, { kind: 'run' }>; group: { first: boolean; last: boolean }; onRetry: (noteId: string) => void; retryOff?: boolean; openDrafts?: ReadonlySet<string>; onIssue: OnIssue; cpOf: (id: string) => Counterparty | null; stale: boolean }) {
+function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, cpOf, stale, onHold, onReply }: { it: Exclude<ChatItem, { kind: 'run' }>; group: { first: boolean; last: boolean }; onRetry: (noteId: string) => void; retryOff?: boolean; openDrafts?: ReadonlySet<string>; onIssue: OnIssue; cpOf: (id: string) => Counterparty | null; stale: boolean; onHold: (h: Held) => void; onReply?: (r: ReplyTo) => void }) {
   const p = usePalette();
+  const bubble = useRef<ComponentRef<typeof Pressable>>(null);
   if (it.kind === 'merged') {
     return (
       <View style={st.mergedWrap} testID="chat-merged">
@@ -526,13 +651,37 @@ function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, cpOf, stale }
   const state = stateOf(it);
   const side = me ? 'Right' : 'Left';
   const corners = { [`borderTop${side}Radius`]: group.first ? 22 : 6, [`borderBottom${side}Radius`]: group.last ? 22 : 6 };
+  const replyable = it.via === 'phone' || (me && !it.state);
   return (
     <View style={[st.msg, !group.first && st.follow, me ? st.mine : st.theirs]} testID={`chat-${it.from}`}>
-      {it.text !== undefined && (
-        <View style={[st.bubble, { backgroundColor: me ? p.bubbleMe : p.bubbleThem }, corners, it.reaction && st.reacted]} testID="chat-bubble">
-          <T style={me ? { color: p.onBubbleMe } : undefined}>{it.text}</T>
-          {it.reaction && <Reaction id={it.reaction} />}
+      {it.text !== undefined && it.replyTo && (
+        <View style={[st.replyCtx, { backgroundColor: p.bubbleThem }, me ? { borderBottomRightRadius: 6 } : { borderBottomLeftRadius: 6 }]} testID="chat-reply-context">
+          <T v="meta" c="ink2" lines={1}>
+            {it.replyTo.text}
+          </T>
         </View>
+      )}
+      {it.text !== undefined && (
+        <SwipeReply enabled={!!onReply && replyable} onReply={() => onReply?.({ id: it.id, text: it.text!, mine: me })}>
+          <View style={me ? st.mine : st.theirs}>
+            <Pressable
+              ref={bubble}
+              onLongPress={() => {
+                tap();
+                bubble.current?.measureInWindow((x, y, w, h) => onHold({ id: it.id, text: it.text!, mine: me, replyable, myReaction: it.myReaction, rect: { x, y, w, h }, corners }));
+              }}
+              delayLongPress={350}
+              accessibilityRole="text"
+              accessibilityHint="꾹 누르면 답장이나 복사를 할 수 있어요"
+              style={[st.bubble, { backgroundColor: me ? p.bubbleMe : p.bubbleThem }, corners, (it.reaction || it.myReaction) && st.reacted]}
+              testID="chat-bubble"
+            >
+              <T style={me ? { color: p.onBubbleMe } : undefined}>{it.text}</T>
+              {it.reaction && <Reaction emoji={REACTION_EMOJI[it.reaction]} label={REACTION_LABEL[it.reaction]} testID={`chat-reaction-${it.reaction}`} />}
+              {!it.reaction && it.myReaction && <Reaction emoji={it.myReaction} label={`내 반응 ${it.myReaction}`} testID="chat-my-reaction" />}
+            </Pressable>
+          </View>
+        </SwipeReply>
       )}
       {it.card && (
         <Card
@@ -554,7 +703,7 @@ function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, cpOf, stale }
 const REACTION_EMOJI: Record<ReactionId, string> = { thumbs_up: '👍', eyes: '👀', check: '✅', pray: '🙏' };
 const REACTION_LABEL: Record<ReactionId, string> = { thumbs_up: '좋아요', eyes: '보고 있어요', check: '확인', pray: '감사해요' };
 
-function Reaction({ id }: { id: ReactionId }) {
+function Reaction({ emoji, label, testID }: { emoji: string; label: string; testID: string }) {
   const p = usePalette();
   const a = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -565,17 +714,16 @@ function Reaction({ id }: { id: ReactionId }) {
       else Animated.timing(a, { toValue: 1, duration: 120, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
     });
     return () => void (live = false);
-  }, [a, id]);
-  if (!Object.hasOwn(REACTION_EMOJI, id)) return null;
+  }, [a, emoji]);
   return (
     <Animated.View
       accessible
       accessibilityRole="image"
-      accessibilityLabel={REACTION_LABEL[id]}
-      testID={`chat-reaction-${id}`}
+      accessibilityLabel={label}
+      testID={testID}
       style={[st.reaction, { backgroundColor: p.bubbleThem, borderColor: p.canvas, opacity: a, transform: [{ translateY: a.interpolate({ inputRange: [0, 1], outputRange: [-4, 0] }) }, { scale: a.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }] }]}
     >
-      <Text style={st.reactionGlyph}>{REACTION_EMOJI[id]}</Text>
+      <Text style={st.reactionGlyph}>{emoji}</Text>
     </Animated.View>
   );
 }
@@ -978,5 +1126,15 @@ const st = StyleSheet.create({
   send: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   chip: { minHeight: size.hit, paddingHorizontal: space.s4, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: space.s2 },
+  replyBar: { flexDirection: 'row', alignItems: 'center', gap: space.s2, borderRadius: radius.lg, paddingLeft: space.s4, paddingRight: space.s1, paddingVertical: space.s2 },
+  replyX: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  replyCtx: { borderRadius: 22, maxWidth: '90%', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24, marginBottom: -20 },
+  pickBar: { position: 'absolute', height: BAR_H, flexDirection: 'row', alignItems: 'center', borderRadius: BAR_H / 2, paddingHorizontal: space.s1, gap: 2 },
+  pick: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  pickGlyph: { fontSize: 26, lineHeight: 32 },
+  lifted: { maxWidth: undefined },
+  holdMenu: { position: 'absolute', minWidth: 200, borderRadius: radius.lg, paddingVertical: space.s1, overflow: 'hidden' },
+  holdIcon: { width: 22, alignItems: 'center' },
+  holdRow: { height: ROW_H, flexDirection: 'row', alignItems: 'center', gap: space.s3, paddingHorizontal: space.s4 },
   input: { flex: 1, minHeight: size.hit, maxHeight: 132, paddingLeft: space.s4, paddingRight: space.s2, paddingTop: 10, paddingBottom: 10 },
 });

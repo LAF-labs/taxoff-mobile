@@ -15,7 +15,7 @@ export interface ChatCard {
 }
 
 export type ChatItem =
-  | { kind: 'msg'; id: string; from: 'pc' | 'me'; via?: 'phone'; at: number; text?: string; card?: ChatCard; state?: 'sent' | 'waiting' | 'sending' | 'failed'; reaction?: ReactionId }
+  | { kind: 'msg'; id: string; from: 'pc' | 'me'; via?: 'phone'; at: number; text?: string; card?: ChatCard; state?: 'sent' | 'waiting' | 'sending' | 'failed'; reaction?: ReactionId; replyTo?: { text: string; mine: boolean }; myReaction?: string }
   | { kind: 'merged'; id: string; from: number; to: number }
   | { kind: 'note'; id: string; at: number; text: string; failed?: { retry?: string } }
   | { kind: 'run'; id: string; at: number; jobId: string };

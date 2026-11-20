@@ -8,6 +8,7 @@ interface OfflinePorts {
   authHeaders: PhoneGatewayOptions['authHeaders'];
   store: PhoneChatPorts['store'];
   shownStore?: PhoneChatPorts['store'];
+  reactStore?: PhoneChatPorts['store'];
   copy(): PhoneCopy | null;
   now(): number;
   newId(): string;
@@ -48,8 +49,10 @@ export function cardOf(s: Exclude<PhoneShow, { type: 'screen' }>, pcOnline = fal
   };
 }
 
-export function itemOf(m: ChatMessage): ChatItem {
-  return m.from === 'user' ? { kind: 'msg', id: m.id, from: 'me', at: m.at, text: m.text, ...(m.reaction ? { reaction: m.reaction } : {}) } : { kind: 'msg', id: m.id, from: 'pc', via: 'phone', at: m.at, text: m.text };
+export function itemOf(m: ChatMessage, all: ReadonlyMap<string, ChatMessage> = new Map()): ChatItem {
+  const to = m.replyTo ? all.get(m.replyTo) : undefined;
+  const replyTo = to ? { replyTo: { text: to.text, mine: to.from === 'user' } } : {};
+  return m.from === 'user' ? { kind: 'msg', id: m.id, from: 'me', at: m.at, text: m.text, ...(m.reaction ? { reaction: m.reaction } : {}), ...replyTo } : { kind: 'msg', id: m.id, from: 'pc', via: 'phone', at: m.at, text: m.text };
 }
 
 type Shown = Exclude<ChatItem, { kind: 'merged' }>;
@@ -63,6 +66,7 @@ export class OfflineChat {
   private check: Promise<SelfCheck> | null = null;
   reactionSink: ((r: ReactionId) => void) | null = null;
   private shown: Promise<Shown[]> | null = null;
+  private reacts: Promise<Record<string, string>> | null = null;
 
   constructor(ports: OfflinePorts) {
     this.ports = ports;
@@ -75,19 +79,43 @@ export class OfflineChat {
     return this.check;
   }
 
-  async send(text: string): Promise<OfflineReply> {
+  async send(text: string, replyTo: string | null = null): Promise<OfflineReply> {
     const c = await this.ready();
     if (!c.ok) return { items: [], chips: [], drafts: [], screens: [], unavailable: { code: 'chat.unavailable', text: this.ports.pcOnline?.() ? '지금은 폰에서 답할 수 없어요. 앱을 껐다 켠 뒤 다시 말씀해 주세요.' : '지금은 폰에서 답할 수 없어요. PC를 켜면 이어서 할게요.', retry: false } };
-    const r = this.toReply(await this.core.send(text));
+    const r = this.toReply(await this.core.send(text, replyTo));
     if (r.items.length) await this.remember(r.items.filter(isShown));
     return r;
   }
 
   async items(): Promise<ChatItem[]> {
     const shown = await this.loadShown();
-    const msgs = (await this.core.messages()).map(itemOf).filter(isShown);
+    const all = await this.core.messages();
+    const byId = new Map(all.map((m) => [m.id, m]));
+    const mine = await this.loadReacts();
+    const msgs = all.map((m) => itemOf(m, byId)).filter(isShown).map((x) => (x.kind === 'msg' && mine[x.id] ? { ...x, myReaction: mine[x.id] } : x));
     const first = msgs[0]?.at ?? 0;
     return [...msgs, ...shown.filter((x) => x.at >= first)].sort((a, b) => a.at - b.at);
+  }
+
+  async react(id: string, emoji: string | null): Promise<void> {
+    const all = { ...(await this.loadReacts()) };
+    if (emoji) all[id] = emoji;
+    else delete all[id];
+    this.reacts = Promise.resolve(all);
+    await this.ports.reactStore?.save(JSON.stringify(all));
+  }
+
+  private loadReacts(): Promise<Record<string, string>> {
+    this.reacts ??= (async () => {
+      try {
+        const raw = await this.ports.reactStore?.load();
+        const v = raw ? (JSON.parse(raw) as unknown) : null;
+        return v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter(([, e]) => typeof e === 'string')) : {};
+      } catch {
+        return {};
+      }
+    })();
+    return this.reacts;
   }
 
   private loadShown(): Promise<Shown[]> {
