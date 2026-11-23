@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { bubbleGroup, chatFromData, clockRange, stampBefore, stateOf, type ChatCard, type ChatItem } from '../chat';
-import { draftWithEdits, issuableDraftCards, type Draft, type DraftFields } from '../draftCards';
+import { issuableDraftCards, type Draft, type DraftFields } from '../draftCards';
 import { useOfflineChat, type OfflineChatView, type ReplyTo } from '../offline/useOfflineChat';
 import type { PhoneScreen, ReactionId } from '@sax/chat-core';
 import { BRAND } from '../config';
@@ -914,7 +914,7 @@ const VAT_OPTIONS = [
 
 function DraftCard({ card, draft, onIssue, cp, stale, confirmed, onConfirm }: { card: ChatCard; draft: Draft; onIssue?: OnCardIssue; cp: Counterparty | null; stale: boolean; confirmed?: DraftFields; onConfirm: (fields: DraftFields) => void }) {
   const p = usePalette();
-  const fields = draftWithEdits(draft, confirmed);
+  const fields = confirmed ? { ...draft, ...confirmed } : draft;
   const val = { amount: fields.amount, vat: (fields.vat === 'included' ? 'incl' : 'excl') as VatMode, item: fields.item ?? '' };
   const openEdit = !confirmed && !!onIssue && !!draft.phone?.edit;
   const [editing, setEdit] = useState<null | { amount: string; vat: VatMode; item: string }>(openEdit ? { amount: draft.amount > 0 ? masked('won', String(draft.amount)) : '', vat: val.vat, item: val.item } : null);

@@ -3,10 +3,6 @@ import type { ChatCard, ChatItem } from './chat';
 export type Draft = NonNullable<ChatCard['draft']>;
 export type DraftFields = Pick<Draft, 'amount' | 'vat' | 'item'>;
 
-export function draftWithEdits(draft: Draft, confirmed?: DraftFields): Draft {
-  return confirmed ? { ...draft, ...confirmed } : draft;
-}
-
 export function issuableDraftCards(items: readonly ChatItem[], openDrafts?: ReadonlySet<string>): ReadonlySet<string> {
   const seen = new Set<string>();
   const issuable = new Set<string>();
