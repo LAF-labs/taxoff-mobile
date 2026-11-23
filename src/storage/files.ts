@@ -26,7 +26,7 @@ export function installMarker(): InstallMarker | null {
 }
 
 export async function writeInstallMarker(m: InstallMarker): Promise<void> {
-  MARKER.write(JSON.stringify(m));
+  await MARKER.write(JSON.stringify(m));
   await protect(MARKER.uri);
 }
 
@@ -53,7 +53,7 @@ async function ensureDir(d: Directory): Promise<Directory> {
 
 export async function writeProtected(f: File, bytes: Uint8Array): Promise<void> {
   await ensureDir(f.parentDirectory);
-  f.write(bytes);
+  await f.write(bytes);
   try {
     await protect(f.uri);
   } catch (e) {
