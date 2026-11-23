@@ -283,13 +283,13 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
         <T v="strong">내 계정과 내 PC가 맞나요?</T>
         <Group note="내 계정이 아니면 중단하세요. 연결한 뒤에도 [PC 연결]에서 늘 볼 수 있어요.">
           <View style={st.kv}>
-            <T v="label" c="ink3">계정 · {BRAND}가 확인함</T>
+            <T v="label" c="ink3">계정</T>
             <T v="strong" testID="confirm-account">
               {lines.account}
             </T>
           </View>
           <View style={st.kv}>
-            <T v="label" c="ink3">PC가 알려 준 이름 · 참고</T>
+            <T v="label" c="ink3">PC 이름</T>
             <T v="body" testID="confirm-pc">
               {lines.pc}
             </T>
@@ -313,7 +313,7 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
             {sas.slice(0, 3)} {sas.slice(3)}
           </T>
         </View>
-        <Notice>이 숫자는 PC 화면에만 입력하세요. 전화·문자·메신저로 묻는 사람에게는 알려 주지 마세요.</Notice>
+        <Notice>이 숫자는 PC 화면에만 입력하세요. 전화, 문자, 메신저로 묻는 사람에게는 알려 주지 마세요.</Notice>
       </Frame>
     );
   }

@@ -5,6 +5,7 @@ import { findDuplicate, recentCounterparties, searchCounterparties, splitAmount,
 import { counterpartiesOf } from '../net/pcCopy';
 import { useIssueSubmit, useViaPc } from '../issueSubmit';
 import { kstDay } from '../phoneCmd';
+import { fullDay } from '../money';
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
 import { MAX_FONT_SCALE, radius, size, space, textScale, type, usePalette } from '../theme';
@@ -167,7 +168,7 @@ export function IssueScreen({
       <Group title="내용">
         <Field label="품목" value={item} onChange={setItem} placeholder="예: 식자재" tag={cp?.lastItem && item === cp.lastItem ? LAST : undefined} testID="issue-item" />
         {viaPc ? (
-          <Row label="작성일자" value={`${kstDay()} 오늘`} testID="issue-day-today" />
+          <Row label="작성일자" value={`오늘(${fullDay(kstDay())})`} testID="issue-day-today" />
         ) : (
           <Field label="작성일자" value={day} onChange={setDay} mask="day" testID="issue-day" />
         )}
@@ -241,9 +242,9 @@ function ClosedWarning({ line, onGo, onBack }: { line: string; onGo: () => void;
 
 function statusNote(status: Counterparty['status'], firstAsLine: boolean) {
   const parts: React.ReactNode[] = [];
-  if (status?.kind === 'checking') parts.push(<StatusDot key="s" busy tone="quiet" v="meta" label="PC가 휴·폐업 여부를 확인해요" testID="issue-status-checking" />);
-  if (status?.kind === 'waitPc') parts.push(<T key="s" v="meta" c="ink3" testID="issue-status-wait">PC가 켜지면 휴·폐업을 확인해요</T>);
-  if (status?.kind === 'ok') parts.push(<T key="s" v="meta" c="ink3" testID="issue-status-ok">휴·폐업 조회 정상</T>);
+  if (status?.kind === 'checking') parts.push(<StatusDot key="s" busy tone="quiet" v="meta" label="PC가 휴폐업 여부를 확인해요" testID="issue-status-checking" />);
+  if (status?.kind === 'waitPc') parts.push(<T key="s" v="meta" c="ink3" testID="issue-status-wait">PC가 켜지면 휴폐업을 확인해요</T>);
+  if (status?.kind === 'ok') parts.push(<T key="s" v="meta" c="ink3" testID="issue-status-ok">휴폐업 조회 정상</T>);
   if (firstAsLine) parts.push(<T key="f" v="meta" c="ink3">처음 거래하는 곳이라 폰으로는 승인할 수 없어요</T>);
   return parts.length ? <View style={{ gap: 2, paddingHorizontal: space.s1 }}>{parts}</View> : null;
 }
@@ -299,7 +300,7 @@ function Picker({
           (found.length > 0 ? (
             <Group title="찾은 거래처">
               {found.map((c) => (
-                <Row key={c.id} label={c.name} sub={[c.bizNo, c.lastAt ? lastLine(c) : ''].filter(Boolean).join(' · ') || undefined} onPress={() => onPick(c)} testID={`cp-${c.id}`} />
+                <Row key={c.id} label={c.name} sub={[c.bizNo, c.lastAt ? lastLine(c) : ''].filter(Boolean).join(', ') || undefined} onPress={() => onPick(c)} testID={`cp-${c.id}`} />
               ))}
             </Group>
           ) : (
@@ -309,7 +310,7 @@ function Picker({
           ))}
       </View>
       <Group>
-        <Row label="새 거래처 · 사업자등록증 찍기" onPress={onCapture} testID="picker-capture" />
+        <Row label="사업자등록증 찍어서 추가" onPress={onCapture} testID="picker-capture" />
         <Row label="새 거래처 직접 입력" onPress={() => onPick(null)} testID="picker-manual" />
       </Group>
     </Screen>
@@ -318,7 +319,7 @@ function Picker({
 
 function lastLine(c: Counterparty): string {
   const parts = [c.lastSupply ? `지난번${NB}${won(c.lastSupply)}` : null, c.lastItem ?? null].filter(Boolean);
-  return parts.join(' · ') || c.bizNo;
+  return parts.join(', ') || c.bizNo;
 }
 
 const st = StyleSheet.create({

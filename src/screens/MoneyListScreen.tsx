@@ -50,7 +50,7 @@ function Item({ v, kind, mark, onMark, onUndo }: { v: ReceivableView; kind: 'rec
       </View>
       <View style={st.line}>
         <T v="sub" c={overdue ? 'attention' : v.status === 'unknown' ? 'ink3' : 'ink2'} style={{ flex: 1 }}>
-          {`${md(v.writtenOn)}${NB}작성 · ${dueLine(v, kind)}${v.received > 0 ? ` · ${exactWon(v.received)} 받음` : ''}`}
+          {`${md(v.writtenOn)}${NB}작성, ${dueLine(v, kind)}${v.received > 0 ? `, ${exactWon(v.received)} 받음` : ''}`}
         </T>
         {kind === 'recv' && (!mark || mark.kind === 'undone') && <Pill label="받았어요" onPress={onMark} testID={`money-mark-${v.id}`} />}
       </View>
@@ -66,7 +66,7 @@ function Item({ v, kind, mark, onMark, onUndo }: { v: ReceivableView; kind: 'rec
             </>
           ) : mark.kind === 'queued' ? (
             <T v="meta" c="ink2">
-              PC 켜지면 받음 처리해요 · 밀린 일에 있어요
+              PC 켜지면 받음 처리해요. 밀린 일에 있어요
             </T>
           ) : (
             <T v="meta" c="ink2">

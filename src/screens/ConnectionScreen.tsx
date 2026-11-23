@@ -55,8 +55,8 @@ export function ConnectionScreen({ onDone, onReset, onRepair }: { onDone: () => 
 
       {sp1 && (
         <Group title="보호 상태" testID="sp1-result">
-          <Row label={sp1.ok ? '열쇠·파일 보호 정상' : '보호가 약한 항목이 있어요'} valueInk={sp1.ok ? 'ink2' : 'attention'} value={sp1.ok ? '정상' : '확인'} />
-          <Row label="열쇠" value={sp1.keychain.accessible} sub={sp1.keychain.auth === 'none' ? '인증 없음(시뮬레이터 개발)' : sp1.keychain.auth === 'missing' ? '열쇠 보호 방식을 확인하지 못했어요' : '열 때 얼굴·지문, 안 되면 폰 암호'} />
+          <Row label={sp1.ok ? '열쇠와 파일 보호 정상' : '보호가 약한 항목이 있어요'} valueInk={sp1.ok ? 'ink2' : 'attention'} value={sp1.ok ? '정상' : '확인'} />
+          <Row label="열쇠" value={sp1.keychain.accessible} sub={sp1.keychain.auth === 'none' ? '인증 없음(시뮬레이터 개발)' : sp1.keychain.auth === 'missing' ? '열쇠 보호 방식을 확인하지 못했어요' : '열 때 얼굴이나 지문, 안 되면 폰 암호'} />
           {sp1.files.slice(0, 8).map((f, i) => (
             <Row key={`${i}:${f.path}`} label={f.path} value={f.excludedFromBackup ? '백업 제외' : '백업 포함'} valueInk={f.excludedFromBackup ? 'ink3' : 'attention'} sub={f.protection} />
           ))}
@@ -65,7 +65,7 @@ export function ConnectionScreen({ onDone, onReset, onRepair }: { onDone: () => 
       {showLog && s.data.pcLog && (
         <Group title="연결 기록" note="PC와 잇지 못한 최근 이유예요. 문의할 때 이 화면을 보여 주세요." testID="pc-log-list">
           {[...s.data.pcLog].reverse().map((w) => (
-            <Row key={`${w.at}:${w.code}`} label={pcWhyText(w.code) ?? '이유를 알 수 없어요'} sub={`${new Date(w.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · ${w.code}`} />
+            <Row key={`${w.at}:${w.code}`} label={pcWhyText(w.code) ?? '이유를 알 수 없어요'} sub={`${new Date(w.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}, ${w.code}`} />
           ))}
         </Group>
       )}

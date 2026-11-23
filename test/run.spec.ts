@@ -38,7 +38,7 @@ describe('진행·결과(P-04)', () => {
     assert.equal(elapsed(80_000), '1분 20초');
     assert.equal(elapsed(40_000), '40초');
     assert.equal(elapsed(3_900_000), '1시간 5분');
-    assert.equal(groupApprovalNo('20261116-41000000-12345678'), '2026 1116 4100 0000 1234 5678');
+    assert.equal(groupApprovalNo('20261116-41000000-12345678'), '20261116-41000000-12345678');
   });
 });
 

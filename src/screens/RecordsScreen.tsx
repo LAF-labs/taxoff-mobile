@@ -1,3 +1,4 @@
+import { fullDay } from '../money';
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
 import { Button, Empty, Group, Row, Screen, won } from '../ui/kit';
@@ -18,7 +19,7 @@ export function RecordsScreen({ go }: { go: (to: HomeRoute) => void }) {
               <Row
                 key={j.id}
                 label={r?.counterpart ?? j.title}
-                sub={r ? `${r.doc.issuedOn} · 승인번호 끝 ${r.approvalNo.replace(/\D/g, '').slice(-4)}` : undefined}
+                sub={r ? `${fullDay(r.doc.issuedOn)}, 승인번호 끝 ${r.approvalNo.replace(/\D/g, '').slice(-4)}` : undefined}
                 value={r ? won(r.total) : undefined}
                 valueInk="ink"
                 onPress={() => {

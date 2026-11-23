@@ -172,5 +172,5 @@ export function elapsed(ms: number): string {
 
 export function groupApprovalNo(no: string): string {
   const d = no.replace(/\D/g, '');
-  return d.length ? (d.match(/.{1,4}/g) ?? []).join(' ') : no;
+  return d.length === 24 ? `${d.slice(0, 8)}-${d.slice(8, 16)}-${d.slice(16)}` : no;
 }

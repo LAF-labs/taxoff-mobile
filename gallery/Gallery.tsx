@@ -589,7 +589,7 @@ const SCREENS: Record<
     node: (
       <>
         <Main start="records" />
-        <Banner ev={{ jobId: 'j', kind: 'myTurn', title: '내 차례예요', line: '가나식자재 세금계산서 · 폰에서 간편인증을 승인해 주세요', os: { title: '', body: '' } }} onPress={noop} onClose={noop} />
+        <Banner ev={{ jobId: 'j', kind: 'myTurn', title: '내 차례예요', line: '가나식자재 세금계산서, 폰에서 간편인증을 승인해 주세요', os: { title: '', body: '' } }} onPress={noop} onClose={noop} />
       </>
     ),
   }),
@@ -675,7 +675,7 @@ const SCREENS: Record<
   }),
   saved: () => ({
     session: fake(paired(), 'online'),
-    node: <CaptureScreen onDone={noop} preview={{ phase: 'saved', docMode: 'invoice', shot: SAMPLE_SHOT, sent: { title: '세금계산서 · 매입', value: '1,353,000원' } }} />,
+    node: <CaptureScreen onDone={noop} preview={{ phase: 'saved', docMode: 'invoice', shot: SAMPLE_SHOT, sent: { title: '세금계산서 매입', value: '1,353,000원' } }} />,
   }),
   camera: () => ({ session: fake(paired(), 'online'), node: <CaptureScreen onDone={noop} /> }),
 };

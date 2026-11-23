@@ -50,16 +50,16 @@ describe('화면 줄과 정지 규칙', () => {
       ],
       { selfId: id(4), pairedPcId: id(2), now: NOW },
     );
-    assert.deepEqual(v.pcs.map((r) => [r.label, r.sub, r.paired]), [['Mac', '쓰는 중 · 이 폰과 연결됨', true], ['집 PC', '쓰는 중', false]]);
+    assert.deepEqual(v.pcs.map((r) => [r.label, r.sub, r.paired]), [['Mac', '쓰는 중, 이 폰과 연결됨', true], ['집 PC', '쓰는 중', false]]);
     assert.deepEqual(v.phones.map((r) => [r.label, r.sub, r.self, r.attention]), [
-      ['이 폰', '지금 쓰는 폰', true, false], ['직원 폰', '정지됨 · 3일 뒤 끊겨요', false, true], ['Android 폰', '연결하는 중', false, false],
+      ['이 폰', '지금 쓰는 폰', true, false], ['직원 폰', '정지됨, 3일 뒤 끊겨요', false, true], ['Android 폰', '연결하는 중', false, false],
     ]);
-    assert.deepEqual([v.pcCount, v.phoneCount, v.pcFull, v.phoneFull], [`2대 · ${MAX_DESKTOPS}대까지`, `3대 · ${MAX_MOBILES}대까지`, false, true]);
+    assert.deepEqual([v.pcCount, v.phoneCount, v.pcFull, v.phoneFull], [`2대, 최대 ${MAX_DESKTOPS}대`, `3대, 최대 ${MAX_MOBILES}대`, false, true]);
   });
 
   it('이 폰은 정지 대상이 아니다. 이미 정지된 기기와 마지막 남은 PC는 정지할 수 없다', () => {
     const one = devicesView([dev(1, 'desktop'), dev(2, 'desktop', { state: 'suspended', deleteAfter: NOW - 1 }), dev(3, 'mobile'), dev(4, 'mobile')], { selfId: id(3), pairedPcId: id(1), now: NOW });
-    assert.deepEqual(one.pcs.map((r) => [r.canStop, r.stopBlocked, r.sub]), [[false, 'last_pc', '쓰는 중 · 이 폰과 연결됨'], [false, 'already', '정지됨 · 곧 끊겨요']]);
+    assert.deepEqual(one.pcs.map((r) => [r.canStop, r.stopBlocked, r.sub]), [[false, 'last_pc', '쓰는 중, 이 폰과 연결됨'], [false, 'already', '정지됨, 곧 끊겨요']]);
     assert.deepEqual(one.phones.map((r) => [r.self, r.canStop, r.stopBlocked]), [[true, false, null], [false, true, null]]);
     const two = devicesView([dev(1, 'desktop'), dev(2, 'desktop'), dev(3, 'mobile')], { selfId: id(3), pairedPcId: null, now: NOW });
     assert.deepEqual(two.pcs.map((r) => r.canStop), [true, true]);

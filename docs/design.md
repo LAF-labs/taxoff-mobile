@@ -32,7 +32,7 @@
 | `Group` / `Row` | 묶음과 줄. 왼쪽 라벨, 오른쪽 값, 누를 수 있으면 꺾쇠 |
 | `Field` | 확인 화면의 값 칸: 평소에는 글자, 누르면 그 자리에서 칸. 빈 칸은 `line-strong` 테두리가 늘 보인다. 오류는 칸 아래에 남고, 한 번에 고치는 제안(예: 합계 맞추기)을 붙일 수 있다 |
 | `Seg` | 둘 중 하나(매입·매출, 영수·청구) |
-| `Replies` | 점선 전폭 답 후보(Muse 확인 UI). 고르면 실선 + 체크로 굳는다 |
+| `Replies` | 전폭 답 후보(Muse 확인 UI). tint 채움 면, 테두리 없음(PC와 같게 점선 안 씀). 고르면 ink 실선 + 체크로 굳는다 |
 | `StatusDot` | 점 + 글자. 진행 중이면 2.4초 주기로 숨 쉰다(동작 줄이기면 멈춤) |
 | `Notice` | 사라지지 않는 안내 한 줄(한 화면에 하나까지) |
 | `Empty` | 빈 화면: 무엇이 비었는지 · 왜 · 다음 할 일 하나 |
@@ -142,3 +142,14 @@
 ## 점검
 
 `pnpm gallery`로 화면 갤러리를 웹으로 묶는다(가짜 세션, 네트워크·키·카메라 없음). `?s=home-chat-online`, `home-chat-offline`, `home-chat-merged`, `home-unpaired`, `home-chat-empty`, `home-phone-empty`, `home-phone-typing`, `home-phone-reply`, `home-phone-failed`, `home-phone-limit`, `home`, `home-stale`, `money-empty`, `money-copy`, `money-copy-unsure`, `money-copy-no-account`, `issue-picker-copy`, `issue-copy-filled`, `issue-copy-online`, `run-pc-prepare`, `run-pc-readback`, `run-pc-approve`, `run-pc-in-doubt`, `run-pc-stopped`, `run-pc-turn-simple`, `run-pc-turn-other`, `home-chat-pc-turn`, `queue-pc-turn`, `run-pc-turn-choice`, `run-pc-turn-choice-failed`, `run-pc-simple-wait`, `run-pc-simple-timeout`, `simple-sheet-app`, `simple-sheet-carrier`, `simple-sheet-name`, `simple-sheet-phone`, `simple-sheet-confirm`, `simple-sheet-failed`, `run-pc-done`, `run-pc-refused`, `run-pc-busy`, `run-pc-old`, `home-chat-pc-run`, `lock-faceid`, `lock-touchid`, `lock-android`, `lock-failed`, `lock-passcode-fallback`, `lock-no-biometric-passcode`, `lock-no-passcode`, `onboarding-easy`, `onboarding-what`, `onboarding-safe`, `onboarding-pair`, `onboarding-paired`, `lock-first-run`, `lock-first-run-no-bio`, `lock-first-run-no-passcode`, `lock-cover`, `records-empty`, `settings`, `settings-unpaired`, `settings-text-small`, `settings-text-large`, `settings-notify`, `settings-notify-ask`, `settings-notify-off`, `notify-banner`, `notify-banner-turn`, `push-ask`, `queue-refused`, `home-chat-entrusted`, `queue-mixed`, `queue-empty`, `issue-picker`, `issue-picker-empty`, `issue-filled-online`, `issue-filled-offline`, `issue-stale`, `issue-first-counterparty`, `issue-duplicate`, `issue-limit`, `issue-inexact`, `approval-default`, `approval-arming`, `approval-urgent`, `approval-expired`, `approval-dup`, `approval-dup-acked`, `approval-unknown`, `approval-first`, `approval-limit`, `approval-no-key`, `approval-ios-allowed`, `approval-ios-policy-blocked`, `approval-mismatch`, `approval-in-doubt`, `approval-long`, `run-prepare`·`run-login`·`run-readback`·`run-issue`·`run-verify-step`, `run-simple-auth`, `run-simple-auth-unknown`, `run-cert`, `run-stop-blocked`, `run-stop-blocked-reserved`, `run-stop-unknown-screen`, `run-stop-date`, `run-stop-input`, `run-in-doubt`, `run-verify-needed`, `result-email`, `result-no-email`, `result-long`, `home-chat-run`, `home-chat-result`, `queue-with-done`, `doc-loading`, `doc-receiving`, `doc-pc-off`, `doc-pc-off-asked`, `doc-backup`, `doc-error`, `doc-ready`, `doc-long`, `demo`, `demo-in-doubt`, `bizreg-camera`, `bizreg-confirm`, `bizreg-email-empty`, `bizreg-low-conf`, `bizreg-checksum`, `bizreg-blurry`, `bizreg-existing`, `bizreg-long`, `issue-new-checking`, `issue-new-pc-off`, `issue-new-closed`, `bizreg-camera-denied`, `bizreg-album`, `bizreg-pdf`, `camera`(앨범 단추), `money-ok`, `money-late`, `money-shortfall`, `money-unsure`, `money-last`, `money-no-account`, `money-loading`, `money-error`, `money-empty`, `money-unpaired`, `money-recv`, `money-recv-marked`, `money-recv-late`, `money-pay`, `money-mark`, `money-mark-offline`, `cash`, `connection`, `devices`, `devices-full`, `devices-suspended`, `devices-error`, `devices-stopped`, `devices-unpaired`, `devices-loading`, `invoice-confirm`, `invoice-issues`, `receipt-confirm`, `saved`, `camera`를 라이트·다크로 본다. `&fs=1.6`을 붙이면 글자 크기 1.6배를, `&w=375&h=667`이면 작은 폰(SE)을 흉내 낸다. 웹 번들에만 들어가고 앱 번들에는 들어가지 않는다(`metro.config.cjs`).
+
+## 단추 자리(2026-11-23)
+
+토스 디자인 시스템(TDS Mobile)의 바텀시트와 같은 규칙이다. TDS는 시트 하단에 CTA를 두고(`BottomSheet` `cta`), 시트 안에 입력칸이 있으면 시트를 통째로 키보드 위로 올린다(`hasTextField`). 하단 여백은 안전 영역과 최소값 중 큰 쪽이다(`BottomCTA` `hasSafeAreaPadding`).
+참고: https://tossmini-docs.toss.im/tds-mobile/components/bottom-sheet/ , https://tossmini-docs.toss.im/tds-mobile/components/BottomCTA/check-first/
+
+- 주 단추는 화면·시트의 바닥에 둔다. 입력칸 바로 밑에 띄워 두지 않는다.
+- 시트 안에 입력칸이 있으면 키보드가 뜰 때 시트가 통째로 올라간다. 단추는 시트 안에서 자리가 바뀌지 않는다. 키보드에 따로 붙는 단추, 키보드 위 [완료] 단추는 쓰지 않는다(11-19 규칙의 뜻).
+- 단추 높이 52(주요), 40(작은). 좌우 여백 20. 단추 두 개를 쌓거나 나란히 둘 때 간격 8.
+- 바닥 여백은 `max(안전 영역, 16)`, 키보드가 떠 있으면 16.
+- 단계 시트는 높이를 고정하고 내용만 옆으로 넘긴다. 그래서 짧은 단계에서는 입력칸과 단추 사이가 비어도 된다.
