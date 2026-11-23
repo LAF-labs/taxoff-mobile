@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import TabView, { useBottomTabBarHeight, type AppleIcon } from 'react-native-bottom-tabs';
 import { Keyboard, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ChatItem } from '../chat';
@@ -22,11 +23,21 @@ const BAR_H = 60;
 const BAR_LIFT = BAR_H - size.row - space.s2;
 const ICON_STROKE = 1.75;
 
+/** 아이폰은 애플 기본 탭바(iOS 26이면 유리 탭바)를 쓴다. 다른 곳은 아래의 떠 있는 탭바. */
+const NATIVE_TABS = Platform.OS === 'ios';
+
 const TABS: Array<{ key: Tab; label: string; a11y: string }> = [
   { key: 'home', label: '홈', a11y: '홈, 대화' },
   { key: 'money', label: '돈', a11y: '돈' },
   { key: 'records', label: '기록', a11y: '기록' },
 ];
+
+const SYMBOL: Record<Tab, [AppleIcon, AppleIcon]> = {
+  home: [{ sfSymbol: 'bubble.left.fill' }, { sfSymbol: 'bubble.left' }],
+  money: [{ sfSymbol: 'banknote.fill' }, { sfSymbol: 'banknote' }],
+  records: [{ sfSymbol: 'list.bullet' }, { sfSymbol: 'list.bullet' }],
+};
+const ROUTES = TABS.map((t) => ({ key: t.key, title: t.label, focusedIcon: SYMBOL[t.key][0], unfocusedIcon: SYMBOL[t.key][1], testID: `tab-${t.key}` }));
 
 export function MainScreen({
   tab, onTab, go, chat, todo, draft, phone, menu, focusAfter, issue: issuePreview, issueCps,
@@ -51,16 +62,35 @@ export function MainScreen({
     q.addCard(issueCard({ cp }, q.prefill));
     q.setPrefill(null);
   }, [q.pickId]);
+  const scene = (t: Tab) =>
+    t === 'home' ? (
+      <HomeScreen go={goMain} chat={chat} todo={todo} draft={draft} phone={phone} menu={menu} focusAfter={focusAfter} onIssue={() => setIssueOpen(true)} />
+    ) : t === 'money' ? (
+      <MoneyScreen go={goMain} />
+    ) : (
+      <RecordsScreen go={goMain} />
+    );
   return (
     <View style={[st.fill, { backgroundColor: p.canvas }]}>
-      <TabInset.Provider value={kb ? 0 : barH}>
-      <View style={st.fill}>
-        {tab === 'home' && <HomeScreen go={goMain} chat={chat} todo={todo} draft={draft} phone={phone} menu={menu} focusAfter={focusAfter} onIssue={() => setIssueOpen(true)} />}
-        {tab === 'money' && <MoneyScreen go={goMain} />}
-        {tab === 'records' && <RecordsScreen go={goMain} />}
-      </View>
-      </TabInset.Provider>
-      {!kb && <TabBar tab={tab} onTab={onTab} onHeight={setBarH} />}
+      {NATIVE_TABS ? (
+        <TabView
+          navigationState={{ index: TABS.findIndex((t) => t.key === tab), routes: ROUTES }}
+          onIndexChange={(i) => {
+            const next = TABS[i]!.key;
+            if (next !== tab) onTab(next);
+          }}
+          renderScene={({ route }) => <NativeScene above={route.key === 'home'}>{scene(route.key as Tab)}</NativeScene>}
+          hapticFeedbackEnabled
+          tabBarActiveTintColor={p.ink}
+        />
+      ) : (
+        <>
+          <TabInset.Provider value={kb ? 0 : barH}>
+            <View style={st.fill}>{scene(tab)}</View>
+          </TabInset.Provider>
+          {!kb && <TabBar tab={tab} onTab={onTab} onHeight={setBarH} />}
+        </>
+      )}
       {issueOpen && (
         <IssueSheet
           preview={issuePreview}
@@ -81,6 +111,21 @@ export function MainScreen({
         />
       )}
     </View>
+  );
+}
+
+/**
+ * iOS 기본 탭바 안의 화면. 탭바가 내용 위에 떠 있으므로 그 높이를 TabInset으로 넘긴다.
+ * 대화(above)는 탭바 위에서 끝낸다: 뒤집힌 대화 목록이 탭바 밑으로 들어가면
+ * iOS 26의 스크롤 가장자리 효과가 위아래가 뒤집힌 채 대화 위쪽을 어둡게 덮는다.
+ */
+function NativeScene({ above, children }: { above: boolean; children: ReactNode }) {
+  const inset = useSafeAreaInsets();
+  const bar = Math.max(useBottomTabBarHeight(), inset.bottom);
+  return (
+    <TabInset.Provider value={above ? 0 : bar}>
+      <View style={[st.fill, above && { paddingBottom: bar }]}>{children}</View>
+    </TabInset.Provider>
   );
 }
 
