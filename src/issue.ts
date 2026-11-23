@@ -1,6 +1,4 @@
 
-import { masked } from './ui/mask.ts';
-
 export interface Counterparty {
   id: string;
   name: string;
@@ -63,12 +61,6 @@ export function searchCounterparties(all: Counterparty[], q: string): Counterpar
   if (!t) return [];
   const digits = t.replace(/\D/g, '');
   return all.filter((c) => c.name.toLowerCase().includes(t) || (digits.length >= 3 && c.bizNo.replace(/\D/g, '').includes(digits)));
-}
-
-export function manualRecipientFromSearch(query: string): { name: string; bizNo: string } {
-  const t = query.trim();
-  if (t && !/^[\d-\s]+$/.test(t)) return { name: t, bizNo: '' };
-  return { name: '', bizNo: t.replace(/\D/g, '').length >= 3 ? masked('bizNo', t) : '' };
 }
 
 export function findDuplicate(today: IssuedToday[], counterpartyId: string, total: number): IssuedToday | null {

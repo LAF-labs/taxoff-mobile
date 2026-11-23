@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { Animated, Easing, FlatList, Keyboard, Platform, Pressable, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ChatItem } from '../chat';
-import { findByBizNo, manualRecipientFromSearch, orderedCounterparties, searchCounterparties, type Counterparty } from '../issue';
+import { findByBizNo, orderedCounterparties, searchCounterparties, type Counterparty } from '../issue';
 import { counterpartiesOf } from '../net/pcCopy';
 import { useQueue, type IssuePrefill } from '../queueStore';
 import { useSession } from '../session';
@@ -107,9 +107,10 @@ export function IssueSheet({ onClose, onPick, onCapture, counterparties: given, 
   };
   const manual = () => {
     tap();
-    const recipient = manualRecipientFromSearch(q);
-    setName(recipient.name);
-    setBizNo(recipient.bizNo);
+    const t = q.trim();
+    const isName = t !== '' && !/^[\d-\s]+$/.test(t);
+    setName(isName ? t : '');
+    setBizNo(!isName && t.replace(/\D/g, '').length >= 3 ? masked('bizNo', t) : '');
     go('name');
   };
   const done = () => {
