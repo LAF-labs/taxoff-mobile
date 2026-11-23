@@ -100,6 +100,7 @@ async function serveMailbox(rec: PairRecord, mbxId: Uint8Array, tok: { read: Uin
       await new Promise((r) => setTimeout(r, 1000));
       continue;
     }
+    link.onPeerGone?.(() => link.close());
     while (!link.closed) {
       const sess = await acceptDesktopSession(link, {
         noise: keys.noise, pair: rec, hello: { appVersion: 'dummy-pc', deviceListVersion: deviceList.listVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash] },
@@ -109,8 +110,10 @@ async function serveMailbox(rec: PairRecord, mbxId: Uint8Array, tok: { read: Uin
       log('session open', sess.deviceListMismatch ? '(device list mismatch)' : '');
       while (!sess.channel.closed) {
         const env = await sess.channel.recv(30_000);
+        if (env?.type === 'close') break;
         if (env) await q.handle(sess.channel, env);
       }
+      sess.channel.close();
       log('session closed');
     }
   }

@@ -88,15 +88,26 @@ if (process.argv.includes('--queue')) {
   console.log('pc status', JSON.stringify(st));
   process.exit(q.queued.length === 2 && st!.received.receipts === 1 && st!.received.cash === 1 ? 0 : 1);
 }
-const mbx = await client.joinMailbox(fromB64(r.mbxId), { read: fromB64(r.tokRead), write: fromB64(r.tokWrite) }, 'mobile');
-const sess = await openMobileSession(mbx, {
-  pairId: r.pairId, noise, desktopStatic: r.desktopStatic, nextTimestamp: monotonicClock(0),
-  hello: { appVersion: 'smoke', deviceListVersion: r.deviceList.listVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash] },
-});
-if (!sess) throw new Error('session failed');
+const nextTimestamp = monotonicClock(0);
+const connect = async () => {
+  const mbx = await client.joinMailbox(fromB64(r.mbxId), { read: fromB64(r.tokRead), write: fromB64(r.tokWrite) }, 'mobile');
+  const sess = await openMobileSession(mbx, {
+    pairId: r.pairId, noise, desktopStatic: r.desktopStatic, nextTimestamp,
+    hello: { appVersion: 'smoke', deviceListVersion: r.deviceList.listVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash] },
+  });
+  if (!sess) throw new Error('session failed');
+  return { mbx, sess };
+};
+const { sess } = await connect();
 const f = await flushOutbox(sess.channel, store, { pace: async () => {} });
 console.log('flushed', f.sent.length, 'pending', f.pending.length);
 sess.channel.close();
+await new Promise((res) => setTimeout(res, 300));
+const resumed = await connect();
+resumed.mbx.close();
+await new Promise((res) => setTimeout(res, 300));
+(await connect()).sess.channel.close();
+console.log('reconnected after graceful and abrupt disconnects');
 const st = await (await fetch(`${base}/dev/status`)).json();
 console.log('pc status', JSON.stringify(st));
 process.exit(f.pending.length === 0 && f.sent.length === 2 ? 0 : 1);
