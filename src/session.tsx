@@ -58,6 +58,7 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
   useEffect(
     () => () => {
       alive.current = false;
+      closeLive();
       if (retry.current) clearTimeout(retry.current);
     },
     [],
@@ -85,22 +86,27 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
     setSyncing(true);
     setPc(statusWhileSyncing);
     const gen = netGen.current;
-    let ok: boolean;
+    const current = () => alive.current && netGen.current === gen;
+    let ok = false;
     try {
       const r = await inflight(() =>
-        syncWithPc({ keys, data: () => dataRef.current, update, outbox, px, onLive: () => alive.current && setPc('online'), alive: () => alive.current && netGen.current === gen }),
+        syncWithPc({ keys, data: () => dataRef.current, update, outbox, px, onLive: () => current() && setPc('online'), alive: current }),
       );
-      setPc(r.status);
-      ok = !failed(r.status);
+      if (current()) {
+        setPc(r.status);
+        ok = !failed(r.status);
+      }
     } finally {
       busy.current = false;
       setSyncing(false);
       await refreshPending();
     }
-    if (!alive.current) return;
+    if (!alive.current || AppState.currentState !== 'active') return;
     if (again.current) {
       fails.current = 0;
-      later(NET_SETTLE_MS);
+      later(0);
+    } else if (!current()) {
+      return;
     } else if (ok) {
       fails.current = 0;
     } else {
@@ -128,8 +134,14 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
       if (AppState.currentState === 'active') void sync();
     }, RECONNECT_MS);
     const sub = AppState.addEventListener('change', (st) => {
-      if (st === 'active') void sync();
-      else if (st === 'background') closeLive();
+      if (st === 'active') {
+        if (busy.current) again.current = true;
+        else void sync();
+      } else if (st === 'background') {
+        netGen.current += 1;
+        closeLive();
+        setPc((prev) => (prev === 'online' ? 'connecting' : prev));
+      }
     });
     let net: NetShape | null = null;
     const unNet = NetInfo.addEventListener((st) => {
