@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { PC_LOG_MAX, causeOf, pcWhyText, pushWhy, statusWhileSyncing, whyCode } from '../src/net/pcWhy.ts';
+import { PC_LOG_MAX, causeOf, pcWhyText, pushWhy, statusWhileSyncing, needsRelink, whyCode } from '../src/net/pcWhy.ts';
 
 describe('원인 코드', () => {
   it('기기 토큰 거절은 계정 서비스 코드와 상태를 남긴다', () => {
@@ -56,7 +56,18 @@ describe('사람이 읽는 한 줄', () => {
 describe('다시 동기화하는 동안', () => {
   it('켜짐이면 그대로 두고(깜빡이지 않게), 아니면 찾는 중', () => {
     assert.equal(statusWhileSyncing('online'), 'online');
-    assert.equal(statusWhileSyncing('offline'), 'connecting');
-    assert.equal(statusWhileSyncing('queued'), 'connecting');
+    assert.equal(statusWhileSyncing('offline'), 'offline');
+    assert.equal(statusWhileSyncing('queued'), 'queued');
+    assert.equal(statusWhileSyncing('unpaired'), 'connecting');
+  });
+});
+
+describe('다시 연결 필요', () => {
+  it('서버가 이 폰을 풀었을 때만 다시 연결 필요다', () => {
+    assert.equal(needsRelink('join:account.device_not_found.404'), true);
+    assert.equal(needsRelink('queue:account.device_suspended.403'), true);
+    assert.equal(needsRelink('peer:timeout'), false);
+    assert.equal(needsRelink('join:net.unreachable'), false);
+    assert.equal(needsRelink(null), false);
   });
 });

@@ -4,7 +4,7 @@ import { decodeCbor, encodeCbor, type CborValue } from './cbor.ts';
 import { CTX } from './contexts.ts';
 import { ed25519Verify } from './crypto.ts';
 import type { HttpJson } from './devauth.ts';
-import { RECEIPT_MAX_BYTES, fromCborModel, toCborModel, validateEnvelope, type CashEntryBody, type Envelope, type ReceiptChunkBody, type ReceiptOfferBody } from './envelope.ts';
+import { RECEIPT_MAX_BYTES, fromCborModel, toCborModel, validateEnvelope, type CashEntryBody, type CmdRunBody, type Envelope, type ReceiptChunkBody, type ReceiptOfferBody } from './envelope.ts';
 import { hpkeSeal } from './hpke.ts';
 import type { Signer } from './keys.ts';
 import type { QBundle } from './qbundle.ts';
@@ -30,7 +30,8 @@ const INFO = utf8(CTX.env);
 const aadOf = (mbxEpoch: number) => concat(utf8(CTX.env), u64be(mbxEpoch));
 const SKEW_S = 300;
 
-export type XferType = 'receipt.offer' | 'receipt.chunk' | 'cash.entry';
+/** cmd.run도 큐로 간다: PC가 꺼져 있을 때 맡긴 발급을 PC가 켜지자마자 받아 시작한다(폰 앱이 닫혀 있어도). */
+export type XferType = 'receipt.offer' | 'receipt.chunk' | 'cash.entry' | 'cmd.run';
 
 export interface Xfer {
   pair_id: string;
@@ -41,7 +42,7 @@ export interface Xfer {
   exp: number;
   qbundle_seq: number;
   type: XferType;
-  body: ReceiptOfferBody | ReceiptChunkBody | CashEntryBody;
+  body: ReceiptOfferBody | ReceiptChunkBody | CashEntryBody | CmdRunBody;
 }
 
 /** 릴레이가 보는 바깥 객체(intent-envelope). */
@@ -70,7 +71,7 @@ function unpadEnv(p: Uint8Array): Uint8Array | null {
 }
 
 function asEnvelope(x: Xfer): Envelope {
-  const id = (x.body as { msgId: string }).msgId;
+  const id = x.type === 'cmd.run' ? (x.body as CmdRunBody).cmdId : (x.body as { msgId: string }).msgId;
   return { v: 1, type: x.type, id, pairId: x.pair_id, from: 'mobile', to: 'desktop', seq: x.seq, ts: x.iat * 1000, ttl: 300, body: x.body } as Envelope;
 }
 
@@ -113,7 +114,7 @@ export async function openXfer(outer: unknown, o: { hpkeOpen: HpkeOpenFn; pairId
     if (x.pair_id !== o.pairId || x.from !== 'mobile' || x.to !== 'desktop' || !Number.isSafeInteger(x.qbundle_seq)) return null;
     const now = Math.floor((o.now ?? Date.now()) / 1000);
     if (!Number.isSafeInteger(x.iat) || !Number.isSafeInteger(x.exp) || x.exp <= now || x.iat > now + SKEW_S || x.exp - x.iat > QUEUE.ttlMs / 1000) return null;
-    if (x.type !== 'receipt.offer' && x.type !== 'receipt.chunk' && x.type !== 'cash.entry') return null;
+    if (x.type !== 'receipt.offer' && x.type !== 'receipt.chunk' && x.type !== 'cash.entry' && x.type !== 'cmd.run') return null;
     if (!validateEnvelope(asEnvelope(x))) return null;
     return x;
   } catch {
@@ -220,6 +221,15 @@ export interface QueueSendResult {
   expired: string[];
 }
 
+/** 폰: PC가 꺼져 있을 때 맡긴 발급 하나를 큐에 넣는다. PC는 같은 cmdId를 두 번 시작하지 않는다(duplicate). */
+export async function queueCmd(body: CmdRunBody, o: QueueSendOptions): Promise<PostResult> {
+  const now = o.now ?? Date.now();
+  if (o.bundle.validTo <= now) throw new Error('queue: bundle expired');
+  const iat = Math.floor(now / 1000);
+  const x: Xfer = { pair_id: o.pairId, from: 'mobile', to: 'desktop', seq: o.nextSeq(), iat, exp: iat + QUEUE.ttlMs / 1000, qbundle_seq: o.bundle.seq, type: 'cmd.run', body };
+  return o.queue.post(await sealXfer(x, o.vm, o.bundle.Qx, o.mbxEpoch));
+}
+
 /** 보관함을 큐로 보낸다. 이미 넣었고 TTL 안이면 건너뛴다. 큐가 차면 멈추고 남은 것은 다음에. */
 export async function queueOutbox(store: OutboxStore, o: QueueSendOptions): Promise<QueueSendResult> {
   const now = o.now ?? Date.now();
@@ -294,6 +304,8 @@ export interface QueueReceiverOptions {
   receive: ReceiveQueue;
   seqMax: { get(): Promise<number>; set(seq: number): Promise<void> };
   now?: () => number;
+  /** 큐로 온 cmd.run. 없으면 버린다. */
+  onCmd?: (body: CmdRunBody) => Promise<void>;
 }
 
 export interface DrainResult {
@@ -332,10 +344,11 @@ export async function drainQueue(o: QueueReceiverOptions): Promise<DrainResult> 
     try {
       for (const { seq, env } of envs) {
         const x = await openXfer(env, { hpkeOpen: o.hpkeOpen, pairId: o.pairId, phoneVm: o.phoneVm, mbxEpoch: o.mbxEpoch, now: o.now?.() });
-        if (!x || x.seq <= max) {
+        if (!x || x.seq <= max || (x.type === 'cmd.run' && !o.onCmd)) {
           res.dropped++;
         } else {
-          await o.receive.handle(replier, asEnvelope(x));
+          if (x.type === 'cmd.run') await o.onCmd!(x.body as CmdRunBody);
+          else await o.receive.handle(replier, asEnvelope(x));
           max = x.seq;
           await o.seqMax.set(max);
           res.handled++;

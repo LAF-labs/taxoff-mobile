@@ -142,8 +142,9 @@ export default function App() {
         <QueueProvider>
         {}
         <MoneyProvider status={unlocked.data.money ? 'ready' : 'none'} snap={unlocked.data.money ?? null}>
-        {route === 'tabs' && <MainScreen tab={tab} onTab={setTab} go={go} />}
+        {(route === 'tabs' || (route === 'pair' && !firstPair)) && <MainScreen tab={tab} onTab={setTab} go={go} />}
         {route === 'pair' && (
+          <View style={firstPair ? { flex: 1 } : StyleSheet.absoluteFill}>
           <PairScreen
             onDone={() => {
               setFirstPair(false);
@@ -155,6 +156,7 @@ export default function App() {
                 : undefined
             }
           />
+          </View>
         )}
         {route === 'capture' && <CaptureScreen onDone={back} />}
         {route === 'cash' && <CashScreen onDone={back} />}

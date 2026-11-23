@@ -1,5 +1,6 @@
 import { ulid } from '@sax/remote';
 import { chatCopyOf } from './net/pcCopy';
+import { entrustNote } from './net/pcWhy';
 import { offlineChat } from './offline/device';
 import { issueRequest, type PhoneCmd } from './phoneCmd';
 import { useQueue } from './queueStore';
@@ -27,8 +28,9 @@ export function useEntrust(): (x: EntrustInput) => Promise<boolean> {
       return false;
     }
     if (draftId && s.data.pair) void offlineChat(s.data.pair, s.keys, () => chatCopyOf(s.data.pcCopy))?.entrust(draftId).catch(() => undefined);
-    queue.noteCmd(`cmd-${cmd.cmdId}`, s.pc === 'online' ? null : `${cp.name} 세금계산서 ${won(total)}을 맡겼어요. PC 켜지면 보내요`);
+    queue.noteCmd(`cmd-${cmd.cmdId}`, entrustNote(s.pc, `${cp.name} 세금계산서 ${won(total)}`));
     void s.sync();
     return true;
   };
 }
+

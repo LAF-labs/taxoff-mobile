@@ -1,5 +1,5 @@
 import {
-  CAP, QUEUE, flushOutbox, fromB64, monotonicClock, openMobileSession, queueOutbox, relayOrigin, relayQueue, softNoiseStatic, softSigner, verifyQBundle,
+  CAP, QUEUE, flushOutbox, fromB64, issueCmd, monotonicClock, openMobileSession, queueCmd, queueOutbox, relayOrigin, relayQueue, softNoiseStatic, softSigner, verifyQBundle,
   wsRelayClient, VM_PURPOSES, type FlushResult, type Link, type PhoneCopyBody, type QueueSendResult, type WebSocketLike,
 } from '@sax/remote';
 import { APP_VERSION, DEV_RELAY_HOST, DEV_STACK } from '../config';
@@ -9,12 +9,13 @@ import type { FileOutbox } from '../storage/outbox';
 import type { AppData } from '../storage/state';
 import { PHONE_CAPS, newerCopy, receiveCopy } from './pcCopy';
 import { driveCmds, trimCmds } from './issueLive';
+import { cmdsToQueue } from '../phoneCmd';
 import { enrollPx } from './pxLive';
 import type { PxDevice } from '../approvalKey';
 import { replaying, tapping } from './hold';
-import { causeOf, pushWhy, whyCode } from './pcWhy';
+import { causeOf, needsRelink, pushWhy, whyCode } from './pcWhy';
 
-export type PcStatus = 'unpaired' | 'connecting' | 'online' | 'queued' | 'stale' | 'offline';
+export type PcStatus = 'unpaired' | 'connecting' | 'online' | 'queued' | 'stale' | 'relink' | 'offline';
 
 interface SyncDeps {
   keys: DeviceKeys;
@@ -70,6 +71,7 @@ export async function syncWithPc(d: SyncDeps): Promise<SyncResult> {
   const q = await viaQueue(d, pair);
   const why = q.why ?? live.why;
   await d.update((x) => ({ ...x, pcLog: pushWhy(x.pcLog, { code: why, at: Date.now() }) })).catch(() => undefined);
+  if (needsRelink(why)) return { ...q, status: 'relink', why };
   return { ...q, why };
 }
 
@@ -77,8 +79,46 @@ type Pair = NonNullable<AppData['pair']>;
 
 let liveLink: Link | null = null;
 
+/** PC가 우편함에 들어오고 나가는 것. 'lost'는 붙잡아 둔 연결 자체가 끊긴 것이다. */
+export type Presence = 'up' | 'down' | 'lost';
+let held: Link | null = null;
+let presence: ((p: Presence) => void) | null = null;
+
+/** 앱을 연 동안 우편함 연결을 붙잡아 두고, PC가 켜지고 꺼지는 것을 바로 알린다. */
+export function onPresence(cb: ((p: Presence) => void) | null): void {
+  presence = cb;
+}
+
+function hold(link: Link, peerNow: boolean): void {
+  dropHeld();
+  held = link;
+  let down = !peerNow;
+  link.onPeerGone?.(() => {
+    if (held !== link || down) return;
+    down = true;
+    presence?.('down');
+  });
+  link.onPeer(() => {
+    if (held !== link || !down) return;
+    down = false;
+    presence?.('up');
+  });
+  link.onClose(() => {
+    if (held !== link) return;
+    held = null;
+    presence?.('lost');
+  });
+}
+
+function dropHeld(): void {
+  const h = held;
+  held = null;
+  h?.close();
+}
+
 export function closeLive(): void {
   liveLink?.close();
+  dropHeld();
 }
 
 async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: string }> {
@@ -87,9 +127,17 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
   let stage: 'join' | 'session' | 'live' = 'join';
   try {
     const relay = relayFor(pair.relayHost, deviceAuthFor(pair.pairId, pair.cert, d.keys.vm));
+    dropHeld();
     link = await relay.joinMailbox(fromB64(pair.mbxId), { read: fromB64(pair.tokRead), write: fromB64(pair.tokWrite) }, 'mobile');
     liveLink = link;
-    if (!(await waitPeer(link, PEER_WAIT_MS))) return { why: whyCode('peer', link.closed ? 'closed' : 'timeout') };
+    if (!(await waitPeer(link, PEER_WAIT_MS))) {
+      const why = whyCode('peer', link.closed ? 'closed' : 'timeout');
+      if (!link.closed && (!d.alive || d.alive())) {
+        hold(link, false);
+        link = null;
+      }
+      return { why };
+    }
     stage = 'session';
     const clock = monotonicClock(d.data().ikTs);
     let used = 0;
@@ -129,13 +177,19 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
       alive: d.alive,
     });
     s.channel.close();
+    if (!link.closed && (!d.alive || d.alive())) {
+      hold(link, true);
+      link = null;
+    }
     return { status: 'online', flushed };
   } catch (e) {
     return { why: whyCode(stage, causeOf(e)) };
   } finally {
     noise.destroy();
-    link?.close();
-    if (liveLink === link) liveLink = null;
+    if (link) {
+      link.close();
+      if (liveLink === link) liveLink = null;
+    } else liveLink = null;
   }
 }
 
@@ -155,12 +209,21 @@ async function viaQueue(d: SyncDeps, pair: Pair): Promise<SyncResult> {
     if (!bundle) return { status: 'stale', why: whyCode('stale', field ? 'bundle_invalid' : 'no_bundle') };
     if (bundle.seq > d.data().qbundleSeq) await d.update((x) => ({ ...x, qbundleSeq: Math.max(x.qbundleSeq, bundle.seq) }));
     const items = await d.outbox.list();
-    const need = items.reduce((n, it) => n + (it.kind === 'cash' ? 1 : 1 + Math.ceil(it.offer.bytes / QUEUE.chunk)), 0);
+    const cmds = cmdsToQueue(d.data().cmds ?? [], QUEUE.ttlMs);
+    const need = cmds.length + items.reduce((n, it) => n + (it.kind === 'cash' ? 1 : 1 + Math.ceil(it.offer.bytes / QUEUE.chunk)), 0);
     if (need === 0) return { status: 'offline' };
     const start = d.data().queueSeq;
     await d.update((x) => ({ ...x, queueSeq: Math.max(x.queueSeq, start) + need }));
     let next = start;
-    const queued = await queueOutbox(d.outbox, { queue: q, pairId: pair.pairId, vm, bundle, mbxEpoch: pair.mbxEpoch, nextSeq: () => ++next });
+    const send = { queue: q, pairId: pair.pairId, vm, bundle, mbxEpoch: pair.mbxEpoch, nextSeq: () => ++next };
+    const cmdsQueued: string[] = [];
+    for (const c of cmds) if ((await queueCmd(issueCmd(c.cmdId, c.req), send).catch(() => 'failed' as const)) === 'ok') cmdsQueued.push(c.cmdId);
+    if (cmdsQueued.length) {
+      const at = Date.now();
+      const done = new Set(cmdsQueued);
+      await d.update((x) => ({ ...x, cmds: (x.cmds ?? []).map((c) => (done.has(c.cmdId) ? { ...c, queuedAt: at } : c)) }));
+    }
+    const queued = await queueOutbox(d.outbox, send);
     const done = new Set(queued.queued);
     if (done.size) {
       await d.update((x) => ({
@@ -169,10 +232,11 @@ async function viaQueue(d: SyncDeps, pair: Pair): Promise<SyncResult> {
         recent: x.recent.map((r) => (done.has(r.msgId) && r.state === 'pending' ? { ...r, state: 'queued' as const } : r)),
       }));
     }
-    return { status: queued.queued.length || !queued.waiting.length ? 'queued' : 'offline', queued };
+    return { status: cmdsQueued.length || queued.queued.length || !queued.waiting.length ? 'queued' : 'offline', queued };
   } catch (e) {
     return { status: 'offline', why: whyCode('queue', causeOf(e)) };
   } finally {
     vm.destroy();
   }
 }
+

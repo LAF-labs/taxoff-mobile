@@ -1,6 +1,7 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Animated, Easing, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MobilePairing, b64, fromB64, softNoiseStatic, type MobilePairFailure, type MobilePairResult } from '@sax/remote';
 import { BRAND, DEV_LOCAL, accountKeys, relayAllowlist } from '../config';
 import { deviceModel } from '../deviceModel';
@@ -14,7 +15,7 @@ import { Button, Group, Notice, Screen, StatusDot, T, success } from '../ui/kit'
 import { STEP_PAIR } from '../ui/StepDots';
 import { OnboardingStep, StepHint } from './OnboardingScreen';
 
-type Phase = 'scan' | 'warn' | 'confirm' | 'working' | 'sas' | 'done' | 'failed';
+type Phase = 'scan' | 'warn' | 'confirm' | 'switch' | 'working' | 'sas' | 'done' | 'failed';
 
 const FAIL: Record<MobilePairFailure | 'relay' | 'save', string> = {
   qr_invalid: `${BRAND}의 연결 QR이 아니에요. PC 화면의 QR을 다시 찍어 주세요.`,
@@ -48,6 +49,9 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
   const linkRef = useRef<{ close(): void } | null>(null);
   const pendingRef = useRef<MobilePairResult | null>(null);
   const gone = useRef(false);
+  /** 이미 연결한 폰의 다시 연결: 지금 화면 위 바텀시트 하나에서 QR, 숫자, 끝. 먼저 끊지 않는다. */
+  const prev = useRef(s.data.pair).current;
+  const relink = !onboarding && !!prev;
 
   useEffect(
     () => () => {
@@ -115,7 +119,15 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
     r.channel.close();
     if (gone.current) return;
     pendingRef.current = r;
-    setPhase(mp.newDesktopWarning ? 'warn' : 'confirm');
+    setPhase(mp.newDesktopWarning ? 'warn' : afterCheck(r));
+  }
+
+  /** 다시 연결이면 계정은 이미 확인했다(AIK가 같아야 여기까지 온다). 다른 PC면 바꿀지만 묻는다. */
+  function afterCheck(r: MobilePairResult): Phase {
+    if (!relink || !prev) return 'confirm';
+    if (r.desktopDeviceId !== prev.desktopDeviceId) return 'switch';
+    void save(r);
+    return 'working';
   }
 
   const stop = () => {
@@ -198,13 +210,17 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
 
   if (phase === 'scan') {
     return (
-      <Screen title="PC와 연결" onBack={onDone} backLabel="취소" scroll={false} testID="pair-scan">
-        <View style={{ gap: space.s2 }}>
-          <T v="strong">PC 화면의 QR을 찍어 주세요</T>
-          <T v="sub" c="ink2">PC의 {BRAND} → 설정 → 기기 연결 → [폰 연결]을 누르면 QR이 떠요.</T>
-        </View>
+      <Frame sheet={relink} step={1} title={relink ? '다시 연결' : 'PC와 연결'} onBack={onDone} backLabel="취소" scroll={false} testID="pair-scan">
+        {relink ? (
+          <T v="body">PC 앱의 [폰 연결] QR을 찍어 주세요.</T>
+        ) : (
+          <View style={{ gap: space.s2 }}>
+            <T v="strong">PC 화면의 QR을 찍어 주세요</T>
+            <T v="sub" c="ink2">PC의 {BRAND} → 설정 → 기기 연결 → [폰 연결]을 누르면 QR이 떠요.</T>
+          </View>
+        )}
         {perm?.granted ? (
-          <View style={[st.scanner, { backgroundColor: p.camera }]}>
+          <View style={[st.scanner, relink && st.scannerFill, { backgroundColor: p.camera }]}>
             <CameraView style={StyleSheet.absoluteFill} facing="back" barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={(e) => void onQr(e.data)} />
             <View pointerEvents="none" style={st.reticle}>
               {(['tl', 'tr', 'bl', 'br'] as const).map((c) => (
@@ -213,7 +229,7 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
             </View>
           </View>
         ) : (
-          <View style={[st.scanner, st.center, { backgroundColor: p.tint, gap: space.s4, padding: space.s6 }]}>
+          <View style={[st.scanner, relink && st.scannerFill, st.center, { backgroundColor: p.tint, gap: space.s4, padding: space.s6 }]}>
             <T v="sub" c="ink2" center>
               QR을 찍으려면 카메라가 필요해요. 찍은 화면은 저장하지 않아요.
             </T>
@@ -221,18 +237,20 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
           </View>
         )}
         {DEV_LOCAL && <Button testID="dev-qr" kind="quiet" label="개발: 더미 PC의 QR 받기" onPress={async () => void onQr(await devFetchQr())} />}
-      </Screen>
+      </Frame>
     );
   }
 
   if (phase === 'warn') {
     return (
-      <Screen
-        title="PC와 연결"
+      <Frame
+        sheet={relink}
+        step={1}
+        title={relink ? '다시 연결' : 'PC와 연결'}
         footer={
           <>
             <Button testID="warn-stop" label="중단" onPress={stop} />
-            <Button testID="warn-continue" kind="quiet" label="내가 등록한 PC예요. 계속" onPress={() => setPhase('confirm')} />
+            <Button testID="warn-continue" kind="quiet" label="내가 등록한 PC예요. 계속" onPress={() => pendingRef.current && setPhase(afterCheck(pendingRef.current))} />
           </>
         }
       >
@@ -243,7 +261,7 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
             중단하면 이 폰에 연결 정보를 남기지 않아요. 계정에 다른 기기가 있으면 그 기기와 메일로도 알려요.
           </T>
         </View>
-      </Screen>
+      </Frame>
     );
   }
 
@@ -282,7 +300,7 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
 
   if (phase === 'sas' && sas) {
     return (
-      <Screen title="PC와 연결" testID="pair-sas" onBack={onboarding?.onBack ?? onDone} backLabel="취소">
+      <Frame sheet={relink} step={2} title={relink ? '다시 연결' : 'PC와 연결'} testID="pair-sas" onBack={onboarding?.onBack ?? onDone} backLabel="취소">
         <View style={{ gap: space.s2 }}>
           <T v="strong">PC 화면에 이 숫자를 입력하세요</T>
           <T v="sub" c="ink2">
@@ -295,11 +313,37 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
           </T>
         </View>
         <Notice>이 숫자는 PC 화면에만 입력하세요. 전화·문자·메신저로 묻는 사람에게는 알려 주지 마세요.</Notice>
-      </Screen>
+      </Frame>
     );
   }
 
   if (phase === 'done' && onboarding) return <PairedScene onStart={onDone} pcName={s.data.pair?.desktopName ?? null} />;
+
+  if (phase === 'switch' && pendingRef.current) {
+    const next = pendingRef.current.identity.desktopName ?? 'PC';
+    return (
+      <Frame
+        sheet
+        title="다시 연결"
+        step={1}
+        testID="pair-switch"
+        onBack={stop}
+        footer={
+          <>
+            <Button testID="switch-yes" label="바꾸기" onPress={() => pendingRef.current && void save(pendingRef.current)} />
+            <Button testID="switch-no" kind="quiet" label="그대로 두기" onPress={stop} />
+          </>
+        }
+      >
+        <T v="strong">{next}로 바꿀까요?</T>
+        <T v="sub" c="ink2">
+          폰은 PC 하나와만 이어져요. 바꾸면 {prev?.desktopName ?? '지금 PC'}와는 끊겨요.
+        </T>
+      </Frame>
+    );
+  }
+
+  if (phase === 'done' && relink) return <RelinkDone onDone={onDone} />;
 
   if (phase === 'done') {
     return (
@@ -317,8 +361,10 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
 
   if (phase === 'failed') {
     return (
-      <Screen
-        title="PC와 연결"
+      <Frame
+        sheet={relink}
+        step={1}
+        title={relink ? '다시 연결' : 'PC와 연결'}
         footer={
           <>
             <Button
@@ -337,16 +383,67 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
           <T v="strong">연결하지 못했어요</T>
           <Notice>{FAIL[fail ?? 'handshake']}</Notice>
         </View>
-      </Screen>
+      </Frame>
     );
   }
 
   return (
-    <Screen title="PC와 연결" onBack={onboarding?.onBack ?? onDone} backLabel="취소" testID="pair-working">
+    <Frame sheet={relink} step={2} title={relink ? '다시 연결' : 'PC와 연결'} onBack={onboarding?.onBack ?? onDone} backLabel="취소" testID="pair-working">
       <StatusDot busy label="PC와 연결하는 중" />
-    </Screen>
+    </Frame>
   );
 }
+
+type FrameProps = { sheet: boolean; step?: number; title?: string; onBack?: () => void; backLabel?: string; footer?: ReactNode; scroll?: boolean; testID?: string; children: ReactNode };
+
+/** 처음 연결은 화면, 다시 연결은 지금 화면 위 바텀시트. 단계는 시트 하나 안에서 내용만 바뀐다. */
+function Frame({ sheet, step, ...rest }: FrameProps) {
+  if (!sheet) return <Screen {...rest} />;
+  return <SheetFrame step={step} {...rest} />;
+}
+
+const RELINK_STEPS = 3;
+
+function SheetFrame({ step = 1, title, onBack, footer, testID, children }: Omit<FrameProps, 'sheet'>) {
+  const p = usePalette();
+  const inset = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  return (
+    <View style={StyleSheet.absoluteFill} testID={testID}>
+      <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: p.scrim }]} onPress={onBack} accessibilityLabel="다시 연결 닫기" accessibilityRole="button" />
+      <View style={[st.sheet, { backgroundColor: p.canvas, height: Math.min(SHEET_H + Math.max(inset.bottom, space.s4), height * 0.9), paddingBottom: Math.max(inset.bottom, space.s4) }]} accessibilityViewIsModal>
+        <View style={[st.grabber, { backgroundColor: p.sunken }]} />
+        <View style={st.sheetHead}>
+          <T v="strong" role="header">
+            {title}
+          </T>
+          <View style={st.dots} accessible accessibilityLabel={`${RELINK_STEPS}단계 중 ${step}단계`}>
+            {Array.from({ length: RELINK_STEPS }, (_, i) => (
+              <View key={i} style={[st.dot, { width: i + 1 === step ? 16 : 4, backgroundColor: i + 1 <= step ? p.ink : p.line }]} />
+            ))}
+          </View>
+        </View>
+        <View style={st.sheetBody}>{children}</View>
+        {footer ? <View style={st.sheetFoot}>{footer}</View> : onBack ? <View style={st.sheetFoot}><Button kind="secondary" label="취소" onPress={onBack} testID="relink-cancel" /></View> : null}
+      </View>
+    </View>
+  );
+}
+
+function RelinkDone({ onDone }: { onDone: () => void }) {
+  useEffect(() => {
+    success();
+    const t = setTimeout(onDone, 1200);
+    return () => clearTimeout(t);
+  }, [onDone]);
+  return (
+    <SheetFrame step={3} title="다시 연결" testID="pair-done" footer={<Button label="확인" onPress={onDone} />}>
+      <StatusDot tone="accent" label="다시 연결했어요" />
+    </SheetFrame>
+  );
+}
+
+const SHEET_H = 560;
 
 function PairedScene({ onStart, pcName }: { onStart: () => void; pcName: string | null }) {
   const p = usePalette();
@@ -389,7 +486,15 @@ function PairedScene({ onStart, pcName }: { onStart: () => void; pcName: string 
 
 const CORNER = 28;
 const st = StyleSheet.create({
+  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingTop: space.s2 },
+  grabber: { alignSelf: 'center', width: 36, height: 5, borderRadius: 3, marginBottom: space.s2 },
+  sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.s5, minHeight: 44 },
+  dots: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  dot: { height: 4, borderRadius: 2 },
+  sheetBody: { flex: 1, paddingHorizontal: space.s5, paddingTop: space.s2, paddingBottom: space.s3, gap: space.s3 },
+  sheetFoot: { paddingHorizontal: space.s5, gap: space.s1 },
   scanner: { width: '100%', aspectRatio: 1, borderRadius: radius.xl, overflow: 'hidden' },
+  scannerFill: { flex: 1, aspectRatio: undefined, borderRadius: radius.lg },
   center: { alignItems: 'center', justifyContent: 'center' },
   reticleIdle: { width: 96, height: 96, marginBottom: space.s2 },
   reticle: { position: 'absolute', top: '18%', left: '18%', right: '18%', bottom: '18%' },
