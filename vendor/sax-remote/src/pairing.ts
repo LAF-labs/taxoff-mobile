@@ -69,7 +69,8 @@ export interface DesktopPairingOptions {
   enrollPhone: (p: { deviceId: string; platform: 'ios' | 'android'; name: string; Sm: Uint8Array; Vm: Uint8Array; roomId: Uint8Array }) => Promise<void>;
   accountClaim: () => Promise<string>;
   desktopName?: string;
-  publishDeviceList: (list: DeviceListJson) => Promise<void>;
+  /** 게시가 서버와 어긋나 다시 만든 목록을 돌려줄 수 있다. rebuild는 새로 받은 목록에 이 폰을 다시 올린다. */
+  publishDeviceList: (list: DeviceListJson, rebuild: (prev: DeviceListJson) => Promise<DeviceListJson>) => Promise<DeviceListJson | void>;
   registerMailbox: (mbxId: Uint8Array, tokRead: Uint8Array, tokWrite: Uint8Array, peer: string) => Promise<void>;
   mbxEpoch?: number;
 }
@@ -191,8 +192,9 @@ export class DesktopPairing {
       const notAfter = certNotAfter(now);
       const certBody: CertBody = { device_id: phone.deviceId, role: 'mobile', Sx: phone.Sm, Vx: phone.Vm, Kx: phone.Km, not_after: notAfter };
       const cert = encodeCertField(await issueCert(this.#o.keys.aik, certBody));
-      const list = await upsertDevice(this.#o.keys.aik, this.#o.deviceList, { deviceId: phone.deviceId, role: 'mobile', noisePub: phone.Sm, signPub: phone.Vm, registeredAt: now });
-      await this.#o.publishDeviceList(list);
+      const withPhone = (prev: DeviceListJson) => upsertDevice(this.#o.keys.aik, prev, { deviceId: phone.deviceId, role: 'mobile', noisePub: phone.Sm, signPub: phone.Vm, registeredAt: now });
+      const first = await withPhone(this.#o.deviceList);
+      const list = (await this.#o.publishDeviceList(first, withPhone)) ?? first;
       const mbxId = randomBytes(32), tokRead = randomBytes(32), tokWrite = randomBytes(32);
       await this.#o.registerMailbox(mbxId, tokRead, tokWrite, phone.deviceId);
       const kvPub = this.#o.keys.kvPublic();

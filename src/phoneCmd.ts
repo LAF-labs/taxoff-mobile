@@ -10,6 +10,8 @@ export interface PhoneCmd {
   total: number;
   createdAt: number;
   sentAt?: number;
+  /** PC가 꺼져 있어 릴레이 큐에 맡긴 때. PC는 켜지자마자 큐에서 받아 시작한다. */
+  queuedAt?: number;
   ack?: CmdAckState;
   runId?: string;
   reason?: CmdRejectReason;
@@ -269,4 +271,9 @@ export function jobOf(c: PhoneCmd): Job {
   if (reason && run.kind === 'running') return { ...base, state: 'running', run, reason };
   const state: Job['state'] = run.kind === 'done' ? 'done' : run.kind === 'verify' ? 'verify' : run.kind === 'refused' || run.kind === 'stopped' ? 'needPc' : 'running';
   return { ...base, state, run };
+}
+
+/** PC가 꺼져 있을 때 큐에 맡길 발급: 아직 PC에 닿지 않았고 큐에도 넣지 않은 것. 큐가 24시간 뒤 지우면 다시 넣는다. */
+export function cmdsToQueue(cmds: readonly PhoneCmd[], ttlMs: number, now = Date.now()): PhoneCmd[] {
+  return cmds.filter((c) => !c.sentAt && !c.ack && (!c.queuedAt || now - c.queuedAt >= ttlMs) && !settled(c, now));
 }

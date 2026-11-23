@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Pressable } from 'react-native';
 import { sp1Report, type Sp1Report } from '../diag';
 import { identityLines } from '../pairing/identity';
 import { useSession } from '../session';
 import { space } from '../theme';
-import { Button, Group, Row, Screen, StatusDot, T, ago } from '../ui/kit';
+import { Button, Group, Row, Screen, StatusDot, T } from '../ui/kit';
 import { pcWhyText } from '../net/pcWhy';
 import { pcLine } from './HomeScreen';
 import { confirmLeaveThisPhone } from './leavePhone';
@@ -14,63 +14,42 @@ export function ConnectionScreen({ onDone, onReset, onRepair }: { onDone: () => 
   const pair = s.data.pair;
   const [sp1, setSp1] = useState<Sp1Report | null>(null);
   const line = pcLine(s.pc, s.data.lastSeenPc);
-  const detail =
-    s.pc === 'queued'
-      ? '보낼 것을 잠가서 잠시 맡겨 뒀어요. 24시간 안에 PC를 켜면 받아요.'
-      : s.pc === 'stale'
-        ? 'PC가 일주일 넘게 꺼져 있어 맡길 수도 없어요. PC를 켜 두거나 다시 연결해 주세요.'
-        : s.pc === 'online'
-          ? '보내면 PC가 바로 받아요.'
-          : null;
   const lastWhy = s.data.pcLog?.[s.data.pcLog.length - 1] ?? null;
-  const whyLine = pair && (s.pc === 'offline' || s.pc === 'queued' || s.pc === 'stale') ? pcWhyText(lastWhy?.code) : null;
+  const whyLine = pair && (s.pc === 'offline' || s.pc === 'queued' || s.pc === 'stale' || s.pc === 'relink') ? pcWhyText(lastWhy?.code) : null;
   const [showLog, setShowLog] = useState(false);
-  const certDays = pair ? Math.floor((pair.certNotAfter - Date.now()) / 86_400_000) : 0;
+  const pending = s.pending.receipts + s.pending.cash;
   const ids = pair ? identityLines({ accountEmail: pair.accountEmail ?? null, desktopName: pair.desktopName ?? null }) : null;
+  const paired = pair ? new Date(pair.pairedAt) : null;
   return (
     <Screen
       title="PC 연결"
       onBack={onDone}
       testID="connection-screen"
-      footer={pair ? <Button label="지금 보내기" onPress={() => void s.sync()} busy={s.syncing} disabled={s.pending.receipts + s.pending.cash === 0 && s.pc !== 'stale'} /> : undefined}
+      footer={pair && pending > 0 ? <Button label={`지금 보내기 ${pending}건`} onPress={() => void s.sync()} busy={s.syncing} /> : undefined}
     >
-      <View style={{ gap: space.s2 }}>
-        <StatusDot tone={line.tone} label={line.label} busy={line.busy} testID="conn-state" />
-        {detail && <T v="sub" c="ink2">{detail}</T>}
-        {whyLine && (
-          <T v="sub" c="ink2" testID="conn-why">
-            {whyLine}
-          </T>
-        )}
-      </View>
-
-      <Group title="보낼 것">
-        <Row label="사진" value={`${s.pending.receipts}장`} testID="conn-pending" />
-        <Row label="현금 매출" value={`${s.pending.cash}건`} />
-        <Row label="마지막 접속" value={ago(s.data.lastSeenPc)} />
-      </Group>
-
-      {pair && ids && (
-        <Group title="연결한 PC" note="계정은 계정 서버가 확인한 값이고, PC 이름은 PC가 알려 준 참고 값이에요.">
+      {pair && ids && paired && (
+        <Group>
+          <Row label={ids.pc} strong value={<StatusDot tone={line.tone} label={line.sub ? `${line.label} ${line.sub}` : line.label} busy={line.busy} testID="conn-state" />} testID="conn-pc-name" />
           <Row label="계정" value={ids.account} testID="conn-account" />
-          <Row label="PC 이름" value={ids.pc} testID="conn-pc-name" />
-          <Row label="연결한 날" value={`${new Date(pair.pairedAt).getFullYear()}년 ${new Date(pair.pairedAt).getMonth() + 1}월 ${new Date(pair.pairedAt).getDate()}일`} />
-          <Row label="PC 기기" value={`…${pair.desktopDeviceId.slice(-6)}`} />
-          <Row label="인증서" value={certDays > 0 ? `${certDays}일 남음` : '만료됨'} valueInk={certDays > 0 ? 'ink2' : 'attention'} sub={certDays > 0 ? 'PC가 켜지면 저절로 새로 받아요' : 'PC와 다시 연결해 주세요'} />
+          <Row label="연결한 날" value={`${paired.getMonth() + 1}월 ${paired.getDate()}일`} />
         </Group>
       )}
+      {whyLine && (
+        <T v="sub" c="ink2" testID="conn-why">
+          {whyLine}
+        </T>
+      )}
 
-      <Group title="이 폰">
-        {pair && s.pc === 'stale' && <Row label="다시 연결하기" onPress={onRepair} testID="re-pair" />}
-        <Row label="보호 상태 보기" onPress={async () => setSp1(await sp1Report())} testID="sp1" />
-        {pair && !!s.data.pcLog?.length && <Row label="연결 기록 보기" onPress={() => setShowLog((v) => !v)} testID="pc-log" />}
+      <Group>
+        <Row label={pair ? '다시 연결' : 'PC와 연결'} onPress={onRepair} testID="re-pair" />
+        {pair && !!s.data.pcLog?.length && <Row label="연결 기록" onPress={() => setShowLog((v) => !v)} testID="pc-log" />}
+        <Row label="보호 상태" onPress={async () => setSp1(await sp1Report())} testID="sp1" />
         {pair && (
-          <Row
-            label="이 폰 연결 해제"
-            testID="unpair"
-            chevron={false}
-            onPress={() => confirmLeaveThisPhone({ pair, keys: s.keys, onReset })}
-          />
+          <Pressable testID="unpair" accessibilityRole="button" onPress={() => confirmLeaveThisPhone({ pair, keys: s.keys, onReset })} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: space.s4 }}>
+            <T v="body" c="attention">
+              연결 끊기
+            </T>
+          </Pressable>
         )}
       </Group>
 

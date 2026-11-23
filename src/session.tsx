@@ -6,7 +6,7 @@ import { inflight } from './inflight';
 import type { DeviceKeys } from './keyring';
 import SaxNative from '../modules/sax-native/src/SaxNativeModule';
 import { deviceApprovalKey } from './approvalKey';
-import { closeLive, syncWithPc, type PcStatus } from './net/pc';
+import { closeLive, onPresence, syncWithPc, type PcStatus } from './net/pc';
 import { statusWhileSyncing } from './net/pcWhy';
 import { failed, netChanged, NET_SETTLE_MS, retryDelay, type NetShape } from './net/reconnect';
 import { FileOutbox } from './storage/outbox';
@@ -38,7 +38,7 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
   const dataRef = useRef(initial);
   const outbox = useMemo(() => new FileOutbox(keys.fileKey), [keys]);
   const [pending, setPending] = useState({ receipts: 0, cash: 0 });
-  const [pc, setPc] = useState<PcStatus>(initial.pair ? 'offline' : 'unpaired');
+  const [pc, setPc] = useState<PcStatus>(initial.pair ? 'connecting' : 'unpaired');
   const [syncing, setSyncing] = useState(false);
   const px = useMemo(() => deviceApprovalKey(SaxNative), []);
   const busy = useRef(false);
@@ -109,6 +109,17 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
     }
   }, [keys, update, outbox, refreshPending, px, later]);
   syncRef.current = sync;
+
+  useEffect(() => {
+    onPresence((p) => {
+      if (!alive.current) return;
+      if (p === 'down') {
+        setPc((prev) => (prev === 'online' ? 'offline' : prev));
+        void update((x) => ({ ...x, lastSeenPc: Date.now() })).catch(() => undefined);
+      } else if (AppState.currentState === 'active') later(p === 'up' ? 0 : NET_SETTLE_MS);
+    });
+    return () => onPresence(null);
+  }, [update, later]);
 
   useEffect(() => {
     void refreshPending();

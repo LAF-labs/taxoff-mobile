@@ -28,21 +28,60 @@ import { Button, Check, Chevron, Pill, Seg, T, ago, success, tap, won, type Tone
 
 export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'devices' | 'issue' | 'queue' | 'run' | 'doc' | 'bizreg' | 'recv' | 'pay' | 'mark';
 
-export function pcLine(pc: PcStatus, lastSeen: number | null): { tone: Tone; label: string; busy?: boolean } {
+export function pcLine(pc: PcStatus, lastSeen: number | null): { tone: Tone; label: string; sub?: string; busy?: boolean } {
   switch (pc) {
     case 'online':
       return { tone: 'accent', label: 'PC 켜짐' };
     case 'connecting':
       return { tone: 'quiet', label: 'PC 찾는 중', busy: true };
-    case 'queued':
-      return { tone: 'quiet', label: 'PC 꺼짐, 켜지면 받아요' };
     case 'stale':
-      return { tone: 'attention', label: 'PC 연결 확인 필요' };
+    case 'relink':
+      return { tone: 'attention', label: '다시 연결 필요' };
     case 'unpaired':
       return { tone: 'quiet', label: 'PC와 연결 전' };
     default:
-      return { tone: 'quiet', label: `PC 꺼짐, ${ago(lastSeen)}` };
+      return { tone: 'quiet', label: 'PC 꺼짐', sub: lastSeen ? ago(lastSeen) : undefined };
   }
+}
+
+/** 머리 오른쪽의 PC 상태 알약. 누르면 PC 연결 화면. */
+function PcPill({ pc, lastSeen, onPress }: { pc: PcStatus; lastSeen: number | null; onPress: () => void }) {
+  const p = usePalette();
+  const l = pcLine(pc, lastSeen);
+  const warn = l.tone === 'attention';
+  return (
+    <Pressable
+      testID="pc-status"
+      accessibilityRole="button"
+      accessibilityLabel={`${l.label}${l.sub ? `, ${l.sub}` : ''}. 연결 상태 보기`}
+      onPress={onPress}
+      style={({ pressed }) => [st.pcPill, { backgroundColor: warn ? p.attentionSoft : p.tint }, pressed && { opacity: 0.6 }]}
+    >
+      <View style={[st.pcDot, l.tone === 'accent' ? { backgroundColor: p.accent } : warn ? { backgroundColor: p.attention } : { borderWidth: 1.5, borderColor: p.ink3 }]} />
+      <T v="subStrong" c={warn ? 'attention' : 'ink'}>
+        {l.label}
+      </T>
+      {l.sub && (
+        <T v="sub" c="ink3">
+          {l.sub}
+        </T>
+      )}
+    </Pressable>
+  );
+}
+
+/** 이 폰의 연결이 풀렸을 때 대화 끝에 한 번 보이는 카드. */
+function RelinkCard({ onRelink }: { onRelink: () => void }) {
+  const p = usePalette();
+  return (
+    <View style={[st.relink, { backgroundColor: p.tint, borderColor: p.attention }]} testID="relink-card">
+      <T v="strong">PC와 연결이 풀렸어요</T>
+      <T v="sub" c="ink2">
+        부탁은 이 폰에 두었어요. 다시 연결하면 바로 보낼게요.
+      </T>
+      <Button testID="relink" small label="다시 연결" onPress={onRelink} />
+    </View>
+  );
 }
 
 export interface Todo {
@@ -133,7 +172,8 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
     y.current = node.scrollTop;
   };
   const off = s.pc === 'offline' || s.pc === 'queued';
-  const pcOff = off || s.pc === 'stale';
+  const relink = s.pc === 'stale' || s.pc === 'relink';
+  const pcOff = off || relink;
 
   const live = useOfflineChat();
   const offline = phone ?? live;
@@ -213,6 +253,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
               </T>
             </View>
           )}
+          {paired && <PcPill pc={s.pc} lastSeen={s.data.lastSeenPc} onPress={() => go('connection')} />}
           <Pressable
             testID="go-settings"
             accessibilityRole="button"
@@ -225,18 +266,11 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
           </Pressable>
         </View>
         {}
-        {paired && s.pc !== 'online' && (
-          <Pressable testID="pc-status" accessibilityRole="button" accessibilityLabel={`${pcHint(s.pc)}. 연결 상태 보기`} onPress={() => go('connection')} style={st.pcHint}>
-            <T v="meta" c={s.pc === 'stale' ? 'attention' : 'ink3'} center>
-              {pcHint(s.pc)}
-            </T>
-          </Pressable>
-        )}
 
         <View style={st.fill}>
         {!paired || items.length === 0 ? (
           <ScrollView style={st.fill} contentContainerStyle={[st.chat, !paired && { justifyContent: 'center' }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" testID="chat">
-            {!paired ? <Intro onPair={() => go('pair')} /> : <Starter phoneAnswers={phoneAnswers} onPick={pick} />}
+            {!paired ? <Intro onPair={() => go('pair')} /> : relink ? <RelinkCard onRelink={() => go('pair')} /> : <Starter phoneAnswers={phoneAnswers} onPick={pick} />}
           </ScrollView>
         ) : (
           <FlatList
@@ -259,6 +293,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
             testID="chat"
             ListHeaderComponent={
               <View style={st.listEnd}>
+          {paired && relink && <RelinkCard onRelink={() => go('pair')} />}
           {paired && canSend && offline.busy && <Typing />}
           {paired && canSend && !offline.busy && offline.chips.length > 0 && (
             <View style={st.replies} testID="chat-chips">
@@ -518,17 +553,6 @@ function NewReply({ fresh, onPress }: { fresh: boolean; onPress: () => void }) {
 const SCREEN_LABEL: Record<PhoneScreen, string> = { capture: '증빙 찍기', cash: '현금 매출 적기', bizreg: '사업자등록증 찍기', issue: '세금계산서 발급' };
 
 const CANT_SEND_TEXT = '이 폰에서는 아직 대화를 보낼 수 없어요. 앱을 다시 열거나 설정에서 PC 연결을 확인해 주세요.';
-
-function pcHint(pc: PcStatus): string {
-  switch (pc) {
-    case 'connecting':
-      return 'PC를 찾고 있어요';
-    case 'stale':
-      return 'PC가 오래 꺼져 있어요. 켜 두거나 연결을 확인해 주세요';
-    default:
-      return 'PC가 꺼져 있어요. 켜지면 바로 할게요';
-  }
-}
 
 function Kebab({ color }: { color: string }) {
   return (
@@ -1080,7 +1104,9 @@ function Chip({ label, onPress, testID }: { label: string; onPress: () => void; 
 const st = StyleSheet.create({
   fill: { flex: 1 },
   top: { minHeight: size.header, flexDirection: 'row', alignItems: 'center', gap: space.s2, paddingLeft: space.s4, paddingRight: space.s2, paddingTop: space.s1 },
-  pcHint: { paddingHorizontal: space.s5, paddingTop: space.s1, paddingBottom: space.s1, minHeight: 28, justifyContent: 'center' },
+  pcPill: { minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: space.s2, paddingHorizontal: space.s3, borderRadius: radius.full },
+  pcDot: { width: 8, height: 8, borderRadius: radius.full },
+  relink: { gap: space.s3, padding: space.s4, borderRadius: radius.lg, borderWidth: 1, marginHorizontal: space.s5, marginBottom: space.s3 },
   topBtn: { minWidth: size.hit, minHeight: size.hit, paddingHorizontal: space.s3, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   lines: { paddingHorizontal: space.s5, gap: space.s2, paddingBottom: space.s2 },
   pcLine: { minHeight: size.hit, flexDirection: 'row', alignItems: 'center', gap: space.s3, marginHorizontal: -space.s2, paddingHorizontal: space.s2, borderRadius: radius.md },

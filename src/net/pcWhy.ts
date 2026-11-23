@@ -54,6 +54,21 @@ export function pcWhyText(code: string | null | undefined): string | null {
   return null;
 }
 
+/** 다시 살피는 동안에는 알던 상태를 그대로 둔다(1분마다 'PC 찾는 중'이 깜빡이지 않게). 처음 한 번만 찾는 중이다. */
 export function statusWhileSyncing<T extends string>(prev: T): T | 'connecting' {
-  return prev === 'online' ? prev : 'connecting';
+  return prev === 'unpaired' ? 'connecting' : prev;
+}
+
+/** 이 폰의 연결이 서버에서 풀렸다: PC를 켜도 다시 연결하기 전에는 이어지지 않는다. */
+export function needsRelink(code: string | null | undefined): boolean {
+  if (!code) return false;
+  const [stage = '', cause = ''] = code.split(':');
+  return /^(join|queue)$/.test(stage) && /^account\.(device_not_found|device_suspended)/.test(cause);
+}
+
+/** 맡긴 발급의 한 줄. 연결이 풀린 것과 PC가 꺼진 것은 다르다: 꺼져 있으면 켜지는 대로 발급하고, 풀렸으면 다시 연결해야 간다. */
+export function entrustNote(pc: string, what: string): string | null {
+  if (pc === 'online') return null;
+  if (pc === 'relink' || pc === 'stale') return `${what}을 이 폰에 두었어요. 다시 연결하면 바로 발급해요`;
+  return `${what}을 맡겼어요. PC가 켜지면 바로 발급해요`;
 }

@@ -17,7 +17,7 @@ export function netChanged(prev: NetShape | null, next: NetShape): boolean {
 }
 
 export function failed(status: PcStatus): boolean {
-  return status === 'offline' || status === 'stale' || status === 'connecting';
+  return status === 'offline' || status === 'stale' || status === 'relink' || status === 'connecting';
 }
 
 export function retryDelay(n: number, maxMs: number, rand: () => number = Math.random): number {
