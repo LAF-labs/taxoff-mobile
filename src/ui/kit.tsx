@@ -247,8 +247,7 @@ export function Replies<K extends string>({
             }}
             style={({ pressed }) => [
               st.reply,
-              { borderColor: on ? p.ink : p.lineStrong, borderStyle: on ? 'solid' : 'dashed', opacity: dim ? 0.45 : 1 },
-              pressed && { backgroundColor: p.tint },
+              { backgroundColor: pressed ? p.sunken : p.tint, borderColor: on ? p.ink : 'transparent', opacity: dim ? 0.45 : 1 },
             ]}
           >
             <View style={{ flex: 1, gap: 2 }}>
