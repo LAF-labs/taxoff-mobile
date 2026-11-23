@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { bubbleGroup, chatFromData, clockRange, stampBefore, stateOf, type ChatCard, type ChatItem } from '../chat';
+import { draftWithEdits, issuableDraftCards, type Draft, type DraftFields } from '../draftCards';
 import { useOfflineChat, type OfflineChatView, type ReplyTo } from '../offline/useOfflineChat';
 import type { PhoneScreen, ReactionId } from '@sax/chat-core';
 import { BRAND } from '../config';
@@ -184,6 +185,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
     .filter((j) => j.id.startsWith('cmd-') && j.run && j.state === 'approval' && !carded.has(j.id))
     .map((j) => ({ kind: 'run', id: `run-${j.id}`, at: j.createdAt, jobId: j.id }));
   const items = [...(chat ?? chatFromData(s.data)), ...q.notes, ...waiting, ...mine, ...(chat && !phone ? [] : offline.items)].sort((a, b) => at(a) - at(b));
+  const issuable = issuableDraftCards(items, offline.openDrafts);
   const data = [...items].reverse();
   const last = items.at(-1);
   const lastId = last?.id ?? '';
@@ -320,7 +322,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
                   {it.kind === 'run' ? (
                     <RunItem jobId={it.jobId} go={go} />
                   ) : (
-                    <Item it={it} group={bubbleGroup(items, i)} onRetry={(id) => void offline.retry(id)} retryOff={offline.busy} openDrafts={offline.openDrafts} onIssue={issueFrom} cpOf={cpOf} stale={s.pc === 'stale'} onHold={setHeld} onReply={canSend ? startReply : undefined} draftEdit={draftEdits.get(it.id)} onConfirmDraft={onConfirmDraft} />
+                    <Item it={it} group={bubbleGroup(items, i)} onRetry={(id) => void offline.retry(id)} retryOff={offline.busy} onIssue={issuable.has(it.id) ? issueFrom : undefined} cpOf={cpOf} stale={s.pc === 'stale'} onHold={setHeld} onReply={canSend ? startReply : undefined} draftEdit={draftEdits.get(it.id)} onConfirmDraft={onConfirmDraft} />
                   )}
                 </View>
               );
@@ -631,7 +633,7 @@ function RunItem({ jobId, go }: { jobId: string; go: (to: HomeRoute) => void }) 
   );
 }
 
-function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, cpOf, stale, onHold, onReply, draftEdit, onConfirmDraft }: { it: Exclude<ChatItem, { kind: 'run' }>; group: { first: boolean; last: boolean }; onRetry: (noteId: string) => void; retryOff?: boolean; openDrafts?: ReadonlySet<string>; onIssue: OnIssue; cpOf: (id: string) => Counterparty | null; stale: boolean; onHold: (h: Held) => void; onReply?: (r: ReplyTo) => void; draftEdit?: DraftFields; onConfirmDraft: (id: string, fields: DraftFields) => void }) {
+function Item({ it, group, onRetry, retryOff, onIssue, cpOf, stale, onHold, onReply, draftEdit, onConfirmDraft }: { it: Exclude<ChatItem, { kind: 'run' }>; group: { first: boolean; last: boolean }; onRetry: (noteId: string) => void; retryOff?: boolean; onIssue?: OnIssue; cpOf: (id: string) => Counterparty | null; stale: boolean; onHold: (h: Held) => void; onReply?: (r: ReplyTo) => void; draftEdit?: DraftFields; onConfirmDraft: (id: string, fields: DraftFields) => void }) {
   const p = usePalette();
   const bubble = useRef<ComponentRef<typeof Pressable>>(null);
   if (it.kind === 'merged') {
@@ -711,7 +713,7 @@ function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, cpOf, stale, 
         <DraftCard
           card={it.card}
           draft={it.card.draft}
-          onIssue={(it.card.draft.phone ? !it.card.sent : !openDrafts || openDrafts.has(it.card.draft.id)) ? (d) => onIssue(d, it.id) : undefined}
+          onIssue={onIssue ? (d) => onIssue(d, it.id) : undefined}
           cp={cpOf(it.card.draft.counterpartyId)}
           stale={stale}
           confirmed={draftEdit}
@@ -850,8 +852,6 @@ function Starter({ phoneAnswers, onPick }: { phoneAnswers: boolean; onPick: (tex
   );
 }
 
-type Draft = NonNullable<ChatCard['draft']>;
-export type DraftFields = Pick<Draft, 'amount' | 'vat' | 'item'>;
 type OnIssue = (d: Draft, itemId: string) => Promise<boolean>;
 type OnCardIssue = (d: Draft) => Promise<boolean>;
 
@@ -914,10 +914,11 @@ const VAT_OPTIONS = [
 
 function DraftCard({ card, draft, onIssue, cp, stale, confirmed, onConfirm }: { card: ChatCard; draft: Draft; onIssue?: OnCardIssue; cp: Counterparty | null; stale: boolean; confirmed?: DraftFields; onConfirm: (fields: DraftFields) => void }) {
   const p = usePalette();
-  const fields = confirmed ?? draft;
+  const fields = draftWithEdits(draft, confirmed);
   const val = { amount: fields.amount, vat: (fields.vat === 'included' ? 'incl' : 'excl') as VatMode, item: fields.item ?? '' };
   const openEdit = !confirmed && !!onIssue && !!draft.phone?.edit;
-  const [edit, setEdit] = useState<null | { amount: string; vat: VatMode; item: string }>(openEdit ? { amount: draft.amount > 0 ? masked('won', String(draft.amount)) : '', vat: val.vat, item: val.item } : null);
+  const [editing, setEdit] = useState<null | { amount: string; vat: VatMode; item: string }>(openEdit ? { amount: draft.amount > 0 ? masked('won', String(draft.amount)) : '', vat: val.vat, item: val.item } : null);
+  const edit = onIssue ? editing : null;
   const closed = cp?.status?.kind === 'closed' ? cp.status : null;
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -933,7 +934,7 @@ function DraftCard({ card, draft, onIssue, cp, stale, confirmed, onConfirm }: { 
     if (!onIssue || busy) return;
     setBusy(true);
     setFailed(false);
-    const ok = await onIssue({ ...draft, amount: val.amount, vat: val.vat === 'incl' ? 'included' : 'separate', item: val.item || null });
+    const ok = await onIssue({ ...fields, vat: val.vat === 'incl' ? 'included' : 'separate', item: val.item || null });
     setBusy(false);
     if (!ok) setFailed(true);
   };
