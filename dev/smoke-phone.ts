@@ -3,7 +3,7 @@ import {
   CAP, DeviceTokenCache, MobilePairing, RECEIPT_CHUNK, VM_PURPOSES, deviceAuthHeaders, ed25519Keygen, enqueueCash, flushOutbox, fromB64, makeCashEntry,
   makeReceiptOffer, monotonicClock, openMobileSession, queueOutbox, relayQueue, requestDeviceToken, softNoiseStatic, softSigner, uuid4, verifyQBundle,
   wsRelayClient, x25519Keygen,
-  type HttpJson, type OutboxItem, type OutboxStore, type SignedCert, type WebSocketLike,
+  type HttpJson, type Link, type OutboxItem, type OutboxStore, type SignedCert, type WebSocketLike,
 } from '../vendor/sax-remote/src/index.ts';
 
 import { parsePaperInvoice } from '../src/capture/invoice.ts';
@@ -12,6 +12,20 @@ import { paperTaxInvoice } from '../test/fixtures/invoice-boxes.ts';
 
 const HOST = 'localhost:8787';
 const base = `http://${HOST}`;
+const CONNECT_WAIT_MS = 5000;
+
+function waitForPeer(link: Link): Promise<boolean> {
+  return new Promise((resolve) => {
+    const finish = (ready: boolean) => {
+      clearTimeout(timer);
+      resolve(ready);
+    };
+    const timer = setTimeout(() => finish(false), CONNECT_WAIT_MS);
+    link.onClose(() => finish(false));
+    link.onPeer(() => finish(true));
+  });
+}
+
 const fetchJson: HttpJson = async (r) => {
   const res = await fetch(r.url, { method: r.method, headers: r.headers, body: r.body });
   const t = await res.text();
@@ -43,7 +57,6 @@ const r = await mp.run(link);
 if (!r) throw new Error(`pair failed: ${mp.failure}`);
 r.channel.close();
 console.log('paired', r.pairId);
-await new Promise((res) => setTimeout(res, 300));
 
 const items = new Map<string, { it: OutboxItem; photo?: Uint8Array }>();
 const store: OutboxStore = {
@@ -90,22 +103,28 @@ if (process.argv.includes('--queue')) {
 }
 const nextTimestamp = monotonicClock(0);
 const connect = async () => {
-  const mbx = await client.joinMailbox(fromB64(r.mbxId), { read: fromB64(r.tokRead), write: fromB64(r.tokWrite) }, 'mobile');
-  const sess = await openMobileSession(mbx, {
-    pairId: r.pairId, noise, desktopStatic: r.desktopStatic, nextTimestamp,
-    hello: { appVersion: 'smoke', deviceListVersion: r.deviceList.listVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash] },
-  });
-  if (!sess) throw new Error('session failed');
-  return { mbx, sess };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const mbx = await client.joinMailbox(fromB64(r.mbxId), { read: fromB64(r.tokRead), write: fromB64(r.tokWrite) }, 'mobile');
+    if (await waitForPeer(mbx)) {
+      // A reconnect can still see presence from the desktop's previous socket.
+      mbx.onPeerGone?.(() => mbx.close());
+      const sess = await openMobileSession(mbx, {
+        pairId: r.pairId, noise, desktopStatic: r.desktopStatic, nextTimestamp,
+        hello: { appVersion: 'smoke', deviceListVersion: r.deviceList.listVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash] },
+        responseTimeoutMs: CONNECT_WAIT_MS, helloTimeoutMs: CONNECT_WAIT_MS,
+      });
+      if (sess) return { mbx, sess };
+    }
+    mbx.close();
+  }
+  throw new Error('desktop session unavailable after waiting for relay peer');
 };
 const { sess } = await connect();
 const f = await flushOutbox(sess.channel, store, { pace: async () => {} });
 console.log('flushed', f.sent.length, 'pending', f.pending.length);
 sess.channel.close();
-await new Promise((res) => setTimeout(res, 300));
 const resumed = await connect();
 resumed.mbx.close();
-await new Promise((res) => setTimeout(res, 300));
 (await connect()).sess.channel.close();
 console.log('reconnected after graceful and abrupt disconnects');
 const st = await (await fetch(`${base}/dev/status`)).json();
