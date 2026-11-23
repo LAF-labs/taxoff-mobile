@@ -3,7 +3,7 @@ import { StyleSheet, TextInput, View } from 'react-native';
 import { clock } from '../chat';
 import { findDuplicate, recentCounterparties, searchCounterparties, splitAmount, type Counterparty, type IssuedToday, type VatMode } from '../issue';
 import { counterpartiesOf } from '../net/pcCopy';
-import { useIssueSubmit, useViaPc } from '../issueSubmit';
+import { ISSUE_SUBMIT_ERRORS, useIssueSubmit, useViaPc } from '../issueSubmit';
 import { kstDay } from '../phoneCmd';
 import { fullDay } from '../money';
 import { useQueue } from '../queueStore';
@@ -61,7 +61,7 @@ export function IssueScreen({
   const [day, setDay] = useState(localDay());
   const [vat, setVat] = useState<VatMode>(preview?.vat ?? (pre?.vat === 'included' ? 'incl' : 'excl'));
   const [saving, setSaving] = useState(false);
-  const [saveFailed, setSaveFailed] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [amount, setAmount] = useState(preview?.amount ?? (pre ? masked('won', String(pre.amount)) : first?.lastSupply ? masked('won', String(first.lastSupply)) : ''));
   const [dupOk, setDupOk] = useState(false);
 
@@ -73,6 +73,7 @@ export function IssueScreen({
     setAmount(c?.lastSupply ? masked('won', String(c.lastSupply)) : '');
     setVat('excl');
     setDupOk(false);
+    setSubmitError(null);
     setPhase('form');
   };
 
@@ -122,10 +123,10 @@ export function IssueScreen({
   const submit = async () => {
     if (saving) return;
     setSaving(true);
-    setSaveFailed(false);
-    const ok = await submitIssue({ cp: manual ? null : cp, name, bizNo, item, day, a, draftId: pre?.draftId });
+    setSubmitError(null);
+    const result = await submitIssue({ cp: manual ? null : cp, item, a, draftId: pre?.draftId });
     setSaving(false);
-    if (!ok) return setSaveFailed(true);
+    if (result !== 'submitted') return setSubmitError(ISSUE_SUBMIT_ERRORS[result]);
     onSubmitted();
   };
 
@@ -140,12 +141,12 @@ export function IssueScreen({
           폐업 경고를 먼저 확인해 주세요
         </T>
       )}
-      {viaPc && saveFailed && (
-        <T v="meta" c="attention" center testID="issue-save-failed">
-          폰에 저장하지 못해 맡기지 않았어요. 다시 눌러 주세요
+      {submitError && (
+        <T v="meta" c="attention" role="alert" center testID="issue-save-failed">
+          {submitError}
         </T>
       )}
-      <Button testID="issue-submit" label={viaPc ? (online ? '발급 맡기기' : 'PC 켜지면 맡기기') : online ? '홈택스에서 준비' : 'PC 켜지면 준비하기'} onPress={() => void submit()} disabled={!ready || saving} />
+      <Button testID="issue-submit" label={viaPc ? (online ? '발급 맡기기' : 'PC 켜지면 맡기기') : '발급하기'} onPress={() => void submit()} disabled={!ready || saving} />
     </>
   );
 

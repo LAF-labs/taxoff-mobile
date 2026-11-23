@@ -12,8 +12,7 @@ import { BRAND } from '../config';
 import { queueCounts } from '../queue';
 import { useQueue } from '../queueStore';
 import { RunCard } from './RunCard';
-import { useIssueSubmit } from '../issueSubmit';
-import { kstDay } from '../phoneCmd';
+import { ISSUE_SUBMIT_ERRORS, useIssueSubmit, type IssueSubmitResult } from '../issueSubmit';
 import { onShowCard, shownCard } from '../cardFocus';
 import { counterpartiesOf } from '../net/pcCopy';
 import { splitAmount, type Counterparty, type VatMode } from '../issue';
@@ -116,18 +115,18 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
   };
   const submitIssue = useIssueSubmit();
   const cpOf = (id: string): Counterparty | null => (id ? [...(s.data.pcCopy ? counterpartiesOf(s.data.pcCopy) : []), ...q.counterparties].find((c) => c.id === id) ?? null : null);
-  const issueFrom = async (d: Draft, itemId: string): Promise<boolean> => {
+  const issueFrom: OnIssue = async (d, itemId) => {
     const cp = cpOf(d.counterpartyId);
     if (!d.phone && !cp) {
       q.setPrefill({ amount: d.amount, vat: d.vat, item: d.item, draftId: d.id });
       go('issue');
-      return true;
+      return;
     }
     const a = splitAmount(d.amount, d.vat === 'included' ? 'incl' : 'excl');
-    if (a.supply <= 0) return true;
-    const ok = await submitIssue({ cp, name: d.phone?.name ?? '', bizNo: d.phone?.bizNo ?? '', item: d.item ?? '', day: kstDay(), a, draftId: d.phone ? d.phone.draftId : d.id });
-    if (ok && d.phone) q.markSent(itemId);
-    return ok;
+    if (a.supply <= 0) return;
+    const result = await submitIssue({ cp, item: d.item ?? '', a, draftId: d.phone ? d.phone.draftId : d.id });
+    if (result === 'submitted' && d.phone) q.markSent(itemId);
+    return result;
   };
   const list = useRef<FlatList<ChatItem>>(null);
   const y = useRef(0);
@@ -848,8 +847,8 @@ function Starter({ phoneAnswers, onPick }: { phoneAnswers: boolean; onPick: (tex
 }
 
 type Draft = NonNullable<ChatCard['draft']>;
-type OnIssue = (d: Draft, itemId: string) => Promise<boolean>;
-type OnCardIssue = (d: Draft) => Promise<boolean>;
+type OnIssue = (d: Draft, itemId: string) => Promise<IssueSubmitResult | undefined>;
+type OnCardIssue = (d: Draft) => ReturnType<OnIssue>;
 
 function Card({ card, onIssue, cp, stale }: { card: ChatCard; onIssue?: OnCardIssue; cp: Counterparty | null; stale: boolean }) {
   const p = usePalette();
@@ -916,7 +915,7 @@ function DraftCard({ card, draft, onIssue, cp, stale }: { card: ChatCard; draft:
   const [edit, setEdit] = useState<null | { amount: string; vat: VatMode; item: string }>(openEdit ? { amount: draft.amount > 0 ? masked('won', String(draft.amount)) : '', vat: val.vat, item: val.item } : null);
   const closed = cp?.status?.kind === 'closed' ? cp.status : null;
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const shown = edit ? { amount: Number(edit.amount.replace(/\D/g, '')), vat: edit.vat, item: edit.item } : val;
   const a = splitAmount(shown.amount, shown.vat);
   const startEdit = () => setEdit({ amount: masked('won', String(val.amount)), vat: val.vat, item: val.item });
@@ -928,10 +927,10 @@ function DraftCard({ card, draft, onIssue, cp, stale }: { card: ChatCard; draft:
   const issue = async () => {
     if (!onIssue || busy) return;
     setBusy(true);
-    setFailed(false);
-    const ok = await onIssue({ ...draft, amount: val.amount, vat: val.vat === 'incl' ? 'included' : 'separate', item: val.item || null });
+    setError(null);
+    const result = await onIssue({ ...draft, amount: val.amount, vat: val.vat === 'incl' ? 'included' : 'separate', item: val.item || null });
     setBusy(false);
-    if (!ok) setFailed(true);
+    if (result && result !== 'submitted') setError(ISSUE_SUBMIT_ERRORS[result]);
   };
   const dark = p.overlay === p.tint;
   const inputStyle = [st.cardInput, { backgroundColor: p.canvas, color: p.ink, borderColor: p.line }];
@@ -993,9 +992,9 @@ function DraftCard({ card, draft, onIssue, cp, stale }: { card: ChatCard; draft:
           {closed ? `${closed.on}에 ${closed.what}한 곳으로 조회돼요` : 'PC를 켜면 맡길 수 있어요'}
         </T>
       )}
-      {failed && (
-        <T v="meta" c="attention" testID="card-failed">
-          폰에 저장하지 못해 맡기지 않았어요. 다시 눌러 주세요
+      {error && (
+        <T v="meta" c="attention" role="alert" testID="card-failed">
+          {error}
         </T>
       )}
       {onIssue && (
