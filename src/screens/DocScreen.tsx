@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Image, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { shareDoc } from '../doc';
+import { fullDay } from '../money';
 import { useQueue } from '../queueStore';
 import type { DocRef } from '../run';
 import { radius, space, usePalette } from '../theme';
@@ -58,8 +59,8 @@ export function DocScreen({ onDone, state: initial = { kind: 'ready' } }: { onDo
           {doc.name}
         </T>
         <T v="meta" c="ink3">
-          발급일 {doc.issuedOn}
-          {open && state.backup ? ' · 백업에서 열었어요' : ''}
+          발급일 {fullDay(doc.issuedOn)}
+          {open && state.backup ? ', 백업에서 열었어요' : ''}
         </T>
       </View>
       {open ? (
@@ -80,7 +81,7 @@ export function DocScreen({ onDone, state: initial = { kind: 'ready' } }: { onDo
         </View>
       ) : state.kind === 'receiving' ? (
         <View style={st.center} testID="doc-receiving">
-          <T v="sub" c="ink2">PC에서 받는 중 · {state.pct}%</T>
+          <T v="sub" c="ink2">PC에서 받는 중 {state.pct}%</T>
           <View style={[st.track, { backgroundColor: p.tint }]} accessible accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: state.pct }}>
             <View style={[st.fill, { width: `${state.pct}%`, backgroundColor: p.ink }]} />
           </View>

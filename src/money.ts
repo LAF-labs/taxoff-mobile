@@ -168,6 +168,11 @@ export function md(day: string): string {
   return `${m}월${NB}${d}일`;
 }
 
+export function fullDay(day: string): string {
+  const y = Number(day.slice(0, 4));
+  return y === new Date().getFullYear() ? md(day) : `${y}년${NB}${md(day)}`;
+}
+
 export function alertLine(a: CashFlowAlert): string {
   switch (a.kind) {
     case 'shortfall':

@@ -86,12 +86,10 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
             </T>
           ))}
       </View>
-      {}
       {r.kind !== 'done' && r.kind !== 'refused' && !(r.kind === 'stopped' && (r.reason === 'pcStopped' || r.reason === 'appOld')) && (compact ? <FoldSteps id={job.id} r={r} /> : <StepBar r={r} />)}
       <StateLines r={r} />
       {onApprove && job.gate && job.state === 'approval' && <CardApprove job={job} gate={job.gate} onDetail={onApprove} now={fixedNow} />}
       {r.kind === 'done' && <ResultRows result={r.result} />}
-      {}
       {compact && (!job.pcOnly || pcTurn(r)) && <CardActions r={r} now={now} onAction={onAction} onDoc={onDoc} onShare={onShare} />}
     </View>
   );
@@ -209,7 +207,7 @@ function StateLines({ r }: { r: RunView }) {
       return (
         <View style={{ gap: space.s1 }} testID="run-in-doubt">
           <T v="sub" c="attention">
-            발급목록을 조회하고 있어요 · {r.tries}회째
+            발급목록을 {r.tries}번째 조회하고 있어요
           </T>
           <T v="meta" c="ink2">
             발급됐는지 확인되기 전에는 다시 발급하지 않아요
@@ -243,14 +241,13 @@ function ResultRows({ result }: { result: IssueResult }) {
   };
   return (
     <View style={[st.rows, { borderTopColor: p.line }]}>
-      {}
       <Pressable onLongPress={() => void copy()} accessibilityRole="button" accessibilityLabel={`승인번호 ${result.approvalNo}`} accessibilityHint="길게 누르면 복사해요" style={st.stack} testID="result-approval-no">
         <View style={st.stackHead}>
           <T v="sub" c="ink2">
             승인번호
           </T>
           <T v="meta" c="ink3">
-            {copied ? '복사했어요' : '길게 누르면 복사'}
+            {copied ? '복사했어요' : ''}
           </T>
         </View>
         <T v="value" style={st.mono}>
@@ -344,7 +341,7 @@ const st = StyleSheet.create({
   value: { flex: 1, minWidth: 0, textAlign: 'right' },
   stack: { paddingVertical: space.s2, gap: space.s1, minHeight: 44 },
   stackHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: space.s3 },
-  mono: { textAlign: 'right', fontVariant: ['tabular-nums'], letterSpacing: 0.5, ...({ whiteSpace: 'nowrap' } as object) },
+  mono: { textAlign: 'right', fontVariant: ['tabular-nums'], ...({ whiteSpace: 'nowrap' } as object) },
   nowrap: { flexShrink: 0, ...({ whiteSpace: 'nowrap', wordBreak: 'normal', overflowWrap: 'normal' } as object) },
   email: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: '100%' },
   emailGroup: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: '100%' },

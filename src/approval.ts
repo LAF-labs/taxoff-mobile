@@ -69,7 +69,7 @@ export const FIELD_LABELS: Readonly<Record<string, string>> = {
   itemName: '품목',
   itemCount: '수량',
   issueDate: '작성일자',
-  receiptType: '영수·청구',
+  receiptType: '영수/청구',
   remark: '비고',
   supplierName: '상호',
   supplierBizNo: '사업자번호',
@@ -102,7 +102,7 @@ export function dupDetail(v: string): string | undefined {
     const h = Number(m[2]);
     parts.push(`${h < 12 ? '오전' : '오후'} ${h % 12 === 0 ? 12 : h % 12}:${m[3]}`);
   }
-  return parts.length ? parts.join(' · ') : undefined;
+  return parts.length ? parts.join(', ') : undefined;
 }
 
 interface GateReading {

@@ -241,7 +241,7 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
       await s.refreshPending();
       setSent(
         docMode === 'invoice'
-          ? { title: `${invoice.docKind === 'invoice' ? '계산서' : '세금계산서'} · ${invoice.direction === 'sales' ? '매출' : invoice.direction === 'purchase' ? '매입' : '사진만'}`, value: invoice.total !== null ? won(invoice.total) : '' }
+          ? { title: `${invoice.docKind === 'invoice' ? '계산서' : '세금계산서'} ${invoice.direction === 'sales' ? '매출' : invoice.direction === 'purchase' ? '매입' : '사진만'}`, value: invoice.total !== null ? won(invoice.total) : '' }
           : { title: c.merchant ?? '영수증', value: c.amount ? won(c.amount) : '' },
       );
       success();
@@ -338,7 +338,7 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
         )}
         {fromAlbum && (
           <T v="meta" c="ink3" testID="capture-album-note">
-            사진은 PC에 보관해요 · 앨범 원본은 그대로 둬요
+            사진은 PC에 보관하고 앨범 원본은 그대로 둬요
           </T>
         )}
         {engine === 'none' && (
@@ -411,7 +411,7 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
                 종이 증빙을 찍으려면 카메라가 필요해요
               </T>
               <T v="meta" c="onCamera" center style={{ opacity: 0.72 }}>
-                사진은 사진 앱에 저장하지 않아요 · 앨범에서 골라도 돼요
+                사진 앱에는 저장하지 않아요. 앨범에서 골라도 돼요
               </T>
             </View>
             <Button small kind="secondary" label="카메라 허용" onPress={() => void requestPerm()} />
@@ -454,7 +454,7 @@ function CamSeg({ value, onChange }: { value: Mode; onChange: (m: Mode) => void 
       {(
         [
           ['receipt', '영수증'],
-          ['invoice', '세금계산서·계산서'],
+          ['invoice', '세금계산서'],
         ] as const
       ).map(([k, l]) => (
         <Pressable
@@ -493,8 +493,8 @@ function InvoiceFields({
           value={inv.direction}
           onChange={(v) => setI('direction', v)}
           options={[
-            { key: 'purchase', label: '받은 것 · 매입' },
-            { key: 'sales', label: '발급한 것 · 매출' },
+            { key: 'purchase', label: '받은 것(매입)' },
+            { key: 'sales', label: '발급한 것(매출)' },
           ]}
         />
         {dirErr ? (
@@ -546,7 +546,7 @@ function InvoiceFields({
             <Row
               key={i}
               label={it.name}
-              sub={[it.month && it.day ? `${it.month}/${it.day}` : null, it.spec, it.qty !== null && it.unitPrice !== null ? `${it.qty} × ${it.unitPrice.toLocaleString('ko-KR')}` : null].filter(Boolean).join(' · ') || undefined}
+              sub={[it.month && it.day ? `${it.month}/${it.day}` : null, it.spec, it.qty !== null && it.unitPrice !== null ? `${it.qty} × ${it.unitPrice.toLocaleString('ko-KR')}` : null].filter(Boolean).join(', ') || undefined}
               value={won(it.supply)}
             />
           ))}
@@ -570,7 +570,7 @@ function InvoiceFields({
 
       {(inv.bookNo || inv.serialNo) && (
         <T v="meta" c="ink3" style={{ paddingHorizontal: space.s1 }}>
-          {[inv.bookNo && `책번호 ${inv.bookNo}`, inv.serialNo && `일련번호 ${inv.serialNo}`].filter(Boolean).join(' · ')}
+          {[inv.bookNo && `책번호 ${inv.bookNo}`, inv.serialNo && `일련번호 ${inv.serialNo}`].filter(Boolean).join(', ')}
         </T>
       )}
     </>

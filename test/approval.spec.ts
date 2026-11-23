@@ -73,7 +73,7 @@ describe('승인 시트 상태', () => {
   });
   it('같은 건 둘째 줄: 값이 승인번호 끝·시각을 실어 올 때만', () => {
     assert.equal(dupDetail('committed'), undefined);
-    assert.equal(dupDetail('committed;4821;10:20'), '승인번호 끝 4821 · 오전 10:20');
+    assert.equal(dupDetail('committed;4821;10:20'), '승인번호 끝 4821, 오전 10:20');
     assert.equal(dupDetail('committed;4821'), '승인번호 끝 4821');
     assert.equal(dupDetail('committed;;14:05'), '오후 2:05');
   });

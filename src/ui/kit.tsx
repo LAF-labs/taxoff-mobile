@@ -9,8 +9,6 @@ import { MAX_FONT_SCALE, TextSizeContext, motion, radius, size, space, textScale
 
 const keepAll = { wordBreak: 'keep-all', overflowWrap: 'anywhere' } as unknown as TextStyle;
 
-const glueDots = (t: string) => t.replace(/ · /g, ' ·\u00A0');
-const glue = (c: ReactNode): ReactNode => (typeof c === 'string' ? glueDots(c) : Array.isArray(c) ? c.map(glue) : c);
 
 export const tap = () => void Haptics.selectionAsync().catch(() => {});
 export const success = () => void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -32,7 +30,7 @@ export function T({
       lineBreakStrategyIOS="hangul-word"
       style={[base, k !== 1 && { fontSize: base.fontSize * k, lineHeight: base.lineHeight * k }, { color: p[c] }, keepAll, center && { textAlign: 'center' }, style]}
     >
-      {glue(children)}
+      {children}
     </Text>
   );
 }

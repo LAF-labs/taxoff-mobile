@@ -35,13 +35,13 @@ export function pcLine(pc: PcStatus, lastSeen: number | null): { tone: Tone; lab
     case 'connecting':
       return { tone: 'quiet', label: 'PC 찾는 중', busy: true };
     case 'queued':
-      return { tone: 'quiet', label: 'PC 꺼짐 · 켜지면 받아요' };
+      return { tone: 'quiet', label: 'PC 꺼짐, 켜지면 받아요' };
     case 'stale':
       return { tone: 'attention', label: 'PC 연결 확인 필요' };
     case 'unpaired':
       return { tone: 'quiet', label: 'PC와 연결 전' };
     default:
-      return { tone: 'quiet', label: `PC 꺼짐 · ${ago(lastSeen)}` };
+      return { tone: 'quiet', label: `PC 꺼짐, ${ago(lastSeen)}` };
   }
 }
 
