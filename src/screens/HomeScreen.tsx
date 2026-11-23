@@ -24,7 +24,7 @@ import { jpegUri } from '../capture/thumb';
 import { useSession } from '../session';
 import type { PcStatus } from '../net/pc';
 import { MAX_FONT_SCALE, TextSizeContext, radius, size, space, textScale, type, usePalette, useReducedMotion } from '../theme';
-import { Button, Check, Chevron, Pill, Seg, T, ago, success, tap, won, type Tone } from '../ui/kit';
+import { Button, Check, Chevron, Pill, Seg, T, TabInset, ago, success, tap, won, type Tone } from '../ui/kit';
 
 export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'devices' | 'issue' | 'queue' | 'run' | 'doc' | 'bizreg' | 'recv' | 'pay' | 'mark';
 
@@ -131,6 +131,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
   };
   const list = useRef<FlatList<ChatItem>>(null);
   const [barH, setBarH] = useState(0);
+  const tabInset = useContext(TabInset);
   const y = useRef(0);
   const [endBtn, setEndBtn] = useState<null | 'end' | 'new'>(null);
   const endRef = useRef<null | 'end' | 'new'>(null);
@@ -332,7 +333,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
         {endBtn && <NewReply fresh={endBtn === 'new'} onPress={toEnd} lift={barH} />}
 
         {paired && (
-          <View style={st.bottom} onLayout={(e) => setBarH(e.nativeEvent.layout.height)}>
+          <View style={[st.bottom, { paddingBottom: space.s2 + tabInset }]} onLayout={(e) => setBarH(e.nativeEvent.layout.height)}>
             <BottomFade />
             {menu && (
               <View style={[st.menu, { backgroundColor: p.tint }]} testID="quick-menu">

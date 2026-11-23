@@ -1,11 +1,14 @@
 import * as Haptics from 'expo-haptics';
-import { useContext, useEffect, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
 import {
   ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View,
   type AccessibilityRole, type StyleProp, type TextStyle, type ViewStyle,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MAX_FONT_SCALE, TextSizeContext, motion, radius, size, space, textScale, type, useReducedMotion, usePalette, type Ink, type TypeName } from '../theme';
+
+/** 탭 화면 아래를 덮는 떠 있는 탭바 높이. 탭 화면은 이만큼 아래를 비운다. */
+export const TabInset = createContext(0);
 
 const keepAll = { wordBreak: 'keep-all', overflowWrap: 'anywhere' } as unknown as TextStyle;
 
@@ -43,6 +46,8 @@ export function Screen({
 }) {
   const p = usePalette();
   const inset = useSafeAreaInsets();
+  const tabInset = useContext(TabInset);
+  const bottom = tabbed ? space.s6 + tabInset : space.s6 + inset.bottom;
   const head = title !== undefined || onBack || right;
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={[{ flex: 1, backgroundColor: p.canvas }, style]} testID={testID}>
@@ -60,11 +65,11 @@ export function Screen({
       {}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={footer && Platform.OS === 'ios' ? 'padding' : undefined} enabled={!!footer}>
       {scroll ? (
-        <ScrollView contentContainerStyle={[st.content, !footer && !tabbed && { paddingBottom: space.s6 + inset.bottom }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets={!footer}>
+        <ScrollView contentContainerStyle={[st.content, !footer && { paddingBottom: bottom }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets={!footer}>
           {children}
         </ScrollView>
       ) : (
-        <View style={[st.content, { flex: 1 }, !footer && !tabbed && { paddingBottom: space.s6 + inset.bottom }]}>{children}</View>
+        <View style={[st.content, { flex: 1 }, !footer && { paddingBottom: bottom }]}>{children}</View>
       )}
       {footer && <View style={[st.footer, { paddingBottom: tabbed ? space.s3 : Math.max(inset.bottom, space.s4), backgroundColor: p.canvas, borderTopColor: p.line }]}>{footer}</View>}
       </KeyboardAvoidingView>
