@@ -44,7 +44,7 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
   const busy = useRef(false);
   const alive = useRef(true);
   const netGen = useRef(0);
-  const again = useRef(false);
+  const retryAfterSync = useRef<number | null>(null);
   const fails = useRef(0);
   const retry = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncRef = useRef<() => Promise<void>>(async () => {});
@@ -82,7 +82,7 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
       return;
     }
     busy.current = true;
-    again.current = false;
+    retryAfterSync.current = null;
     setSyncing(true);
     setPc(statusWhileSyncing);
     const gen = netGen.current;
@@ -102,9 +102,9 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
       await refreshPending();
     }
     if (!alive.current || AppState.currentState !== 'active') return;
-    if (again.current) {
+    if (retryAfterSync.current !== null) {
       fails.current = 0;
-      later(0);
+      later(retryAfterSync.current);
     } else if (!current()) {
       return;
     } else if (ok) {
@@ -135,7 +135,7 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
     }, RECONNECT_MS);
     const sub = AppState.addEventListener('change', (st) => {
       if (st === 'active') {
-        if (busy.current) again.current = true;
+        if (busy.current) retryAfterSync.current ??= 0;
         else void sync();
       } else if (st === 'background') {
         netGen.current += 1;
@@ -151,7 +151,7 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
       if (!changed) return;
       netGen.current += 1;
       fails.current = 0;
-      if (busy.current) again.current = true;
+      if (busy.current) retryAfterSync.current = NET_SETTLE_MS;
       else if (AppState.currentState === 'active') later(NET_SETTLE_MS);
     });
     return () => {
