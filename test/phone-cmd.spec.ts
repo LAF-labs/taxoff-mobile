@@ -66,6 +66,16 @@ describe('cmd.ack · run.event → 진행 화면', () => {
     assert.equal(settled(c), true);
     assert.equal(jobOf(c).state, 'done');
   });
+
+  it('PC가 메일 확인 전에 완료를 먼저 알리면 메일 여부는 모름으로 두고, 뒤에 온 결과로 채운다', () => {
+    let c = applyAck(cmd({ sentAt: T0 }), { cmdId: cmd().cmdId, state: 'pc_only', runId: 'run1' });
+    c = applyEvent(c, { runId: 'run1', event: 'end', at: T0 + 9000, rev: 1, phase: 'done', result: { approvalNo: '20261117-41000000-00000001', total: 1_353_005 } });
+    let v = runViewOf(c);
+    assert.equal(v?.kind === 'done' && 'emailSent' in v.result, false);
+    c = applyEvent(c, { runId: 'run1', event: 'end', at: T0 + 40_000, rev: 2, phase: 'done', result: { approvalNo: '20261117-41000000-00000001', total: 1_353_005, emailSent: true } });
+    v = runViewOf(c);
+    assert.equal(v?.kind === 'done' && v.result.emailSent, true);
+  });
   it('다른 run의 사건과 더 오래된 사건은 버린다', () => {
     const c = applyEvent(applyAck(cmd(), { cmdId: cmd().cmdId, state: 'pc_only', runId: 'run1' }), { runId: 'run1', event: 'phase', at: T0 + 5000, phase: 'issue' });
     assert.equal(applyEvent(c, { runId: 'other', event: 'phase', at: T0 + 9000, phase: 'done' }).phase, 'issue');

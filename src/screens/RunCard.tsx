@@ -271,17 +271,19 @@ function ResultRows({ result }: { result: IssueResult }) {
           {won(result.total)}
         </T>
       </View>
-      <View style={st.row} testID="result-email">
-        <T v="sub" c="ink2" style={st.label}>
-          받는 이메일
-        </T>
-        <View style={{ flex: 1, alignItems: 'flex-end', gap: 2 }}>
-          <T v="sub" c={result.emailSent ? 'ink' : 'ink3'}>
-            {result.emailSent ? '보냈어요' : '보내지 않았어요'}
+      {result.emailSent !== undefined && (
+        <View style={st.row} testID="result-email">
+          <T v="sub" c="ink2" style={st.label}>
+            받는 이메일
           </T>
-          {result.email && <EmailText value={result.email} />}
+          <View style={{ flex: 1, alignItems: 'flex-end', gap: 2 }}>
+            <T v="sub" c={result.emailSent ? 'ink' : 'ink3'}>
+              {result.emailSent ? '보냈어요' : '보내지 않았어요'}
+            </T>
+            {result.email && <EmailText value={result.email} />}
+          </View>
         </View>
-      </View>
+      )}
     </View>
   );
 }

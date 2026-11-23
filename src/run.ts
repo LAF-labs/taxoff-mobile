@@ -92,7 +92,8 @@ export interface IssueResult {
   counterpart: string;
   total: number;
   email: string | null;
-  emailSent: boolean;
+  /** 없으면 아직 모름(PC가 메일 발송을 확인하는 중). 그동안 받는 이메일 줄을 보이지 않는다. */
+  emailSent?: boolean;
   issuedAt: number;
   doc: DocRef;
 }
