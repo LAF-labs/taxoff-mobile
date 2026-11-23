@@ -5,7 +5,7 @@ import type { ChatItem } from '../chat';
 import { radius, size, space, usePalette } from '../theme';
 import { T, tap } from '../ui/kit';
 import type { OfflineChatView } from '../offline/useOfflineChat';
-import { HomeScreen, type HomeRoute, type Todo } from './HomeScreen';
+import { HomeScreen, type DraftFields, type HomeRoute, type Todo } from './HomeScreen';
 import { MoneyScreen } from './MoneyScreen';
 import { RecordsScreen } from './RecordsScreen';
 import { IssueSheet, issueCard, type IssueSheetPreview } from './IssueSheet';
@@ -30,6 +30,8 @@ export function MainScreen({
   const q = useQueue();
   const s = useSession();
   const [issueOpen, setIssueOpen] = useState(!!issuePreview);
+  const [draftEdits, setDraftEdits] = useState<ReadonlyMap<string, DraftFields>>(() => new Map());
+  const confirmDraft = (id: string, fields: DraftFields) => setDraftEdits((edits) => new Map(edits).set(id, fields));
   const goMain = (to: MainRoute) => {
     if (to !== 'issue') return go(to);
     onTab('home');
@@ -47,7 +49,7 @@ export function MainScreen({
   return (
     <View style={st.fill}>
       <View style={st.fill}>
-        {tab === 'home' && <HomeScreen go={goMain} chat={chat} todo={todo} draft={draft} phone={phone} menu={menu} focusAfter={focusAfter} onIssue={() => setIssueOpen(true)} />}
+        {tab === 'home' && <HomeScreen go={goMain} chat={chat} todo={todo} draft={draft} phone={phone} menu={menu} focusAfter={focusAfter} onIssue={() => setIssueOpen(true)} draftEdits={draftEdits} onConfirmDraft={confirmDraft} />}
         {tab === 'money' && <MoneyScreen go={goMain} />}
         {tab === 'records' && <RecordsScreen go={goMain} />}
       </View>

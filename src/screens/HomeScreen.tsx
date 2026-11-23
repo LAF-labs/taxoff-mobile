@@ -93,7 +93,7 @@ const FOLLOW_PX = 80;
 const KEEP_POSITION = { minIndexForVisible: 0, autoscrollToTopThreshold: FOLLOW_PX } as const;
 const SHOW_END_PX = 160;
 
-export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen = false, focusAfter, onIssue }: { go: (to: HomeRoute) => void; onIssue?: () => void; chat?: ChatItem[]; todo?: Todo; draft?: string; phone?: OfflineChatView; menu?: boolean; focusAfter?: number }) {
+export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen = false, focusAfter, onIssue, draftEdits, onConfirmDraft }: { go: (to: HomeRoute) => void; onIssue?: () => void; chat?: ChatItem[]; todo?: Todo; draft?: string; phone?: OfflineChatView; menu?: boolean; focusAfter?: number; draftEdits: ReadonlyMap<string, DraftFields>; onConfirmDraft: (id: string, fields: DraftFields) => void }) {
   const s = useSession();
   const p = usePalette();
   useContext(TextSizeContext);
@@ -320,7 +320,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
                   {it.kind === 'run' ? (
                     <RunItem jobId={it.jobId} go={go} />
                   ) : (
-                    <Item it={it} group={bubbleGroup(items, i)} onRetry={(id) => void offline.retry(id)} retryOff={offline.busy} openDrafts={offline.openDrafts} onIssue={issueFrom} cpOf={cpOf} stale={s.pc === 'stale'} onHold={setHeld} onReply={canSend ? startReply : undefined} />
+                    <Item it={it} group={bubbleGroup(items, i)} onRetry={(id) => void offline.retry(id)} retryOff={offline.busy} openDrafts={offline.openDrafts} onIssue={issueFrom} cpOf={cpOf} stale={s.pc === 'stale'} onHold={setHeld} onReply={canSend ? startReply : undefined} draftEdit={draftEdits.get(it.id)} onConfirmDraft={onConfirmDraft} />
                   )}
                 </View>
               );
@@ -631,7 +631,7 @@ function RunItem({ jobId, go }: { jobId: string; go: (to: HomeRoute) => void }) 
   );
 }
 
-function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, cpOf, stale, onHold, onReply }: { it: Exclude<ChatItem, { kind: 'run' }>; group: { first: boolean; last: boolean }; onRetry: (noteId: string) => void; retryOff?: boolean; openDrafts?: ReadonlySet<string>; onIssue: OnIssue; cpOf: (id: string) => Counterparty | null; stale: boolean; onHold: (h: Held) => void; onReply?: (r: ReplyTo) => void }) {
+function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, cpOf, stale, onHold, onReply, draftEdit, onConfirmDraft }: { it: Exclude<ChatItem, { kind: 'run' }>; group: { first: boolean; last: boolean }; onRetry: (noteId: string) => void; retryOff?: boolean; openDrafts?: ReadonlySet<string>; onIssue: OnIssue; cpOf: (id: string) => Counterparty | null; stale: boolean; onHold: (h: Held) => void; onReply?: (r: ReplyTo) => void; draftEdit?: DraftFields; onConfirmDraft: (id: string, fields: DraftFields) => void }) {
   const p = usePalette();
   const bubble = useRef<ComponentRef<typeof Pressable>>(null);
   if (it.kind === 'merged') {
@@ -707,14 +707,17 @@ function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, cpOf, stale, 
           </View>
         </SwipeReply>
       )}
-      {it.card && (
-        <Card
+      {it.card?.draft ? (
+        <DraftCard
           card={it.card}
-          onIssue={(it.card.draft?.phone ? !it.card.sent : it.card.draft && (!openDrafts || openDrafts.has(it.card.draft.id))) ? (d) => onIssue(d, it.id) : undefined}
-          cp={it.card.draft ? cpOf(it.card.draft.counterpartyId) : null}
+          draft={it.card.draft}
+          onIssue={(it.card.draft.phone ? !it.card.sent : !openDrafts || openDrafts.has(it.card.draft.id)) ? (d) => onIssue(d, it.id) : undefined}
+          cp={cpOf(it.card.draft.counterpartyId)}
           stale={stale}
+          confirmed={draftEdit}
+          onConfirm={(fields) => onConfirmDraft(it.id, fields)}
         />
-      )}
+      ) : it.card && <Card card={it.card} />}
       {state !== '' && (
         <T v="meta" c="ink3" style={{ textAlign: 'right' }} testID="chat-state">
           {state}
@@ -848,12 +851,12 @@ function Starter({ phoneAnswers, onPick }: { phoneAnswers: boolean; onPick: (tex
 }
 
 type Draft = NonNullable<ChatCard['draft']>;
+export type DraftFields = Pick<Draft, 'amount' | 'vat' | 'item'>;
 type OnIssue = (d: Draft, itemId: string) => Promise<boolean>;
 type OnCardIssue = (d: Draft) => Promise<boolean>;
 
-function Card({ card, onIssue, cp, stale }: { card: ChatCard; onIssue?: OnCardIssue; cp: Counterparty | null; stale: boolean }) {
+function Card({ card }: { card: ChatCard }) {
   const p = usePalette();
-  if (card.draft) return <DraftCard card={card} draft={card.draft} onIssue={onIssue} cp={cp} stale={stale} />;
   return (
     <View style={[st.card, { backgroundColor: p.tint }]} testID="chat-card">
       <T v="subStrong">{card.title}</T>
@@ -909,10 +912,11 @@ const VAT_OPTIONS = [
   { key: 'incl' as const, label: '포함' },
 ];
 
-function DraftCard({ card, draft, onIssue, cp, stale }: { card: ChatCard; draft: Draft; onIssue?: OnCardIssue; cp: Counterparty | null; stale: boolean }) {
+function DraftCard({ card, draft, onIssue, cp, stale, confirmed, onConfirm }: { card: ChatCard; draft: Draft; onIssue?: OnCardIssue; cp: Counterparty | null; stale: boolean; confirmed?: DraftFields; onConfirm: (fields: DraftFields) => void }) {
   const p = usePalette();
-  const [val, setVal] = useState({ amount: draft.amount, vat: (draft.vat === 'included' ? 'incl' : 'excl') as VatMode, item: draft.item ?? '' });
-  const openEdit = !!onIssue && !!draft.phone?.edit;
+  const fields = confirmed ?? draft;
+  const val = { amount: fields.amount, vat: (fields.vat === 'included' ? 'incl' : 'excl') as VatMode, item: fields.item ?? '' };
+  const openEdit = !confirmed && !!onIssue && !!draft.phone?.edit;
   const [edit, setEdit] = useState<null | { amount: string; vat: VatMode; item: string }>(openEdit ? { amount: draft.amount > 0 ? masked('won', String(draft.amount)) : '', vat: val.vat, item: val.item } : null);
   const closed = cp?.status?.kind === 'closed' ? cp.status : null;
   const [busy, setBusy] = useState(false);
@@ -922,7 +926,7 @@ function DraftCard({ card, draft, onIssue, cp, stale }: { card: ChatCard; draft:
   const startEdit = () => setEdit({ amount: masked('won', String(val.amount)), vat: val.vat, item: val.item });
   const done = () => {
     if (!edit) return;
-    setVal({ amount: Number(edit.amount.replace(/\D/g, '')), vat: edit.vat, item: edit.item.trim() });
+    onConfirm({ amount: Number(edit.amount.replace(/\D/g, '')), vat: edit.vat === 'incl' ? 'included' : 'separate', item: edit.item.trim() || null });
     setEdit(null);
   };
   const issue = async () => {
