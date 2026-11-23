@@ -39,6 +39,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+/modules/sax-native/android/build/
 
 # 더미 PC 출력
 dev/out/

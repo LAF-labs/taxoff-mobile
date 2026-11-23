@@ -24,22 +24,22 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 // Android: 앱 전용 저장소(filesDir)는 다른 앱이 읽을 수 없고, 백업 제외는 매니페스트(allowBackup=false +
-// dataExtractionRules, plugins/with-android-backup-rules)로 건다. 기기 안 OCR(ML Kit)은 제안이라 아직 없다.
+// dataExtractionRules, plugins/with-no-backup.cjs)로 건다. 기기 안 OCR(ML Kit)은 제안이라 아직 없다.
 class SaxNativeModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("SaxNative")
 
-    AsyncFunction("protectPath") { _: String ->
-      mapOf("excludedFromBackup" to true, "protection" to "app_private")
+    AsyncFunction("protectPath") { uri: String ->
+      pathProtection(uri)
     }
 
-    AsyncFunction("inspectPath") { _: String ->
-      mapOf("excludedFromBackup" to true, "protection" to "app_private")
+    AsyncFunction("inspectPath") { uri: String ->
+      pathProtection(uri)
     }
 
     Function("ocrAvailable") { false }
 
-    AsyncFunction("recognizeText") { _: String ->
+    AsyncFunction<List<String>, String>("recognizeText") { _ ->
       throw CodedException("ERR_OCR_UNAVAILABLE", "on-device OCR not implemented on Android", null)
     }
 
@@ -51,7 +51,10 @@ class SaxNativeModule : Module() {
         val c = Cipher.getInstance(TRANSFORM)
         c.init(Cipher.ENCRYPT_MODE, key(service, create = true))
         val ct = c.doFinal(value.toByteArray(Charsets.UTF_8))
-        prefs().edit().putString(slot(service, account), b64(c.iv) + "." + b64(ct)).commit()
+        if (!prefs().edit().putString(slot(service, account), b64(c.iv) + "." + b64(ct)).commit()) {
+          promise.reject(CodedException("ERR_SAX_VAULT", "keystore_write_failed", null))
+          return@withAuth
+        }
         promise.resolve(null)
       }
     }.runOnQueue(Queues.MAIN)
@@ -82,6 +85,11 @@ class SaxNativeModule : Module() {
   }
 
   private val ctx: Context get() = appContext.reactContext ?: throw CodedException("ERR_SAX_VAULT", "keystore_no_context", null)
+  private fun pathProtection(uri: String): Map<String, Any> {
+    val isPrivate = isPrivateFileUri(ctx.filesDir, uri)
+    return mapOf("excludedFromBackup" to isPrivate, "protection" to if (isPrivate) "app_private" else "unverified")
+  }
+
   private fun prefs() = ctx.getSharedPreferences("sax_vault", Context.MODE_PRIVATE)
   private fun slot(service: String, account: String) = "$service/$account"
   private fun alias(service: String) = "sax.vault.$service"

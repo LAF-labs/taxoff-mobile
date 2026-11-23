@@ -67,6 +67,20 @@ npx expo prebuild -p ios && npx expo run:ios   # 시뮬레이터
 
 시뮬레이터 개발 빌드(`__DEV__ && !Device.isDevice`)에서만: QR 대신 [개발: 더미 PC의 QR 받기], 카메라 대신 [개발: 견본 영수증으로 찍기](앱에 묶인 견본, 갤러리 아님), 키 항목은 생체 없이(여전히 ThisDeviceOnly), 릴레이 `localhost:8787`(ws) 허용. 더미 PC에 6자리 입력은 `curl -XPOST localhost:8787/dev/sas -d '{"code":"123456"}'`.
 
+### Android 개발 빌드
+
+JDK 17과 Android SDK Platform 37.0, Build-Tools 37.0.0, NDK 27.1.12297006, CMake 3.22.1을 설치한다. `ANDROID_HOME`이 SDK를 가리킨 상태에서:
+
+```bash
+pnpm exec expo prebuild --platform android --no-install
+pnpm android                   # 실행 중인 에뮬레이터 또는 연결한 실기기에 설치
+(cd android && ./gradlew :sax-native:testDebugUnitTest :app:assembleDebug -PreactNativeArchitectures=x86_64)
+```
+
+마지막 명령은 CI와 같은 네이티브 테스트 및 x86_64 에뮬레이터용 APK 빌드다. 로컬 더미 PC를 에뮬레이터에서 쓸 때는 `adb reverse tcp:8787 tcp:8787`로 앱의 `localhost:8787`을 개발 PC에 연결한다.
+
+### iOS 개발 빌드
+
 시뮬레이터 빌드: 키체인은 entitlement가 있어야 열리므로 서명 없는 빌드(`CODE_SIGNING_ALLOWED=NO`)는 잠금 화면에서 멈춘다(의도한 동작, `reports/raw/mobile/00`). `ios/`에서 애드혹 서명으로 빌드한다.
 
 ```bash
