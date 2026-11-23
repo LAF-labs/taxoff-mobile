@@ -16,7 +16,7 @@ import { useIssueSubmit } from '../issueSubmit';
 import { kstDay } from '../phoneCmd';
 import { onShowCard, shownCard } from '../cardFocus';
 import { counterpartiesOf } from '../net/pcCopy';
-import { splitAmount, type Counterparty, type VatMode } from '../issue';
+import { inexactNote, splitAmount, type Counterparty, type VatMode } from '../issue';
 import { masked } from '../ui/field';
 import { FlapText } from '../ui/FlapText';
 import { PhotoSlot } from '../ui/PhotoSlot';
@@ -919,6 +919,7 @@ function DraftCard({ card, draft, onIssue, cp, stale }: { card: ChatCard; draft:
   const [failed, setFailed] = useState(false);
   const shown = edit ? { amount: Number(edit.amount.replace(/\D/g, '')), vat: edit.vat, item: edit.item } : val;
   const a = splitAmount(shown.amount, shown.vat);
+  const inexact = inexactNote(shown.amount, a);
   const startEdit = () => setEdit({ amount: masked('won', String(val.amount)), vat: val.vat, item: val.item });
   const done = () => {
     if (!edit) return;
@@ -983,6 +984,11 @@ function DraftCard({ card, draft, onIssue, cp, stale }: { card: ChatCard; draft:
       <CardRow label="합계" fixed>
         <CardValue text={won(a.total)} strong />
       </CardRow>
+      {inexact && (
+        <T v="meta" c="attention" testID="card-inexact">
+          {inexact}
+        </T>
+      )}
       {card.note && !onIssue && (
         <T v="meta" c="ink3">
           {card.note}

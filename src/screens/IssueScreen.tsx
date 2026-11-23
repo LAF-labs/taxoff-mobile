@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { clock } from '../chat';
-import { findDuplicate, recentCounterparties, searchCounterparties, splitAmount, type Counterparty, type IssuedToday, type VatMode } from '../issue';
+import { findDuplicate, inexactNote, recentCounterparties, searchCounterparties, splitAmount, type Counterparty, type IssuedToday, type VatMode } from '../issue';
 import { counterpartiesOf } from '../net/pcCopy';
 import { useIssueSubmit, useViaPc } from '../issueSubmit';
 import { kstDay } from '../phoneCmd';
@@ -114,8 +114,7 @@ export function IssueScreen({
   else if (approvalsLeft <= 1)
     notice = <Notice testID="issue-limit">{approvalsLeft === 0 ? '오늘 폰 승인을 다 썼어요. 내일 0시에 다시 생겨요' : `오늘 폰 승인은 ${approvalsLeft}건 남았어요`}</Notice>;
 
-  const entered = Number(amount.replace(/\D/g, ''));
-  const inexactLine = a.inexact && a.total > 0 ? `합계 ${won(entered)}은 정확히 맞출 수 없어 ${won(a.total)}으로 했어요` : null;
+  const inexactLine = inexactNote(Number(amount.replace(/\D/g, '')), a);
   const inexactAsNotice = !!inexactLine && !notice;
   if (inexactAsNotice) notice = <Notice testID="issue-inexact">{inexactLine}</Notice>;
 
