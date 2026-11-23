@@ -91,7 +91,7 @@ export function ApprovalSheet({
   let footer;
   let notice = null;
   if (state.kind === 'inDoubt') {
-    notice = <Notice testID="sheet-in-doubt">발급됐는지 PC가 확인하고 있어요 · 다시 발급하지 않아요</Notice>;
+    notice = <Notice testID="sheet-in-doubt">발급됐는지 PC가 확인하고 있어요. 다시 발급하지 않아요</Notice>;
     footer = <Button kind="secondary" label="닫기" onPress={onClose} testID="sheet-close" />;
   } else if (state.kind === 'stopped') {
     notice = (

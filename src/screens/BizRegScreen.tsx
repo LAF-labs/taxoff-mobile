@@ -235,7 +235,7 @@ export function BizRegScreen({
             onChange={set('bizNo')}
             placeholder="000-00-00000"
             unsure={unsure('bizNo') && !badNo}
-            error={badNo ? '번호가 맞지 않아요 · 사진을 보고 고쳐 주세요' : null}
+            error={badNo ? '번호가 맞지 않아요. 사진을 보고 고쳐 주세요' : null}
           />
           <Field testID="bz-ceo" label="대표자" value={v.ceo} onChange={set('ceo')} placeholder="대표자" unsure={unsure('ceo')} />
           <Field testID="bz-address" label="사업장 주소" value={v.address} onChange={set('address')} placeholder="주소" unsure={unsure('address')} multiline format={glueAddress} />
@@ -246,7 +246,7 @@ export function BizRegScreen({
           <Field testID="bz-email" label="이메일" mask="email" value={v.email} onChange={set('email')} placeholder="tax@example.com" multiline={v.email.length > 24} error={badEmail ? '이메일 모양이 아니에요' : null} />
         </Group>
         <T v="meta" c="ink3" style={{ paddingHorizontal: space.s1 }} testID="bizreg-privacy">
-          {fromAlbum ? '사진은 PC에 보관해요 · 앨범 원본은 그대로 둬요' : '사진은 PC에 보관하고 이 폰에서는 지워요'}
+          {fromAlbum ? '사진은 PC에 보관하고 앨범 원본은 그대로 둬요' : '사진은 PC에 보관하고 이 폰에서는 지워요'}
         </T>
 
         <Modal visible={zoom} animationType="fade" onRequestClose={() => setZoom(false)}>

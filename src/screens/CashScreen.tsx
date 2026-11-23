@@ -80,7 +80,7 @@ export function CashScreen({ onDone }: { onDone: () => void }) {
         </View>
         <View style={{ gap: space.s2 }}>
           <T v="label" c="ink3">
-            현금으로 받은 매출 · 영수증을 주지 않은 것 포함
+            영수증 없이 받은 현금 매출도 적어요
           </T>
           <Pressable onPress={() => input.current?.focus()} style={[st.amount, { backgroundColor: p.tint, borderColor: err ? p.attention : 'transparent' }]}>
             <TextInput

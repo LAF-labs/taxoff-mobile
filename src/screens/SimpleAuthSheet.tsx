@@ -224,7 +224,7 @@ const st = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.s4, minHeight: 44 },
   headBtn: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
   body: { flex: 1, paddingHorizontal: space.s5, paddingTop: space.s2, paddingBottom: space.s3, gap: space.s3 },
-  foot: { paddingHorizontal: space.s5, gap: space.s1 },
+  foot: { paddingHorizontal: space.s5, gap: space.s2 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s2 },
   choice: { minHeight: 48, width: '31.5%', alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, paddingHorizontal: space.s2 },
   check: { position: 'absolute', top: 6, right: 8 },

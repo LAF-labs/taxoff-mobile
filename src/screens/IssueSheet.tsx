@@ -237,7 +237,7 @@ export function IssueSheet({ onClose, onPick, onCapture, counterparties: given, 
     primary = { label: '확인', on, go: done };
   }
 
-  const bottomPad = kb > 0 ? space.s3 : Math.max(inset.bottom, space.s4);
+  const bottomPad = Math.max(kb > 0 ? 0 : inset.bottom, space.s4);
   const h = Math.min(SHEET_H + bottomPad, height - kb - inset.top - space.s2);
 
   return (
@@ -264,7 +264,6 @@ export function IssueSheet({ onClose, onPick, onCapture, counterparties: given, 
           key={step}
           style={[
             st.body,
-            step !== 'cp' && st.bodyFit,
             { opacity: slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }), transform: [{ translateX: slide.interpolate({ inputRange: [0, 1], outputRange: [0, 28 * dir.current] }) }] },
           ]}
         >
@@ -280,7 +279,6 @@ export function IssueSheet({ onClose, onPick, onCapture, counterparties: given, 
             primary && <Button label={primary.label} onPress={primary.go} disabled={!primary.on} testID="issue-sheet-next" />
           )}
         </View>
-        {step !== 'cp' && <View style={{ flex: 1 }} />}
       </View>
     </View>
   );
@@ -294,8 +292,7 @@ const st = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.s4, minHeight: 44 },
   headBtn: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
   body: { flex: 1, minHeight: 0, paddingHorizontal: space.s5, paddingTop: space.s2, paddingBottom: space.s3, gap: space.s3 },
-  bodyFit: { flex: 0, flexGrow: 0, flexShrink: 0 },
-  foot: { paddingHorizontal: space.s5, gap: space.s1 },
+  foot: { paddingHorizontal: space.s5, gap: space.s2 },
   twin: { flexDirection: 'row', gap: space.s2 },
   search: { minHeight: 44, borderRadius: radius.full, paddingHorizontal: space.s4 },
   list: { flex: 1, minHeight: 0, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.lg, overflow: 'hidden' },

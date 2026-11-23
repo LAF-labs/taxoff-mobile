@@ -67,10 +67,10 @@ function subOf(d: AccountDevice, o: { self: boolean; paired: boolean; now: numbe
   if (d.state === 'suspended') {
     if (d.deleteAfter === null) return '정지됨';
     const days = Math.ceil((d.deleteAfter - o.now) / DAY);
-    return days <= 0 ? '정지됨 · 곧 끊겨요' : `정지됨 · ${days}일 뒤 끊겨요`;
+    return days <= 0 ? '정지됨, 곧 끊겨요' : `정지됨, ${days}일 뒤 끊겨요`;
   }
   if (o.self) return '지금 쓰는 폰';
-  return o.paired ? '쓰는 중 · 이 폰과 연결됨' : '쓰는 중';
+  return o.paired ? '쓰는 중, 이 폰과 연결됨' : '쓰는 중';
 }
 
 export function devicesView(devices: readonly AccountDevice[], o: { selfId: string; pairedPcId: string | null; now: number }): DevicesView {
@@ -96,7 +96,7 @@ export function devicesView(devices: readonly AccountDevice[], o: { selfId: stri
   const phones = devices.filter((d) => d.role === 'mobile').sort(order);
   return {
     pcs: pcs.map(row), phones: phones.map(row),
-    pcCount: `${pcs.length}대 · ${MAX_DESKTOPS}대까지`, phoneCount: `${phones.length}대 · ${MAX_MOBILES}대까지`,
+    pcCount: `${pcs.length}대, 최대 ${MAX_DESKTOPS}대`, phoneCount: `${phones.length}대, 최대 ${MAX_MOBILES}대`,
     pcFull: pcs.length >= MAX_DESKTOPS, phoneFull: phones.length >= MAX_MOBILES,
   };
 }

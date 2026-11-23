@@ -10,4 +10,4 @@ export async function pickPhoto(): Promise<Picked> {
   return { kind: 'image', uri: a.uri, width: a.width, height: a.height };
 }
 
-export const PDF_LINE = 'PDF는 아직 못 읽어요 · 화면을 캡처해서 올려 주세요';
+export const PDF_LINE = 'PDF는 아직 못 읽어요. 화면을 캡처해서 올려 주세요';

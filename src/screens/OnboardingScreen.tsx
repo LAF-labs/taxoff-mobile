@@ -462,10 +462,10 @@ function ChatArt({ p, active, reduce, at }: ArtProps) {
 }
 
 const FEATURES: Array<{ title: string; sub: string; glyph: 'doc' | 'camera' | 'cash' | 'chart' }> = [
-  { title: '세금계산서 발급·승인', sub: '말로 시키고, 확인하고, 승인해요', glyph: 'doc' },
-  { title: '종이 증빙 찍어 보내기', sub: '영수증·종이 계산서를 찍으면 PC에 정리돼요', glyph: 'camera' },
+  { title: '세금계산서 발급과 승인', sub: '말로 시키고, 확인하고, 승인해요', glyph: 'doc' },
+  { title: '종이 증빙 찍어 보내기', sub: '영수증과 종이 계산서를 찍으면 PC에 정리돼요', glyph: 'camera' },
   { title: '현금 매출 적기', sub: '그날그날 적어 두면 PC로 가요', glyph: 'cash' },
-  { title: '받을 돈·낼 돈 보기', sub: '이번 달 돈 흐름을 한눈에', glyph: 'chart' },
+  { title: '받을 돈과 낼 돈 보기', sub: '이번 달 돈 흐름을 한눈에', glyph: 'chart' },
 ];
 
 function FeatureArt({ p, active, reduce, at }: ArtProps) {
@@ -503,9 +503,9 @@ function FeatureRow({ f, i, p, active, reduce, at }: ArtProps & { f: (typeof FEA
 }
 
 const SAFE: Array<{ title: string; sub: string }> = [
-  { title: '홈택스 비밀번호·인증서는 내 PC에만', sub: '폰이나 저희 서버로 보내지 않아요' },
+  { title: '홈택스 비밀번호와 인증서는 내 PC에만', sub: '폰이나 저희 서버로 보내지 않아요' },
   { title: '폰과 PC 사이는 잠가서 주고받아요', sub: '중간에서 전달하는 서버도 내용을 열어 볼 수 없어요' },
-  { title: '발급 승인은 매번 얼굴·지문으로', sub: '승인 전에 PC가 홈택스에서 다시 읽은 값을 그대로 보여 줘요' },
+  { title: '발급 승인은 매번 얼굴이나 지문으로', sub: '승인 전에 PC가 홈택스에서 다시 읽은 값을 그대로 보여 줘요' },
   { title: '이 폰의 열쇠는 폰 밖으로 나가지 않아요', sub: '백업되지 않고, 폰을 잃어버리면 PC에서 끊을 수 있어요' },
 ];
 
