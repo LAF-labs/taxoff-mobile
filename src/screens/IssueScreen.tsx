@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { clock } from '../chat';
-import { findDuplicate, inexactNote, recentCounterparties, searchCounterparties, splitAmount, type Counterparty, type IssuedToday, type VatMode } from '../issue';
+import { findDuplicate, recentCounterparties, searchCounterparties, splitAmount, type Amounts, type Counterparty, type IssuedToday, type VatMode } from '../issue';
 import { counterpartiesOf } from '../net/pcCopy';
 import { useIssueSubmit, useViaPc } from '../issueSubmit';
 import { kstDay } from '../phoneCmd';
@@ -23,6 +23,10 @@ export interface IssuePreview {
   amount?: string;
   vat?: VatMode;
   query?: string;
+}
+
+export function inexactNote(entered: number, a: Amounts): string | null {
+  return a.inexact && a.total > 0 ? `합계 ${won(entered)}은 정확히 맞출 수 없어 ${won(a.total)}으로 했어요` : null;
 }
 
 export function IssueScreen({

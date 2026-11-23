@@ -52,12 +52,6 @@ export function splitAmount(amount: number, mode: VatMode): Amounts {
   return { supply: 0, tax: 0, total: 0, inexact: true };
 }
 
-const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
-
-export function inexactNote(entered: number, a: Amounts): string | null {
-  return a.inexact && a.total > 0 ? `합계 ${won(entered)}은 정확히 맞출 수 없어 ${won(a.total)}으로 했어요` : null;
-}
-
 export function recentCounterparties(all: Counterparty[], n = 5): Counterparty[] {
   return all.filter((c) => c.lastAt).sort((a, b) => (b.lastAt ?? 0) - (a.lastAt ?? 0)).slice(0, n);
 }
