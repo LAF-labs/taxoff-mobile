@@ -8,7 +8,7 @@ import { deviceModel } from '../deviceModel';
 import { inflight } from '../inflight';
 import { devFetchQr } from '../net/account';
 import { identityLines } from '../pairing/identity';
-import { relayFor } from '../net/pc';
+import { leavePc, relayFor } from '../net/pc';
 import { useSession } from '../session';
 import { radius, space, usePalette, useReducedMotion } from '../theme';
 import { Button, Group, Notice, Screen, StatusDot, T, success } from '../ui/kit';
@@ -138,6 +138,7 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
   async function save(r: MobilePairResult) {
     pendingRef.current = null;
     if (gone.current) return;
+    if (prev && prev.desktopDeviceId !== r.desktopDeviceId) await leavePc({ keys: s.keys, data: () => s.data, update: s.update }, prev);
     try {
       await inflight(() => s.update((d) => ({
         ...d,

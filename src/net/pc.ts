@@ -1,5 +1,5 @@
 import {
-  CAP, QUEUE, flushOutbox, fromB64, issueCmd, monotonicClock, openMobileSession, queueCmd, queueOutbox, relayOrigin, relayQueue, softNoiseStatic, softSigner, verifyQBundle,
+  CAP, QUEUE, flushOutbox, fromB64, issueCmd, monotonicClock, openMobileSession, queueCmd, queueLeave, queueOutbox, relayOrigin, relayQueue, softNoiseStatic, softSigner, verifyQBundle,
   wsRelayClient, VM_PURPOSES, type FlushResult, type Link, type PhoneCopyBody, type QueueSendResult, type WebSocketLike,
 } from '@sax/remote';
 import { APP_VERSION, DEV_RELAY_HOST, DEV_STACK } from '../config';
@@ -190,6 +190,30 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
       link.close();
       if (liveLink === link) liveLink = null;
     } else liveLink = null;
+  }
+}
+
+/** 다른 PC로 옮기기 전에 예전 PC의 우편함에 떠난다고 남긴다. 예전 PC는 켜지면 이 폰을 목록에서 뺀다. 실패해도 옮기기는 막지 않는다. */
+export async function leavePc(d: Pick<SyncDeps, 'keys' | 'data' | 'update'>, pair: Pair): Promise<boolean> {
+  const vm = softSigner(d.keys.vm, VM_PURPOSES);
+  try {
+    const q = relayQueue({
+      http: fetchJson,
+      origin: relayOrigin(pair.relayHost, DEV_STACK && pair.relayHost === DEV_RELAY_HOST),
+      mbxId: fromB64(pair.mbxId),
+      tok: { read: fromB64(pair.tokRead), write: fromB64(pair.tokWrite) },
+      deviceAuth: deviceAuthFor(pair.pairId, pair.cert, d.keys.vm),
+    });
+    const field = await q.getBundle();
+    const bundle = field ? verifyQBundle(field, fromB64(pair.desktopVd), { minSeq: d.data().qbundleSeq }) : null;
+    if (!bundle) return false;
+    const seq = d.data().queueSeq + 1;
+    await d.update((x) => ({ ...x, queueSeq: Math.max(x.queueSeq, seq) }));
+    return (await queueLeave({ queue: q, pairId: pair.pairId, vm, bundle, mbxEpoch: pair.mbxEpoch, nextSeq: () => seq })) === 'ok';
+  } catch {
+    return false;
+  } finally {
+    vm.destroy();
   }
 }
 
