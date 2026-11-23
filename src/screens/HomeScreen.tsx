@@ -15,7 +15,7 @@ import { RunCard } from './RunCard';
 import { ISSUE_SUBMIT_ERRORS, useIssueSubmit, type IssueSubmitResult } from '../issueSubmit';
 import { onShowCard, shownCard } from '../cardFocus';
 import { counterpartiesOf } from '../net/pcCopy';
-import { splitAmount, type Counterparty, type VatMode } from '../issue';
+import { findByBizNo, splitAmount, type Counterparty, type VatMode } from '../issue';
 import { masked } from '../ui/field';
 import { FlapText } from '../ui/FlapText';
 import { PhotoSlot } from '../ui/PhotoSlot';
@@ -114,9 +114,16 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
     go(to);
   };
   const submitIssue = useIssueSubmit();
-  const cpOf = (id: string): Counterparty | null => (id ? [...(s.data.pcCopy ? counterpartiesOf(s.data.pcCopy) : []), ...q.counterparties].find((c) => c.id === id) ?? null : null);
+  const pcCounterparties = s.data.pcCopy ? counterpartiesOf(s.data.pcCopy) : [];
+  const cpOf = (d: Draft): Counterparty | null => {
+    const local = q.counterparties.find((c) => c.id === d.counterpartyId);
+    return pcCounterparties.find((c) => c.id === d.counterpartyId)
+      ?? findByBizNo(pcCounterparties, d.phone?.bizNo || local?.bizNo || '')
+      ?? local
+      ?? null;
+  };
   const issueFrom: OnIssue = async (d, itemId) => {
-    const cp = cpOf(d.counterpartyId);
+    const cp = cpOf(d);
     if (!d.phone && !cp) {
       q.setPrefill({ amount: d.amount, vat: d.vat, item: d.item, draftId: d.id });
       go('issue');
@@ -630,7 +637,7 @@ function RunItem({ jobId, go }: { jobId: string; go: (to: HomeRoute) => void }) 
   );
 }
 
-function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, cpOf, stale, onHold, onReply }: { it: Exclude<ChatItem, { kind: 'run' }>; group: { first: boolean; last: boolean }; onRetry: (noteId: string) => void; retryOff?: boolean; openDrafts?: ReadonlySet<string>; onIssue: OnIssue; cpOf: (id: string) => Counterparty | null; stale: boolean; onHold: (h: Held) => void; onReply?: (r: ReplyTo) => void }) {
+function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, cpOf, stale, onHold, onReply }: { it: Exclude<ChatItem, { kind: 'run' }>; group: { first: boolean; last: boolean }; onRetry: (noteId: string) => void; retryOff?: boolean; openDrafts?: ReadonlySet<string>; onIssue: OnIssue; cpOf: (d: Draft) => Counterparty | null; stale: boolean; onHold: (h: Held) => void; onReply?: (r: ReplyTo) => void }) {
   const p = usePalette();
   const bubble = useRef<ComponentRef<typeof Pressable>>(null);
   if (it.kind === 'merged') {
@@ -710,7 +717,7 @@ function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, cpOf, stale, 
         <Card
           card={it.card}
           onIssue={(it.card.draft?.phone ? !it.card.sent : it.card.draft && (!openDrafts || openDrafts.has(it.card.draft.id))) ? (d) => onIssue(d, it.id) : undefined}
-          cp={it.card.draft ? cpOf(it.card.draft.counterpartyId) : null}
+          cp={it.card.draft ? cpOf(it.card.draft) : null}
           stale={stale}
         />
       )}

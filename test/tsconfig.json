@@ -6,8 +6,7 @@
     ]
   },
   "include": [
-    "*.ts",
-    "../src/assets.d.ts"
+    "*.ts"
   ],
   "exclude": []
 }
