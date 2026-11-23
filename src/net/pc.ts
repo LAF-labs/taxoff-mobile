@@ -89,25 +89,28 @@ export function onPresence(cb: ((p: Presence) => void) | null): void {
   presence = cb;
 }
 
-function hold(link: Link, peerNow: boolean): void {
+function hold(link: Link, afterSync: boolean): boolean {
   dropHeld();
   held = link;
-  let down = !peerNow;
+  let online = false;
+  let joining = afterSync;
   link.onPeerGone?.(() => {
-    if (held !== link || down) return;
-    down = true;
+    if (held !== link || !online) return;
+    online = false;
     presence?.('down');
   });
   link.onPeer(() => {
-    if (held !== link || !down) return;
-    down = false;
-    presence?.('up');
+    if (held !== link || online) return;
+    online = true;
+    if (!joining) presence?.('up');
   });
+  joining = false;
   link.onClose(() => {
     if (held !== link) return;
     held = null;
     presence?.('lost');
   });
+  return online;
 }
 
 function dropHeld(): void {
@@ -117,7 +120,9 @@ function dropHeld(): void {
 }
 
 export function closeLive(): void {
-  liveLink?.close();
+  const active = liveLink;
+  liveLink = null;
+  active?.close();
   dropHeld();
 }
 
@@ -127,8 +132,9 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
   let stage: 'join' | 'session' | 'live' = 'join';
   try {
     const relay = relayFor(pair.relayHost, deviceAuthFor(pair.pairId, pair.cert, d.keys.vm));
+    const joinMailbox = () => relay.joinMailbox(fromB64(pair.mbxId), { read: fromB64(pair.tokRead), write: fromB64(pair.tokWrite) }, 'mobile');
     dropHeld();
-    link = await relay.joinMailbox(fromB64(pair.mbxId), { read: fromB64(pair.tokRead), write: fromB64(pair.tokWrite) }, 'mobile');
+    link = await joinMailbox();
     liveLink = link;
     if (!(await waitPeer(link, PEER_WAIT_MS))) {
       const why = whyCode('peer', link.closed ? 'closed' : 'timeout');
@@ -177,9 +183,13 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
       alive: d.alive,
     });
     s.channel.close();
-    if (!link.closed && (!d.alive || d.alive())) {
-      hold(link, true);
-      link = null;
+    if (liveLink === link && (!d.alive || d.alive())) {
+      stage = 'join';
+      const monitor = await joinMailbox();
+      if (liveLink === link && (!d.alive || d.alive())) {
+        return { status: hold(monitor, true) ? 'online' : 'offline', flushed };
+      }
+      monitor.close();
     }
     return { status: 'online', flushed };
   } catch (e) {
@@ -263,4 +273,3 @@ async function viaQueue(d: SyncDeps, pair: Pair): Promise<SyncResult> {
     vm.destroy();
   }
 }
-
