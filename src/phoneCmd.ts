@@ -217,7 +217,7 @@ export function runViewOf(c: PhoneCmd): RunView | null {
           counterpart: c.cpName,
           total: c.result.total,
           email: null,
-          emailSent: !!c.result.emailSent,
+          ...(c.result.emailSent === undefined ? {} : { emailSent: c.result.emailSent }),
           issuedAt: c.at ?? Date.now(),
           doc: { name: `세금계산서_${c.cpName.replace(/\s+/g, '')}_${c.req.day.replace(/-/g, '')}.pdf`, issuedOn: c.req.day, uri: '' },
         },
