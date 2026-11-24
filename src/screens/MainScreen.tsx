@@ -5,7 +5,7 @@ import type { ChatItem } from '../chat';
 import { size, space, useReducedMotion, usePalette } from '../theme';
 import { T, TabDrop, TabInset, TabScroll, tap } from '../ui/kit';
 import type { OfflineChatView } from '../offline/useOfflineChat';
-import { HomeScreen, type HomeRoute, type Todo } from './HomeScreen';
+import { HomeScreen, type DraftFields, type HomeRoute, type Todo } from './HomeScreen';
 import { MoneyScreen } from './MoneyScreen';
 import { RecordsScreen } from './RecordsScreen';
 import { IssueSheet, issueCard, type IssueSheetPreview } from './IssueSheet';
@@ -72,6 +72,9 @@ export function MainScreen({
   const q = useQueue();
   const s = useSession();
   const [issueOpen, setIssueOpen] = useState(!!issuePreview);
+  const [draftEdits, setDraftEdits] = useState<ReadonlyMap<string, DraftFields>>(() => new Map());
+  const confirmDraft = (id: string, fields: DraftFields) =>
+    setDraftEdits((edits) => new Map(edits).set(id, fields));
   const goMain = (to: MainRoute) => {
     if (to !== 'issue') return go(to);
     onTab('home');
@@ -88,7 +91,7 @@ export function MainScreen({
   }, [q.pickId]);
   const scene = (t: Tab) =>
     t === 'home' ? (
-      <HomeScreen go={goMain} chat={chat} todo={todo} draft={draft} phone={phone} menu={menu} focusAfter={focusAfter} onIssue={() => setIssueOpen(true)} />
+      <HomeScreen go={goMain} chat={chat} todo={todo} draft={draft} phone={phone} menu={menu} focusAfter={focusAfter} onIssue={() => setIssueOpen(true)} draftEdits={draftEdits} onConfirmDraft={confirmDraft} />
     ) : t === 'money' ? (
       <MoneyScreen go={goMain} />
     ) : (
