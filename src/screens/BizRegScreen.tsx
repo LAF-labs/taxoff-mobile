@@ -269,6 +269,7 @@ export function BizRegScreen({
       <View style={st.camTop}>
         <Pressable accessibilityRole="button" accessibilityLabel="닫기" onPress={() => {
             cleanup();
+            q.setPrefill(null);
             onDone();
           }} hitSlop={8} style={st.camSide}>
           <T v="subStrong" c="onCamera">
