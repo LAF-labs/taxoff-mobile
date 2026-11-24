@@ -51,4 +51,6 @@ export interface ChatMessage {
   kind?: PhoneReplyKind;
   reaction?: ReactionId;
   replyTo?: string;
+  /** 모델 맥락에만 남기는 기록. 화면은 말풍선으로 내지 않는다. */
+  hidden?: true;
 }
