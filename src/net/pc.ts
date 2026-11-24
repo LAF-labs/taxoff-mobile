@@ -165,7 +165,11 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
     const held: Parameters<typeof s.channel.sendRaw>[0][] = [];
     const early = tapping(s.channel, held);
     const copy = await receiveCopy(early, s.peerHello.capabilities).catch(() => null);
-    const onCopy = (c: PhoneCopyBody) => d.update((x) => (x.pair?.pairId === pair.pairId ? { ...x, pcCopy: newerCopy(x.pcCopy, c) } : x));
+    const onCopy = (c: PhoneCopyBody) => d.update((x) => (
+      x.pair?.pairId === pair.pairId
+        ? { ...x, pcCopy: { ...newerCopy(x.pcCopy, c), ownerDesktopDeviceId: pair.desktopDeviceId } }
+        : x
+    ));
     if (copy) await onCopy(copy);
     const px = await enrollPx(early, s.peerHello.capabilities, { pairId: pair.pairId, deviceId: d.keys.deviceId, vm: d.keys.vm, px: d.px ?? null, onCopy }).catch(() => null);
     if (px) await d.update((x) => ({ ...x, px }));

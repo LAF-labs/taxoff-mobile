@@ -71,7 +71,7 @@ export interface AppData {
   queueSeq: number;
   qbundleSeq: number;
   money?: MoneySnapshot | null;
-  pcCopy?: PhoneCopyBody | null;
+  pcCopy?: (PhoneCopyBody & { ownerDesktopDeviceId?: string }) | null;
   cmds?: PhoneCmd[];
   pcLog?: PcWhy[];
   px?: PxState;
@@ -87,7 +87,9 @@ export const emptyData = (): AppData => ({ v: 1, pair: null, deviceList: null, s
 async function openFile(f: File, fileKey: Uint8Array): Promise<AppData> {
   const box = await f.bytes();
   const d = JSON.parse(fromUtf8(xOpen(fileKey, box, AD))) as AppData;
-  return d.v === 1 ? { ...emptyData(), ...d } : emptyData();
+  if (d.v !== 1) return emptyData();
+  if (d.pcCopy && (!d.pcCopy.ownerDesktopDeviceId || d.pcCopy.ownerDesktopDeviceId !== d.pair?.desktopDeviceId)) delete d.pcCopy;
+  return { ...emptyData(), ...d };
 }
 
 export async function loadData(fileKey: Uint8Array): Promise<AppData> {
