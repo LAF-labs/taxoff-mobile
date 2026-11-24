@@ -1,7 +1,7 @@
 import type { Thumb } from '../capture/thumb';
 import type { MoneySnapshot } from '../money';
-import type { PhoneCopyBody } from '@sax/remote';
 import type { PhoneCmd } from '../phoneCmd';
+import type { CachedPhoneCopy } from '../net/pcCopy';
 import type { PcWhy } from '../net/pcWhy';
 import type { PxState } from '../net/pxLive';
 import type { NotifyPrefs } from '../notify/events';
@@ -71,7 +71,7 @@ export interface AppData {
   queueSeq: number;
   qbundleSeq: number;
   money?: MoneySnapshot | null;
-  pcCopy?: (PhoneCopyBody & { ownerDesktopDeviceId?: string }) | null;
+  pcCopy?: CachedPhoneCopy | null;
   cmds?: PhoneCmd[];
   pcLog?: PcWhy[];
   px?: PxState;
@@ -88,7 +88,7 @@ async function openFile(f: File, fileKey: Uint8Array): Promise<AppData> {
   const box = await f.bytes();
   const d = JSON.parse(fromUtf8(xOpen(fileKey, box, AD))) as AppData;
   if (d.v !== 1) return emptyData();
-  if (d.pcCopy && (!d.pcCopy.ownerDesktopDeviceId || d.pcCopy.ownerDesktopDeviceId !== d.pair?.desktopDeviceId)) delete d.pcCopy;
+  if (d.pcCopy?.ownerDesktopDeviceId && d.pcCopy.ownerDesktopDeviceId !== d.pair?.desktopDeviceId) delete d.pcCopy;
   return { ...emptyData(), ...d };
 }
 

@@ -167,7 +167,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
     const copy = await receiveCopy(early, s.peerHello.capabilities).catch(() => null);
     const onCopy = (c: PhoneCopyBody) => d.update((x) => (
       x.pair?.pairId === pair.pairId
-        ? { ...x, pcCopy: { ...newerCopy(x.pcCopy, c), ownerDesktopDeviceId: pair.desktopDeviceId } }
+        ? { ...x, pcCopy: newerCopy(x.pcCopy, { ...c, ownerDesktopDeviceId: pair.desktopDeviceId }) }
         : x
     ));
     if (copy) await onCopy(copy);
