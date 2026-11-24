@@ -39,7 +39,7 @@ class SaxNativeModule : Module() {
 
     Function("ocrAvailable") { false }
 
-    AsyncFunction("recognizeText") { _: String ->
+    AsyncFunction<List<String>, String>("recognizeText") { _ ->
       throw CodedException("ERR_OCR_UNAVAILABLE", "on-device OCR not implemented on Android", null)
     }
 
