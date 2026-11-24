@@ -16,6 +16,10 @@ interface CmdIo {
 type Ch = Pick<Channel, 'send' | 'recv' | 'closed'>;
 
 export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, watchMs = WATCH_MS): Promise<'none' | 'pc_old' | 'settled' | 'closed' | 'timeout'> {
+  const requireLink = () => {
+    if (ch.closed) throw new Error('relay: closed');
+  };
+  requireLink();
   const now = io.now ?? Date.now;
   const open = io.cmds().filter((c) => !settled(c, now()));
   if (!open.length) return 'none';
@@ -27,16 +31,20 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
   }
   const t0 = now();
   const send = async (c: PhoneCmd) => {
+    requireLink();
     ids.add(c.cmdId);
+    let body: ReturnType<typeof issueCmd>;
     try {
-      ch.send('cmd.run', issueCmd(c.cmdId, c.req));
+      body = issueCmd(c.cmdId, c.req);
     } catch {
       await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? { ...x, ack: 'rejected', reason: 'input_invalid' } : x)));
       return;
     }
+    ch.send('cmd.run', body);
     if (!c.sentAt) await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? { ...x, sentAt: now() } : x)));
   };
   const retry = async (c: PhoneCmd) => {
+    requireLink();
     await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? forRetry(x) : x)));
     const fresh = io.cmds().find((x) => x.cmdId === c.cmdId);
     if (fresh) await send(fresh);
@@ -52,6 +60,7 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
   const flushApprovals = async () => {
     if (!approves) return;
     for (const c of io.cmds()) {
+      requireLink();
       const r = responseDue(c, now());
       if (r) {
         try {
@@ -80,6 +89,7 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
     }
     for (const c of io.cmds()) {
       if (c.resumeAt === undefined || c.resumeSentAt !== undefined || !c.runId) continue;
+      requireLink();
       ids.add(c.cmdId);
       try {
         (ch.send as unknown as (t: string, b: object) => unknown)('cmd.resume', { runId: c.runId });
@@ -90,6 +100,7 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
     }
     for (const c of io.cmds()) {
       if (c.simpleOut === undefined || c.simpleOutSentAt !== undefined || !c.simpleReq || !c.runId) continue;
+      requireLink();
       ids.add(c.cmdId);
       try {
         (ch.send as unknown as (t: string, b: object) => unknown)('human.response', { runId: c.runId, stepId: 's7e', reqId: c.simpleReq, value: c.simpleOut });
