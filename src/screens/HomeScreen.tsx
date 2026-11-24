@@ -333,7 +333,12 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
           />
         )}
         <TopFade />
-        {endBtn && <NewReply fresh={endBtn === 'new'} onPress={toEnd} lift={barH} />}
+        {endBtn && (
+          // 탭바·입력창이 내려앉으면 같이 내려간다. 단추 자체의 나타나기는 네이티브 드라이버라 바깥 틀에서 옮긴다.
+          <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { transform: [{ translateY: tabDrop }] }]}>
+            <NewReply fresh={endBtn === 'new'} onPress={toEnd} lift={barH} />
+          </Animated.View>
+        )}
 
         {paired && (
           <Animated.View style={[st.bottom, { paddingBottom: space.s2 + tabInset, transform: [{ translateY: tabDrop }] }]} onLayout={(e) => setBarH(e.nativeEvent.layout.height)}>
