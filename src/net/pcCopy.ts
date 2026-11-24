@@ -21,7 +21,8 @@ export async function receiveCopy(ch: Channel, peerCaps: readonly string[], ms =
 }
 
 export function newerCopy(have: PhoneCopyBody | null | undefined, got: PhoneCopyBody): PhoneCopyBody {
-  return have && have.asOf >= got.asOf ? have : got;
+  if (have && have.asOf >= got.asOf) return have;
+  return !got.money && have?.money ? { ...got, money: have.money } : got;
 }
 
 const noonOf = (day: string) => Date.parse(`${day}T12:00:00+09:00`);
