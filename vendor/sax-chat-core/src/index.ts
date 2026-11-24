@@ -9,3 +9,4 @@ export * from './chat-log.ts';
 export * from './phone-gateway.ts';
 export * from './phone-chat.ts';
 export * from './turn.ts';
+export * from './amend.ts';

@@ -67,7 +67,8 @@ export const PHONE_ASK_TEXT: Record<AgentAsk, string> = {
 };
 export const PHONE_SLOT_MISSING_TEXT = '정확한 값은 아래 표에 있어요.';
 export const PHONE_UNAVAILABLE_TEXT = '답을 받지 못했어요. 잠시 뒤 [다시 시도]를 눌러 주세요.';
-export const PHONE_ENTRUST_TEXT = (name: string): string => `${name} 세금계산서를 맡겼어요. PC가 켜지면 시작하고, 발급 전에 한 번 더 확인을 받아요.`;
+/** 카드에서 [발급하기]를 누른 기록. PC가 받을지는 아직 모르므로 맡긴 사실만 적는다. */
+export const PHONE_ENTRUST_TEXT = (name: string): string => `${name} 세금계산서 발급을 PC에 맡겼어요.`;
 
 /** 오류 코드 → 대화 문장과 [다시 시도]. 화면이 다른 문구를 쓰려면 code로 바꾼다. */
 export const PHONE_ERROR_TEXT: Record<PhoneChatErrorCode, { text: string; retry: boolean }> = {
@@ -216,9 +217,6 @@ interface Turn {
 
 const KINDS: ReadonlySet<PhoneReplyKind> = new Set(PHONE_REPLY_KINDS);
 
-/** PC가 켜져 있을 때 맡긴 한 줄: PC가 바로 홈택스에서 준비하고, 발급은 PC 승인으로만 된다. */
-export const PHONE_ENTRUST_ONLINE_TEXT = (name: string): string => `${name} 세금계산서를 PC에 맡겼어요. PC가 홈택스에서 준비하고, 발급 전에 한 번 더 확인을 받아요.`;
-
 const INTENT_MISSED: ReadonlySet<PhoneReplyKind> = new Set(['smalltalk', 'answer', 'cannot']);
 
 /**
@@ -234,7 +232,7 @@ const out = (status: PhoneToolStatus, ref: string | null = null, needs: ToolNeed
 function messageOf(v: unknown): ChatMessage | null {
   const m = v as Partial<ChatMessage> | null;
   if (!m || typeof m !== 'object' || typeof m.id !== 'string' || typeof m.at !== 'number' || (m.from !== 'user' && m.from !== 'app') || typeof m.text !== 'string') return null;
-  return { id: m.id, at: m.at, from: m.from, text: m.text, ...(m.ctx ? { ctx: m.ctx } : {}), ...(m.kind ? { kind: m.kind } : {}), ...(m.from === 'user' && isReaction(m.reaction) ? { reaction: m.reaction } : {}), ...(m.from === 'user' && typeof m.replyTo === 'string' ? { replyTo: m.replyTo } : {}) };
+  return { id: m.id, at: m.at, from: m.from, text: m.text, ...(m.ctx ? { ctx: m.ctx } : {}), ...(m.kind ? { kind: m.kind } : {}), ...(m.from === 'user' && isReaction(m.reaction) ? { reaction: m.reaction } : {}), ...(m.from === 'user' && typeof m.replyTo === 'string' ? { replyTo: m.replyTo } : {}), ...(m.hidden === true ? { hidden: true as const } : {}) };
 }
 
 const emptyState = (): State => ({ v: 1, seq: 0, phone: [], fold: null, drafts: [] });
@@ -291,10 +289,8 @@ export class PhoneChat {
       if (!d || d.state !== 'open') return null;
       d.state = 'entrusted';
       const name = this.ports.copy()?.counterparties.find((c) => c.id === d.counterpartyId)?.name ?? '거래처';
-      const line = this.ports.pcOnline?.() ? PHONE_ENTRUST_ONLINE_TEXT : PHONE_ENTRUST_TEXT;
-      const text = line(name);
       const tok = '[NAME_1]';
-      this.push(st, { from: 'app', text, kind: 'did', ctx: { t: line(tok), e: { [tok]: { k: 'NAME', v: name, r: `cp:${d.counterpartyId}` } } } });
+      this.push(st, { from: 'app', text: PHONE_ENTRUST_TEXT(name), kind: 'did', hidden: true, ctx: { t: PHONE_ENTRUST_TEXT(tok), e: { [tok]: { k: 'NAME', v: name, r: `cp:${d.counterpartyId}` } } } });
       await this.save(st);
       return { ...d };
     });
@@ -344,7 +340,7 @@ export class PhoneChat {
     }
   }
 
-  private push(st: State, m: Pick<ChatMessage, 'from' | 'text'> & Partial<Pick<ChatMessage, 'ctx' | 'kind' | 'reaction' | 'replyTo'>>): ChatMessage {
+  private push(st: State, m: Pick<ChatMessage, 'from' | 'text'> & Partial<Pick<ChatMessage, 'ctx' | 'kind' | 'reaction' | 'replyTo' | 'hidden'>>): ChatMessage {
     const msg: ChatMessage = { id: this.ports.newId(), at: this.ports.now(), ...m };
     st.phone.push(msg);
     return msg;
