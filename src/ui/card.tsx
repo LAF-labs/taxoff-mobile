@@ -162,7 +162,7 @@ export function PickRows<V extends string>({ groups, value, onPick, testID }: { 
 }
 
 const cst = StyleSheet.create({
-  card: { borderRadius: radius.lg, padding: space.s5, gap: space.s4 },
+  card: { alignSelf: 'stretch', borderRadius: radius.lg, padding: space.s5, gap: space.s4 },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.s2 },
   actions: { flexDirection: 'row', gap: space.s2 },
   sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingTop: space.s2 },
