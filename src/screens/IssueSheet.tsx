@@ -62,7 +62,7 @@ export function IssueSheet({ onClose, onPick, onCapture, counterparties: given, 
   const { height } = useWindowDimensions();
   const copy = s.data.pcCopy ?? null;
   const fromCopy = useMemo(() => (copy ? counterpartiesOf(copy) : null), [copy]);
-  const all = useMemo(() => orderedCounterparties(given ?? (queue.counterparties.length > 0 || !fromCopy ? queue.counterparties : fromCopy)), [given, queue.counterparties, fromCopy]);
+  const all = useMemo(() => orderedCounterparties(given ?? [...(fromCopy ?? []), ...queue.counterparties.filter((c) => !fromCopy || !findByBizNo(fromCopy, c.bizNo))]), [given, queue.counterparties, fromCopy]);
 
   const [step, setStep] = useState<IssueStep>(preview?.step ?? 'cp');
   const [q, setQ] = useState(preview?.query ?? '');
