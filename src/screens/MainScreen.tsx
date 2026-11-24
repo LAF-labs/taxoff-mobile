@@ -22,8 +22,9 @@ export type MainRoute = HomeRoute;
 const BAR_H = 60;
 const BAR_LIFT = BAR_H - size.row - space.s2;
 const ICON_STROKE = 1.75;
-/** 이만큼 넘게 내리면 떠 있는 탭바를 동그란 단추 하나로 줄이고, 올리면 다시 편다. */
+/** 이만큼 넘게 내리면 떠 있는 탭바를 이름 없이 아이콘만 남긴 낮은 막대로 줄이고, 올리면 다시 편다. */
 const MINI_STEP = 24;
+const BAR_MINI_H = 44;
 
 /** 아이폰은 애플 기본 탭바(iOS 26이면 유리 탭바)를 쓴다. 다른 곳은 아래의 떠 있는 탭바. */
 const NATIVE_TABS = Platform.OS === 'ios';
@@ -110,7 +111,7 @@ export function MainScreen({
               <View style={st.fill}>{scene(tab)}</View>
             </TabScroll.Provider>
           </TabInset.Provider>
-          {!kb && <TabBar tab={tab} mini={mini} onTab={onTab} onExpand={() => setMini(false)} onHeight={setBarH} />}
+          {!kb && <TabBar tab={tab} mini={mini} onTab={onTab} onHeight={setBarH} />}
         </>
       )}
       {issueOpen && (
@@ -147,7 +148,7 @@ function NativeScene({ children }: { children: ReactNode }) {
   );
 }
 
-function TabBar({ tab, mini, onTab, onExpand, onHeight }: { tab: Tab; mini: boolean; onTab: (t: Tab) => void; onExpand: () => void; onHeight: (h: number) => void }) {
+function TabBar({ tab, mini, onTab, onHeight }: { tab: Tab; mini: boolean; onTab: (t: Tab) => void; onHeight: (h: number) => void }) {
   const p = usePalette();
   const inset = useSafeAreaInsets();
   const dark = p.overlay === p.tint;
@@ -155,23 +156,10 @@ function TabBar({ tab, mini, onTab, onExpand, onHeight }: { tab: Tab; mini: bool
     <View
       style={[st.barWrap, { paddingBottom: Math.max(inset.bottom - BAR_LIFT, space.s2) }]}
       pointerEvents="box-none"
-      onLayout={(e) => onHeight(e.nativeEvent.layout.height)}
+      // 줄어든 높이는 화면 여백에 넣지 않는다: 여백이 바뀌면 목록이 밀려 스크롤이 거꾸로 읽히고 탭바가 다시 펴진다.
+      onLayout={(e) => !mini && onHeight(e.nativeEvent.layout.height)}
     >
-      {mini ? (
-        <Pressable
-          testID="tabbar-mini"
-          accessibilityRole="button"
-          accessibilityLabel={`${TABS.find((t) => t.key === tab)!.a11y}, 탭 펼치기`}
-          onPress={() => {
-            tap();
-            onExpand();
-          }}
-          style={({ pressed }) => [st.bar, st.mini, { backgroundColor: p.overlay, borderColor: p.line, shadowColor: p.ink }, pressed && { opacity: 0.6 }]}
-        >
-          <TabIcon kind={tab} color={p.ink} />
-        </Pressable>
-      ) : (
-      <View style={[st.bar, { backgroundColor: p.overlay, borderColor: p.line, shadowColor: p.ink }]} accessibilityRole="tablist" testID="tabbar">
+      <View style={[st.bar, mini && st.barMini, { backgroundColor: p.overlay, borderColor: p.line, shadowColor: p.ink }]} accessibilityRole="tablist" testID="tabbar">
         {TABS.map((t) => {
           const on = t.key === tab;
           const ink = on ? p.ink : p.ink3;
@@ -190,14 +178,15 @@ function TabBar({ tab, mini, onTab, onExpand, onHeight }: { tab: Tab; mini: bool
               style={({ pressed }) => [st.tab, on && { backgroundColor: dark ? p.sunken : p.tint }, pressed && !on && { opacity: 0.6 }]}
             >
               <TabIcon kind={t.key} color={ink} />
-              <T v="meta" c={on ? 'ink' : 'ink3'} style={on ? st.labelOn : st.label}>
-                {t.label}
-              </T>
+              {!mini && (
+                <T v="meta" c={on ? 'ink' : 'ink3'} style={on ? st.labelOn : st.label}>
+                  {t.label}
+                </T>
+              )}
             </Pressable>
           );
         })}
       </View>
-      )}
     </View>
   );
 }
@@ -249,7 +238,7 @@ function useKeyboardShown(): boolean {
 
 const st = StyleSheet.create({
   fill: { flex: 1 },
-  mini: { width: BAR_H, alignItems: 'center', justifyContent: 'center' },
+  barMini: { height: BAR_MINI_H, borderRadius: BAR_MINI_H / 2 },
   barWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: space.s4 },
   bar: { flexDirection: 'row', height: BAR_H, padding: 4, borderRadius: BAR_H / 2, borderWidth: StyleSheet.hairlineWidth, shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
   tab: { flex: 1, borderRadius: (BAR_H - 8) / 2, alignItems: 'center', justifyContent: 'center', gap: 3 },
