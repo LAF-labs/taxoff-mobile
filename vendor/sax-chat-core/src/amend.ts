@@ -13,6 +13,8 @@ export const AMEND_GROUPS: readonly (readonly AmendWhat[])[] = [
   ['amount_changed', 'deal_cancelled', 'returned'],
 ];
 export const AMEND_WHATS: readonly AmendWhat[] = AMEND_GROUPS.flat();
+/** 사유를 다시 고르는 목록(PC 모달, 폰 시트)의 묶음 이름. AMEND_GROUPS와 같은 순서. */
+export const AMEND_GROUP_LABEL: readonly string[] = ['처음부터 틀렸어요', '발급한 뒤에 달라졌어요'];
 
 export function isAmendWhat(v: unknown): v is AmendWhat {
   return typeof v === 'string' && (AMEND_WHATS as readonly string[]).includes(v);
@@ -26,6 +28,16 @@ export const AMEND_LABEL: Readonly<Record<AmendWhat, string>> = {
   amount_changed: '금액이 바뀌었어요',
   deal_cancelled: '거래가 취소됐어요',
   returned: '물건을 돌려받았어요',
+};
+
+/** 사유 목록 줄 아래 한 줄(ADR-058 표). */
+export const AMEND_HINT: Readonly<Record<AmendWhat, string>> = {
+  wrong_entry: '금액, 날짜, 거래처 번호',
+  duplicate: '같은 건을 한 번 더, 발급하면 안 되는 건',
+  local_lc: '수출용 영세율로 바꿔요',
+  amount_changed: '깎아 주거나 더 받기로 했어요',
+  deal_cancelled: '계약이 없던 일이 됐어요',
+  returned: '반품',
 };
 
 /** 홈택스 수정발급 사유 이름. 플레이북이 고를 때만 쓰고 화면에는 내지 않는다. */

@@ -96,7 +96,7 @@ describe('폰 대화(PC 꺼짐): 고정 사본 → 가짜 게이트웨이', () =
     assert.match(text, /앱 판단: 세금계산서 발급 요청/);
     const card = r.items.find((x) => x.kind === 'msg' && x.card);
     assert.ok(card && card.kind === 'msg');
-    assert.equal(card.card?.note, '발급하기를 누르면 PC가 바로 준비해요');
+    assert.equal(card.card?.note, undefined);
     if (card.card?.draft?.vat !== undefined) assert.notEqual(card.card.draft.vat, null);
     assert.ok(!JSON.stringify(card.card).includes('정하지 않음'));
   });
@@ -128,6 +128,7 @@ describe('폰 대화(PC 꺼짐): 고정 사본 → 가짜 게이트웨이', () =
 
     assert.ok(await chat.entrust(r.drafts[0]!.id));
     assert.equal((await chat.core.drafts())[0]!.state, 'entrusted');
+    assert.equal((await chat.items()).filter((x) => x.kind === 'msg' && x.text !== undefined).length, 2);
   });
 
   it('주간 한도에 닿으면 모델을 더 부르지 않고 이유 한 줄을 준다', async () => {

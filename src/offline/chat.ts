@@ -28,7 +28,7 @@ export interface OfflineReply {
 const won = (n: number) => `${n.toLocaleString('en-US')}원`;
 const VAT: Record<string, string> = { separate: '부가세 별도', included: '부가세 포함' };
 
-export function cardOf(s: Exclude<PhoneShow, { type: 'screen' }>, pcOnline = false): ChatCard {
+export function cardOf(s: Exclude<PhoneShow, { type: 'screen' }>): ChatCard {
   if (s.type === 'card') {
     const d = s.draft;
     return {
@@ -39,7 +39,6 @@ export function cardOf(s: Exclude<PhoneShow, { type: 'screen' }>, pcOnline = fal
         ...(d.item ? [{ label: '품목', value: d.item }] : []),
       ],
       draft: { id: d.id, counterpartyId: d.counterpartyId, amount: d.amount, vat: d.vat ?? 'separate', item: d.item },
-      note: pcOnline ? (d.state === 'entrusted' ? 'PC가 준비하고 있어요' : '발급하기를 누르면 PC가 바로 준비해요') : d.state === 'entrusted' ? 'PC를 켜면 시작해요' : '발급하기를 누르면 PC를 켰을 때 시작해요',
     };
   }
   return {
@@ -92,7 +91,7 @@ export class OfflineChat {
     const all = await this.core.messages();
     const byId = new Map(all.map((m) => [m.id, m]));
     const mine = await this.loadReacts();
-    const msgs = all.map((m) => itemOf(m, byId)).filter(isShown).map((x) => (x.kind === 'msg' && mine[x.id] ? { ...x, myReaction: mine[x.id] } : x));
+    const msgs = all.filter((m) => !m.hidden).map((m) => itemOf(m, byId)).filter(isShown).map((x) => (x.kind === 'msg' && mine[x.id] ? { ...x, myReaction: mine[x.id] } : x));
     const first = msgs[0]?.at ?? 0;
     return [...msgs, ...shown.filter((x) => x.at >= first)].sort((a, b) => a.at - b.at);
   }
@@ -175,7 +174,7 @@ export class OfflineChat {
     const at = this.ports.now();
     const items: ChatItem[] = [];
     r.show.forEach((s, i) => {
-      if (s.type !== 'screen') items.push({ kind: 'msg', id: `${r.id}-${i}`, from: 'pc', via: 'phone', at, card: cardOf(s, this.ports.pcOnline?.() ?? false) });
+      if (s.type !== 'screen') items.push({ kind: 'msg', id: `${r.id}-${i}`, from: 'pc', via: 'phone', at, card: cardOf(s) });
     });
     return { items, chips: r.ask?.chips ?? [], drafts: r.show.flatMap((s) => (s.type === 'card' ? [s.draft] : [])), screens: r.show.flatMap((s) => (s.type === 'screen' ? [s.screen] : [])) };
   }
