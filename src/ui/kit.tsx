@@ -1,15 +1,19 @@
 import * as Haptics from 'expo-haptics';
-import { useContext, useEffect, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
 import {
   ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View,
   type AccessibilityRole, type StyleProp, type TextStyle, type ViewStyle,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ShellTop, TOP_SPACE } from './float';
+import { Glyph } from './glyph';
 import { MAX_FONT_SCALE, TextSizeContext, motion, radius, size, space, textScale, type, useReducedMotion, usePalette, type Ink, type TypeName } from '../theme';
 
 const keepAll = { wordBreak: 'keep-all', overflowWrap: 'anywhere' } as unknown as TextStyle;
 
+
+/** 시트 안처럼 overlay 면 위에 있으면 묶음 면을 한 단계 밝힌다(어두운 모드). */
+export const Raised = createContext(false);
 
 export const tap = () => void Haptics.selectionAsync().catch(() => {});
 export const success = () => void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -37,40 +41,49 @@ export function T({
 }
 
 export function Screen({
-  title, onBack, backLabel = '뒤로', right, children, footer, scroll = true, testID, style, shell,
+  title, onBack, backLabel = '뒤로', backText, right, children, footer, cta, scroll = true, testID, style, shell, gap,
 }: {
   title?: string; onBack?: () => void; backLabel?: string; right?: ReactNode; children: ReactNode; footer?: ReactNode; scroll?: boolean; testID?: string; style?: StyleProp<ViewStyle>;
+  /** 뒤로 단추에 글을 붙인다(iOS 기본 뒤로: ‹ 거래처). 글은 backLabel이 아니라 이 값이다. */
+  backText?: string;
+  /** 바닥에 뜬 주 단추 줄(선 없이 위로 본문이 흐려지며 지나간다). footer와 함께 쓰지 않는다. */
+  cta?: ReactNode;
+  /** 본문 줄 사이 간격. 목록 화면은 space.s2. */
+  gap?: number;
   /** 맨 위 화면(더보기 메뉴로 오가는 화면): 머리 줄 대신 떠 있는 더보기, 제목, PC 상태를 두고 본문이 그 밑으로 지나간다. */
   shell?: boolean;
 }) {
   const p = usePalette();
   const inset = useSafeAreaInsets();
-  const bottom = space.s6 + inset.bottom;
+  const bottom = space.s6 + inset.bottom + (cta ? CTA_SPACE : 0);
   const head = !shell && (title !== undefined || onBack || right);
-  const top = shell ? { paddingTop: inset.top + TOP_SPACE } : null;
+  const top = [shell ? { paddingTop: inset.top + TOP_SPACE } : null, gap !== undefined ? { gap } : null];
   return (
     <SafeAreaView edges={shell ? ['left', 'right'] : ['top', 'left', 'right']} style={[{ flex: 1, backgroundColor: p.canvas }, style]} testID={testID}>
       {head && (
         <View style={st.header}>
-          <View style={st.headerSide}>{onBack && <Back onPress={onBack} label={backLabel} />}</View>
-          {title !== undefined && (
+          <View style={[st.headerSide, backText !== undefined && st.headerWide]}>{onBack && <Back onPress={onBack} label={backLabel} text={backText} />}</View>
+          {title !== undefined ? (
             <T v="title" lines={1} role="header" style={st.headerTitle}>
               {title}
             </T>
+          ) : (
+            <View style={{ flex: 1 }} />
           )}
-          <View style={[st.headerSide, { alignItems: 'flex-end' }]}>{right}</View>
+          <View style={[st.headerSide, backText !== undefined && st.headerWide, { alignItems: 'flex-end' }]}>{right}</View>
         </View>
       )}
       {}
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={footer && Platform.OS === 'ios' ? 'padding' : undefined} enabled={!!footer}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={(footer || cta) && Platform.OS === 'ios' ? 'padding' : undefined} enabled={!!(footer || cta)}>
       {scroll ? (
-        <ScrollView contentContainerStyle={[st.content, top, !footer && { paddingBottom: bottom }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets={!footer}>
+        <ScrollView contentContainerStyle={[st.content, top, !footer && { paddingBottom: bottom }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets={!footer && !cta}>
           {children}
         </ScrollView>
       ) : (
         <View style={[st.content, top, { flex: 1 }, !footer && { paddingBottom: bottom }]}>{children}</View>
       )}
       {footer && <View style={[st.footer, { paddingBottom: Math.max(inset.bottom, space.s4), backgroundColor: p.canvas, borderTopColor: p.line }]}>{footer}</View>}
+      {cta && <FloatCta>{cta}</FloatCta>}
       </KeyboardAvoidingView>
       {shell && (
         <ShellTop
@@ -87,12 +100,45 @@ export function Screen({
   );
 }
 
-function Back({ onPress, label }: { onPress: () => void; label: string }) {
+function Back({ onPress, label, text }: { onPress: () => void; label: string; text?: string }) {
   const p = usePalette();
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} hitSlop={8} onPress={onPress} style={({ pressed }) => [st.back, pressed && { opacity: 0.5 }]} testID="back">
+    <Pressable accessibilityRole="button" accessibilityLabel={label} hitSlop={8} onPress={onPress} style={({ pressed }) => [text !== undefined ? st.backText : st.back, pressed && { opacity: 0.5 }]} testID="back">
       <Chevron dir="left" color={p.ink} />
+      {text !== undefined && (
+        <T lines={1} style={{ flexShrink: 1 }}>
+          {text}
+        </T>
+      )}
     </Pressable>
+  );
+}
+
+/** 머리 줄 오른쪽 글 단추(수정 등). */
+export function TextButton({ label, onPress, testID, disabled }: { label: string; onPress: () => void; testID?: string; disabled?: boolean }) {
+  return (
+    <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: !!disabled }} disabled={disabled} hitSlop={6} onPress={onPress} style={({ pressed }) => [st.textBtn, pressed && { opacity: 0.5 }]}>
+      <T c={disabled ? 'ink4' : 'ink'}>{label}</T>
+    </Pressable>
+  );
+}
+
+const CTA_SPACE = size.button + space.s6;
+const CTA_FADE = Array.from({ length: 12 }, (_, i) => Number((((i + 1) / 12) ** 1.4).toFixed(2)));
+
+/** 바닥에 뜬 주 단추 줄: 화면 폭을 다 쓰는 단추. 위 24는 바탕색으로 서서히 덮어 본문이 흐려지며 지나간다. */
+function FloatCta({ children }: { children: ReactNode }) {
+  const p = usePalette();
+  const inset = useSafeAreaInsets();
+  return (
+    <View pointerEvents="box-none" style={st.cta}>
+      <View pointerEvents="none">
+        {CTA_FADE.map((o, i) => (
+          <View key={i} style={{ height: 2, backgroundColor: p.canvas, opacity: o }} />
+        ))}
+      </View>
+      <View style={[st.ctaRow, { backgroundColor: p.canvas, paddingBottom: Math.max(inset.bottom, space.s4) }]}>{children}</View>
+    </View>
   );
 }
 
@@ -143,6 +189,7 @@ export function Button({
 
 export function Group({ children, title, note, style, testID }: { children: ReactNode; title?: string; note?: ReactNode; style?: StyleProp<ViewStyle>; testID?: string }) {
   const p = usePalette();
+  const raised = useContext(Raised);
   const items = (Array.isArray(children) ? children : [children]).filter((c) => c !== null && c !== undefined && c !== false);
   return (
     <View style={[{ gap: space.s2 }, style]} testID={testID}>
@@ -151,7 +198,7 @@ export function Group({ children, title, note, style, testID }: { children: Reac
           {title}
         </T>
       )}
-      <View style={[st.group, { backgroundColor: p.tint }]}>
+      <View style={[st.group, { backgroundColor: raised ? p.raisedTint : p.tint }]}>
         {items.map((c, i) => (
           <View key={i}>
             {i > 0 && <View style={[st.sep, { backgroundColor: p.line }]} />}
@@ -169,14 +216,31 @@ export function Group({ children, title, note, style, testID }: { children: Reac
 }
 
 export function Row({
-  label, value, sub, onPress, chevron, testID, valueInk = 'ink2', strong, accessory, subInk = 'ink3', icon,
-}: { label: string; value?: ReactNode; sub?: string; onPress?: () => void; chevron?: boolean; testID?: string; valueInk?: Ink; strong?: boolean; accessory?: ReactNode; subInk?: Ink; icon?: ReactNode }) {
+  label, value, sub, onPress, chevron, testID, valueInk = 'ink2', strong, accessory, subInk = 'ink3', icon, mark, a11y,
+}: {
+  label: string; value?: ReactNode; sub?: string; onPress?: () => void; chevron?: boolean; testID?: string; valueInk?: Ink; strong?: boolean; accessory?: ReactNode; subInk?: Ink; icon?: ReactNode;
+  /** 찾은 글자: 이름 안에서 굵게 보인다. */
+  mark?: string;
+  a11y?: string;
+}) {
   const p = usePalette();
+  const at = mark ? label.toLowerCase().indexOf(mark.trim().toLowerCase()) : -1;
+  const n = mark?.trim().length ?? 0;
   const body = (
     <>
       {icon}
       <View style={{ flex: 1, gap: 2 }}>
-        <T v={strong ? 'strong' : 'body'}>{label}</T>
+        <T v={strong ? 'strong' : 'body'} lines={sub ? 1 : undefined}>
+          {at >= 0 && n > 0 ? (
+            <>
+              {label.slice(0, at)}
+              <T v="strong">{label.slice(at, at + n)}</T>
+              {label.slice(at + n)}
+            </>
+          ) : (
+            label
+          )}
+        </T>
         {sub && <T v="meta" c={subInk}>{sub}</T>}
       </View>
       {value !== undefined && (typeof value === 'string' ? <T v="value" c={valueInk} lines={1} style={{ flexShrink: 1, textAlign: 'right' }}>{value}</T> : value)}
@@ -184,9 +248,9 @@ export function Row({
       {(chevron ?? !!onPress) && <Chevron color={p.ink4} />}
     </>
   );
-  if (!onPress) return <View style={st.row} testID={testID}>{body}</View>;
+  if (!onPress) return <View style={st.row} testID={testID} accessible={!!a11y} accessibilityLabel={a11y}>{body}</View>;
   return (
-    <Pressable testID={testID} accessibilityRole="button" onPress={onPress} style={({ pressed }) => [st.row, pressed && { backgroundColor: p.sunken }]}>
+    <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={a11y} onPress={onPress} style={({ pressed }) => [st.row, pressed && { backgroundColor: p.sunken }]}>
       {body}
     </Pressable>
   );
@@ -265,8 +329,19 @@ export function StatusDot({ tone = 'quiet', label, busy, testID, v = 'subStrong'
   );
 }
 
-export function Notice({ children, tone = 'attention', testID, sub }: { children: ReactNode; tone?: 'attention' | 'quiet'; testID?: string; sub?: string }) {
+export function Notice({ children, tone = 'attention', testID, sub, icon }: { children: ReactNode; tone?: 'attention' | 'quiet'; testID?: string; sub?: string; icon?: boolean }) {
   const p = usePalette();
+  if (icon) {
+    // 기준판 sx-note: 세모 느낌표 + 본문 글씨(확인 필요 면).
+    return (
+      <View style={[st.notice, st.noticeRow, { backgroundColor: tone === 'attention' ? p.attentionSoft : p.tint }]} testID={testID} accessibilityRole="alert">
+        <Glyph kind="attention" color={tone === 'attention' ? p.attention : p.ink3} size={16} />
+        <T v="sub" style={{ flex: 1 }}>
+          {children}
+        </T>
+      </View>
+    );
+  }
   return (
     <View style={[st.notice, { backgroundColor: tone === 'attention' ? p.attentionSoft : p.tint, gap: space.s1 }]} testID={testID} accessibilityRole="alert">
       <T v="sub" c={tone === 'attention' ? 'attention' : 'ink2'}>
@@ -400,7 +475,12 @@ export const st = StyleSheet.create({
   header: { height: size.header, flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.s2 },
   headerSide: { width: 72, justifyContent: 'center' },
   headerTitle: { flex: 1, textAlign: 'center' },
+  headerWide: { width: 120 },
   back: { width: size.hit, height: size.hit, alignItems: 'center', justifyContent: 'center' },
+  backText: { height: size.hit, flexDirection: 'row', alignItems: 'center', gap: space.s1, paddingLeft: space.s2 + 2, paddingRight: space.s2 },
+  textBtn: { height: size.hit, paddingHorizontal: space.s3, justifyContent: 'center' },
+  cta: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  ctaRow: { paddingHorizontal: space.s5, gap: space.s2 },
   content: { paddingHorizontal: space.s5, paddingTop: space.s3, paddingBottom: space.s6, gap: space.s6 },
   footer: { paddingHorizontal: space.s5, paddingTop: space.s3, gap: space.s2, borderTopWidth: StyleSheet.hairlineWidth },
   btn: { minHeight: size.button, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.s5 },
@@ -417,6 +497,7 @@ export const st = StyleSheet.create({
   pill: { minHeight: 36, minWidth: 52, paddingHorizontal: space.s3, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: space.s5, paddingHorizontal: space.s3, paddingBottom: space.s7 },
   notice: { borderRadius: radius.md, paddingVertical: space.s3, paddingHorizontal: space.s4 },
+  noticeRow: { flexDirection: 'row', alignItems: 'center', gap: space.s3 - 2, padding: space.s3 },
   reply: { minHeight: size.row, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: space.s4, paddingVertical: space.s3, flexDirection: 'row', alignItems: 'center', gap: space.s3 },
   seg: { flexDirection: 'row', borderRadius: radius.md, padding: 3 },
   segItem: { flex: 1, minHeight: 38, borderRadius: radius.sm + 1, alignItems: 'center', justifyContent: 'center' },

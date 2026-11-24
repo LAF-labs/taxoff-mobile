@@ -6,6 +6,8 @@ const light = {
   tint: '#F3F4F5',
   sunken: '#E9EAEB',
   overlay: '#FFFFFF',
+  /** 시트(overlay) 위의 채움 면. 어두운 모드에서는 시트 면과 같은 색이라 한 단계 밝힌다. */
+  raisedTint: '#F3F4F5',
   line: '#ECEDEE',
   lineStrong: '#8F9296',
   ink: '#111112',
@@ -35,6 +37,7 @@ const dark: typeof light = {
   tint: '#232425',
   sunken: '#2E2F31',
   overlay: '#232425',
+  raisedTint: '#2E2F31',
   line: '#2A2B2D',
   lineStrong: '#76797D',
   ink: '#F3F4F5',
@@ -78,6 +81,11 @@ export const type = {
   label: { fontSize: 13, lineHeight: 18, fontWeight: '500' as const },
   meta: { fontSize: 13, lineHeight: 18, fontWeight: '400' as const, fontVariant: tnum },
   button: { fontSize: 17, lineHeight: 22, fontWeight: '600' as const },
+  /** 자세히 화면 맨 위 이름(거래처 이름 등). 큰 글씨는 이것과 시트의 묻는 말, 페어링 6자리뿐이다. */
+  heading: { fontSize: 24, lineHeight: 32, fontWeight: '700' as const },
+  /** 시트에서 한 단계씩 묻는 말과 그 답(밑줄 칸). */
+  ask: { fontSize: 22, lineHeight: 30, fontWeight: '700' as const },
+  askValue: { fontSize: 22, lineHeight: 30, fontWeight: '600' as const, fontVariant: tnum },
   sas: { fontSize: 40, lineHeight: 48, fontWeight: '600' as const, fontVariant: tnum, letterSpacing: 8 },
 };
 export type TypeName = keyof typeof type;

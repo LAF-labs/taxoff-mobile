@@ -5,9 +5,10 @@ import { radius, usePalette } from '../theme';
 /**
  * 알림 줄 앞의 종류 아이콘(18pt 선 그림). 대화 카드의 종류 아이콘과 같은 뜻을 쓴다:
  * 발급됨은 동그라미 체크, 멈춤은 동그라미 느낌표, 내 차례와 확인 필요는 세모, 승인 기다림은 문서, 돈은 지폐, 목록은 줄 셋.
- * 더보기 메뉴는 같은 그림을 22로 키워 쓴다(대화 말풍선, 알림 종, 설정 조절 막대).
+ * 더보기 메뉴는 같은 그림을 22로 키워 쓴다(대화 말풍선, 알림 종, 설정 조절 막대, 거래처 건물).
+ * 거래처 화면: 찾기 돋보기, 더하기, 등록증 찍기 카메라, 바꿀 수 없는 칸 자물쇠, 복사, 닫기 X.
  */
-export type GlyphKind = 'done' | 'stop' | 'attention' | 'doc' | 'money' | 'list' | 'chat' | 'bell' | 'settings';
+export type GlyphKind = 'done' | 'stop' | 'attention' | 'doc' | 'money' | 'list' | 'chat' | 'bell' | 'settings' | 'building' | 'search' | 'plus' | 'camera' | 'lock' | 'copy' | 'close';
 
 const W = 1.75;
 
@@ -94,6 +95,61 @@ function Base({ kind, color }: { kind: GlyphKind; color: string }): ReactNode {
       </View>
     );
   }
+  if (kind === 'building') {
+    return (
+      <View style={st.box} aria-hidden>
+        <View style={[st.tower, line]} />
+        <View style={[st.wing, line]} />
+        {[4, 8, 12].map((y) => (
+          <View key={y} style={[st.window, fill, { top: y }]} />
+        ))}
+        <View style={[st.ground, fill]} />
+      </View>
+    );
+  }
+  if (kind === 'search') {
+    return (
+      <View style={st.box} aria-hidden>
+        <View style={[st.lens, line]} />
+        <View style={[st.handle, fill]} />
+      </View>
+    );
+  }
+  if (kind === 'plus' || kind === 'close') {
+    const turn = kind === 'close' ? '45deg' : '0deg';
+    return (
+      <View style={[st.box, { transform: [{ rotate: turn }] }]} aria-hidden>
+        <View style={[st.bar, fill]} />
+        <View style={[st.bar, fill, { transform: [{ rotate: '90deg' }] }]} />
+      </View>
+    );
+  }
+  if (kind === 'camera') {
+    return (
+      <View style={st.box} aria-hidden>
+        <View style={[st.camTop, line]} />
+        <View style={[st.camBody, line]}>
+          <View style={[st.camLens, line]} />
+        </View>
+      </View>
+    );
+  }
+  if (kind === 'lock') {
+    return (
+      <View style={st.box} aria-hidden>
+        <View style={[st.shackle, line]} />
+        <View style={[st.lockBody, line]} />
+      </View>
+    );
+  }
+  if (kind === 'copy') {
+    return (
+      <View style={st.box} aria-hidden>
+        <View style={[st.sheetBack, line]} />
+        <View style={[st.sheetFront, line, { backgroundColor: p.tint }]} />
+      </View>
+    );
+  }
   if (kind === 'money') {
     return (
       <View style={st.box} aria-hidden>
@@ -139,6 +195,20 @@ const st = StyleSheet.create({
   slider: { width: 16, height: 6, justifyContent: 'center' },
   sliderLine: { height: W, borderRadius: radius.full },
   knob: { position: 'absolute', top: 0, width: 6, height: 6, marginLeft: -3, borderRadius: radius.full },
+  tower: { position: 'absolute', left: 2, bottom: 1, width: 9, height: 15, borderRadius: radius.sm / 8, borderBottomWidth: 0 },
+  wing: { position: 'absolute', left: 10, bottom: 1, width: 6, height: 9, borderRadius: radius.sm / 8, borderBottomWidth: 0 },
+  window: { position: 'absolute', left: 5, width: 3, height: W, borderRadius: radius.full },
+  ground: { position: 'absolute', left: 0.5, right: 0.5, bottom: 0.5, height: W, borderRadius: radius.full },
+  lens: { position: 'absolute', left: 1.5, top: 1.5, width: 11, height: 11, borderRadius: radius.full },
+  handle: { position: 'absolute', left: 12.2, top: 10.6, width: W, height: 6.5, borderRadius: radius.full, transform: [{ rotate: '-45deg' }] },
+  bar: { position: 'absolute', left: 9 - W / 2, top: 2, width: W, height: 14, borderRadius: radius.full },
+  camTop: { position: 'absolute', left: 6, top: 2, width: 6, height: 3.5, borderTopLeftRadius: radius.sm / 5, borderTopRightRadius: radius.sm / 5, borderBottomWidth: 0 },
+  camBody: { position: 'absolute', left: 1, top: 4.5, width: 16, height: 12, borderRadius: radius.sm / 3, alignItems: 'center', justifyContent: 'center' },
+  camLens: { width: 6.5, height: 6.5, borderRadius: radius.full },
+  shackle: { position: 'absolute', left: 5, top: 1.5, width: 8, height: 8, borderTopLeftRadius: radius.full, borderTopRightRadius: radius.full, borderBottomWidth: 0 },
+  lockBody: { position: 'absolute', left: 2.5, top: 8, width: 13, height: 9, borderRadius: radius.sm / 4 },
+  sheetBack: { position: 'absolute', left: 1.5, top: 1.5, width: 11, height: 11, borderRadius: radius.sm / 4 },
+  sheetFront: { position: 'absolute', left: 5.5, top: 5.5, width: 11, height: 11, borderRadius: radius.sm / 4 },
   list: { gap: 3.5, alignItems: 'flex-start', paddingLeft: 1 },
   listRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   listDot: { width: 2.5, height: 2.5, borderRadius: radius.full },

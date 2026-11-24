@@ -10,6 +10,7 @@ import type { AppData } from '../storage/state';
 import { PHONE_CAPS, newerCopy, receiveCopy } from './pcCopy';
 import { driveCmds, trimCmds } from './issueLive';
 import { cmdsToQueue } from '../phoneCmd';
+import { bookRun, bookToQueue, trimBook } from '../book';
 import { enrollPx } from './pxLive';
 import type { PxDevice } from '../approvalKey';
 import { replaying, tapping } from './hold';
@@ -165,8 +166,12 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
     const held: Parameters<typeof s.channel.sendRaw>[0][] = [];
     const early = tapping(s.channel, held);
     const copy = await receiveCopy(early, s.peerHello.capabilities).catch(() => null);
-    if (copy) await d.update((x) => ({ ...x, pcCopy: newerCopy(x.pcCopy, copy) }));
-    const onCopy = (c: PhoneCopyBody) => d.update((x) => ({ ...x, pcCopy: newerCopy(x.pcCopy, c) }));
+    const onCopy = (c: PhoneCopyBody) =>
+      d.update((x) => {
+        const pcCopy = newerCopy(x.pcCopy, c);
+        return { ...x, pcCopy, book: trimBook(x.book ?? [], pcCopy) };
+      });
+    if (copy) await onCopy(copy);
     const px = await enrollPx(early, s.peerHello.capabilities, { pairId: pair.pairId, deviceId: d.keys.deviceId, vm: d.keys.vm, px: d.px ?? null, onCopy }).catch(() => null);
     if (px) await d.update((x) => ({ ...x, px }));
     const flushed = await flushOutbox(early, d.outbox);
@@ -182,6 +187,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
       cmds: () => d.data().cmds ?? [],
       save: (f) => d.update((x) => ({ ...x, cmds: trimCmds(f(x.cmds ?? [])) })),
       onCopy,
+      book: { list: () => d.data().book ?? [], save: (f) => d.update((x) => ({ ...x, book: f(x.book ?? []) })) },
       alive: d.alive,
     });
     s.channel.close();
@@ -250,12 +256,20 @@ async function viaQueue(d: SyncDeps, pair: Pair): Promise<SyncResult> {
     if (bundle.seq > d.data().qbundleSeq) await d.update((x) => ({ ...x, qbundleSeq: Math.max(x.qbundleSeq, bundle.seq) }));
     const items = await d.outbox.list();
     const cmds = cmdsToQueue(d.data().cmds ?? [], QUEUE.ttlMs);
-    const need = cmds.length + items.reduce((n, it) => n + (it.kind === 'cash' ? 1 : 1 + Math.ceil(it.offer.bytes / QUEUE.chunk)), 0);
+    const books = bookToQueue(d.data().book ?? [], QUEUE.ttlMs);
+    const need = books.length + cmds.length + items.reduce((n, it) => n + (it.kind === 'cash' ? 1 : 1 + Math.ceil(it.offer.bytes / QUEUE.chunk)), 0);
     if (need === 0) return { status: 'offline' };
     const start = d.data().queueSeq;
     await d.update((x) => ({ ...x, queueSeq: Math.max(x.queueSeq, start) + need }));
     let next = start;
     const send = { queue: q, pairId: pair.pairId, vm, bundle, mbxEpoch: pair.mbxEpoch, nextSeq: () => ++next };
+    // 거래처 저장을 발급보다 먼저 넣는다. PC는 큐를 넣은 순서대로 받는다.
+    const booksQueued = new Set<string>();
+    for (const b of books) if ((await queueCmd(bookRun(b), send).catch(() => 'failed' as const)) === 'ok') booksQueued.add(b.cmdId);
+    if (booksQueued.size) {
+      const at = Date.now();
+      await d.update((x) => ({ ...x, book: (x.book ?? []).map((b) => (booksQueued.has(b.cmdId) ? { ...b, queuedAt: at } : b)) }));
+    }
     const cmdsQueued: string[] = [];
     for (const c of cmds) if ((await queueCmd(issueCmd(c.cmdId, c.req), send).catch(() => 'failed' as const)) === 'ok') cmdsQueued.push(c.cmdId);
     if (cmdsQueued.length) {
@@ -272,7 +286,7 @@ async function viaQueue(d: SyncDeps, pair: Pair): Promise<SyncResult> {
         recent: x.recent.map((r) => (done.has(r.msgId) && r.state === 'pending' ? { ...r, state: 'queued' as const } : r)),
       }));
     }
-    return { status: cmdsQueued.length || queued.queued.length || !queued.waiting.length ? 'queued' : 'offline', queued };
+    return { status: booksQueued.size || cmdsQueued.length || queued.queued.length || !queued.waiting.length ? 'queued' : 'offline', queued };
   } catch (e) {
     return { status: 'offline', why: whyCode('queue', causeOf(e)) };
   } finally {

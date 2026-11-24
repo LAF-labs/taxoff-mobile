@@ -11,9 +11,9 @@ import type { PhoneScreen, ReactionId } from '@sax/chat-core';
 import { BRAND } from '../config';
 import { useQueue, type DraftEdit } from '../queueStore';
 import { RunCard } from './RunCard';
+import { useCustomers } from '../customers';
 import { useIssueSubmit, type IssueSubmit } from '../issueSubmit';
 import { onShowCard, shownCard } from '../cardFocus';
-import { counterpartiesOf } from '../net/pcCopy';
 import { splitAmount, type Counterparty, type VatMode } from '../issue';
 import { masked } from '../ui/field';
 import { FlapText } from '../ui/FlapText';
@@ -107,9 +107,10 @@ export function HomeScreen({ go, chat, draft = '', phone, menu: menuOpen = false
     go(to);
   };
   const submitIssue = useIssueSubmit();
-  const cpOf = (id: string): Counterparty | null => (id ? [...(s.data.pcCopy ? counterpartiesOf(s.data.pcCopy) : []), ...q.counterparties].find((c) => c.id === id) ?? null : null);
+  const customers = useCustomers();
+  const cpOf = (id: string): Counterparty | null => (id ? (customers.counterparties.find((c) => c.id === id) ?? null) : null);
   const issueFrom = async (d: Draft, itemId: string): Promise<IssueSubmit> => {
-    const cp = cpOf(d.counterpartyId);
+    const cp = cpOf(d.counterpartyId) ?? (d.phone?.bizNo ? { id: '', name: d.phone.name, bizNo: d.phone.bizNo, issued: 0 } : null);
     if (!d.phone && !cp) {
       q.setPrefill({ amount: d.amount, vat: d.vat, item: d.item, draftId: d.id });
       go('issue');
@@ -793,7 +794,7 @@ function Starter({ phoneAnswers, onPick }: { phoneAnswers: boolean; onPick: (tex
 type Draft = NonNullable<ChatCard['draft']>;
 const ISSUE_FAILED: Record<Exclude<IssueSubmit, 'sent'>, string> = {
   save_failed: '폰에 저장하지 못해 맡기지 않았어요. 다시 눌러 주세요',
-  new_counterparty: '새 거래처는 아직 폰에서 발급할 수 없어요',
+  no_counterparty: '거래처를 찾지 못해 맡기지 않았어요',
 };
 type OnIssue = (d: Draft, itemId: string) => Promise<IssueSubmit>;
 type OnCardIssue = (d: Draft) => Promise<IssueSubmit>;

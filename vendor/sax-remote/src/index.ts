@@ -1,3 +1,4 @@
+export * from './book.ts';
 export * from './bytes.ts';
 export * from './cbor.ts';
 export * from './channel.ts';
@@ -5,6 +6,7 @@ export * from './contexts.ts';
 export * from './crypto.ts';
 export * from './devauth.ts';
 export * from './devlist.ts';
+export * from './docs.ts';
 export * from './envelope.ts';
 export * from './frame.ts';
 export * from './hpke.ts';
@@ -27,4 +29,5 @@ export * from './session.ts';
 export * from './share.ts';
 export * from './transfer.ts';
 export * from './ulid.ts';
+export * from './unlock.ts';
 export { SCHEMA_ID, SCHEMA_TITLE, MESSAGE_TYPES, BINARY_KEYS } from './schema.gen.ts';

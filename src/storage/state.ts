@@ -2,6 +2,7 @@ import type { Thumb } from '../capture/thumb';
 import type { MoneySnapshot } from '../money';
 import type { PhoneCopyBody } from '@sax/remote';
 import type { PhoneCmd } from '../phoneCmd';
+import type { BookCmd } from '../book';
 import type { PcWhy } from '../net/pcWhy';
 import type { PxState } from '../net/pxLive';
 import type { NotifyPrefs } from '../notify/events';
@@ -74,6 +75,8 @@ export interface AppData {
   money?: MoneySnapshot | null;
   pcCopy?: PhoneCopyBody | null;
   cmds?: PhoneCmd[];
+  /** 폰에서 넣거나 고친 거래처. PC가 받아 사본에 실을 때까지 둔다(tex ADR-066). */
+  book?: BookCmd[];
   pcLog?: PcWhy[];
   px?: PxState;
   notify?: NotifyPrefs;

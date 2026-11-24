@@ -3,9 +3,8 @@ import { Animated, Easing, FlatList, Keyboard, Platform, Pressable, StyleSheet, 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ChatItem } from '../chat';
 import { findByBizNo, orderedCounterparties, searchCounterparties, type Counterparty } from '../issue';
-import { counterpartiesOf } from '../net/pcCopy';
-import { useQueue, type IssuePrefill } from '../queueStore';
-import { useSession } from '../session';
+import { useCustomers } from '../customers';
+import type { IssuePrefill } from '../queueStore';
 import { MAX_FONT_SCALE, radius, space, type as typeScale, usePalette } from '../theme';
 import { masked } from '../ui/mask';
 import { Button, Chevron, T, tap } from '../ui/kit';
@@ -56,13 +55,10 @@ export function IssueSheet({ onClose, onPick, onCapture, counterparties: given, 
   preview?: IssueSheetPreview;
 }) {
   const p = usePalette();
-  const s = useSession();
-  const queue = useQueue();
   const inset = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  const copy = s.data.pcCopy ?? null;
-  const fromCopy = useMemo(() => (copy ? counterpartiesOf(copy) : null), [copy]);
-  const all = useMemo(() => orderedCounterparties(given ?? [...(fromCopy ?? []), ...queue.counterparties.filter((c) => !fromCopy || !findByBizNo(fromCopy, c.bizNo))]), [given, queue.counterparties, fromCopy]);
+  const customers = useCustomers();
+  const all = useMemo(() => orderedCounterparties(given ?? customers.counterparties), [given, customers.counterparties]);
 
   const [step, setStep] = useState<IssueStep>(preview?.step ?? 'cp');
   const [q, setQ] = useState(preview?.query ?? '');

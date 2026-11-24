@@ -6,12 +6,13 @@ import type { OfflineChatView } from '../offline/useOfflineChat';
 import { HomeScreen, PcPill, type HomeRoute } from './HomeScreen';
 import { MoneyScreen } from './MoneyScreen';
 import { RecordsScreen } from './RecordsScreen';
+import { CustomersScreen, type CustomersPreview } from './CustomersScreen';
 import { InboxScreen } from './InboxScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { IssueSheet, issueCard, type IssueSheetPreview } from './IssueSheet';
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
-import { counterpartiesOf } from '../net/pcCopy';
+import { useCustomers } from '../customers';
 import { unreadCount } from '../notify/inbox';
 import { showCard } from '../cardFocus';
 import type { Counterparty } from '../issue';
@@ -20,21 +21,26 @@ import { Drawer, NavGap, NavPush, NavRow } from '../ui/drawer';
 import { Glyph, type GlyphKind } from '../ui/glyph';
 
 /** 더보기 메뉴로 오가는 맨 위 화면. 아래 탭바는 없다(2026-11-24 대표). */
-export type Tab = 'home' | 'money' | 'records' | 'inbox' | 'settings';
+export type Tab = 'home' | 'money' | 'records' | 'customers' | 'inbox' | 'settings';
 export type MainRoute = HomeRoute;
 
 const NAV: Array<{ key: Tab; label: string; icon: GlyphKind }> = [
   { key: 'home', label: '대화', icon: 'chat' },
   { key: 'money', label: '돈', icon: 'money' },
   { key: 'records', label: '발급 기록', icon: 'doc' },
+  { key: 'customers', label: '거래처', icon: 'building' },
 ];
 
 export function MainScreen({
-  tab, onTab, go, chat, draft, phone, menu, focusAfter, issue: issuePreview, issueCps, drawer: drawerOpen = false,
-}: { tab: Tab; onTab: (t: Tab) => void; go: (to: MainRoute) => void; chat?: ChatItem[]; draft?: string; phone?: OfflineChatView; menu?: boolean; focusAfter?: number; issue?: IssueSheetPreview; issueCps?: Counterparty[]; drawer?: boolean }) {
+  tab, onTab, go, chat, draft, phone, menu, focusAfter, issue: issuePreview, issueCps, drawer: drawerOpen = false, customers: customersPreview,
+}: {
+  tab: Tab; onTab: (t: Tab) => void; go: (to: MainRoute) => void; chat?: ChatItem[]; draft?: string; phone?: OfflineChatView; menu?: boolean; focusAfter?: number;
+  issue?: IssueSheetPreview; issueCps?: Counterparty[]; drawer?: boolean; customers?: CustomersPreview;
+}) {
   const p = usePalette();
   const q = useQueue();
   const s = useSession();
+  const customers = useCustomers();
   const [drawer, setDrawer] = useState(drawerOpen);
   const [issueOpen, setIssueOpen] = useState(!!issuePreview);
   const unread = unreadCount(s.data.inbox, s.data.inboxSeenAt);
@@ -45,14 +51,15 @@ export function MainScreen({
     setIssueOpen(true);
   };
   useEffect(() => {
-    if (!q.pickId) return;
-    const cp = [...q.counterparties, ...(s.data.pcCopy ? counterpartiesOf(s.data.pcCopy) : [])].find((c) => c.id === q.pickId);
+    // 거래처 화면에서 등록증을 찍었으면 거래처 화면이 자세히로 연다.
+    if (!q.pickId || tab === 'customers') return;
+    const cp = customers.counterparties.find((c) => c.id === q.pickId);
     if (!cp) return;
     q.clearPick();
     onTab('home');
     q.addCard(issueCard({ cp }, q.prefill));
     q.setPrefill(null);
-  }, [q.pickId]);
+  }, [q.pickId, customers.counterparties, tab]);
   const close = useCallback(() => setDrawer(false), []);
   const pick = (t: Tab) => {
     setDrawer(false);
@@ -68,6 +75,15 @@ export function MainScreen({
       <MoneyScreen go={goMain} />
     ) : tab === 'records' ? (
       <RecordsScreen go={goMain} />
+    ) : tab === 'customers' ? (
+      <CustomersScreen
+        go={goMain}
+        preview={customersPreview}
+        onIssue={(cp) => {
+          onTab('home');
+          q.addCard(issueCard({ cp }));
+        }}
+      />
     ) : tab === 'inbox' ? (
       <InboxScreen
         onQueue={() => go('queue')}
@@ -111,8 +127,11 @@ export function MainScreen({
           }}
           onPick={(pick) => {
             setIssueOpen(false);
-            q.addCard(issueCard(pick, q.prefill));
+            const pre = q.prefill;
             q.setPrefill(null);
+            if (pick.cp) return q.addCard(issueCard(pick, pre));
+            // 처음 적은 거래처는 장부에도 넣는다. 저장하지 못해도 카드는 띄우고, 발급은 등록번호로 간다.
+            void customers.add({ bizNo: pick.bizNo, name: pick.name }).then((id) => q.addCard(issueCard(id ? { cp: { id, name: pick.name.trim(), bizNo: pick.bizNo, issued: 0 } } : pick, pre)));
           }}
           onCapture={() => {
             setIssueOpen(false);

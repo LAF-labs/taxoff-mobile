@@ -75,8 +75,11 @@ export function kstDay(now = Date.now()): string {
   return new Date(now + 9 * 3_600_000).toISOString().slice(0, 10);
 }
 
-export function issueRequest(p: { ref: string; supply: number; item: string; now?: number }): PhoneIssueRequest {
-  return { counterpartyRef: p.ref, supply: p.supply, tax: Math.floor(p.supply / 10), item: p.item.trim(), day: kstDay(p.now) };
+/** 거래처는 PC가 아는 ID(counterpartyRef)나, 폰에서 막 넣어 PC가 아직 모르는 등록번호와 상호(newCounterparty) 둘 중 하나. */
+export type IssueTarget = Pick<PhoneIssueRequest, 'counterpartyRef' | 'newCounterparty'>;
+
+export function issueRequest(p: { target: IssueTarget; supply: number; item: string; now?: number }): PhoneIssueRequest {
+  return { ...p.target, supply: p.supply, tax: Math.floor(p.supply / 10), item: p.item.trim(), day: kstDay(p.now) };
 }
 
 const isReattach = (a: CmdAckBody): boolean => a.state === 'rejected' && a.reason === 'duplicate' && !!a.runId;
