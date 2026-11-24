@@ -27,18 +27,18 @@ export interface ShellValue {
 export const Shell = createContext<ShellValue | null>(null);
 export const useShell = () => useContext(Shell);
 
-/** 뒤 글이 흐리게 비치는 유리 면. iOS 26은 애플 기본 유리(Liquid Glass), 그 전은 흐림 효과. */
+/** 뒤 글이 비치는 유리 면(대표: 좀 투명한 단추). iOS 26은 애플 기본 유리 중 맑은 유리(clear), 그 전은 가장 얇은 흐림. */
 function Glass({ style, children }: { style: StyleProp<ViewStyle>; children: ReactNode }) {
   const dark = useColorScheme() === 'dark';
   if (Platform.OS === 'ios' && isLiquidGlassAvailable()) {
     return (
-      <GlassView glassEffectStyle="regular" isInteractive style={style}>
+      <GlassView glassEffectStyle="clear" isInteractive style={style}>
         {children}
       </GlassView>
     );
   }
   return (
-    <BlurView intensity={60} tint={dark ? 'systemChromeMaterialDark' : 'systemChromeMaterialLight'} style={style}>
+    <BlurView intensity={40} tint={dark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'} style={style}>
       {children}
     </BlurView>
   );
