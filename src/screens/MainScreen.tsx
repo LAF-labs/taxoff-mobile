@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Keyboard, LayoutAnimation, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Keyboard, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ChatItem } from '../chat';
-import { size, space, usePalette } from '../theme';
+import { size, space, useReducedMotion, usePalette } from '../theme';
 import { T, TabInset, TabScroll, tap } from '../ui/kit';
 import type { OfflineChatView } from '../offline/useOfflineChat';
 import { HomeScreen, type HomeRoute, type Todo } from './HomeScreen';
@@ -21,9 +21,18 @@ export type MainRoute = HomeRoute;
 const BAR_H = 60;
 const BAR_LIFT = BAR_H - size.row - space.s2;
 const ICON_STROKE = 1.75;
-/** 이만큼 넘게 내리면 떠 있는 탭바를 이름 없이 아이콘만 남긴 낮은 막대로 줄이고, 올리면 다시 편다. */
+/** 이만큼 넘게 내리면 떠 있는 탭바를 줄이고, 올리면 다시 편다. */
 const MINI_STEP = 24;
-const BAR_MINI_H = 44;
+/**
+ * 줄어든 탭바: iOS 26 사파리 하단바를 시뮬레이터에서 녹화해 잰 값을 따른다(2026-11-24).
+ * 사파리는 내리면 높이 48→32pt(2/3), 화면 아래와 간격 34→14pt, 글자 약 75%, 가운데로 좁아지며 약 0.3초에 바뀐다.
+ */
+const COMPACT = 2 / 3;
+const COMPACT_DROP = 20;
+const COMPACT_ICON = 0.8;
+const COMPACT_W = 3 * 48 + 8;
+const COMPACT_MS = 300;
+const LABEL_H = 14;
 
 const TABS: Array<{ key: Tab; label: string; a11y: string }> = [
   { key: 'home', label: '홈', a11y: '홈, 대화' },
@@ -49,11 +58,7 @@ export function MainScreen({
     if (Math.abs(dy) < MINI_STEP) return;
     lastY.current = y;
     const next = y > MINI_STEP && dy > 0;
-    setMini((m) => {
-      if (m === next) return m;
-      LayoutAnimation.configureNext(LayoutAnimation.create(220, 'easeInEaseOut', 'opacity'));
-      return next;
-    });
+    setMini(next);
   }, []);
   const q = useQueue();
   const s = useSession();
@@ -114,15 +119,41 @@ export function MainScreen({
 function TabBar({ tab, mini, onTab, onHeight }: { tab: Tab; mini: boolean; onTab: (t: Tab) => void; onHeight: (h: number) => void }) {
   const p = usePalette();
   const inset = useSafeAreaInsets();
+  const still = useReducedMotion();
   const dark = p.overlay === p.tint;
+  const [wide, setWide] = useState(0);
+  const k = useRef(new Animated.Value(mini ? 1 : 0)).current;
+  useEffect(() => {
+    const to = mini ? 1 : 0;
+    if (still) return k.setValue(to);
+    Animated.timing(k, { toValue: to, duration: COMPACT_MS, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [mini, still]);
+  const gap = Math.max(inset.bottom - BAR_LIFT, space.s2);
+  // 화면 여백은 늘 펼친 높이로 둔다: 여백이 따라 바뀌면 목록이 밀려 스크롤이 거꾸로 읽히고 탭바가 다시 펴진다.
+  useEffect(() => onHeight(BAR_H + gap), [gap]);
+  const lerp = (a: number, b: number) => k.interpolate({ inputRange: [0, 1], outputRange: [a, b] });
   return (
     <View
-      style={[st.barWrap, { paddingBottom: Math.max(inset.bottom - BAR_LIFT, space.s2) }]}
+      style={[st.barWrap, { paddingBottom: gap }]}
       pointerEvents="box-none"
-      // 줄어든 높이는 화면 여백에 넣지 않는다: 여백이 바뀌면 목록이 밀려 스크롤이 거꾸로 읽히고 탭바가 다시 펴진다.
-      onLayout={(e) => !mini && onHeight(e.nativeEvent.layout.height)}
+      onLayout={(e) => setWide(e.nativeEvent.layout.width - space.s4 * 2)}
     >
-      <View style={[st.bar, mini && st.barMini, { backgroundColor: p.overlay, borderColor: p.line, shadowColor: p.ink }]} accessibilityRole="tablist" testID="tabbar">
+      <Animated.View
+        style={[
+          st.bar,
+          {
+            height: lerp(BAR_H, BAR_H * COMPACT),
+            width: wide ? lerp(wide, COMPACT_W) : '100%',
+            borderRadius: lerp(BAR_H / 2, (BAR_H * COMPACT) / 2),
+            transform: [{ translateY: lerp(0, COMPACT_DROP) }],
+            backgroundColor: p.overlay,
+            borderColor: p.line,
+            shadowColor: p.ink,
+          },
+        ]}
+        accessibilityRole="tablist"
+        testID="tabbar"
+      >
         {TABS.map((t) => {
           const on = t.key === tab;
           const ink = on ? p.ink : p.ink3;
@@ -140,16 +171,18 @@ function TabBar({ tab, mini, onTab, onHeight }: { tab: Tab; mini: boolean; onTab
               }}
               style={({ pressed }) => [st.tab, on && { backgroundColor: dark ? p.sunken : p.tint }, pressed && !on && { opacity: 0.6 }]}
             >
-              <TabIcon kind={t.key} color={ink} />
-              {!mini && (
+              <Animated.View style={{ transform: [{ scale: lerp(1, COMPACT_ICON) }] }}>
+                <TabIcon kind={t.key} color={ink} />
+              </Animated.View>
+              <Animated.View style={{ height: lerp(LABEL_H + 3, 0), opacity: lerp(1, 0), overflow: 'hidden', justifyContent: 'flex-end' }}>
                 <T v="meta" c={on ? 'ink' : 'ink3'} style={on ? st.labelOn : st.label}>
                   {t.label}
                 </T>
-              )}
+              </Animated.View>
             </Pressable>
           );
         })}
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -201,10 +234,9 @@ function useKeyboardShown(): boolean {
 
 const st = StyleSheet.create({
   fill: { flex: 1 },
-  barMini: { height: BAR_MINI_H, borderRadius: BAR_MINI_H / 2 },
-  barWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: space.s4 },
-  bar: { flexDirection: 'row', height: BAR_H, padding: 4, borderRadius: BAR_H / 2, borderWidth: StyleSheet.hairlineWidth, shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
-  tab: { flex: 1, borderRadius: (BAR_H - 8) / 2, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  barWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: space.s4, alignItems: 'center' },
+  bar: { flexDirection: 'row', padding: 4, borderRadius: BAR_H / 2, borderWidth: StyleSheet.hairlineWidth, shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+  tab: { flex: 1, borderRadius: BAR_H / 2, alignItems: 'center', justifyContent: 'center' },
   label: { fontSize: 12, lineHeight: 14, fontWeight: '500' },
   labelOn: { fontSize: 12, lineHeight: 14, fontWeight: '600' },
   icon: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },
