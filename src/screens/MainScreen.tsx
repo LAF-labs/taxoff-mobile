@@ -1,10 +1,10 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import TabView, { useBottomTabBarHeight, type AppleIcon } from 'react-native-bottom-tabs';
-import { Keyboard, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Keyboard, LayoutAnimation, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ChatItem } from '../chat';
 import { size, space, usePalette } from '../theme';
-import { T, TabInset, tap } from '../ui/kit';
+import { T, TabInset, TabScroll, tap } from '../ui/kit';
 import type { OfflineChatView } from '../offline/useOfflineChat';
 import { HomeScreen, type HomeRoute, type Todo } from './HomeScreen';
 import { MoneyScreen } from './MoneyScreen';
@@ -22,6 +22,8 @@ export type MainRoute = HomeRoute;
 const BAR_H = 60;
 const BAR_LIFT = BAR_H - size.row - space.s2;
 const ICON_STROKE = 1.75;
+/** 이만큼 넘게 내리면 떠 있는 탭바를 동그란 단추 하나로 줄이고, 올리면 다시 편다. */
+const MINI_STEP = 24;
 
 /** 아이폰은 애플 기본 탭바(iOS 26이면 유리 탭바)를 쓴다. 다른 곳은 아래의 떠 있는 탭바. */
 const NATIVE_TABS = Platform.OS === 'ios';
@@ -45,6 +47,23 @@ export function MainScreen({
   const kb = useKeyboardShown();
   const p = usePalette();
   const [barH, setBarH] = useState(0);
+  const [mini, setMini] = useState(false);
+  const lastY = useRef(0);
+  useEffect(() => {
+    lastY.current = 0;
+    setMini(false);
+  }, [tab]);
+  const onTabScroll = useCallback((y: number) => {
+    const dy = y - lastY.current;
+    if (Math.abs(dy) < MINI_STEP) return;
+    lastY.current = y;
+    const next = y > MINI_STEP && dy > 0;
+    setMini((m) => {
+      if (m === next) return m;
+      LayoutAnimation.configureNext(LayoutAnimation.create(220, 'easeInEaseOut', 'opacity'));
+      return next;
+    });
+  }, []);
   const q = useQueue();
   const s = useSession();
   const [issueOpen, setIssueOpen] = useState(!!issuePreview);
@@ -79,16 +98,19 @@ export function MainScreen({
             const next = TABS[i]!.key;
             if (next !== tab) onTab(next);
           }}
-          renderScene={({ route }) => <NativeScene above={route.key === 'home'}>{scene(route.key as Tab)}</NativeScene>}
+          renderScene={({ route }) => <NativeScene>{scene(route.key as Tab)}</NativeScene>}
           hapticFeedbackEnabled
+          minimizeBehavior="onScrollDown"
           tabBarActiveTintColor={p.ink}
         />
       ) : (
         <>
           <TabInset.Provider value={kb ? 0 : barH}>
-            <View style={st.fill}>{scene(tab)}</View>
+            <TabScroll.Provider value={onTabScroll}>
+              <View style={st.fill}>{scene(tab)}</View>
+            </TabScroll.Provider>
           </TabInset.Provider>
-          {!kb && <TabBar tab={tab} onTab={onTab} onHeight={setBarH} />}
+          {!kb && <TabBar tab={tab} mini={mini} onTab={onTab} onExpand={() => setMini(false)} onHeight={setBarH} />}
         </>
       )}
       {issueOpen && (
@@ -114,22 +136,18 @@ export function MainScreen({
   );
 }
 
-/**
- * iOS 기본 탭바 안의 화면. 탭바가 내용 위에 떠 있으므로 그 높이를 TabInset으로 넘긴다.
- * 대화(above)는 탭바 위에서 끝낸다: 뒤집힌 대화 목록이 탭바 밑으로 들어가면
- * iOS 26의 스크롤 가장자리 효과가 위아래가 뒤집힌 채 대화 위쪽을 어둡게 덮는다.
- */
-function NativeScene({ above, children }: { above: boolean; children: ReactNode }) {
+/** iOS 기본 탭바 안의 화면. 탭바가 내용 위에 떠 있으므로 그 높이를 TabInset으로 넘긴다. */
+function NativeScene({ children }: { children: ReactNode }) {
   const inset = useSafeAreaInsets();
   const bar = Math.max(useBottomTabBarHeight(), inset.bottom);
   return (
-    <TabInset.Provider value={above ? 0 : bar}>
-      <View style={[st.fill, above && { paddingBottom: bar }]}>{children}</View>
+    <TabInset.Provider value={bar}>
+      <View style={st.fill}>{children}</View>
     </TabInset.Provider>
   );
 }
 
-function TabBar({ tab, onTab, onHeight }: { tab: Tab; onTab: (t: Tab) => void; onHeight: (h: number) => void }) {
+function TabBar({ tab, mini, onTab, onExpand, onHeight }: { tab: Tab; mini: boolean; onTab: (t: Tab) => void; onExpand: () => void; onHeight: (h: number) => void }) {
   const p = usePalette();
   const inset = useSafeAreaInsets();
   const dark = p.overlay === p.tint;
@@ -139,6 +157,20 @@ function TabBar({ tab, onTab, onHeight }: { tab: Tab; onTab: (t: Tab) => void; o
       pointerEvents="box-none"
       onLayout={(e) => onHeight(e.nativeEvent.layout.height)}
     >
+      {mini ? (
+        <Pressable
+          testID="tabbar-mini"
+          accessibilityRole="button"
+          accessibilityLabel={`${TABS.find((t) => t.key === tab)!.a11y}, 탭 펼치기`}
+          onPress={() => {
+            tap();
+            onExpand();
+          }}
+          style={({ pressed }) => [st.bar, st.mini, { backgroundColor: p.overlay, borderColor: p.line, shadowColor: p.ink }, pressed && { opacity: 0.6 }]}
+        >
+          <TabIcon kind={tab} color={p.ink} />
+        </Pressable>
+      ) : (
       <View style={[st.bar, { backgroundColor: p.overlay, borderColor: p.line, shadowColor: p.ink }]} accessibilityRole="tablist" testID="tabbar">
         {TABS.map((t) => {
           const on = t.key === tab;
@@ -165,6 +197,7 @@ function TabBar({ tab, onTab, onHeight }: { tab: Tab; onTab: (t: Tab) => void; o
           );
         })}
       </View>
+      )}
     </View>
   );
 }
@@ -216,6 +249,7 @@ function useKeyboardShown(): boolean {
 
 const st = StyleSheet.create({
   fill: { flex: 1 },
+  mini: { width: BAR_H, alignItems: 'center', justifyContent: 'center' },
   barWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: space.s4 },
   bar: { flexDirection: 'row', height: BAR_H, padding: 4, borderRadius: BAR_H / 2, borderWidth: StyleSheet.hairlineWidth, shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
   tab: { flex: 1, borderRadius: (BAR_H - 8) / 2, alignItems: 'center', justifyContent: 'center', gap: 3 },
