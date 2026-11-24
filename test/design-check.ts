@@ -1,7 +1,7 @@
 // 화면 확정 규칙(docs/design.md "확정 기준 v3.0") 검사.
 // 사용: node test/design-check.ts            어긋난 곳이 기준선보다 늘면 실패
 //       node test/design-check.ts --list     어긋난 곳을 모두 찍는다
-//       node test/design-check.ts --update   기준선을 지금 수로 다시 쓴다(줄였을 때만)
+//       node test/design-check.ts --update   줄었을 때 기준선을 낮춘다(늘었으면 쓰지 않고 실패)
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -136,6 +136,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
   const hits = scan();
   const now = count(hits);
   if (process.argv.includes('--update')) {
+    // 기준선은 줄이기만 한다. 어느 파일이든 늘었으면 쓰지 않고 실패한다.
+    const grown = compare(now, readBaseline()).worse;
+    if (grown.length) {
+      for (const w of grown) process.stderr.write(`어긋남이 늘어 기준선을 쓰지 않았어요. ${w.rule} ${w.file}: ${w.base} → ${w.now}곳\n`);
+      process.exit(1);
+    }
     fs.writeFileSync(BASELINE_PATH, `${JSON.stringify(now, null, 2)}\n`);
     process.stdout.write(`기준선을 다시 썼어요: ${hits.length}곳\n`);
   } else {
