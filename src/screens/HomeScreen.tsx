@@ -25,7 +25,7 @@ import { jpegUri } from '../capture/thumb';
 import { useSession } from '../session';
 import type { PcStatus } from '../net/pc';
 import { MAX_FONT_SCALE, TextSizeContext, radius, size, space, textScale, type, usePalette, useReducedMotion } from '../theme';
-import { Button, Check, Chevron, Pill, Seg, T, ago, success, tap, won, type Tone } from '../ui/kit';
+import { Button, Check, Chevron, Pill, Seg, T, TabDrop, TabInset, TabScroll, ago, success, tap, won, type Tone } from '../ui/kit';
 
 export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'devices' | 'issue' | 'queue' | 'run' | 'doc' | 'bizreg' | 'recv' | 'pay' | 'mark';
 
@@ -131,6 +131,10 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
     return ok;
   };
   const list = useRef<FlatList<ChatItem>>(null);
+  const [barH, setBarH] = useState(0);
+  const tabInset = useContext(TabInset);
+  const tabScroll = useContext(TabScroll);
+  const tabDrop = useContext(TabDrop);
   const y = useRef(0);
   const [endBtn, setEndBtn] = useState<null | 'end' | 'new'>(null);
   const endRef = useRef<null | 'end' | 'new'>(null);
@@ -141,6 +145,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
   };
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     y.current = Math.max(0, e.nativeEvent.contentOffset.y);
+    tabScroll(y.current);
     if (y.current <= FOLLOW_PX) setEnd(null);
     else if (y.current > SHOW_END_PX && endRef.current === null) setEnd('end');
   };
@@ -271,7 +276,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
 
         <View style={st.fill}>
         {!paired || items.length === 0 ? (
-          <ScrollView style={st.fill} contentContainerStyle={[st.chat, !paired && { justifyContent: 'center' }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" testID="chat">
+          <ScrollView style={st.fill} contentContainerStyle={[st.chat, !paired ? { justifyContent: 'center' } : { paddingBottom: space.s4 + barH }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" testID="chat">
             {!paired ? <Intro onPair={() => go('pair')} /> : relink ? <RelinkCard onRelink={() => go('pair')} /> : <Starter phoneAnswers={phoneAnswers} onPick={pick} />}
           </ScrollView>
         ) : (
@@ -283,7 +288,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
             onScrollToIndexFailed={(e) => list.current?.scrollToOffset({ offset: e.averageItemLength * e.index, animated: true })}
             maintainVisibleContentPosition={KEEP_POSITION}
             style={st.fill}
-            contentContainerStyle={st.list}
+            contentContainerStyle={[st.list, { paddingTop: space.s4 + barH }]}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             onScroll={onScroll}
@@ -330,11 +335,16 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
           />
         )}
         <TopFade />
-        {endBtn && <NewReply fresh={endBtn === 'new'} onPress={toEnd} />}
-        </View>
+        {endBtn && (
+          // 탭바·입력창이 내려앉으면 같이 내려간다. 단추 자체의 나타나기는 네이티브 드라이버라 바깥 틀에서 옮긴다.
+          <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { transform: [{ translateY: tabDrop }] }]}>
+            <NewReply fresh={endBtn === 'new'} onPress={toEnd} lift={barH} />
+          </Animated.View>
+        )}
 
         {paired && (
-          <View style={[st.bottom, { borderTopColor: p.line, backgroundColor: p.canvas }]}>
+          <Animated.View style={[st.bottom, { paddingBottom: space.s2 + tabInset, transform: [{ translateY: tabDrop }] }]} onLayout={(e) => setBarH(e.nativeEvent.layout.height)}>
+            <BottomFade />
             {menu && (
               <View style={[st.menu, { backgroundColor: p.tint }]} testID="quick-menu">
                 <MenuRow
@@ -377,23 +387,28 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
                   tap();
                   setMenu((m) => !m);
                 }}
-                style={({ pressed }) => [st.round, { backgroundColor: pressed || menu ? p.sunken : p.tint }]}
+                style={({ pressed }) => [st.round, { backgroundColor: pressed || menu ? p.sunken : p.tint, borderColor: p.line }]}
               >
                 <Plus color={p.ink2} open={menu} />
               </Pressable>
-              <View style={[st.field, { backgroundColor: p.tint }]}>
+              <View style={[st.field, { backgroundColor: p.tint, borderColor: p.line }]}>
                 <TextInput
                   ref={input}
                   testID="chat-input"
                   value={text}
-                  onChangeText={setText}
-                  onFocus={() => setMenu(false)}
+                  onChangeText={(v) => {
+                    setText(v);
+                    if (endRef.current) toEnd();
+                  }}
+                  onFocus={() => {
+                    setMenu(false);
+                    toEnd();
+                  }}
                   placeholder="궁금한 것이나 시킬 일"
                   placeholderTextColor={p.ink3}
                   accessibilityLabel="궁금한 것이나 시킬 일 적기"
                   maxFontSizeMultiplier={MAX_FONT_SCALE}
                   multiline
-                  numberOfLines={1}
                   onSubmitEditing={send}
                   style={[
                     type.body,
@@ -405,8 +420,9 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
                 <SendButton onPress={send} disabled={!text.trim() || offline.busy} />
               </View>
             </View>
-          </View>
+          </Animated.View>
         )}
+        </View>
       </KeyboardAvoidingView>
       {held && (
         <HoldOverlay
@@ -512,6 +528,18 @@ function HoldRow({ icon, label, onPress, testID }: { icon: React.ReactNode; labe
 }
 
 const FADE = Array.from({ length: 10 }, (_, i) => Number(((1 - i / 10) ** 1.6).toFixed(2)));
+function BottomFade() {
+  const p = usePalette();
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {[...FADE].reverse().map((o, i) => (
+        <View key={i} style={{ height: 2, backgroundColor: p.canvas, opacity: o * 0.94 }} />
+      ))}
+      <View style={{ flex: 1, backgroundColor: p.canvas, opacity: 0.94 }} />
+    </View>
+  );
+}
+
 function TopFade() {
   const p = usePalette();
   return (
@@ -523,7 +551,7 @@ function TopFade() {
   );
 }
 
-function NewReply({ fresh, onPress }: { fresh: boolean; onPress: () => void }) {
+function NewReply({ fresh, onPress, lift }: { fresh: boolean; onPress: () => void; lift: number }) {
   const p = usePalette();
   const still = useReducedMotion();
   const a = useRef(new Animated.Value(still ? 1 : 0)).current;
@@ -532,7 +560,7 @@ function NewReply({ fresh, onPress }: { fresh: boolean; onPress: () => void }) {
     Animated.timing(a, { toValue: 1, duration: 160, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
   }, [a, still]);
   return (
-    <Animated.View pointerEvents="box-none" style={[st.newReplyWrap, { opacity: a, transform: [{ translateY: a.interpolate({ inputRange: [0, 1], outputRange: [6, 0] }) }] }]}>
+    <Animated.View pointerEvents="box-none" style={[st.newReplyWrap, { bottom: space.s3 + lift, opacity: a, transform: [{ translateY: a.interpolate({ inputRange: [0, 1], outputRange: [6, 0] }) }] }]}>
       <Pressable
         testID="chat-new-reply"
         accessibilityRole="button"
@@ -1149,11 +1177,11 @@ const st = StyleSheet.create({
   examples: { alignItems: 'flex-start', gap: space.s2 },
   mergedWrap: { alignItems: 'center', paddingVertical: space.s1 },
   merged: { borderRadius: radius.full, paddingHorizontal: space.s3, paddingVertical: space.s1 },
-  bottom: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: space.s4, paddingTop: space.s2, paddingBottom: space.s2, gap: space.s2 },
+  bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: space.s3, paddingTop: space.s2, paddingBottom: space.s2, gap: space.s2 },
   menu: { borderRadius: radius.lg, paddingVertical: space.s1, overflow: 'hidden' },
   menuRow: { minHeight: size.row, flexDirection: 'row', alignItems: 'center', gap: space.s3, paddingHorizontal: space.s4, paddingVertical: space.s2 },
-  round: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
-  field: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', borderRadius: 22, paddingRight: 4, paddingBottom: 4, minHeight: size.hit },
+  round: { width: 44, height: 44, borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
+  field: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, paddingRight: 4, paddingBottom: 4, minHeight: size.hit },
   send: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   chip: { minHeight: size.hit, paddingHorizontal: space.s4, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: space.s2 },
