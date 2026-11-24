@@ -22,6 +22,8 @@ export interface OfflineChatView {
   send(text: string, reply?: ReplyTo | null): Promise<void>;
   react?(id: string, emoji: string | null): Promise<void>;
   retry(noteId: string): Promise<void>;
+  /** 보인 항목을 바꾸거나 더해 남긴다(수정 카드에서 고친 값, 맡긴 표시, 기록 화면에서 연 수정 카드). */
+  update?(item: ChatItem): Promise<void>;
 }
 
 const SEND_FAILED_TEXT = '연결이 잠깐 끊겨서 보내지 못했어요. 다시 보내 주세요.';
@@ -128,6 +130,17 @@ export function useOfflineChat(): OfflineChatView {
     [chat],
   );
 
+  const update = useCallback(
+    async (item: ChatItem) => {
+      if (!chat) return;
+      const swap = (xs: ChatItem[]) => xs.map((x) => (x.id === item.id ? item : x));
+      setLog(swap);
+      setExtra((xs) => (xs.some((x) => x.id === item.id) ? swap(xs) : [...xs, item]));
+      await chat.keep([item]);
+    },
+    [chat],
+  );
+
   const shownIds = new Set(log.map((x) => x.id));
-  return { available: !!chat, items: [...log, ...extra.filter((x) => !shownIds.has(x.id)), ...(pending ? [pending] : [])], busy, chips, openDrafts, screens, send, retry, react };
+  return { available: !!chat, items: [...log, ...extra.filter((x) => !shownIds.has(x.id)), ...(pending ? [pending] : [])], busy, chips, openDrafts, screens, send, retry, react, update };
 }

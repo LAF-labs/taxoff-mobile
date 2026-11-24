@@ -117,6 +117,7 @@ export const PHONE_TOOL_ARGS: { [K in ChatPhoneToolName]: (a: Record<string, unk
   draft_edit: (a) => keysAre(a, ['draft', 'amount', 'vat', 'item', ...EXTRA_KEYS]) && typeof a.draft === 'string' && nullableString(a.amount) && vat(a.vat) && nullableString(a.item) && extraOk(a),
   draft_discard: (a) => keysAre(a, ['draft']) && typeof a.draft === 'string',
   open_screen: (a) => keysAre(a, ['screen']) && (PHONE_SCREENS as readonly unknown[]).includes(a.screen),
+  invoice_amend: (a) => keysAre(a, ['invoice', 'amount', 'vat', 'item', 'date_month_offset', 'date_day', 'counterparty']) && nullableString(a.invoice) && nullableString(a.amount) && vat(a.vat) && nullableString(a.item) && monthOffset(a.date_month_offset) && nullableString(a.date_day) && nullableString(a.counterparty),
 };
 const TOOL_NAMES: ReadonlySet<string> = new Set(CHAT_PHONE_TOOLS.map((t) => t.name));
 

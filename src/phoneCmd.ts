@@ -1,4 +1,5 @@
-import type { CmdAckBody, CmdAckState, CmdRejectReason, GateRequestBody, GateResolvedBody, GateResolvedBy, GateResponseBody, PhoneIssueRequest, RunEventBody, RunPhase, RunResult } from '@sax/remote';
+import type { CmdAckBody, CmdAckState, CmdRejectReason, CmdRunBody, GateRequestBody, GateResolvedBody, GateResolvedBy, GateResponseBody, PhoneAmendRequest, PhoneIssueRequest, RunEventBody, RunPhase, RunResult } from '@sax/remote';
+import { amendCmd, issueCmd } from '../vendor/sax-remote/src/issue.ts';
 import type { PhoneGate } from './approval';
 import type { Job, NeedPcReason } from './queue';
 import { PASS_CARRIERS, STEPS, simpleAppOf, type RunView, type Step } from './run.ts';
@@ -6,6 +7,10 @@ import { PASS_CARRIERS, STEPS, simpleAppOf, type RunView, type Step } from './ru
 export interface PhoneCmd {
   cmdId: string;
   req: PhoneIssueRequest;
+  /** 수정세금계산서(ADR-058 결정 8)면 사장님이 카드에서 고른 사유와 고친 값. 있으면 req 대신 이것을 보낸다(req는 거래처와 날짜 기록용). */
+  amend?: PhoneAmendRequest;
+  /** 진행 카드와 기록에 보일 제목(수정이면 "거래처 세금계산서 고치기"). 없으면 "거래처 세금계산서". */
+  title?: string;
   cpName: string;
   total: number;
   createdAt: number;
@@ -77,6 +82,11 @@ export function kstDay(now = Date.now()): string {
 
 export function issueRequest(p: { ref: string; supply: number; item: string; now?: number }): PhoneIssueRequest {
   return { counterpartyRef: p.ref, supply: p.supply, tax: Math.floor(p.supply / 10), item: p.item.trim(), day: kstDay(p.now) };
+}
+
+/** PC에 보낼 cmd.run 본문(발급 또는 수정). */
+export function cmdBody(c: PhoneCmd): CmdRunBody {
+  return c.amend ? amendCmd(c.cmdId, c.amend) : issueCmd(c.cmdId, c.req);
 }
 
 const isReattach = (a: CmdAckBody): boolean => a.state === 'rejected' && a.reason === 'duplicate' && !!a.runId;
@@ -221,7 +231,7 @@ export function runViewOf(c: PhoneCmd): RunView | null {
           email: null,
           ...(c.result.emailSent === undefined ? {} : { emailSent: c.result.emailSent }),
           issuedAt: c.at ?? Date.now(),
-          doc: { name: `세금계산서_${c.cpName.replace(/\s+/g, '')}_${c.req.day.replace(/-/g, '')}.pdf`, issuedOn: c.req.day, uri: '' },
+          doc: { name: `${c.amend ? '수정세금계산서' : '세금계산서'}_${c.cpName.replace(/\s+/g, '')}_${c.req.day.replace(/-/g, '')}.pdf`, issuedOn: c.req.day, uri: '' },
         },
       };
     case 'stopped':
@@ -259,7 +269,7 @@ export function askSimple(c: PhoneCmd, value: string, app?: string): PhoneCmd {
 }
 
 export function jobOf(c: PhoneCmd): Job {
-  const title = `${c.cpName} 세금계산서`;
+  const title = c.title ?? `${c.cpName} 세금계산서`;
   const base = { id: `cmd-${c.cmdId}`, title, amount: c.total, createdAt: c.createdAt, pcOnly: true };
   if (needsRedate(c)) return { ...base, state: 'phoneWaiting', wait: 'newDay', waitDay: c.req.day };
   if (busyWaiting(c)) return { ...base, state: 'phoneWaiting', wait: 'pcBusy' };

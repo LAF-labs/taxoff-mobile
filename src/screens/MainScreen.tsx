@@ -92,7 +92,7 @@ export function MainScreen({
     ) : t === 'money' ? (
       <MoneyScreen go={goMain} />
     ) : (
-      <RecordsScreen go={goMain} />
+      <RecordsScreen go={goMain} onHome={() => onTab('home')} phone={phone} />
     );
   return (
     <View style={[st.fill, { backgroundColor: p.canvas }]}>

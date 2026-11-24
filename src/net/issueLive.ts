@@ -1,5 +1,5 @@
-import { CAP, issueCmd, type Channel, type CmdAckBody, type GateRequestBody, type GateResolvedBody, type PhoneCopyBody, type RunEventBody } from '@sax/remote';
-import { applyAck, applyEvent, applyGate, applyHumanRequest, applyResolved, busyWaiting, forRetry, markAnswered, responseDue, retryDue, settled, type PhoneCmd } from '../phoneCmd.ts';
+import { CAP, type Channel, type CmdAckBody, type GateRequestBody, type GateResolvedBody, type PhoneCopyBody, type RunEventBody } from '@sax/remote';
+import { applyAck, cmdBody, applyEvent, applyGate, applyHumanRequest, applyResolved, busyWaiting, forRetry, markAnswered, responseDue, retryDue, settled, type PhoneCmd } from '../phoneCmd.ts';
 
 const WATCH_MS = 10 * 60_000;
 const TICK_MS = 2_000;
@@ -29,7 +29,7 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
   const send = async (c: PhoneCmd) => {
     ids.add(c.cmdId);
     try {
-      ch.send('cmd.run', issueCmd(c.cmdId, c.req));
+      ch.send('cmd.run', cmdBody(c));
     } catch {
       await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? { ...x, ack: 'rejected', reason: 'input_invalid' } : x)));
       return;

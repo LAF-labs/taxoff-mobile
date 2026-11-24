@@ -4,7 +4,7 @@ import { APPROVE_CTX, approveMessage, readGate, sheetState, showValue, type Phon
 import type { Job } from '../queue';
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
-import { space, usePalette } from '../theme';
+import { space } from '../theme';
 import { Button, ConfirmSheet, T, success } from '../ui/kit';
 import { approvalKeyFor } from './ApprovalHost';
 
@@ -18,7 +18,6 @@ const ROWS: ReadonlyArray<{ key: string; label: string; strong?: boolean }> = [
 export function CardApprove({ job, gate, onDetail, now: fixedNow }: { job: Job; gate: PhoneGate; onDetail: () => void; now?: number }) {
   const q = useQueue();
   const s = useSession();
-  const p = usePalette();
   const [openedAt] = useState(() => fixedNow ?? Date.now());
   const [now, setNow] = useState(() => fixedNow ?? Date.now());
   const [busy, setBusy] = useState(false);
@@ -48,7 +47,17 @@ export function CardApprove({ job, gate, onDetail, now: fixedNow }: { job: Job; 
 
   return (
     <View style={st.wrap} testID={`card-approve-${job.id}`}>
-      <View style={[st.rows, { borderColor: p.line }]}>
+      <View style={st.rows}>
+        {r.amend && (
+          <View style={st.row} testID="card-approve-amend">
+            <T v="sub" c="ink2">
+              사유
+            </T>
+            <T v="sub" style={st.value} lines={1}>
+              {r.amend.label}
+            </T>
+          </View>
+        )}
         {ROWS.map((x) =>
           r.values[x.key] !== undefined ? (
             <View key={x.key} style={st.row}>
@@ -65,7 +74,6 @@ export function CardApprove({ job, gate, onDetail, now: fixedNow }: { job: Job; 
       {direct ? (
         <>
           <View style={st.buttons}>
-            <Button kind="secondary" small label="거절" onPress={() => setAsking(true)} disabled={busy} style={{ flex: 1 }} testID="card-deny" />
             <Button
               kind="approve"
               small
@@ -74,9 +82,10 @@ export function CardApprove({ job, gate, onDetail, now: fixedNow }: { job: Job; 
               onPress={() => void answer('approve')}
               busy={busy}
               disabled={!state.armed}
-              style={{ flex: 2 }}
+              style={{ flex: 1 }}
               testID="card-approve"
             />
+            <Button kind="secondary" small label="거절" onPress={() => setAsking(true)} disabled={busy} style={{ flex: 1 }} testID="card-deny" />
           </View>
         </>
       ) : (
@@ -106,7 +115,7 @@ export function CardApprove({ job, gate, onDetail, now: fixedNow }: { job: Job; 
 
 const st = StyleSheet.create({
   wrap: { gap: space.s3, paddingTop: space.s1 },
-  rows: { gap: space.s1, paddingTop: space.s2, borderTopWidth: StyleSheet.hairlineWidth },
+  rows: { gap: space.s1, paddingTop: space.s2 },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.s3, minHeight: 28 },
   value: { flex: 1, textAlign: 'right', fontVariant: ['tabular-nums'] },
   buttons: { flexDirection: 'row', alignItems: 'center', gap: space.s2 },

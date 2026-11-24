@@ -18,6 +18,8 @@ const light = {
   onAccent: '#FFFFFF',
   attention: '#8A5A0B',
   attentionSoft: '#FBF3E4',
+  /** 취소 아이콘(동그라미 X)에만 쓴다(v3.0 확정 기준). 글자, 면, 단추에는 쓰지 않는다. */
+  danger: '#D92D20',
   scrim: '#11111233',
   dim: '#11111280',
   bubbleMe: '#CBE5FF',
@@ -47,6 +49,7 @@ const dark: typeof light = {
   onAccent: '#0B1226',
   attention: '#E0AE55',
   attentionSoft: '#2E2410',
+  danger: '#FF6B5E',
   scrim: '#00000080',
   dim: '#000000B8',
   bubbleMe: '#0074E8',
@@ -63,7 +66,7 @@ export type Palette = typeof light;
 export type Ink = 'ink' | 'ink2' | 'ink3' | 'ink4' | 'onInk' | 'accent' | 'attention' | 'onCamera';
 
 export const space = { s0: 2, s1: 4, s2: 8, s3: 12, s4: 16, s5: 20, s6: 28, s7: 40 } as const;
-export const radius = { sm: 8, md: 12, lg: 16, xl: 22, full: 9999 } as const;
+export const radius = { xs: 3, sm: 8, md: 12, lg: 16, xl: 22, full: 9999 } as const;
 export const size = { hit: 44, row: 52, button: 52, buttonSm: 40, header: 48 } as const;
 
 const tnum = ['tabular-nums' as const];

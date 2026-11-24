@@ -1,5 +1,5 @@
 import {
-  CAP, QUEUE, flushOutbox, fromB64, issueCmd, monotonicClock, openMobileSession, queueCmd, queueLeave, queueOutbox, relayOrigin, relayQueue, softNoiseStatic, softSigner, verifyQBundle,
+  CAP, QUEUE, flushOutbox, fromB64, monotonicClock, openMobileSession, queueCmd, queueLeave, queueOutbox, relayOrigin, relayQueue, softNoiseStatic, softSigner, verifyQBundle,
   wsRelayClient, VM_PURPOSES, type FlushResult, type Link, type PhoneCopyBody, type QueueSendResult, type WebSocketLike,
 } from '@sax/remote';
 import { APP_VERSION, DEV_RELAY_HOST, DEV_STACK, PUBLIC_ORIGIN } from '../config';
@@ -9,7 +9,7 @@ import type { FileOutbox } from '../storage/outbox';
 import type { AppData } from '../storage/state';
 import { PHONE_CAPS, newerCopy, receiveCopy } from './pcCopy';
 import { driveCmds, trimCmds } from './issueLive';
-import { cmdsToQueue } from '../phoneCmd';
+import { cmdBody, cmdsToQueue } from '../phoneCmd';
 import { enrollPx } from './pxLive';
 import type { PxDevice } from '../approvalKey';
 import { replaying, tapping } from './hold';
@@ -257,7 +257,7 @@ async function viaQueue(d: SyncDeps, pair: Pair): Promise<SyncResult> {
     let next = start;
     const send = { queue: q, pairId: pair.pairId, vm, bundle, mbxEpoch: pair.mbxEpoch, nextSeq: () => ++next };
     const cmdsQueued: string[] = [];
-    for (const c of cmds) if ((await queueCmd(issueCmd(c.cmdId, c.req), send).catch(() => 'failed' as const)) === 'ok') cmdsQueued.push(c.cmdId);
+    for (const c of cmds) if ((await queueCmd(cmdBody(c), send).catch(() => 'failed' as const)) === 'ok') cmdsQueued.push(c.cmdId);
     if (cmdsQueued.length) {
       const at = Date.now();
       const done = new Set(cmdsQueued);

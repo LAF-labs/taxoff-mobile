@@ -3,7 +3,7 @@ import type { PhoneCopy } from '@sax/chat-core';
 import type { Counterparty } from '../issue.ts';
 import { phoneCopyFrom } from '../offline/copy.ts';
 
-export const PHONE_CAPS: readonly string[] = [CAP.copy, CAP.issue, CAP.sync, CAP.issued];
+export const PHONE_CAPS: readonly string[] = [CAP.copy, CAP.issue, CAP.sync, CAP.issued, CAP.amend];
 
 const COPY_WAIT_MS = 2000;
 const DAY = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
@@ -41,6 +41,21 @@ export function counterpartiesOf(body: PhoneCopyBody): Counterparty[] {
 export function chatCopyOf(body: PhoneCopyBody | null | undefined): PhoneCopy | null {
   if (!body) return null;
   const copy = phoneCopyFrom({ asOf: body.asOf, profile: null, counterparties: counterpartiesOf(body), receivables: null });
-  const issued = body.issued?.map((r) => ({ counterpartyId: r.ref ?? null, counterparty: r.name, date: r.day, total: r.total, approvalNo: null }));
+  const issued = body.issued?.map((r) => {
+    const signed = typeof r.supply === 'number' && typeof r.tax === 'number';
+    return {
+      counterpartyId: r.ref ?? null,
+      counterparty: r.name,
+      date: r.day,
+      total: r.total ?? (signed ? r.supply! + r.tax! : null),
+      approvalNo: r.approvalNo ?? null,
+      // 수정세금계산서(ADR-058)에 쓰는 값: PC가 amend.v1 사본으로 넘길 때만 있다
+      ...(signed ? { supply: r.supply!, tax: r.tax! } : {}),
+      ...(r.item ? { item: r.item } : {}),
+      ...(r.wrtDay ? { issueDate: r.wrtDay } : {}),
+      ...(r.amendOf ? { amendOf: r.amendOf } : {}),
+      ...(r.amendState || r.adjSupply || r.adjTax ? { amend: { cancelled: r.amendState === 'cancelled', replaced: r.amendState === 'replaced', adjusted: { supply: r.adjSupply ?? 0, tax: r.adjTax ?? 0 } } } : {}),
+    };
+  });
   return { ...copy, counterparties: copy.counterparties.map((c) => ({ ...c, bizNo: c.bizNo || null })), ...(issued ? { issued, sales: issued } : {}) };
 }
