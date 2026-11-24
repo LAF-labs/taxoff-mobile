@@ -6,6 +6,7 @@ import type { OfflineChatView } from '../offline/useOfflineChat';
 import { HomeScreen, PcPill, type HomeRoute } from './HomeScreen';
 import { MoneyScreen } from './MoneyScreen';
 import { RecordsScreen } from './RecordsScreen';
+import { DocsScreen, type DocsPreview } from './DocsScreen';
 import { InboxScreen } from './InboxScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { IssueSheet, issueCard, type IssueSheetPreview } from './IssueSheet';
@@ -20,18 +21,19 @@ import { Drawer, NavGap, NavPush, NavRow } from '../ui/drawer';
 import { Glyph, type GlyphKind } from '../ui/glyph';
 
 /** 더보기 메뉴로 오가는 맨 위 화면. 아래 탭바는 없다(2026-11-24 대표). */
-export type Tab = 'home' | 'money' | 'records' | 'inbox' | 'settings';
+export type Tab = 'home' | 'money' | 'records' | 'docs' | 'inbox' | 'settings';
 export type MainRoute = HomeRoute;
 
 const NAV: Array<{ key: Tab; label: string; icon: GlyphKind }> = [
   { key: 'home', label: '대화', icon: 'chat' },
   { key: 'money', label: '돈', icon: 'money' },
   { key: 'records', label: '발급 기록', icon: 'doc' },
+  { key: 'docs', label: '문서함', icon: 'folder' },
 ];
 
 export function MainScreen({
-  tab, onTab, go, chat, draft, phone, menu, focusAfter, issue: issuePreview, issueCps, drawer: drawerOpen = false,
-}: { tab: Tab; onTab: (t: Tab) => void; go: (to: MainRoute) => void; chat?: ChatItem[]; draft?: string; phone?: OfflineChatView; menu?: boolean; focusAfter?: number; issue?: IssueSheetPreview; issueCps?: Counterparty[]; drawer?: boolean }) {
+  tab, onTab, go, chat, draft, phone, menu, focusAfter, issue: issuePreview, issueCps, drawer: drawerOpen = false, docs,
+}: { docs?: DocsPreview; tab: Tab; onTab: (t: Tab) => void; go: (to: MainRoute) => void; chat?: ChatItem[]; draft?: string; phone?: OfflineChatView; menu?: boolean; focusAfter?: number; issue?: IssueSheetPreview; issueCps?: Counterparty[]; drawer?: boolean }) {
   const p = usePalette();
   const q = useQueue();
   const s = useSession();
@@ -68,6 +70,8 @@ export function MainScreen({
       <MoneyScreen go={goMain} />
     ) : tab === 'records' ? (
       <RecordsScreen go={goMain} />
+    ) : tab === 'docs' ? (
+      <DocsScreen preview={docs} />
     ) : tab === 'inbox' ? (
       <InboxScreen
         onQueue={() => go('queue')}

@@ -6,8 +6,12 @@ import Vision
 import UIKit
 import Security
 import LocalAuthentication
+import QuickLook
 
 public class SaxNativeModule: Module {
+  // 지금 띄운 미리보기. 닫힐 때까지 데이터 소스를 붙잡아 둔다(QLPreviewController는 약하게 잡는다).
+  private var preview: PdfPreview?
+
   public func definition() -> ModuleDefinition {
     Name("SaxNative")
 
@@ -179,6 +183,29 @@ public class SaxNativeModule: Module {
       SecItemDelete(q as CFDictionary)
     }
 
+    // 문서함(ADR-064): 받은 PDF를 애플 기본 미리보기(QLPreviewController)로 띄운다. 공유와 파일에 저장은 미리보기 도구 막대가 맡는다.
+    // 닫히면(완료, 아래로 끌기) 끝난다. 파일 내용과 이름은 로그에 남기지 않는다.
+    AsyncFunction("previewFile") { (uri: String, title: String, promise: Promise) in
+      guard let url = URL(string: uri), url.isFileURL, FileManager.default.fileExists(atPath: url.path) else {
+        promise.reject(SaxError.badUri)
+        return
+      }
+      guard self.preview == nil, let top = self.appContext?.utilities?.currentViewController() else {
+        promise.reject(SaxError.noView)
+        return
+      }
+      let p = PdfPreview(url: url, title: title)
+      p.onDone = { [weak self] in
+        self?.preview = nil
+        promise.resolve(nil)
+      }
+      self.preview = p
+      let qc = QLPreviewController()
+      qc.dataSource = p
+      qc.delegate = p
+      top.present(qc, animated: true)
+    }.runOnQueue(.main)
+
     // SP-1 진단: 항목 정책 이름만(값 없음)
     Function("vaultPolicy") { () -> [String: String] in
       ["accessible": "WHEN_PASSCODE_SET_THIS_DEVICE_ONLY", "auth": "userPresence"]
@@ -216,6 +243,30 @@ private func pxPub(_ key: SecKey) throws -> String {
 
 enum SaxError: Error {
   case badUri
+  case noView
+}
+
+final class PreviewItem: NSObject, QLPreviewItem {
+  let previewItemURL: URL?
+  let previewItemTitle: String?
+  init(url: URL, title: String) {
+    previewItemURL = url
+    previewItemTitle = title
+  }
+}
+
+final class PdfPreview: NSObject, QLPreviewControllerDataSource, QLPreviewControllerDelegate {
+  let item: PreviewItem
+  var onDone: (() -> Void)?
+  init(url: URL, title: String) {
+    item = PreviewItem(url: url, title: title)
+  }
+  func numberOfPreviewItems(in controller: QLPreviewController) -> Int { 1 }
+  func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem { item }
+  func previewControllerDidDismiss(_ controller: QLPreviewController) {
+    onDone?()
+    onDone = nil
+  }
 }
 
 private func inspect(_ url: URL) throws -> [String: Any] {

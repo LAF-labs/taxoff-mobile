@@ -5,9 +5,10 @@ import { radius, usePalette } from '../theme';
 /**
  * 알림 줄 앞의 종류 아이콘(18pt 선 그림). 대화 카드의 종류 아이콘과 같은 뜻을 쓴다:
  * 발급됨은 동그라미 체크, 멈춤은 동그라미 느낌표, 내 차례와 확인 필요는 세모, 승인 기다림은 문서, 돈은 지폐, 목록은 줄 셋.
- * 더보기 메뉴는 같은 그림을 22로 키워 쓴다(대화 말풍선, 알림 종, 설정 조절 막대).
+ * 더보기 메뉴는 같은 그림을 22로 키워 쓴다(대화 말풍선, 알림 종, 설정 조절 막대, 문서함 폴더).
+ * 문서함 줄은 종류마다 문서 속을 바꾼다: 세금계산서는 두 줄(doc), 증명서는 체크(cert), 그 밖은 한 줄(paper). 찾기 칸은 돋보기(search).
  */
-export type GlyphKind = 'done' | 'stop' | 'attention' | 'doc' | 'money' | 'list' | 'chat' | 'bell' | 'settings';
+export type GlyphKind = 'done' | 'stop' | 'attention' | 'doc' | 'cert' | 'paper' | 'money' | 'list' | 'chat' | 'bell' | 'settings' | 'folder' | 'search';
 
 const W = 1.75;
 
@@ -62,6 +63,40 @@ function Base({ kind, color }: { kind: GlyphKind; color: string }): ReactNode {
           <View style={[st.docLine, fill]} />
           <View style={[st.docLine, fill]} />
         </View>
+      </View>
+    );
+  }
+  if (kind === 'cert') {
+    return (
+      <View style={st.box} aria-hidden>
+        <View style={[st.doc, line]}>
+          <View style={[st.check, st.docCheck, { borderColor: color }]} />
+        </View>
+      </View>
+    );
+  }
+  if (kind === 'paper') {
+    return (
+      <View style={st.box} aria-hidden>
+        <View style={[st.doc, line]}>
+          <View style={[st.docLine, fill]} />
+        </View>
+      </View>
+    );
+  }
+  if (kind === 'folder') {
+    return (
+      <View style={[st.box, st.folder]} aria-hidden>
+        <View style={[st.folderTab, line]} />
+        <View style={[st.folderBody, line]} />
+      </View>
+    );
+  }
+  if (kind === 'search') {
+    return (
+      <View style={st.box} aria-hidden>
+        <View style={[st.lens, line]} />
+        <View style={[st.handle, fill]} />
       </View>
     );
   }
@@ -127,6 +162,12 @@ const st = StyleSheet.create({
   triDot: { position: 'absolute', left: 9 - W / 2, top: 12.5, width: W, height: W, borderRadius: radius.full },
   doc: { width: 13, height: 17, borderRadius: radius.sm / 3, alignItems: 'center', justifyContent: 'center', gap: 2.5, paddingTop: 2 },
   docLine: { width: 6, height: W, borderRadius: radius.full },
+  docCheck: { width: 6, height: 3.5, marginTop: 0 },
+  folder: { justifyContent: 'flex-end', paddingBottom: 1.5 },
+  folderTab: { position: 'absolute', left: 1, top: 2, width: 7, height: 4, borderTopLeftRadius: radius.sm / 4, borderTopRightRadius: radius.sm / 4, borderBottomWidth: 0 },
+  folderBody: { width: 17, height: 11.5, borderRadius: radius.sm / 3 },
+  lens: { position: 'absolute', left: 1.5, top: 1.5, width: 12, height: 12, borderRadius: radius.full },
+  handle: { position: 'absolute', left: 13, top: 11.2, width: W, height: 6, borderRadius: radius.full, transform: [{ rotate: '-45deg' }] },
   bill: { width: 18, height: 12, borderRadius: radius.sm / 3, alignItems: 'center', justifyContent: 'center' },
   coin: { width: 6, height: 6, borderRadius: radius.full },
   bubble: { width: 16, height: 12.5, borderRadius: radius.sm / 2, marginBottom: 2.5 },

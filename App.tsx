@@ -10,6 +10,7 @@ import { clearDeviceToken } from './src/net/devauth';
 import { closeOfflineChat } from './src/offline/device';
 import { ensureFreshInstall, forget, markOnboarded, type DeviceKeys } from './src/keyring';
 import { sweepCaptureTemps } from './src/storage/files';
+import { sweepTemps as sweepDocTemps } from './src/docs/box';
 import { CaptureScreen } from './src/screens/CaptureScreen';
 import { CashScreen } from './src/screens/CashScreen';
 import { ConnectionScreen } from './src/screens/ConnectionScreen';
@@ -60,6 +61,7 @@ export default function App() {
 
   useEffect(() => {
     sweepCaptureTemps();
+    sweepDocTemps();
     ensureFreshInstall().then(setBoot, () => setBootErr(true));
   }, []);
 

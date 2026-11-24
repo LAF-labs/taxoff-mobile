@@ -1,11 +1,12 @@
 import * as Haptics from 'expo-haptics';
 import { useContext, useEffect, useRef, type ReactNode } from 'react';
 import {
-  ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View,
+  ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
   type AccessibilityRole, type StyleProp, type TextStyle, type ViewStyle,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ShellTop, TOP_SPACE } from './float';
+import { Glyph } from './glyph';
 import { MAX_FONT_SCALE, TextSizeContext, motion, radius, size, space, textScale, type, useReducedMotion, usePalette, type Ink, type TypeName } from '../theme';
 
 const keepAll = { wordBreak: 'keep-all', overflowWrap: 'anywhere' } as unknown as TextStyle;
@@ -169,14 +170,20 @@ export function Group({ children, title, note, style, testID }: { children: Reac
 }
 
 export function Row({
-  label, value, sub, onPress, chevron, testID, valueInk = 'ink2', strong, accessory, subInk = 'ink3', icon,
-}: { label: string; value?: ReactNode; sub?: string; onPress?: () => void; chevron?: boolean; testID?: string; valueInk?: Ink; strong?: boolean; accessory?: ReactNode; subInk?: Ink; icon?: ReactNode }) {
+  label, value, sub, onPress, chevron, testID, valueInk = 'ink2', strong, accessory, subInk = 'ink3', icon, active, lines,
+}: {
+  label: string; value?: ReactNode; sub?: string; onPress?: () => void; chevron?: boolean; testID?: string; valueInk?: Ink; strong?: boolean; accessory?: ReactNode; subInk?: Ink; icon?: ReactNode;
+  /** 누른 뒤 일이 끝날 때까지(문서 받는 중) 줄에 눌린 면을 남긴다. */
+  active?: boolean;
+  /** 이름이 길면 줄 수를 묶는다. */
+  lines?: number;
+}) {
   const p = usePalette();
   const body = (
     <>
       {icon}
       <View style={{ flex: 1, gap: 2 }}>
-        <T v={strong ? 'strong' : 'body'}>{label}</T>
+        <T v={strong ? 'strong' : 'body'} lines={lines}>{label}</T>
         {sub && <T v="meta" c={subInk}>{sub}</T>}
       </View>
       {value !== undefined && (typeof value === 'string' ? <T v="value" c={valueInk} lines={1} style={{ flexShrink: 1, textAlign: 'right' }}>{value}</T> : value)}
@@ -186,9 +193,54 @@ export function Row({
   );
   if (!onPress) return <View style={st.row} testID={testID}>{body}</View>;
   return (
-    <Pressable testID={testID} accessibilityRole="button" onPress={onPress} style={({ pressed }) => [st.row, pressed && { backgroundColor: p.sunken }]}>
+    <Pressable testID={testID} accessibilityRole="button" accessibilityState={{ busy: !!active }} onPress={onPress} style={({ pressed }) => [st.row, (pressed || active) && { backgroundColor: p.sunken }]}>
       {body}
     </Pressable>
+  );
+}
+
+/** 도는 고리: 줄 끝 꺾쇠 자리에서 받는 중을 보인다. 움직임 줄이기를 켜면 멈춘 고리다. */
+export function Ring({ label, testID }: { label: string; testID?: string }) {
+  const p = usePalette();
+  const still = useReducedMotion();
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (still) return;
+    const a = Animated.loop(Animated.timing(v, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: true }));
+    a.start();
+    return () => a.stop();
+  }, [still]);
+  const rotate = v.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  return (
+    <View accessible accessibilityRole="progressbar" accessibilityLabel={label} testID={testID} style={st.ringBox}>
+      <View style={[st.ring, { borderColor: p.sunken }]} />
+      <Animated.View style={[st.ring, StyleSheet.absoluteFill, { borderColor: 'transparent', borderTopColor: p.ink2, borderRightColor: p.ink2, transform: [{ rotate }] }]} />
+    </View>
+  );
+}
+
+/** 목록 위 찾기 칸: 테두리 없는 채움 면 한 줄, 앞에 돋보기. 지우기는 iOS 기본 지우기 단추. */
+export function SearchField({ value, onChange, placeholder, testID }: { value: string; onChange: (v: string) => void; placeholder: string; testID?: string }) {
+  const p = usePalette();
+  const base = type.body;
+  return (
+    <View style={[st.search, { backgroundColor: p.tint }]}>
+      <Glyph kind="search" color={p.ink3} />
+      <TextInput
+        testID={testID}
+        value={value}
+        onChangeText={onChange}
+        placeholder={placeholder}
+        placeholderTextColor={p.ink3}
+        accessibilityLabel={placeholder}
+        returnKeyType="search"
+        clearButtonMode="while-editing"
+        autoCorrect={false}
+        maxLength={60}
+        maxFontSizeMultiplier={MAX_FONT_SCALE}
+        style={[st.searchInput, { fontSize: base.fontSize * textScale.web, color: p.ink }]}
+      />
+    </View>
   );
 }
 
@@ -365,10 +417,11 @@ export function Pill({ label, onPress, testID, quiet }: { label: string; onPress
   );
 }
 
-export function Empty({ title, sub, action, testID }: { title: string; sub?: string; action?: ReactNode; testID?: string }) {
+export function Empty({ title, sub, action, testID, icon }: { title: string; sub?: string; action?: ReactNode; testID?: string; icon?: ReactNode }) {
   return (
     <View style={st.empty} testID={testID}>
       <View style={{ gap: space.s2, alignItems: 'center' }}>
+        {icon}
         <T v="strong" center>
           {title}
         </T>
@@ -418,6 +471,10 @@ export const st = StyleSheet.create({
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: space.s5, paddingHorizontal: space.s3, paddingBottom: space.s7 },
   notice: { borderRadius: radius.md, paddingVertical: space.s3, paddingHorizontal: space.s4 },
   reply: { minHeight: size.row, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: space.s4, paddingVertical: space.s3, flexDirection: 'row', alignItems: 'center', gap: space.s3 },
+  ringBox: { width: 18, height: 18 },
+  ring: { width: 18, height: 18, borderRadius: radius.full, borderWidth: 2.2 },
+  search: { flexDirection: 'row', alignItems: 'center', gap: space.s2, minHeight: size.hit, paddingLeft: space.s3 + 2, paddingRight: space.s2, borderRadius: radius.md },
+  searchInput: { flex: 1, minHeight: size.hit, paddingVertical: 0 },
   seg: { flexDirection: 'row', borderRadius: radius.md, padding: 3 },
   segItem: { flex: 1, minHeight: 38, borderRadius: radius.sm + 1, alignItems: 'center', justifyContent: 'center' },
 });
