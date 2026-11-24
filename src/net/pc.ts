@@ -2,7 +2,7 @@ import {
   CAP, QUEUE, flushOutbox, fromB64, issueCmd, monotonicClock, openMobileSession, queueCmd, queueLeave, queueOutbox, relayOrigin, relayQueue, softNoiseStatic, softSigner, verifyQBundle,
   wsRelayClient, VM_PURPOSES, type FlushResult, type Link, type PhoneCopyBody, type QueueSendResult, type WebSocketLike,
 } from '@sax/remote';
-import { APP_VERSION, DEV_RELAY_HOST, DEV_STACK, RECONNECT_MS } from '../config';
+import { APP_VERSION, DEV_RELAY_HOST, DEV_STACK, PUBLIC_ORIGIN, RECONNECT_MS } from '../config';
 import { deviceAuthFor, fetchJson, type Htm } from './devauth';
 import type { DeviceKeys } from '../keyring';
 import type { FileOutbox } from '../storage/outbox';
@@ -68,7 +68,8 @@ function waitPeer(link: Link, ms: number): Promise<boolean> {
 export async function syncWithPc(d: SyncDeps): Promise<SyncResult> {
   const pair = d.data().pair;
   if (!pair) return { status: 'unpaired' };
-  const live = await viaLive(d, pair);
+  // 붙잡아 둔 연결로 PC가 없는 줄 이미 알면 3초 기다리지 않고 바로 큐에 맡긴다(맡기고 곧장 앱을 닫아도 가게).
+  const live = pcAway() ? { why: whyCode('peer', 'away') } : await viaLive(d, pair);
   if ('status' in live) return live;
   if (d.alive && !d.alive()) return { status: 'offline', why: live.why };
   const q = await viaQueue(d, pair);
@@ -90,6 +91,7 @@ function joinMailbox(relay: ReturnType<typeof relayFor>, pair: Pair): Promise<Li
 /** PC가 우편함에 들어오고 나가는 것. 'lost'는 붙잡아 둔 연결 자체가 끊긴 것이다. */
 export type Presence = 'up' | 'down' | 'lost';
 let held: Link | null = null;
+let heldDown = false;
 let presence: ((p: Presence) => void) | null = null;
 
 /** 앱을 연 동안 우편함 연결을 붙잡아 두고, PC가 켜지고 꺼지는 것을 바로 알린다. */
@@ -97,19 +99,24 @@ export function onPresence(cb: ((p: Presence) => void) | null): void {
   presence = cb;
 }
 
+/** 붙잡아 둔 연결이 열려 있고 그 너머에 PC가 없다. */
+export function pcAway(): boolean {
+  return !!held && !held.closed && heldDown;
+}
+
 function hold(link: Link, afterSync: boolean): boolean {
   dropHeld();
   held = link;
-  let online = false;
+  heldDown = true;
   let joining = afterSync;
   link.onPeerGone?.(() => {
-    if (held !== link || !online) return;
-    online = false;
+    if (held !== link || heldDown) return;
+    heldDown = true;
     presence?.('down');
   });
   link.onPeer(() => {
-    if (held !== link || online) return;
-    online = true;
+    if (held !== link || !heldDown) return;
+    heldDown = false;
     if (!joining) presence?.('up');
   });
   joining = false;
@@ -118,7 +125,7 @@ function hold(link: Link, afterSync: boolean): boolean {
     held = null;
     presence?.('lost');
   });
-  return online;
+  return !heldDown;
 }
 
 function dropHeld(): void {
@@ -250,7 +257,7 @@ export async function leavePc(d: Pick<SyncDeps, 'keys' | 'data' | 'update'>, pai
   try {
     const q = relayQueue({
       http: fetchJson,
-      origin: relayOrigin(pair.relayHost, DEV_STACK && pair.relayHost === DEV_RELAY_HOST),
+      origin: queueOrigin(pair),
       mbxId: fromB64(pair.mbxId),
       tok: { read: fromB64(pair.tokRead), write: fromB64(pair.tokWrite) },
       deviceAuth: deviceAuthFor(pair.pairId, pair.cert, d.keys.vm),
@@ -268,10 +275,18 @@ export async function leavePc(d: Pick<SyncDeps, 'keys' | 'data' | 'update'>, pai
   }
 }
 
+/**
+ * 큐(HTTPS)는 실시간 연결(WSS) 호스트가 아니라 공개 주소로 부른다. 릴레이는 HTTPS 기기 확인을 공개 주소로만 받아서,
+ * rooms 호스트로 부르면 401(queue.bundle_401)로 막혀 PC가 꺼져 있을 때 아무것도 맡기지 못했다(11-23 실기기).
+ */
+function queueOrigin(pair: Pair): string {
+  return DEV_STACK && pair.relayHost === DEV_RELAY_HOST ? relayOrigin(pair.relayHost, true) : PUBLIC_ORIGIN;
+}
+
 async function viaQueue(d: SyncDeps, pair: Pair): Promise<SyncResult> {
   const vm = softSigner(d.keys.vm, VM_PURPOSES);
   try {
-    const origin = relayOrigin(pair.relayHost, DEV_STACK && pair.relayHost === DEV_RELAY_HOST);
+    const origin = queueOrigin(pair);
     const q = relayQueue({
       http: fetchJson,
       origin,

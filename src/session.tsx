@@ -77,8 +77,13 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
   const refreshPending = useCallback(async () => setPending(await outbox.counts()), [outbox]);
 
   const sync = useCallback(async () => {
-    if (busy.current || !dataRef.current.pair) {
-      if (!dataRef.current.pair) setPc('unpaired');
+    if (!dataRef.current.pair) {
+      setPc('unpaired');
+      return;
+    }
+    if (busy.current) {
+      // 도는 중에 새로 맡긴 것이 생기면 끝난 뒤 한 번 더 돈다(버리지 않는다).
+      retryAfterSync.current ??= NET_SETTLE_MS;
       return;
     }
     busy.current = true;

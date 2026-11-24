@@ -60,15 +60,14 @@ export function Screen({
       {}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={footer && Platform.OS === 'ios' ? 'padding' : undefined} enabled={!!footer}>
       {scroll ? (
-        <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets={!footer}>
+        <ScrollView contentContainerStyle={[st.content, !footer && !tabbed && { paddingBottom: space.s6 + inset.bottom }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets={!footer}>
           {children}
         </ScrollView>
       ) : (
-        <View style={[st.content, { flex: 1 }]}>{children}</View>
+        <View style={[st.content, { flex: 1 }, !footer && !tabbed && { paddingBottom: space.s6 + inset.bottom }]}>{children}</View>
       )}
       {footer && <View style={[st.footer, { paddingBottom: tabbed ? space.s3 : Math.max(inset.bottom, space.s4), backgroundColor: p.canvas, borderTopColor: p.line }]}>{footer}</View>}
       </KeyboardAvoidingView>
-      {!footer && !tabbed && <View style={{ height: inset.bottom }} />}
     </SafeAreaView>
   );
 }

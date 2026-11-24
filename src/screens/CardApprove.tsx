@@ -36,7 +36,8 @@ export function CardApprove({ job, gate, onDetail, now: fixedNow }: { job: Job; 
   const answer = async (decision: 'approve' | 'deny') => {
     setBusy(true);
     try {
-      const signed = await key.sign(APPROVE_CTX, approveMessage(s.data.pair?.pairId ?? '', gate.reqId, gate.challenge, gate.actionHash, decision));
+      // 거절은 일을 멈추기만 해서 Face ID를 묻지 않는다(PC는 서명 없는 거절을 받는다).
+      const signed = decision === 'deny' ? { sig: '' } : await key.sign(APPROVE_CTX, approveMessage(s.data.pair?.pairId ?? '', gate.reqId, gate.challenge, gate.actionHash, decision));
       if (!signed) return;
       if (decision === 'approve') success();
       q.decide(job.id, decision, { reqId: gate.reqId, actionHash: gate.actionHash, sig: signed.sig });

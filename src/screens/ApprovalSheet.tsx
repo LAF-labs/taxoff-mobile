@@ -79,7 +79,8 @@ export function ApprovalSheet({
   const answer = async (decision: 'approve' | 'deny') => {
     setBusy(true);
     try {
-      const signed = await approvalKey.sign(APPROVE_CTX, approveMessage(pairId, gate.reqId, gate.challenge, gate.actionHash, decision));
+      // 거절은 일을 멈추기만 해서 Face ID를 묻지 않는다(PC는 서명 없는 거절을 받는다).
+      const signed = decision === 'deny' ? { sigAlg: 'p256' as const, sig: '' } : await approvalKey.sign(APPROVE_CTX, approveMessage(pairId, gate.reqId, gate.challenge, gate.actionHash, decision));
       if (!signed) return;
       if (decision === 'approve') success();
       onAnswer({ reqId: gate.reqId, decision, actionHash: gate.actionHash, ...signed });
