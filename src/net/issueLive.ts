@@ -1,4 +1,4 @@
-import { CAP, issueCmd, type Channel, type CmdAckBody, type GateRequestBody, type GateResolvedBody, type PhoneCopyBody, type RunEventBody } from '@sax/remote';
+import { CAP, issueCmd, type Channel, type CmdAckBody, type Envelope, type GateRequestBody, type GateResolvedBody, type PhoneCopyBody, type RunEventBody } from '@sax/remote';
 import { applyAck, applyEvent, applyGate, applyHumanRequest, applyResolved, busyWaiting, forRetry, markAnswered, responseDue, retryDue, settled, type PhoneCmd } from '../phoneCmd.ts';
 
 const WATCH_MS = 10 * 60_000;
@@ -116,25 +116,29 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
     if (left <= 0) return 'timeout';
     const waiting = approves && io.cmds().some((c) => !!c.gate || (!!c.answer && !c.answer.sentAt) || !!c.refresh);
     const e = await ch.recv(Math.min(left, waiting ? GATE_TICK_MS : TICK_MS));
-    if (!e) continue;
-    if (e.type === 'cmd.ack') {
-      const a = e.body as CmdAckBody;
-      await io.save((cs) => cs.map((c) => applyAck(c, a, now())));
-    } else if (e.type === 'human.request') {
-      const b = e.body as { runId?: unknown; reqId?: unknown; kind?: unknown; prompt?: unknown };
-      await io.save((cs) => cs.map((c) => applyHumanRequest(c, b)));
-    } else if (e.type === 'run.event') {
-      const ev = e.body as RunEventBody;
-      await io.save((cs) => cs.map((c) => applyEvent(c, ev)));
-    } else if (e.type === 'gate.request' && approves) {
-      const g = e.body as GateRequestBody;
-      await io.save((cs) => cs.map((c) => applyGate(c, g)));
-    } else if (e.type === 'gate.resolved' && approves) {
-      const r = e.body as GateResolvedBody;
-      await io.save((cs) => cs.map((c) => applyResolved(c, r)));
-    } else if (e.type === 'phone.copy' && io.onCopy) {
-      await io.onCopy(e.body as PhoneCopyBody);
-    }
+    if (e) await applyIncoming(e, approves, io);
+  }
+}
+
+export async function applyIncoming(e: Envelope, approves: boolean, io: Pick<CmdIo, 'save' | 'onCopy' | 'now'>): Promise<void> {
+  const now = io.now ?? Date.now;
+  if (e.type === 'cmd.ack') {
+    const a = e.body as CmdAckBody;
+    await io.save((cs) => cs.map((c) => applyAck(c, a, now())));
+  } else if (e.type === 'human.request') {
+    const b = e.body as { runId?: unknown; reqId?: unknown; kind?: unknown; prompt?: unknown };
+    await io.save((cs) => cs.map((c) => applyHumanRequest(c, b)));
+  } else if (e.type === 'run.event') {
+    const ev = e.body as RunEventBody;
+    await io.save((cs) => cs.map((c) => applyEvent(c, ev)));
+  } else if (e.type === 'gate.request' && approves) {
+    const g = e.body as GateRequestBody;
+    await io.save((cs) => cs.map((c) => applyGate(c, g)));
+  } else if (e.type === 'gate.resolved' && approves) {
+    const r = e.body as GateResolvedBody;
+    await io.save((cs) => cs.map((c) => applyResolved(c, r)));
+  } else if (e.type === 'phone.copy' && io.onCopy) {
+    await io.onCopy(e.body as PhoneCopyBody);
   }
 }
 

@@ -1,5 +1,5 @@
 import {
-  CAP, QUEUE, flushOutbox, fromB64, issueCmd, monotonicClock, openMobileSession, queueCmd, queueLeave, queueOutbox, relayOrigin, relayQueue, softNoiseStatic, softSigner, verifyQBundle,
+  CAP, QUEUE, flushOutbox, fromB64, issueCmd, monotonicClock, openMobileSession, queueCmd, queueLeave, queueOutbox, queuedFrame, relayOrigin, relayQueue, softNoiseStatic, softSigner, verifyQBundle,
   wsRelayClient, VM_PURPOSES, type Channel, type FlushResult, type Link, type PhoneCopyBody, type QueueSendResult, type WebSocketLike,
 } from '@sax/remote';
 import { APP_VERSION, DEV_RELAY_HOST, DEV_STACK, PUBLIC_ORIGIN } from '../config';
@@ -8,9 +8,9 @@ import type { DeviceKeys } from '../keyring';
 import type { FileOutbox } from '../storage/outbox';
 import type { AppData } from '../storage/state';
 import { PHONE_CAPS, newerCopy, receiveCopy } from './pcCopy';
-import { driveCmds, trimCmds } from './issueLive';
+import { applyIncoming, driveCmds, trimCmds } from './issueLive';
 import { peerSession } from './peerSession';
-import { cmdsToQueue } from '../phoneCmd';
+import { cmdsToQueue, type PhoneCmd } from '../phoneCmd';
 import { enrollPx } from './pxLive';
 import type { PxDevice } from '../approvalKey';
 import { replaying, tapping } from './hold';
@@ -39,12 +39,13 @@ const PEER_WAIT_MS = 3000;
 
 type RnWebSocket = new (url: string, protocols?: string | string[], options?: { headers: Record<string, string> }) => WebSocketLike;
 const RnWs = WebSocket as unknown as RnWebSocket;
+const openSocket = (url: string, headers?: Record<string, string>) => new RnWs(url, undefined, headers ? { headers } : undefined);
 
-export function relayFor(host: string, deviceAuth?: (htm: Htm, htu: string) => Promise<Record<string, string>>) {
+export function relayFor(host: string, deviceAuth?: (htm: Htm, htu: string) => Promise<Record<string, string>>, open = openSocket) {
   return wsRelayClient({
     host,
     insecureLocal: DEV_STACK && host === DEV_RELAY_HOST,
-    open: (url, headers) => new RnWs(url, undefined, headers ? { headers } : undefined),
+    open,
     deviceAuth,
   });
 }
@@ -137,11 +138,13 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
   const noise = softNoiseStatic(d.keys.sm);
   let stage: 'join' | 'session' | 'live' = 'join';
   try {
-    const relay = relayFor(pair.relayHost, deviceAuthFor(pair.pairId, pair.cert, d.keys.vm));
+    let socket!: WebSocketLike;
+    const relay = relayFor(pair.relayHost, deviceAuthFor(pair.pairId, pair.cert, d.keys.vm), (url, headers) => (socket = openSocket(url, headers)));
     dropHeld();
     link = await relay.joinMailbox(fromB64(pair.mbxId), { read: fromB64(pair.tokRead), write: fromB64(pair.tokWrite) }, 'mobile');
     liveLink = link;
-    sessionLink = peerSession(link);
+    const { session, drained } = peerSession(link, socket);
+    sessionLink = session;
     if (!(await waitPeer(link, PEER_WAIT_MS))) {
       const why = whyCode('peer', link.closed ? 'closed' : 'timeout');
       if (!link.closed && (!d.alive || d.alive())) {
@@ -188,11 +191,21 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
         recent: x.recent.map((r) => (sent.has(r.msgId) ? { ...r, state: 'sent' as const } : r)),
       }));
     }
-    await driveCmds(replaying(s.channel, held), s.peerHello.capabilities, {
+    const io = {
       cmds: () => d.data().cmds ?? [],
-      save: (f) => d.update((x) => ({ ...x, cmds: trimCmds(f(x.cmds ?? [])) })),
+      save: (f: (cmds: PhoneCmd[]) => PhoneCmd[]) => d.update((x) => ({ ...x, cmds: trimCmds(f(x.cmds ?? [])) })),
       onCopy,
       alive: d.alive,
+    };
+    await driveCmds(replaying(s.channel, held), s.peerHello.capabilities, io).finally(async () => {
+      if (!session.closed) return;
+      await drained;
+      const approves = s.peerHello.capabilities.includes(CAP.approve);
+      for (const e of held) await applyIncoming(e, approves, io);
+      for (let frame = queuedFrame(session); frame; frame = queuedFrame(session)) {
+        const e = s.channel.accept(frame);
+        if (e) await applyIncoming(e, approves, io);
+      }
     });
     finish();
     if (!link.closed && (!d.alive || d.alive())) {
