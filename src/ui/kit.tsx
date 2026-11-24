@@ -5,7 +5,6 @@ import {
   type AccessibilityRole, type StyleProp, type TextStyle, type ViewStyle,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { attachTabScrolls } from '../../modules/tex-ui/src';
 import { MAX_FONT_SCALE, TextSizeContext, motion, radius, size, space, textScale, type, useReducedMotion, usePalette, type Ink, type TypeName } from '../theme';
 
 /** 탭 화면 아래를 덮는 떠 있는 탭바 높이. 탭 화면은 이만큼 아래를 비운다. */
@@ -69,7 +68,7 @@ export function Screen({
       {}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={footer && Platform.OS === 'ios' ? 'padding' : undefined} enabled={!!footer}>
       {scroll ? (
-        <ScrollView onLayout={tabbed ? attachTabScrolls : undefined} onScroll={tabbed ? (e) => tabScroll(e.nativeEvent.contentOffset.y) : undefined} scrollEventThrottle={tabbed ? 32 : undefined} contentContainerStyle={[st.content, !footer && { paddingBottom: bottom }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets={!footer}>
+        <ScrollView onScroll={tabbed ? (e) => tabScroll(e.nativeEvent.contentOffset.y) : undefined} scrollEventThrottle={tabbed ? 32 : undefined} contentContainerStyle={[st.content, !footer && { paddingBottom: bottom }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets={!footer}>
           {children}
         </ScrollView>
       ) : (

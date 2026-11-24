@@ -24,7 +24,6 @@ import { jpegUri } from '../capture/thumb';
 import { useSession } from '../session';
 import type { PcStatus } from '../net/pc';
 import { MAX_FONT_SCALE, TextSizeContext, radius, size, space, textScale, type, usePalette, useReducedMotion } from '../theme';
-import { attachTabScrolls } from '../../modules/tex-ui/src';
 import { Button, Check, Chevron, Pill, Seg, T, TabInset, TabScroll, ago, success, tap, won, type Tone } from '../ui/kit';
 
 export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'devices' | 'issue' | 'queue' | 'run' | 'doc' | 'bizreg' | 'recv' | 'pay' | 'mark';
@@ -285,7 +284,6 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
             keyExtractor={(it) => it.id}
             onScrollToIndexFailed={(e) => list.current?.scrollToOffset({ offset: e.averageItemLength * e.index, animated: true })}
             maintainVisibleContentPosition={KEEP_POSITION}
-            onLayout={attachTabScrolls}
             style={st.fill}
             contentContainerStyle={[st.list, { paddingTop: space.s4 + barH }]}
             keyboardShouldPersistTaps="handled"

@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import TabView, { useBottomTabBarHeight, type AppleIcon } from 'react-native-bottom-tabs';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Keyboard, LayoutAnimation, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ChatItem } from '../chat';
@@ -26,21 +25,12 @@ const ICON_STROKE = 1.75;
 const MINI_STEP = 24;
 const BAR_MINI_H = 44;
 
-/** 아이폰은 애플 기본 탭바(iOS 26이면 유리 탭바)를 쓴다. 다른 곳은 아래의 떠 있는 탭바. */
-const NATIVE_TABS = Platform.OS === 'ios';
-
 const TABS: Array<{ key: Tab; label: string; a11y: string }> = [
   { key: 'home', label: '홈', a11y: '홈, 대화' },
   { key: 'money', label: '돈', a11y: '돈' },
   { key: 'records', label: '기록', a11y: '기록' },
 ];
 
-const SYMBOL: Record<Tab, [AppleIcon, AppleIcon]> = {
-  home: [{ sfSymbol: 'bubble.left.fill' }, { sfSymbol: 'bubble.left' }],
-  money: [{ sfSymbol: 'banknote.fill' }, { sfSymbol: 'banknote' }],
-  records: [{ sfSymbol: 'list.bullet' }, { sfSymbol: 'list.bullet' }],
-};
-const ROUTES = TABS.map((t) => ({ key: t.key, title: t.label, focusedIcon: SYMBOL[t.key][0], unfocusedIcon: SYMBOL[t.key][1], testID: `tab-${t.key}` }));
 
 export function MainScreen({
   tab, onTab, go, chat, todo, draft, phone, menu, focusAfter, issue: issuePreview, issueCps,
@@ -92,28 +82,12 @@ export function MainScreen({
     );
   return (
     <View style={[st.fill, { backgroundColor: p.canvas }]}>
-      {NATIVE_TABS ? (
-        <TabView
-          navigationState={{ index: TABS.findIndex((t) => t.key === tab), routes: ROUTES }}
-          onIndexChange={(i) => {
-            const next = TABS[i]!.key;
-            if (next !== tab) onTab(next);
-          }}
-          renderScene={({ route }) => <NativeScene>{scene(route.key as Tab)}</NativeScene>}
-          hapticFeedbackEnabled
-          minimizeBehavior="onScrollDown"
-          tabBarActiveTintColor={p.ink}
-        />
-      ) : (
-        <>
-          <TabInset.Provider value={kb ? 0 : barH}>
-            <TabScroll.Provider value={onTabScroll}>
-              <View style={st.fill}>{scene(tab)}</View>
-            </TabScroll.Provider>
-          </TabInset.Provider>
-          {!kb && <TabBar tab={tab} mini={mini} onTab={onTab} onHeight={setBarH} />}
-        </>
-      )}
+      <TabInset.Provider value={kb ? 0 : barH}>
+        <TabScroll.Provider value={onTabScroll}>
+          <View style={st.fill}>{scene(tab)}</View>
+        </TabScroll.Provider>
+      </TabInset.Provider>
+      {!kb && <TabBar tab={tab} mini={mini} onTab={onTab} onHeight={setBarH} />}
       {issueOpen && (
         <IssueSheet
           preview={issuePreview}
@@ -134,17 +108,6 @@ export function MainScreen({
         />
       )}
     </View>
-  );
-}
-
-/** iOS 기본 탭바 안의 화면. 탭바가 내용 위에 떠 있으므로 그 높이를 TabInset으로 넘긴다. */
-function NativeScene({ children }: { children: ReactNode }) {
-  const inset = useSafeAreaInsets();
-  const bar = Math.max(useBottomTabBarHeight(), inset.bottom);
-  return (
-    <TabInset.Provider value={bar}>
-      <View style={st.fill}>{children}</View>
-    </TabInset.Provider>
   );
 }
 
