@@ -108,8 +108,9 @@ export function IssueSheet({ onClose, onPick, onCapture, counterparties: given, 
   const manual = () => {
     tap();
     const t = q.trim();
-    if (t && !/^[\d-\s]+$/.test(t)) setName(t);
-    else if (t.replace(/\D/g, '').length >= 3) setBizNo(masked('bizNo', t));
+    const isName = t !== '' && !/^[\d-\s]+$/.test(t);
+    setName(isName ? t : '');
+    setBizNo(!isName && t.replace(/\D/g, '').length >= 3 ? masked('bizNo', t) : '');
     go('name');
   };
   const done = () => {
