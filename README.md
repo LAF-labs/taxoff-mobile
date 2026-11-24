@@ -18,7 +18,7 @@
 |---|---|---|
 | 잠금(생체, 백그라운드 30초 뒤 재잠금, 앱 전환기 가림) | P-01 | `src/screens/LockScreen.tsx`, `App.tsx` |
 | 앱 틀: 아래 탭 홈(대화) · 돈 · 기록, 설정은 홈 오른쪽 위 | 기획 v2 | `src/screens/MainScreen.tsx` |
-| 홈 = PC와 나누는 대화: PC 연결 한 줄 · 지금 할 일 한 줄 · 대화 · 빠른 일 [세금계산서 발급] [찍기] [현금] + 입력 줄 | 기획 v2 | `src/screens/HomeScreen.tsx`, `src/chat.ts` |
+| 홈 = PC와 나누는 대화: PC 연결 한 줄, 승인 카드, 대화, 입력창 왼쪽 [+](세금계산서 발급, 증빙 찍기, 현금 매출 적기). 입력창과 탭바는 떠 있고 스크롤하면 함께 줄어든다(#68) | 기획 v2 | `src/screens/HomeScreen.tsx`, `src/chat.ts` |
 | 돈: 이번 달(들어온·나간·남은 돈), 받을 돈·낼 돈(안 받은 합계·기한 지남·7일 안), 앞으로 30일, 알림 한 줄(11 §3.5), "확인 못 함", 받음 표시·되돌리기. PC가 꺼져 있으면 마지막 요약을 날짜와 함께 | 기획 v2 PR 8 | `src/screens/MoneyScreen.tsx`, `MoneyListScreen.tsx`, `MarkReceivedScreen.tsx`, `src/money.ts`, `src/moneyStore.tsx` |
 | 기록(끝난 발급 목록, 비었으면 [세금계산서 발급]) | 기획 v2 | `src/screens/RecordsScreen.tsx` |
 | 설정(연결 · 알림 · 보안 · 도움말 · 앱 정보), 알림 설정과 앱 안 배너·기기 알림 | 기획 v2 | `src/screens/SettingsScreen.tsx`, `NotifyScreen.tsx`, `src/notify/*` |
@@ -27,15 +27,15 @@
 | 진행·결과 카드: 단계 줄(준비 → 홈택스 로그인 → 값 확인 → 승인 → 발급 → 확인), 내 차례(간편인증·인증서 PC 전용), 중지(08 §11 문구), 확인 중·확인 필요(다시 발급 단추 없음), 결과(승인번호 길게 눌러 복사) | P-04 | `src/screens/RunCard.tsx`, `RunScreen.tsx`, `src/run.ts` |
 | 서류 보기: 파일 이름·발급일, 첫 쪽 미리보기, [공유] [파일에 저장], 여는 중·받는 중·PC 꺼짐·백업·열 수 없음 | P-05 | `src/screens/DocScreen.tsx`, `src/doc.ts`, `assets/sample/` |
 | 사업자등록증 찍기: 앱 안 카메라(A4 세로 틀) → 기기 안 OCR → 상호·사업자번호(검증식)·대표자·주소·업태·종목 확인, 받을 이메일 → 거래처로 저장 → 발급 작성(휴·폐업 확인 줄, 처음 거래처 안내). 이미 있는 번호면 그 거래처로 | 기획 v2 PR 7 | `src/screens/BizRegScreen.tsx`, `src/capture/bizreg.ts` |
-| 발급 작성 + 거래처 고르기: 최근 다섯 곳 · 찾기, 지난번 값, 부가세 별도/포함, 세액 10% 버림, PC 상태에 따른 단추 | P-10 · P-11 | `src/screens/IssueScreen.tsx`, `src/issue.ts` |
+| 발급: [+]의 시트에서 거래처만 고르면 대화에 채운 카드가 뜨고, 카드 [수정]으로 고친다. 따로 열리던 발급 화면은 없앴다(#45) | P-10, P-11 | `src/screens/IssueSheet.tsx`, `src/issue.ts` |
 | 폰 연결(QR 스캔 → 24시간 경고 → 6자리 + "PC 화면에만 입력" 경고) | S-03 | `src/screens/PairScreen.tsx` |
 | 연결 상태(켜짐·꺼짐, 마지막 접속, 보낼 것 건수, 연결 해제, SP-1 보호 상태) | P-06 | `src/screens/ConnectionScreen.tsx` |
 | 종이 증빙 촬영: 영수증 · 종이 세금계산서·계산서(앱 안 카메라 → 자르기 → 기기 안 OCR 글자 상자 → 칸 판독·검산 → 확인 → 보관함 → PC) | P-08 | `src/screens/CaptureScreen.tsx`, `src/capture/*` |
 | 현금매출(하루 숫자 하나, 날짜별) | P-09 | `src/screens/CashScreen.tsx` |
 
-폰 승인(P-03, M7-7)은 ADR-046 결정 1로 Phase 1에 들어왔다: 승인 시트 화면과 해시 재계산(`src/approval.ts`, PC 엔진 벡터 `test/fixtures/gate-vectors.json`)은 있고, 하드웨어 키(`src/approvalKey.ts`)는 iPhone Secure Enclave P-256이다(tex ADR-052, 네이티브 `modules/sax-native` pxCreate·pxSign, 서명마다 생체 확인). 라이브 세션마다 키를 PC에 알리고(`src/net/pxLive.ts`), PC가 보낸 gate.request를 받아 서명한 gate.response를 보낸다(`src/net/issueLive.ts`, `src/phoneCmd.ts`). Android는 키 증명 검증기가 생길 때까지 승인 기기가 아니다(PC에서 승인). 네이티브가 바뀌었으니 다음 개발 빌드에 `expo prebuild`와 `pod install`이 필요하다. 홈 대화는 아직 화면만 있다: 적은 말은 이 화면에만 남고("PC 켜지면 보냄") PC로 가지 않는다. PC 답·카드는 갤러리 견본에만 있다(대화 프로토콜은 다음 PR). 밀린 일·거래처도 아직 메모리 가짜 저장소뿐이다(앱의 거래처 목록은 비어 있다).
+폰 승인(P-03, M7-7)은 ADR-046 결정 1로 Phase 1에 들어왔다: 승인 시트 화면과 해시 재계산(`src/approval.ts`, PC 엔진 벡터 `test/fixtures/gate-vectors.json`)은 있고, 하드웨어 키(`src/approvalKey.ts`)는 iPhone Secure Enclave P-256이다(tex ADR-052, 네이티브 `modules/sax-native` pxCreate·pxSign, 서명마다 생체 확인). 라이브 세션마다 키를 PC에 알리고(`src/net/pxLive.ts`), PC가 보낸 gate.request를 받아 서명한 gate.response를 보낸다(`src/net/issueLive.ts`, `src/phoneCmd.ts`). Android는 키 증명 검증기가 생길 때까지 승인 기기가 아니다(PC에서 승인). 네이티브가 바뀌었으니 다음 개발 빌드에 `expo prebuild`와 `pod install`이 필요하다. 홈 대화는 PC와 이어진다. PC가 꺼져 있으면 폰이 PC가 넘긴 사본(phone.copy, [docs/design.md](docs/design.md))으로 답하고(ADR-047), 발급은 맡겨 두었다가 PC가 켜지면 한다(tex #482).
 
-디자인 기준은 [docs/design.md](docs/design.md)(tex design-system v2.0을 폰 크기로).
+디자인 기준은 [docs/design.md](docs/design.md)(tex design-system을 폰 크기로). 일하는 규칙은 [AGENTS.md](AGENTS.md).
 
 ## 종이 세금계산서
 
