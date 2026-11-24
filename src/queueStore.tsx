@@ -8,7 +8,7 @@ import { DAILY_LIMIT, GATE_TTL_MS, buildGate, type AttestState, type PhoneGate, 
 import type { ChatItem } from './chat';
 import { applyAction, startAll as startAllJobs, type DoneJob, type Job, type JobAction, type NeedPcReason } from './queue';
 import type { IssueResult, RunAction, RunView } from './run';
-import type { Counterparty } from './issue';
+import type { Counterparty, VatMode } from './issue';
 import sampleDoc from '../assets/sample/tax-invoice.pdf';
 import { b64, randomBytes } from '../vendor/sax-remote/src/index.ts';
 
@@ -30,6 +30,8 @@ interface QueueStore {
   notes: ChatItem[];
   addCard: (item: ChatItem) => void;
   markSent: (itemId: string) => void;
+  draftEdits: ReadonlyMap<string, DraftEdit>;
+  editDraft: (itemId: string, edit: DraftEdit) => void;
   approval: ApprovalSettings;
   sheetJob: Job | null;
   openSheet: (id: string) => void;
@@ -50,6 +52,12 @@ interface QueueStore {
   prefill: IssuePrefill | null;
   setPrefill: (p: IssuePrefill | null) => void;
   clearPick: () => void;
+}
+
+export interface DraftEdit {
+  amount: number;
+  vat: VatMode;
+  item: string;
 }
 
 export interface IssuePrefill {
@@ -95,6 +103,7 @@ export function QueueProvider({
   const [cps, setCps] = useState<Counterparty[]>(initialCps);
   const [pickId, setPickId] = useState<string | null>(pick);
   const [prefill, setPrefill] = useState<IssuePrefill | null>(null);
+  const [draftEdits, setDraftEdits] = useState<ReadonlyMap<string, DraftEdit>>(new Map());
   const setRun = (id: string, f: (r: RunView | undefined, j: Job) => RunView, extra: Partial<Job> = {}) => patch(id, (j) => ({ ...j, ...extra, run: f(j.run, j) }));
   const timers = useRef(jobTimers()).current;
   useEffect(() => () => timers.clearAll(), [timers]);
@@ -130,6 +139,8 @@ export function QueueProvider({
       notes,
       addCard: (item) => setNotes((n) => [...n, item]),
       markSent: (itemId) => setNotes((n) => n.map((x) => (x.id === itemId && x.kind === 'msg' && x.card ? { ...x, card: { ...x.card, sent: true } } : x))),
+      draftEdits,
+      editDraft: (itemId, edit) => setDraftEdits((m) => new Map(m).set(itemId, edit)),
       approval: { ...approval, usedToday: used },
       sheetJob: jobs.find((j) => j.id === sheetId && j.gate) ?? null,
       simpleJob: jobs.find((j) => j.id === simpleId) ?? null,
@@ -276,7 +287,7 @@ export function QueueProvider({
         patch(id, (x) => (x.gate ? { ...x, gate: { ...x.gate, challenge: b64(randomBytes(32)), exp: Date.now() + GATE_TTL_MS } } : x));
       },
     }),
-    [jobs, last, notes, sheetId, simpleId, used, focusId, cps, pickId, prefill, approval, simulate, sess],
+    [jobs, last, notes, draftEdits, sheetId, simpleId, used, focusId, cps, pickId, prefill, approval, simulate, sess],
   );
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

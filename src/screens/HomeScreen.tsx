@@ -10,10 +10,9 @@ import { useOfflineChat, type OfflineChatView, type ReplyTo } from '../offline/u
 import type { PhoneScreen, ReactionId } from '@sax/chat-core';
 import { BRAND } from '../config';
 import { queueCounts } from '../queue';
-import { useQueue } from '../queueStore';
+import { useQueue, type DraftEdit } from '../queueStore';
 import { RunCard } from './RunCard';
-import { useIssueSubmit } from '../issueSubmit';
-import { kstDay } from '../phoneCmd';
+import { useIssueSubmit, type IssueSubmit } from '../issueSubmit';
 import { onShowCard, shownCard } from '../cardFocus';
 import { counterpartiesOf } from '../net/pcCopy';
 import { splitAmount, type Counterparty, type VatMode } from '../issue';
@@ -116,18 +115,18 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
   };
   const submitIssue = useIssueSubmit();
   const cpOf = (id: string): Counterparty | null => (id ? [...(s.data.pcCopy ? counterpartiesOf(s.data.pcCopy) : []), ...q.counterparties].find((c) => c.id === id) ?? null : null);
-  const issueFrom = async (d: Draft, itemId: string): Promise<boolean> => {
+  const issueFrom = async (d: Draft, itemId: string): Promise<IssueSubmit> => {
     const cp = cpOf(d.counterpartyId);
     if (!d.phone && !cp) {
       q.setPrefill({ amount: d.amount, vat: d.vat, item: d.item, draftId: d.id });
       go('issue');
-      return true;
+      return 'sent';
     }
     const a = splitAmount(d.amount, d.vat === 'included' ? 'incl' : 'excl');
-    if (a.supply <= 0) return true;
-    const ok = await submitIssue({ cp, name: d.phone?.name ?? '', bizNo: d.phone?.bizNo ?? '', item: d.item ?? '', day: kstDay(), a, draftId: d.phone ? d.phone.draftId : d.id });
-    if (ok && d.phone) q.markSent(itemId);
-    return ok;
+    if (a.supply <= 0) return 'sent';
+    const sent = await submitIssue({ cp, item: d.item ?? '', a, draftId: d.phone ? d.phone.draftId : d.id });
+    if (sent === 'sent' && d.phone) q.markSent(itemId);
+    return sent;
   };
   const list = useRef<FlatList<ChatItem>>(null);
   const [barH, setBarH] = useState(0);
@@ -661,6 +660,7 @@ function RunItem({ jobId, go }: { jobId: string; go: (to: HomeRoute) => void }) 
 
 function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, cpOf, stale, onHold, onReply }: { it: Exclude<ChatItem, { kind: 'run' }>; group: { first: boolean; last: boolean }; onRetry: (noteId: string) => void; retryOff?: boolean; openDrafts?: ReadonlySet<string>; onIssue: OnIssue; cpOf: (id: string) => Counterparty | null; stale: boolean; onHold: (h: Held) => void; onReply?: (r: ReplyTo) => void }) {
   const p = usePalette();
+  const q = useQueue();
   const bubble = useRef<ComponentRef<typeof Pressable>>(null);
   if (it.kind === 'merged') {
     return (
@@ -741,6 +741,8 @@ function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, cpOf, stale, 
           onIssue={(it.card.draft?.phone ? !it.card.sent : it.card.draft && (!openDrafts || openDrafts.has(it.card.draft.id))) ? (d) => onIssue(d, it.id) : undefined}
           cp={it.card.draft ? cpOf(it.card.draft.counterpartyId) : null}
           stale={stale}
+          edited={q.draftEdits.get(it.id)}
+          onEdit={(e) => q.editDraft(it.id, e)}
         />
       )}
       {state !== '' && (
@@ -876,12 +878,16 @@ function Starter({ phoneAnswers, onPick }: { phoneAnswers: boolean; onPick: (tex
 }
 
 type Draft = NonNullable<ChatCard['draft']>;
-type OnIssue = (d: Draft, itemId: string) => Promise<boolean>;
-type OnCardIssue = (d: Draft) => Promise<boolean>;
+const ISSUE_FAILED: Record<Exclude<IssueSubmit, 'sent'>, string> = {
+  save_failed: '폰에 저장하지 못해 맡기지 않았어요. 다시 눌러 주세요',
+  new_counterparty: '새 거래처는 아직 폰에서 발급할 수 없어요',
+};
+type OnIssue = (d: Draft, itemId: string) => Promise<IssueSubmit>;
+type OnCardIssue = (d: Draft) => Promise<IssueSubmit>;
 
-function Card({ card, onIssue, cp, stale }: { card: ChatCard; onIssue?: OnCardIssue; cp: Counterparty | null; stale: boolean }) {
+function Card({ card, onIssue, cp, stale, edited, onEdit }: { card: ChatCard; onIssue?: OnCardIssue; cp: Counterparty | null; stale: boolean; edited?: DraftEdit; onEdit: (e: DraftEdit) => void }) {
   const p = usePalette();
-  if (card.draft) return <DraftCard card={card} draft={card.draft} onIssue={onIssue} cp={cp} stale={stale} />;
+  if (card.draft) return <DraftCard card={card} draft={card.draft} onIssue={onIssue} cp={cp} stale={stale} edited={edited} onEdit={onEdit} />;
   return (
     <View style={[st.card, { backgroundColor: p.tint }]} testID="chat-card">
       <T v="subStrong">{card.title}</T>
@@ -937,29 +943,29 @@ const VAT_OPTIONS = [
   { key: 'incl' as const, label: '포함' },
 ];
 
-function DraftCard({ card, draft, onIssue, cp, stale }: { card: ChatCard; draft: Draft; onIssue?: OnCardIssue; cp: Counterparty | null; stale: boolean }) {
+function DraftCard({ card, draft, onIssue, cp, stale, edited, onEdit }: { card: ChatCard; draft: Draft; onIssue?: OnCardIssue; cp: Counterparty | null; stale: boolean; edited?: DraftEdit; onEdit: (e: DraftEdit) => void }) {
   const p = usePalette();
-  const [val, setVal] = useState({ amount: draft.amount, vat: (draft.vat === 'included' ? 'incl' : 'excl') as VatMode, item: draft.item ?? '' });
-  const openEdit = !!onIssue && !!draft.phone?.edit;
+  const val: DraftEdit = edited ?? { amount: draft.amount, vat: draft.vat === 'included' ? 'incl' : 'excl', item: draft.item ?? '' };
+  const openEdit = !!onIssue && !!draft.phone?.edit && !edited;
   const [edit, setEdit] = useState<null | { amount: string; vat: VatMode; item: string }>(openEdit ? { amount: draft.amount > 0 ? masked('won', String(draft.amount)) : '', vat: val.vat, item: val.item } : null);
   const closed = cp?.status?.kind === 'closed' ? cp.status : null;
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<Exclude<IssueSubmit, 'sent'> | null>(null);
   const shown = edit ? { amount: Number(edit.amount.replace(/\D/g, '')), vat: edit.vat, item: edit.item } : val;
   const a = splitAmount(shown.amount, shown.vat);
   const startEdit = () => setEdit({ amount: masked('won', String(val.amount)), vat: val.vat, item: val.item });
   const done = () => {
     if (!edit) return;
-    setVal({ amount: Number(edit.amount.replace(/\D/g, '')), vat: edit.vat, item: edit.item.trim() });
+    onEdit({ amount: Number(edit.amount.replace(/\D/g, '')), vat: edit.vat, item: edit.item.trim() });
     setEdit(null);
   };
   const issue = async () => {
     if (!onIssue || busy) return;
     setBusy(true);
-    setFailed(false);
-    const ok = await onIssue({ ...draft, amount: val.amount, vat: val.vat === 'incl' ? 'included' : 'separate', item: val.item || null });
+    setFailed(null);
+    const sent = await onIssue({ ...draft, amount: val.amount, vat: val.vat === 'incl' ? 'included' : 'separate', item: val.item || null });
     setBusy(false);
-    if (!ok) setFailed(true);
+    if (sent !== 'sent') setFailed(sent);
   };
   const dark = p.overlay === p.tint;
   const inputStyle = [st.cardInput, { backgroundColor: p.canvas, color: p.ink, borderColor: p.line }];
@@ -1023,7 +1029,7 @@ function DraftCard({ card, draft, onIssue, cp, stale }: { card: ChatCard; draft:
       )}
       {failed && (
         <T v="meta" c="attention" testID="card-failed">
-          폰에 저장하지 못해 맡기지 않았어요. 다시 눌러 주세요
+          {ISSUE_FAILED[failed]}
         </T>
       )}
       {onIssue && (

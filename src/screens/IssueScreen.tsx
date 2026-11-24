@@ -123,9 +123,9 @@ export function IssueScreen({
     if (saving) return;
     setSaving(true);
     setSaveFailed(false);
-    const ok = await submitIssue({ cp: manual ? null : cp, name, bizNo, item, day, a, draftId: pre?.draftId });
+    const sent = await submitIssue({ cp: manual ? null : cp, item, a, draftId: pre?.draftId });
     setSaving(false);
-    if (!ok) return setSaveFailed(true);
+    if (sent !== 'sent') return setSaveFailed(true);
     onSubmitted();
   };
 
