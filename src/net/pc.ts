@@ -1,6 +1,6 @@
 import {
   CAP, QUEUE, flushOutbox, fromB64, issueCmd, monotonicClock, openMobileSession, queueCmd, queueLeave, queueOutbox, relayOrigin, relayQueue, softNoiseStatic, softSigner, verifyQBundle,
-  wsRelayClient, VM_PURPOSES, type FlushResult, type Link, type PhoneCopyBody, type QueueSendResult, type WebSocketLike,
+  wsRelayClient, VM_PURPOSES, type Channel, type FlushResult, type Link, type PhoneCopyBody, type QueueSendResult, type WebSocketLike,
 } from '@sax/remote';
 import { APP_VERSION, DEV_RELAY_HOST, DEV_STACK, PUBLIC_ORIGIN } from '../config';
 import { deviceAuthFor, fetchJson, type Htm } from './devauth';
@@ -14,6 +14,7 @@ import { enrollPx } from './pxLive';
 import type { PxDevice } from '../approvalKey';
 import { replaying, tapping } from './hold';
 import { causeOf, needsRelink, pushWhy, whyCode } from './pcWhy';
+import { peerSession } from './peerSession';
 
 export type PcStatus = 'unpaired' | 'connecting' | 'online' | 'queued' | 'stale' | 'relink' | 'offline';
 
@@ -131,6 +132,8 @@ export function closeLive(): void {
 
 async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: string }> {
   let link: Link | null = null;
+  let sessionLink: Link | null = null;
+  let channel: Channel | null = null;
   const noise = softNoiseStatic(d.keys.sm);
   let stage: 'join' | 'session' | 'live' = 'join';
   try {
@@ -138,6 +141,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
     dropHeld();
     link = await relay.joinMailbox(fromB64(pair.mbxId), { read: fromB64(pair.tokRead), write: fromB64(pair.tokWrite) }, 'mobile');
     liveLink = link;
+    sessionLink = peerSession(link);
     if (!(await waitPeer(link, PEER_WAIT_MS))) {
       const why = whyCode('peer', link.closed ? 'closed' : 'timeout');
       if (!link.closed && (!d.alive || d.alive())) {
@@ -149,7 +153,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
     stage = 'session';
     const clock = monotonicClock(d.data().ikTs);
     let used = 0;
-    const s = await openMobileSession(link, {
+    const s = await openMobileSession(sessionLink, {
       pairId: pair.pairId,
       noise,
       desktopStatic: fromB64(pair.desktopStatic),
@@ -158,7 +162,8 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
       responseTimeoutMs: 8000,
     });
     if (used) await d.update((x) => ({ ...x, ikTs: Math.max(x.ikTs, used) }));
-    if (!s) return { why: whyCode('session', link.closed ? 'closed' : 'no_answer') };
+    if (!s) return { why: whyCode('session', sessionLink.closed ? 'closed' : 'no_answer') };
+    channel = s.channel;
     stage = 'live';
     await d.update((x) => ({ ...x, lastSeenPc: Date.now() }));
     d.onLive?.();
@@ -184,7 +189,9 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
       onCopy,
       alive: d.alive,
     });
+    if (sessionLink.closed) return { why: whyCode('live', 'relay.closed') };
     s.channel.close();
+    channel = null;
     if (!link.closed && (!d.alive || d.alive())) {
       hold(link, true);
       link = null;
@@ -193,7 +200,12 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
   } catch (e) {
     return { why: whyCode(stage, causeOf(e)) };
   } finally {
+    channel?.close();
     noise.destroy();
+    if (link && sessionLink?.closed && !link.closed && (!d.alive || d.alive())) {
+      hold(link, false);
+      link = null;
+    }
     if (link) {
       link.close();
       if (liveLink === link) liveLink = null;
