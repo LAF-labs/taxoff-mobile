@@ -2,10 +2,10 @@ import type { PhoneCopyBody } from '@sax/remote';
 import type { PhoneCmd } from '../src/phoneCmd';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 import type { ChatItem } from '../src/chat';
-import { SessionContext, type Session } from '../src/session';
+import { SessionContext, useSession, type Session } from '../src/session';
 import { MainScreen, type Tab } from '../src/screens/MainScreen';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
 import { Banner } from '../src/notify/NotifyHost';
@@ -16,6 +16,10 @@ import { PairScreen } from '../src/screens/PairScreen';
 import { OnboardingScreen } from '../src/screens/OnboardingScreen';
 import type { BioInfo } from '../src/biometry';
 import { QueueScreen } from '../src/screens/QueueScreen';
+import { InboxScreen } from '../src/screens/InboxScreen';
+import { unreadCount, type InboxItem } from '../src/notify/inbox';
+import { Shell } from '../src/ui/float';
+import { PcPill } from '../src/screens/HomeScreen';
 import { IssueScreen, type IssuePreview } from '../src/screens/IssueScreen';
 import { counterpartiesOf } from '../src/net/pcCopy';
 import { issueCard, type IssuePick, type IssueSheetPreview } from '../src/screens/IssueSheet';
@@ -113,8 +117,8 @@ const COPY_MANY: PhoneCopyBody = {
     { ref: 'cp_spring', name: '새봄꽃집', bizNo: '402-11-55667' },
   ],
 };
-const issueSheet = (issue: IssueSheetPreview, c: PhoneCopyBody = COPY_MANY, pc: PcStatus = 'online') => ({ session: fake(copyData(c), pc), node: <Main live chat={[]} phone={phoneChat('empty')} issue={issue} /> });
-const issueCardCase = (pick: IssuePick, pc: PcStatus = 'online') => ({ session: fake(copyData(COPY_MANY), pc), notes: [issueCard(pick, null, now - 30_000)], node: <Main live chat={[]} phone={phoneChat('empty')} /> });
+const issueSheet = (issue: IssueSheetPreview, c: PhoneCopyBody = COPY_MANY, pc: PcStatus = 'online') => ({ session: fake(copyData(c), pc), node: <Main chat={[]} phone={phoneChat('empty')} issue={issue} /> });
+const issueCardCase = (pick: IssuePick, pc: PcStatus = 'online') => ({ session: fake(copyData(COPY_MANY), pc), notes: [issueCard(pick, null, now - 30_000)], node: <Main chat={[]} phone={phoneChat('empty')} /> });
 const cpOfCopy = (ref: string) => counterpartiesOf(COPY_MANY).find((c) => c.id === ref)!;
 const COPY_UNSURE: PhoneCopyBody = {
   ...COPY,
@@ -164,7 +168,6 @@ const CHAT_MERGED: ChatItem[] = [
   { kind: 'msg', id: 'm3', from: 'pc', at: at(9, 38), text: '식자재(매입)로 넣었어요. 이번 달 식자재 매입은 2,140,000원이에요.' },
   { kind: 'msg', id: 'm4', from: 'me', at: at(9, 40), text: '고마워' },
 ];
-const TODO = { approvals: 2, backlog: 1 };
 
 const LONG_PC = ['네, 확인했어요.', '이번 달 발급은 14건이에요. 합계 8,420,000원이에요.', '가나식자재 입금이 평소보다 늦어요. 지난달에는 12일 걸렸는데 이번에는 31일째예요.', '영수증 3장을 세무사 꾸러미에 넣었어요.', '부가세 2기 확정 신고는 1월 25일까지예요.', '동네마트 세금계산서는 PC가 켜지면 바로 발급할게요.'];
 const LONG_ME = ['고마워', '이번 달 매출 알려줘', '가나식자재 돈 들어왔어?', '영수증 넣어 줘', '신고 언제까지야?', '동네마트 발급해 줘'];
@@ -189,9 +192,15 @@ function LongChat() {
 }
 
 
-function Main({ start = 'home', chat, live, phone, menu, focusAfter, issue }: { start?: Tab; chat?: ChatItem[]; live?: boolean; phone?: OfflineChatView; menu?: boolean; focusAfter?: number; issue?: IssueSheetPreview }) {
+function Main({ start = 'home', chat, phone, menu, focusAfter, issue, drawer }: { start?: Tab; chat?: ChatItem[]; phone?: OfflineChatView; menu?: boolean; focusAfter?: number; issue?: IssueSheetPreview; drawer?: boolean }) {
   const [tab, setTab] = useState<Tab>(start);
-  return <MainScreen tab={tab} onTab={setTab} go={noop} chat={chat} todo={chat && !live ? TODO : undefined} phone={phone} menu={menu} focusAfter={focusAfter} issue={issue} />;
+  return <MainScreen tab={tab} onTab={setTab} go={noop} chat={chat} phone={phone} menu={menu} focusAfter={focusAfter} issue={issue} drawer={drawer} />;
+}
+/** 맨 위 화면을 따로 띄울 때 더보기와 PC 상태를 붙인다(미리 보기 값을 넘기는 설정 화면용). */
+function InShell({ children }: { children: ReactNode }) {
+  const s = useSession();
+  const right = s.data.pair ? <PcPill pc={s.pc} lastSeen={s.data.lastSeenPc} onPress={noop} /> : null;
+  return <Shell.Provider value={{ onMenu: noop, badge: unreadCount(s.data.inbox, s.data.inboxSeenAt) > 0, right }}>{children}</Shell.Provider>;
 }
 const read = parsePaperInvoice(SAMPLE_INVOICE, today)!;
 
@@ -249,6 +258,14 @@ const sheetCase = (g: PhoneGate, o: { settings?: ApprovalSettings; openedAt?: nu
   node: <QueueScreen onDone={noop} onConnection={noop} onOpen={noop} now={now} />,
 });
 
+const INBOX: InboxItem[] = [
+  { id: 'i1', at: at(15, 12), kind: 'approve', title: '승인을 기다리는 발급이 있어요', line: '가나식자재 세금계산서, 1,353,000원', jobId: 'ap' },
+  { id: 'i2', at: at(14, 40), kind: 'done', title: '세금계산서를 발급했어요', line: '대한테크 세금계산서', jobId: 'r2' },
+  { id: 'i3', at: at(11, 5), kind: 'myTurn', title: '내 차례예요', line: '스마일카페 세금계산서. 간편인증을 승인해 주세요', jobId: 'r3' },
+  { id: 'i4', at: at(18, 20, 1), kind: 'stopped', title: '발급을 멈췄어요', line: '김앤리 세금계산서. 아무것도 발급하지 않았어요', jobId: 'r4' },
+  { id: 'i5', at: at(9, 0, 1), kind: 'money', title: '이번 주 오갈 돈이 있어요', line: '7일 안에 받을 돈 3건' },
+];
+
 const RES: IssueResult = {
   approvalNo: '20261116-41000000-12345678', counterpart: '가나식자재', total: 1_353_000, email: 'tax@gana.example', emailSent: true, issuedAt: now - 60_000,
   doc: { name: '세금계산서_가나식자재_20261116.pdf', issuedOn: iso(today), uri: '' },
@@ -278,7 +295,7 @@ const simpleSheet = (start?: Parameters<typeof SimpleAuthSheet>[0]['start'], rem
   notes: [{ kind: 'run' as const, id: 'run-cmd-G1', at: now - 90_000, jobId: 'cmd-G1' }],
   node: (
     <>
-      <Main chat={CHAT} live />
+      <Main chat={CHAT} />
       <SimpleAuthSheet remembered={remembered} failed={failed} onSend={noop} onClose={noop} start={start} />
     </>
   ),
@@ -374,7 +391,7 @@ function Demo() {
       supplyAmount: '1230000', taxAmount: '123000', totalAmount: '1353000', issueDate: iso(today), remark: '', receiptType: '청구',
     });
   }, []);
-  return <Main chat={CHAT} live />;
+  return <Main chat={CHAT} />;
 }
 
 const devices = (load: DevicesPreview['load']) => ({
@@ -451,7 +468,7 @@ const SCREENS: Record<
   'home-chat-pc-turn': () => ({
     session: fake({ ...copyData(), cmds: [CMD({ phase: 'login', turn: true, code: 'login.simple_auth', simpleReq: '01JD0000000000000000000000' })] }, 'online'),
     notes: [{ kind: 'run', id: 'run-cmd-G1', at: now - 90_000, jobId: 'cmd-G1' }],
-    node: <Main chat={CHAT} live />,
+    node: <Main chat={CHAT} />,
   }),
   'queue-pc-turn': () => ({ session: fake({ ...copyData(), cmds: [CMD({ phase: 'login', turn: true, code: 'login.simple_auth' })] }, 'online'), node: <QueueScreen onDone={noop} onConnection={noop} onOpen={noop} now={now} /> }),
   'run-pc-done': () => pcRun({ phase: 'done', result: { approvalNo: '20261117-41000000-12345678', total: 1_353_000, emailSent: true } }),
@@ -461,7 +478,7 @@ const SCREENS: Record<
   'home-chat-pc-approve': () => ({
     session: fake({ ...copyData(), cmds: [APPROVE_CMD()] }, 'online'),
     approval: HW,
-    node: <Main chat={CHAT} live />,
+    node: <Main chat={CHAT} />,
   }),
   'queue-approve-card': () => ({
     session: fake({ ...copyData(), cmds: [APPROVE_CMD()] }, 'online'),
@@ -471,7 +488,7 @@ const SCREENS: Record<
   'home-chat-pc-run': () => ({
     session: fake({ ...copyData(), cmds: [CMD({ phase: 'approve' })] }, 'online'),
     notes: [{ kind: 'run', id: 'run-cmd-G1', at: now - 90_000, jobId: 'cmd-G1' }],
-    node: <Main chat={CHAT} live />,
+    node: <Main chat={CHAT} />,
   }),
   'result-email': () => runCase({ kind: 'done', result: RES, startedAt: T0 }),
   'result-no-email': () => runCase({ kind: 'done', result: { ...RES, email: null, emailSent: false }, startedAt: T0 }),
@@ -480,13 +497,13 @@ const SCREENS: Record<
     session: fake(paired(), 'online'),
     jobs: [runJob({ kind: 'myTurn', step: 'login', auth: { method: 'simple', app: '카카오뱅크' }, startedAt: now - 50_000 })],
     notes: [{ kind: 'run', id: 'run-r1', at: at(11, 50), jobId: 'r1' }],
-    node: <Main chat={CHAT} live />,
+    node: <Main chat={CHAT} />,
   }),
   'home-chat-result': () => ({
     session: fake(paired(), 'online'),
     jobs: [runJob({ kind: 'done', result: RES, startedAt: T0 })],
     notes: [{ kind: 'run', id: 'run-r1', at: at(11, 50), jobId: 'r1' }],
-    node: <Main chat={CHAT} live />,
+    node: <Main chat={CHAT} />,
   }),
   'queue-with-done': () => ({ session: fake(paired(), 'online'), jobs: [runJob({ kind: 'inDoubt', tries: 2, startedAt: T0 }, { title: '서울청과 세금계산서', amount: 880_000 }), { ...runJob({ kind: 'done', result: RES, startedAt: T0 }), id: 'r2' }], node: <QueueScreen onDone={noop} onConnection={noop} onOpen={noop} now={now} /> }),
   'doc-loading': () => docCase({ kind: 'loading' }),
@@ -520,16 +537,16 @@ const SCREENS: Record<
   'home-chat-offline': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * 3_600_000 }, 'offline', { receipts: 1, cash: 0 }), node: <Main chat={CHAT_OFFLINE} /> }),
   'home-chat-merged': () => ({ session: fake(paired(), 'online', { receipts: 1, cash: 0 }), node: <Main chat={CHAT_MERGED} /> }),
   'home-unpaired': () => ({ session: fake(emptyData(), 'unpaired'), node: <Main /> }),
-  'home-chat-empty': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} /> }),
-  'home-phone-empty': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('empty')} /> }),
-  'home-phone-sales': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('sales')} /> }),
-  'home-phone-typing': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('typing')} /> }),
-  'home-phone-reply': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('reply')} /> }),
-  'home-phone-failed': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('failed')} /> }),
-  'home-phone-card': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('card')} /> }),
-  'home-phone-ask': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('ask')} /> }),
-  'home-phone-screen': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('screen')} /> }),
-  'home-phone-lunch': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('lunch')} /> }),
+  'home-chat-empty': () => ({ session: fake(paired(), 'online'), node: <Main chat={[]} /> }),
+  'home-phone-empty': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main chat={[]} phone={phoneChat('empty')} /> }),
+  'home-phone-sales': () => ({ session: fake(paired(), 'online'), node: <Main chat={[]} phone={phoneChat('sales')} /> }),
+  'home-phone-typing': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main chat={[]} phone={phoneChat('typing')} /> }),
+  'home-phone-reply': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main chat={[]} phone={phoneChat('reply')} /> }),
+  'home-phone-failed': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main chat={[]} phone={phoneChat('failed')} /> }),
+  'home-phone-card': () => ({ session: fake(paired(), 'online'), node: <Main chat={[]} phone={phoneChat('card')} /> }),
+  'home-phone-ask': () => ({ session: fake(paired(), 'online'), node: <Main chat={[]} phone={phoneChat('ask')} /> }),
+  'home-phone-screen': () => ({ session: fake(paired(), 'online'), node: <Main chat={[]} phone={phoneChat('screen')} /> }),
+  'home-phone-lunch': () => ({ session: fake(paired(), 'online'), node: <Main chat={[]} phone={phoneChat('lunch')} /> }),
   'issue-sheet': () => issueSheet({}),
   'issue-sheet-search': () => issueSheet({ query: '동네' }),
   'issue-sheet-none': () => issueSheet({ query: '한강상회' }),
@@ -541,11 +558,11 @@ const SCREENS: Record<
   'issue-sheet-bizno': () => issueSheet({ step: 'bizNo', name: '한강상회' }),
   'issue-card': () => issueCardCase({ cp: cpOfCopy('cp_gana') }),
   'issue-card-new': () => issueCardCase({ cp: null, name: '한강상회', bizNo: '107-12-34567' }),
-  'home-phone-react-working': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('react-working')} /> }),
-  'home-phone-react-result': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('react-result')} /> }),
-  'home-phone-react-only': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('react-only')} /> }),
-  'home-plus-menu': () => ({ session: fake(paired(), 'online'), node: <Main live chat={[]} phone={phoneChat('card')} menu /> }),
-  'home-phone-limit': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main live chat={[]} phone={phoneChat('limit')} /> }),
+  'home-phone-react-working': () => ({ session: fake(paired(), 'online'), node: <Main chat={[]} phone={phoneChat('react-working')} /> }),
+  'home-phone-react-result': () => ({ session: fake(paired(), 'online'), node: <Main chat={[]} phone={phoneChat('react-result')} /> }),
+  'home-phone-react-only': () => ({ session: fake(paired(), 'online'), node: <Main chat={[]} phone={phoneChat('react-only')} /> }),
+  'home-plus-menu': () => ({ session: fake(paired(), 'online'), node: <Main chat={[]} phone={phoneChat('card')} menu /> }),
+  'home-phone-limit': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: <Main chat={[]} phone={phoneChat('limit')} /> }),
   home: () => ({ session: fake(paired(), 'online', { receipts: 2, cash: 0 }), node: <Main /> }),
   'home-stale': () => ({ session: fake({ ...paired(), lastSeenPc: now - 9 * DAY }, 'stale', { receipts: 3, cash: 1 }), node: <Main chat={CHAT} /> }),
   'money-empty': () => money(null),
@@ -568,13 +585,17 @@ const SCREENS: Record<
   'money-mark': () => money(MONEY_OK, { start: 'mark' }),
   'money-mark-offline': () => money(MONEY_LAST, { start: 'mark', live: false, pc: 'offline' }),
   'records-empty': () => ({ session: fake(paired(), 'online'), node: <Main start="records" /> }),
-  settings: () => ({ session: fake(paired(), 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="granted" /> }),
-  'settings-text-large': () => ({ session: fake({ ...paired(), textSize: 'large' }, 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="granted" /> }),
-  'settings-text-small': () => ({ session: fake({ ...paired(), textSize: 'small' }, 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="granted" /> }),
-  'settings-unpaired': () => ({ session: fake(emptyData(), 'unpaired'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="undetermined" /> }),
-  'settings-notify': () => ({ session: fake(paired(), 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="granted" sub="notify" /> }),
-  'settings-notify-ask': () => ({ session: fake(paired(), 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="undetermined" sub="notify" /> }),
-  'settings-notify-off': () => ({ session: fake({ ...paired(), notify: { run: true, money: false } }, 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="denied" sub="notify" /> }),
+  settings: () => ({ session: fake(paired(), 'online'), node: <InShell><SettingsScreen onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="granted" /></InShell> }),
+  inbox: () => ({ session: fake({ ...paired(), inbox: INBOX, inboxSeenAt: at(14, 0) }, 'online', { receipts: 1, cash: 0 }), jobs: JOBS.slice(6, 7), node: <InShell><InboxScreen onRun={noop} onCard={noop} onMoney={noop} onQueue={noop} now={now} /></InShell> }),
+  'inbox-empty': () => ({ session: fake(paired(), 'online'), node: <InShell><InboxScreen onRun={noop} onCard={noop} onMoney={noop} onQueue={noop} now={now} /></InShell> }),
+  menu: () => ({ session: fake({ ...paired(), inbox: INBOX, inboxSeenAt: at(14, 0) }, 'online'), node: <Main chat={CHAT} drawer /> }),
+  'home-chat-inbox-new': () => ({ session: fake({ ...paired(), inbox: INBOX, inboxSeenAt: at(14, 0) }, 'online'), node: <Main chat={CHAT} /> }),
+  'settings-text-large': () => ({ session: fake({ ...paired(), textSize: 'large' }, 'online'), node: <InShell><SettingsScreen onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="granted" /></InShell> }),
+  'settings-text-small': () => ({ session: fake({ ...paired(), textSize: 'small' }, 'online'), node: <InShell><SettingsScreen onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="granted" /></InShell> }),
+  'settings-unpaired': () => ({ session: fake(emptyData(), 'unpaired'), node: <InShell><SettingsScreen onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="undetermined" /></InShell> }),
+  'settings-notify': () => ({ session: fake(paired(), 'online'), node: <InShell><SettingsScreen onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="granted" sub="notify" /></InShell> }),
+  'settings-notify-ask': () => ({ session: fake(paired(), 'online'), node: <InShell><SettingsScreen onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="undetermined" sub="notify" /></InShell> }),
+  'settings-notify-off': () => ({ session: fake({ ...paired(), notify: { run: true, money: false } }, 'online'), node: <InShell><SettingsScreen onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="denied" sub="notify" /></InShell> }),
   'notify-banner': () => ({
     session: fake(paired(), 'online'),
     node: (
@@ -622,7 +643,7 @@ const SCREENS: Record<
     session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'),
     jobs: [JOBS[7]!],
     notes: [{ kind: 'note', id: 'n1', at: at(11, 42), text: '동네마트 성수점 세금계산서 352,000원을 맡겼어요. PC 켜지면 준비해요' }],
-    node: <Main chat={CHAT} live />,
+    node: <Main chat={CHAT} />,
   }),
   'queue-mixed': () => ({ session: fake(paired(), 'online'), jobs: JOBS, node: <QueueScreen onDone={noop} onConnection={noop} onOpen={noop} now={now} /> }),
   'queue-refused': () => ({

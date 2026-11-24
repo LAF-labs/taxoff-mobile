@@ -5,6 +5,7 @@ import type { PhoneCmd } from '../phoneCmd';
 import type { PcWhy } from '../net/pcWhy';
 import type { PxState } from '../net/pxLive';
 import type { NotifyPrefs } from '../notify/events';
+import type { InboxItem } from '../notify/inbox';
 import type { TextSize } from '../theme';
 import { File } from 'expo-file-system';
 import { fromUtf8, utf8, xOpen, xSeal, type DeviceListJson, type SignedCert } from '@sax/remote';
@@ -80,6 +81,8 @@ export interface AppData {
   pushAsked?: boolean;
   simpleId?: SimpleId | null;
   textSize?: TextSize;
+  inbox?: InboxItem[];
+  inboxSeenAt?: number;
 }
 
 export const emptyData = (): AppData => ({ v: 1, pair: null, deviceList: null, seenListVersion: 0, ikTs: 0, lastSeenPc: null, cash: [], recent: [], queueSeq: 0, qbundleSeq: 0 });

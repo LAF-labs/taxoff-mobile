@@ -1,18 +1,12 @@
 import * as Haptics from 'expo-haptics';
-import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
+import { useContext, useEffect, useRef, type ReactNode } from 'react';
 import {
   ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View,
   type AccessibilityRole, type StyleProp, type TextStyle, type ViewStyle,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ShellTop, TOP_SPACE } from './float';
 import { MAX_FONT_SCALE, TextSizeContext, motion, radius, size, space, textScale, type, useReducedMotion, usePalette, type Ink, type TypeName } from '../theme';
-
-/** 탭 화면 아래를 덮는 떠 있는 탭바 높이. 탭 화면은 이만큼 아래를 비운다. */
-export const TabInset = createContext(0);
-/** 탭 화면 스크롤 위치(위에서부터 떨어진 거리)를 떠 있는 탭바에 알린다. 탭바는 멀어지면 작아진다. */
-export const TabScroll = createContext<(y: number) => void>(() => {});
-/** 탭바가 줄어들며 내려앉는 거리(pt, 움직이는 값). 탭바 바로 위에 붙은 것(대화 입력창)이 같이 내려간다. */
-export const TabDrop = createContext<Animated.AnimatedInterpolation<number> | 0>(0);
 
 const keepAll = { wordBreak: 'keep-all', overflowWrap: 'anywhere' } as unknown as TextStyle;
 
@@ -43,19 +37,19 @@ export function T({
 }
 
 export function Screen({
-  title, onBack, backLabel = '뒤로', right, children, footer, scroll = true, testID, style, tabbed,
+  title, onBack, backLabel = '뒤로', right, children, footer, scroll = true, testID, style, shell,
 }: {
   title?: string; onBack?: () => void; backLabel?: string; right?: ReactNode; children: ReactNode; footer?: ReactNode; scroll?: boolean; testID?: string; style?: StyleProp<ViewStyle>;
-  tabbed?: boolean;
+  /** 맨 위 화면(더보기 메뉴로 오가는 화면): 머리 줄 대신 떠 있는 더보기, 제목, PC 상태를 두고 본문이 그 밑으로 지나간다. */
+  shell?: boolean;
 }) {
   const p = usePalette();
   const inset = useSafeAreaInsets();
-  const tabInset = useContext(TabInset);
-  const tabScroll = useContext(TabScroll);
-  const bottom = tabbed ? space.s6 + tabInset : space.s6 + inset.bottom;
-  const head = title !== undefined || onBack || right;
+  const bottom = space.s6 + inset.bottom;
+  const head = !shell && (title !== undefined || onBack || right);
+  const top = shell ? { paddingTop: inset.top + TOP_SPACE } : null;
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={[{ flex: 1, backgroundColor: p.canvas }, style]} testID={testID}>
+    <SafeAreaView edges={shell ? ['left', 'right'] : ['top', 'left', 'right']} style={[{ flex: 1, backgroundColor: p.canvas }, style]} testID={testID}>
       {head && (
         <View style={st.header}>
           <View style={st.headerSide}>{onBack && <Back onPress={onBack} label={backLabel} />}</View>
@@ -70,14 +64,25 @@ export function Screen({
       {}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={footer && Platform.OS === 'ios' ? 'padding' : undefined} enabled={!!footer}>
       {scroll ? (
-        <ScrollView onScroll={tabbed ? (e) => tabScroll(e.nativeEvent.contentOffset.y) : undefined} scrollEventThrottle={tabbed ? 32 : undefined} contentContainerStyle={[st.content, !footer && { paddingBottom: bottom }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets={!footer}>
+        <ScrollView contentContainerStyle={[st.content, top, !footer && { paddingBottom: bottom }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets={!footer}>
           {children}
         </ScrollView>
       ) : (
-        <View style={[st.content, { flex: 1 }, !footer && { paddingBottom: bottom }]}>{children}</View>
+        <View style={[st.content, top, { flex: 1 }, !footer && { paddingBottom: bottom }]}>{children}</View>
       )}
-      {footer && <View style={[st.footer, { paddingBottom: tabbed ? space.s3 : Math.max(inset.bottom, space.s4), backgroundColor: p.canvas, borderTopColor: p.line }]}>{footer}</View>}
+      {footer && <View style={[st.footer, { paddingBottom: Math.max(inset.bottom, space.s4), backgroundColor: p.canvas, borderTopColor: p.line }]}>{footer}</View>}
       </KeyboardAvoidingView>
+      {shell && (
+        <ShellTop
+          title={
+            title !== undefined ? (
+              <T v="title" lines={1} role="header">
+                {title}
+              </T>
+            ) : undefined
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -164,11 +169,12 @@ export function Group({ children, title, note, style, testID }: { children: Reac
 }
 
 export function Row({
-  label, value, sub, onPress, chevron, testID, valueInk = 'ink2', strong, accessory, subInk = 'ink3',
-}: { label: string; value?: ReactNode; sub?: string; onPress?: () => void; chevron?: boolean; testID?: string; valueInk?: Ink; strong?: boolean; accessory?: ReactNode; subInk?: Ink }) {
+  label, value, sub, onPress, chevron, testID, valueInk = 'ink2', strong, accessory, subInk = 'ink3', icon,
+}: { label: string; value?: ReactNode; sub?: string; onPress?: () => void; chevron?: boolean; testID?: string; valueInk?: Ink; strong?: boolean; accessory?: ReactNode; subInk?: Ink; icon?: ReactNode }) {
   const p = usePalette();
   const body = (
     <>
+      {icon}
       <View style={{ flex: 1, gap: 2 }}>
         <T v={strong ? 'strong' : 'body'}>{label}</T>
         {sub && <T v="meta" c={subInk}>{sub}</T>}
@@ -181,6 +187,48 @@ export function Row({
   if (!onPress) return <View style={st.row} testID={testID}>{body}</View>;
   return (
     <Pressable testID={testID} accessibilityRole="button" onPress={onPress} style={({ pressed }) => [st.row, pressed && { backgroundColor: p.sunken }]}>
+      {body}
+    </Pressable>
+  );
+}
+
+/**
+ * 알림 한 줄: 종류 아이콘, 제목, 내용, 시각 세 줄. 새 알림은 굵은 제목과 오른쪽 파란 점(제목 줄 가운데).
+ * Group 안에 Row처럼 넣는다.
+ */
+export function NoteRow({
+  icon, title, line, time, fresh, onPress, testID,
+}: { icon: ReactNode; title: string; line: string; time: string; fresh?: boolean; onPress?: () => void; testID?: string }) {
+  const p = usePalette();
+  const body = (
+    <>
+      <View style={st.noteHead}>
+        {icon}
+        <T v={fresh ? 'strong' : 'body'} style={{ flex: 1 }}>
+          {title}
+        </T>
+        {fresh && <View style={[st.noteNew, { backgroundColor: p.accent }]} testID={testID ? `${testID}-new` : undefined} />}
+      </View>
+      <View style={st.noteBody}>
+        <T v="sub" c="ink2">
+          {line}
+        </T>
+        <T v="meta" c="ink3">
+          {time}
+        </T>
+      </View>
+    </>
+  );
+  const a11y = `${fresh ? '새 알림. ' : ''}${title}. ${line}. ${time}`;
+  if (!onPress) {
+    return (
+      <View style={st.noteRow} testID={testID} accessible accessibilityLabel={a11y}>
+        {body}
+      </View>
+    );
+  }
+  return (
+    <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={a11y} onPress={onPress} style={({ pressed }) => [st.noteRow, pressed && { backgroundColor: p.sunken }]}>
       {body}
     </Pressable>
   );
@@ -360,6 +408,10 @@ export const st = StyleSheet.create({
   group: { borderRadius: radius.lg, overflow: 'hidden' },
   sep: { height: StyleSheet.hairlineWidth, marginLeft: space.s4 },
   row: { minHeight: size.row, flexDirection: 'row', alignItems: 'center', gap: space.s3, paddingHorizontal: space.s4, paddingVertical: space.s3 },
+  noteRow: { gap: 2, paddingHorizontal: space.s4, paddingVertical: space.s3 + 2 },
+  noteHead: { flexDirection: 'row', alignItems: 'center', gap: space.s3 },
+  noteBody: { gap: 2, paddingLeft: 18 + space.s3 },
+  noteNew: { width: 8, height: 8, borderRadius: radius.full },
   status: { flexDirection: 'row', alignItems: 'center', gap: space.s2 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   pill: { minHeight: 36, minWidth: 52, paddingHorizontal: space.s3, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },

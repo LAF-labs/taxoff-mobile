@@ -11,7 +11,7 @@ export function RecordsScreen({ go }: { go: (to: HomeRoute) => void }) {
   const done = q.jobs.filter((j) => j.run?.kind === 'done').sort((a, b) => b.createdAt - a.createdAt);
   if (paired && done.length > 0) {
     return (
-      <Screen title="기록" tabbed testID="records">
+      <Screen title="발급 기록" shell testID="records">
         <Group title="발급한 세금계산서" testID="records-list">
           {done.map((j) => {
             const r = j.run?.kind === 'done' ? j.run.result : null;
@@ -35,7 +35,7 @@ export function RecordsScreen({ go }: { go: (to: HomeRoute) => void }) {
     );
   }
   return (
-    <Screen title="기록" tabbed scroll={false} testID="records">
+    <Screen title="발급 기록" shell scroll={false} testID="records">
       <Empty
         testID="records-empty"
         title="아직 발급한 게 없어요"

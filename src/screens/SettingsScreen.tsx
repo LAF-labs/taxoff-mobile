@@ -22,7 +22,7 @@ const open = (url: string) => () => void Linking.openURL(url).catch(() => {});
 
 export function SettingsScreen({
   onDone, onConnection, onPair, onDevices, bioPreview, permPreview, sub: initialSub = null,
-}: { onDone: () => void; onConnection: () => void; onPair: () => void; onDevices: () => void; bioPreview?: BioInfo; permPreview?: Permission; sub?: 'notify' | null }) {
+}: { onDone?: () => void; onConnection: () => void; onPair: () => void; onDevices: () => void; bioPreview?: BioInfo; permPreview?: Permission; sub?: 'notify' | null }) {
   const s = useSession();
   const bio = useBioInfo(bioPreview);
   const [sub, setSub] = useState<'notify' | null>(initialSub);
@@ -44,7 +44,7 @@ export function SettingsScreen({
   const lockSub = bio && bio.enrolled && bio.kind !== 'none' ? `${bioName(bio.kind)}, 안 되면 폰 암호` : '폰 암호';
 
   return (
-    <Screen title="설정" onBack={onDone} testID="settings">
+    <Screen title="설정" onBack={onDone} shell={!onDone} testID="settings">
       <Group title="연결">
         {pair ? (
           <Row testID="settings-pc" label={pair.desktopName ?? '내 PC'} sub={line.label} subInk={line.tone === 'attention' ? 'attention' : 'ink3'} onPress={onConnection} />

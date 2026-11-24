@@ -19,14 +19,14 @@ export function MoneyScreen({ go }: { go: (to: HomeRoute) => void }) {
 
   if (!paired) {
     return (
-      <Screen title="돈" tabbed scroll={false} testID="money">
+      <Screen title="돈" shell scroll={false} testID="money">
         <Empty testID="money-unpaired" title="PC와 연결하면 돈 흐름이 보여요" sub="먼저 이 폰을 PC와 연결해 주세요." action={<Button label="PC 연결하기" onPress={() => go('pair')} />} />
       </Screen>
     );
   }
   if (m.status === 'loading') {
     return (
-      <Screen title="돈" tabbed scroll={false} testID="money">
+      <Screen title="돈" shell scroll={false} testID="money">
         <View style={st.center} testID="money-loading">
           <ActivityIndicator color={p.ink3} />
           <T v="sub" c="ink2">
@@ -38,7 +38,7 @@ export function MoneyScreen({ go }: { go: (to: HomeRoute) => void }) {
   }
   if (m.status === 'error') {
     return (
-      <Screen title="돈" tabbed scroll={false} testID="money">
+      <Screen title="돈" shell scroll={false} testID="money">
         <Empty testID="money-error" title="돈 요약을 받지 못했어요" sub="PC와 연결이 잠깐 끊겼을 수 있어요." action={<Button label="다시 불러오기" onPress={m.reload} testID="money-reload" />} />
       </Screen>
     );
@@ -47,7 +47,7 @@ export function MoneyScreen({ go }: { go: (to: HomeRoute) => void }) {
   if (!m.snap && cm) return <CopyMoney money={cm} />;
   if (!m.snap) {
     return (
-      <Screen title="돈" tabbed scroll={false} testID="money">
+      <Screen title="돈" shell scroll={false} testID="money">
         <Empty
           testID="money-none"
           title="PC가 켜지면 돈 요약을 받아 와요"
@@ -68,7 +68,7 @@ export function MoneyScreen({ go }: { go: (to: HomeRoute) => void }) {
   const monthNo = Number(month.month.slice(5, 7));
 
   return (
-    <Screen title="돈" tabbed testID="money">
+    <Screen title="돈" shell testID="money">
       {alert && <Notice testID={`money-alert-${alert.kind}`}>{alertLine(alert)}</Notice>}
 
       <View style={{ gap: space.s2 }}>
@@ -144,7 +144,7 @@ function CopyMoney({ money }: { money: NonNullable<PhoneCopyBody['money']> }) {
   const monthNo = cf ? Number(cf.month.slice(5, 7)) : null;
   const n30 = cf && (cf.in30 != null || cf.out30 != null);
   return (
-    <Screen title="돈" tabbed testID="money">
+    <Screen title="돈" shell testID="money">
       {alert && <Notice testID={`money-alert-${alert.kind}`}>{alert.text}</Notice>}
 
       <View style={{ gap: space.s2 }}>

@@ -9,10 +9,9 @@
     "src/screens/CaptureScreen.tsx": 5,
     "src/screens/CardApprove.tsx": 1,
     "src/screens/CashScreen.tsx": 1,
-    "src/screens/HomeScreen.tsx": 9,
+    "src/screens/HomeScreen.tsx": 7,
     "src/screens/IssueSheet.tsx": 2,
     "src/screens/LockScreen.tsx": 1,
-    "src/screens/MainScreen.tsx": 3,
     "src/screens/OnboardingScreen.tsx": 10,
     "src/screens/PairScreen.tsx": 7,
     "src/screens/RunCard.tsx": 1,
@@ -42,9 +41,8 @@
     "src/screens/CaptureScreen.tsx": 7,
     "src/screens/CashScreen.tsx": 1,
     "src/screens/DocScreen.tsx": 2,
-    "src/screens/HomeScreen.tsx": 16,
+    "src/screens/HomeScreen.tsx": 12,
     "src/screens/IssueSheet.tsx": 1,
-    "src/screens/MainScreen.tsx": 5,
     "src/screens/OnboardingScreen.tsx": 15,
     "src/screens/PairScreen.tsx": 8,
     "src/screens/RunCard.tsx": 3,
@@ -56,7 +54,6 @@
   },
   "raw-type": {
     "src/screens/HomeScreen.tsx": 2,
-    "src/screens/MainScreen.tsx": 2,
     "src/ui/field.tsx": 1
   }
 }

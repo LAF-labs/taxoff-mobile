@@ -9,7 +9,6 @@ import { bubbleGroup, chatFromData, clockRange, stampBefore, stateOf, type ChatC
 import { useOfflineChat, type OfflineChatView, type ReplyTo } from '../offline/useOfflineChat';
 import type { PhoneScreen, ReactionId } from '@sax/chat-core';
 import { BRAND } from '../config';
-import { queueCounts } from '../queue';
 import { useQueue, type DraftEdit } from '../queueStore';
 import { RunCard } from './RunCard';
 import { useIssueSubmit, type IssueSubmit } from '../issueSubmit';
@@ -23,9 +22,10 @@ import { jpegUri } from '../capture/thumb';
 import { useSession } from '../session';
 import type { PcStatus } from '../net/pc';
 import { MAX_FONT_SCALE, TextSizeContext, radius, size, space, textScale, type, usePalette, useReducedMotion } from '../theme';
-import { Button, Check, Chevron, Pill, Seg, T, TabDrop, TabInset, TabScroll, ago, success, tap, won, type Tone } from '../ui/kit';
+import { Button, Check, Chevron, Pill, Seg, T, ago, success, tap, won, type Tone } from '../ui/kit';
+import { CAPSULE_SIDE, Capsule, DOWN_GAP, DownButton, FloatPill, ShellTop, TOP_SPACE, useKeyboardShown } from '../ui/float';
 
-export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'devices' | 'issue' | 'queue' | 'run' | 'doc' | 'bizreg' | 'recv' | 'pay' | 'mark';
+export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'devices' | 'issue' | 'queue' | 'inbox' | 'run' | 'doc' | 'bizreg' | 'recv' | 'pay' | 'mark';
 
 export function pcLine(pc: PcStatus, lastSeen: number | null): { tone: Tone; label: string; sub?: string; busy?: boolean } {
   switch (pc) {
@@ -43,19 +43,13 @@ export function pcLine(pc: PcStatus, lastSeen: number | null): { tone: Tone; lab
   }
 }
 
-/** 머리 오른쪽의 PC 상태 알약. 누르면 PC 연결 화면. */
-function PcPill({ pc, lastSeen, onPress }: { pc: PcStatus; lastSeen: number | null; onPress: () => void }) {
+/** 오른쪽 위에 떠 있는 PC 상태 알약. 누르면 PC 연결 화면. */
+export function PcPill({ pc, lastSeen, onPress }: { pc: PcStatus; lastSeen: number | null; onPress: () => void }) {
   const p = usePalette();
   const l = pcLine(pc, lastSeen);
   const warn = l.tone === 'attention';
   return (
-    <Pressable
-      testID="pc-status"
-      accessibilityRole="button"
-      accessibilityLabel={`${l.label}${l.sub ? `, ${l.sub}` : ''}. 연결 상태 보기`}
-      onPress={onPress}
-      style={({ pressed }) => [st.pcPill, { backgroundColor: warn ? p.attentionSoft : p.tint }, pressed && { opacity: 0.6 }]}
-    >
+    <FloatPill testID="pc-status" label={`${l.label}${l.sub ? `, ${l.sub}` : ''}. 연결 상태 보기`} warn={warn} onPress={onPress}>
       <View style={[st.pcDot, l.tone === 'accent' ? { backgroundColor: p.accent } : warn ? { backgroundColor: p.attention } : { borderWidth: 1.5, borderColor: p.ink3 }]} />
       <T v="subStrong" c={warn ? 'attention' : 'ink'}>
         {l.label}
@@ -65,7 +59,7 @@ function PcPill({ pc, lastSeen, onPress }: { pc: PcStatus; lastSeen: number | nu
           {l.sub}
         </T>
       )}
-    </Pressable>
+    </FloatPill>
   );
 }
 
@@ -83,23 +77,20 @@ function RelinkCard({ onRelink }: { onRelink: () => void }) {
   );
 }
 
-export interface Todo {
-  approvals: number;
-  backlog: number;
-}
-
 const FOLLOW_PX = 80;
 const KEEP_POSITION = { minIndexForVisible: 0, autoscrollToTopThreshold: FOLLOW_PX } as const;
 const SHOW_END_PX = 160;
 
-export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen = false, focusAfter, onIssue }: { go: (to: HomeRoute) => void; onIssue?: () => void; chat?: ChatItem[]; todo?: Todo; draft?: string; phone?: OfflineChatView; menu?: boolean; focusAfter?: number }) {
+export function HomeScreen({ go, chat, draft = '', phone, menu: menuOpen = false, focusAfter, onIssue }: { go: (to: HomeRoute) => void; onIssue?: () => void; chat?: ChatItem[]; draft?: string; phone?: OfflineChatView; menu?: boolean; focusAfter?: number }) {
   const s = useSession();
   const p = usePalette();
   useContext(TextSizeContext);
   const paired = !!s.data.pair;
   const q = useQueue();
-  const qc = queueCounts(q.jobs, Date.now());
-  const t = todo ?? { approvals: qc.approvals, backlog: qc.backlog + s.pending.receipts + s.pending.cash };
+  const inset = useSafeAreaInsets();
+  const kb = useKeyboardShown();
+  /** 떠 있는 더보기와 PC 상태 밑으로 대화 맨 위 글이 숨지 않게 둔 여백. */
+  const topPad = inset.top + TOP_SPACE;
   const [mine, setMine] = useState<ChatItem[]>([]);
   const [text, setText] = useState(draft);
   const [menu, setMenu] = useState(menuOpen);
@@ -130,9 +121,6 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
   };
   const list = useRef<FlatList<ChatItem>>(null);
   const [barH, setBarH] = useState(0);
-  const tabInset = useContext(TabInset);
-  const tabScroll = useContext(TabScroll);
-  const tabDrop = useContext(TabDrop);
   const y = useRef(0);
   const [endBtn, setEndBtn] = useState<null | 'end' | 'new'>(null);
   const endRef = useRef<null | 'end' | 'new'>(null);
@@ -143,7 +131,6 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
   };
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     y.current = Math.max(0, e.nativeEvent.contentOffset.y);
-    tabScroll(y.current);
     if (y.current <= FOLLOW_PX) setEnd(null);
     else if (y.current > SHOW_END_PX && endRef.current === null) setEnd('end');
   };
@@ -243,37 +230,12 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
   };
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={[st.fill, { backgroundColor: p.canvas }]} testID="home">
+    <SafeAreaView edges={['left', 'right']} style={[st.fill, { backgroundColor: p.canvas }]} testID="home">
       {}
       <KeyboardAvoidingView style={st.fill} behavior="translate-with-padding">
-        {}
-        <View style={st.top}>
-          {paired ? (
-            <TodoLine todo={t} onPress={() => go('queue')} />
-          ) : (
-            <View style={{ flex: 1, paddingLeft: space.s1 }}>
-              <T v="title" role="header">
-                {BRAND}
-              </T>
-            </View>
-          )}
-          {paired && <PcPill pc={s.pc} lastSeen={s.data.lastSeenPc} onPress={() => go('connection')} />}
-          <Pressable
-            testID="go-settings"
-            accessibilityRole="button"
-            accessibilityLabel="설정"
-            hitSlop={4}
-            onPress={() => go('settings')}
-            style={({ pressed }) => [st.topBtn, pressed && { backgroundColor: p.tint }]}
-          >
-            <Kebab color={p.ink2} />
-          </Pressable>
-        </View>
-        {}
-
         <View style={st.fill}>
         {!paired || items.length === 0 ? (
-          <ScrollView style={st.fill} contentContainerStyle={[st.chat, !paired ? { justifyContent: 'center' } : { paddingBottom: space.s4 + barH }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" testID="chat">
+          <ScrollView style={st.fill} contentContainerStyle={[st.chat, { paddingTop: topPad }, !paired ? { justifyContent: 'center' } : { paddingBottom: space.s4 + barH }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" testID="chat">
             {!paired ? <Intro onPair={() => go('pair')} /> : relink ? <RelinkCard onRelink={() => go('pair')} /> : <Starter phoneAnswers={phoneAnswers} onPick={pick} />}
           </ScrollView>
         ) : (
@@ -285,7 +247,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
             onScrollToIndexFailed={(e) => list.current?.scrollToOffset({ offset: e.averageItemLength * e.index, animated: true })}
             maintainVisibleContentPosition={KEEP_POSITION}
             style={st.fill}
-            contentContainerStyle={[st.list, { paddingTop: space.s4 + barH }]}
+            contentContainerStyle={[st.list, { paddingTop: space.s4 + barH, paddingBottom: topPad }]}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             onScroll={onScroll}
@@ -331,16 +293,11 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
             }}
           />
         )}
-        <TopFade />
-        {endBtn && (
-          // 탭바·입력창이 내려앉으면 같이 내려간다. 단추 자체의 나타나기는 네이티브 드라이버라 바깥 틀에서 옮긴다.
-          <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { transform: [{ translateY: tabDrop }] }]}>
-            <NewReply fresh={endBtn === 'new'} onPress={toEnd} lift={barH} />
-          </Animated.View>
-        )}
+        <ShellTop />
+        {endBtn && <NewReply fresh={endBtn === 'new'} onPress={toEnd} lift={barH - space.s4 + DOWN_GAP} />}
 
         {paired && (
-          <Animated.View style={[st.bottom, { paddingBottom: space.s2 + tabInset, transform: [{ translateY: tabDrop }] }]} onLayout={(e) => setBarH(e.nativeEvent.layout.height)}>
+          <View style={[st.bottom, { paddingBottom: kb ? space.s2 : inset.bottom + space.s1 }]} onLayout={(e) => setBarH(e.nativeEvent.layout.height)}>
             <BottomFade />
             {menu && (
               <View style={[st.menu, { backgroundColor: p.tint }]} testID="quick-menu">
@@ -373,7 +330,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
                 </Pressable>
               </View>
             )}
-            <View style={st.inputRow}>
+            <Capsule testID="chat-composer">
               <Pressable
                 testID="chat-plus"
                 accessibilityRole="button"
@@ -384,40 +341,39 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
                   tap();
                   setMenu((m) => !m);
                 }}
-                style={({ pressed }) => [st.round, { backgroundColor: pressed || menu ? p.sunken : p.tint, borderColor: p.line }]}
+                style={({ pressed }) => [st.plus, (pressed || menu) && { backgroundColor: p.tint }]}
               >
-                <Plus color={p.ink2} open={menu} />
+                <Plus color={p.ink} open={menu} />
               </Pressable>
-              <View style={[st.field, { backgroundColor: p.tint, borderColor: p.line }]}>
-                <TextInput
-                  ref={input}
-                  testID="chat-input"
-                  value={text}
-                  onChangeText={(v) => {
-                    setText(v);
-                    if (endRef.current) toEnd();
-                  }}
-                  onFocus={() => {
-                    setMenu(false);
-                    toEnd();
-                  }}
-                  placeholder="궁금한 것이나 시킬 일"
-                  placeholderTextColor={p.ink3}
-                  accessibilityLabel="궁금한 것이나 시킬 일 적기"
-                  maxFontSizeMultiplier={MAX_FONT_SCALE}
-                  multiline
-                  onSubmitEditing={send}
-                  style={[
-                    type.body,
-                    textScale.web !== 1 && { fontSize: type.body.fontSize * textScale.web, lineHeight: type.body.lineHeight * textScale.web },
-                    st.input,
-                    { color: p.ink },
-                  ]}
-                />
-                <SendButton onPress={send} disabled={!text.trim() || offline.busy} />
-              </View>
-            </View>
-          </Animated.View>
+              <TextInput
+                ref={input}
+                testID="chat-input"
+                value={text}
+                onChangeText={(v) => {
+                  setText(v);
+                  if (endRef.current) toEnd();
+                }}
+                onFocus={() => {
+                  setMenu(false);
+                  toEnd();
+                }}
+                placeholder="궁금한 것이나 시킬 일"
+                placeholderTextColor={p.ink3}
+                accessibilityLabel="궁금한 것이나 시킬 일 적기"
+                maxFontSizeMultiplier={MAX_FONT_SCALE}
+                multiline
+                rows={Platform.OS === 'web' ? 1 : undefined}
+                onSubmitEditing={send}
+                style={[
+                  type.body,
+                  textScale.web !== 1 && { fontSize: type.body.fontSize * textScale.web, lineHeight: type.body.lineHeight * textScale.web },
+                  st.input,
+                  { color: p.ink },
+                ]}
+              />
+              <SendButton onPress={send} disabled={!text.trim() || offline.busy} />
+            </Capsule>
+          </View>
         )}
         </View>
       </KeyboardAvoidingView>
@@ -537,17 +493,6 @@ function BottomFade() {
   );
 }
 
-function TopFade() {
-  const p = usePalette();
-  return (
-    <View pointerEvents="none" style={st.fade}>
-      {FADE.map((o, i) => (
-        <View key={i} style={{ height: 2, backgroundColor: p.canvas, opacity: o }} />
-      ))}
-    </View>
-  );
-}
-
 function NewReply({ fresh, onPress, lift }: { fresh: boolean; onPress: () => void; lift: number }) {
   const p = usePalette();
   const still = useReducedMotion();
@@ -557,22 +502,21 @@ function NewReply({ fresh, onPress, lift }: { fresh: boolean; onPress: () => voi
     Animated.timing(a, { toValue: 1, duration: 160, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
   }, [a, still]);
   return (
-    <Animated.View pointerEvents="box-none" style={[st.newReplyWrap, { bottom: space.s3 + lift, opacity: a, transform: [{ translateY: a.interpolate({ inputRange: [0, 1], outputRange: [6, 0] }) }] }]}>
-      <Pressable
+    <Animated.View pointerEvents="box-none" style={[st.newReplyWrap, { bottom: lift, opacity: a, transform: [{ translateY: a.interpolate({ inputRange: [0, 1], outputRange: [6, 0] }) }] }]}>
+      <DownButton
         testID="chat-new-reply"
-        accessibilityRole="button"
-        accessibilityLabel={fresh ? '새 답 보기' : '맨 아래로'}
+        label={fresh ? '새 답 보기' : '맨 아래로'}
+        wide={fresh}
         onPress={() => {
           tap();
           onPress();
         }}
-        style={({ pressed }) => [st.newReply, !fresh && st.endOnly, { backgroundColor: pressed ? p.sunken : p.tint, shadowColor: p.ink }]}
       >
-        <View style={{ marginTop: -4 }}>
-          <Chevron color={p.ink2} dir="down" sizePx={7} />
+        <View style={{ marginTop: -3 }}>
+          <Chevron color={p.ink} dir="down" sizePx={7} />
         </View>
         {fresh && <T v="label">새 답</T>}
-      </Pressable>
+      </DownButton>
     </Animated.View>
   );
 }
@@ -581,45 +525,7 @@ const SCREEN_LABEL: Record<PhoneScreen, string> = { capture: '증빙 찍기', ca
 
 const CANT_SEND_TEXT = '이 폰에서는 아직 대화를 보낼 수 없어요. 앱을 다시 열거나 설정에서 PC 연결을 확인해 주세요.';
 
-function Kebab({ color }: { color: string }) {
-  return (
-    <View style={{ gap: 3, alignItems: 'center' }}>
-      {[0, 1, 2].map((i) => (
-        <View key={i} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: color }} />
-      ))}
-    </View>
-  );
-}
-
 const at = (it: ChatItem) => (it.kind === 'merged' ? it.from : it.at);
-
-function TodoLine({ todo, onPress }: { todo: Todo; onPress: () => void }) {
-  const p = usePalette();
-  const parts = [todo.approvals > 0 && `승인\u00A0대기\u00A0${todo.approvals}건`, todo.backlog > 0 && `밀린\u00A0일\u00A0${todo.backlog}건`].filter(Boolean).join(', ');
-  const body = (
-    <>
-      <T v="subStrong" style={{ flexShrink: 0 }}>
-        지금 할 일
-      </T>
-      <T v="sub" c={parts ? 'ink' : 'ink3'} style={{ flexShrink: 1 }} lines={1} testID="todo-counts">
-        {parts || '없음'}
-      </T>
-      {parts ? <Chevron color={p.ink4} /> : null}
-    </>
-  );
-  if (!parts) return <View style={st.todo} testID="todo">{body}</View>;
-  return (
-    <Pressable
-      testID="todo"
-      accessibilityRole="button"
-      accessibilityLabel={`지금 할 일: ${parts.replace(/\u00A0/g, ' ')}`}
-      onPress={onPress}
-      style={({ pressed }) => [st.todo, pressed && { opacity: 0.6 }]}
-    >
-      {body}
-    </Pressable>
-  );
-}
 
 function Intro({ onPair }: { onPair: () => void }) {
   const p = usePalette();
@@ -1137,21 +1043,14 @@ function Chip({ label, onPress, testID }: { label: string; onPress: () => void; 
 
 const st = StyleSheet.create({
   fill: { flex: 1 },
-  top: { minHeight: size.header, flexDirection: 'row', alignItems: 'center', gap: space.s2, paddingLeft: space.s4, paddingRight: space.s2, paddingTop: space.s1 },
-  pcPill: { minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: space.s2, paddingHorizontal: space.s3, borderRadius: radius.full },
   pcDot: { width: 8, height: 8, borderRadius: radius.full },
   relink: { gap: space.s3, padding: space.s4, borderRadius: radius.lg, borderWidth: 1, marginHorizontal: space.s5, marginBottom: space.s3 },
-  topBtn: { minWidth: size.hit, minHeight: size.hit, paddingHorizontal: space.s3, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   lines: { paddingHorizontal: space.s5, gap: space.s2, paddingBottom: space.s2 },
   pcLine: { minHeight: size.hit, flexDirection: 'row', alignItems: 'center', gap: space.s3, marginHorizontal: -space.s2, paddingHorizontal: space.s2, borderRadius: radius.md },
-  todo: { flex: 1, minHeight: size.hit, flexDirection: 'row', alignItems: 'center', gap: space.s2, paddingLeft: space.s1 },
-  fade: { position: 'absolute', top: 0, left: 0, right: 0 },
   newReplyWrap: { position: 'absolute', left: 0, right: 0, bottom: space.s3, alignItems: 'center' },
-  endOnly: { paddingLeft: 0, paddingRight: 0, width: 36, justifyContent: 'center' },
   list: { paddingHorizontal: space.s5, paddingTop: space.s4, paddingBottom: space.s3 },
   row: { gap: space.s4, paddingTop: space.s4 },
   listEnd: { gap: space.s4, paddingTop: space.s4 },
-  newReply: { flexDirection: 'row', alignItems: 'center', gap: space.s1, minHeight: 36, paddingLeft: space.s3, paddingRight: space.s4, borderRadius: radius.full, shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
   chat: { paddingHorizontal: space.s5, paddingTop: space.s3, paddingBottom: space.s4, gap: space.s4, flexGrow: 1, justifyContent: 'flex-end' },
   msg: { gap: space.s1, alignSelf: 'stretch' },
   follow: { marginTop: -(space.s4 - space.s1) },
@@ -1178,14 +1077,12 @@ const st = StyleSheet.create({
   examples: { alignItems: 'flex-start', gap: space.s2 },
   mergedWrap: { alignItems: 'center', paddingVertical: space.s1 },
   merged: { borderRadius: radius.full, paddingHorizontal: space.s3, paddingVertical: space.s1 },
-  bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: space.s3, paddingTop: space.s2, paddingBottom: space.s2, gap: space.s2 },
+  bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: CAPSULE_SIDE, paddingTop: space.s4, gap: space.s2 },
   menu: { borderRadius: radius.lg, paddingVertical: space.s1, overflow: 'hidden' },
   menuRow: { minHeight: size.row, flexDirection: 'row', alignItems: 'center', gap: space.s3, paddingHorizontal: space.s4, paddingVertical: space.s2 },
-  round: { width: 44, height: 44, borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
-  field: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, paddingRight: 4, paddingBottom: 4, minHeight: size.hit },
-  send: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  plus: { width: 38, height: 38, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  send: { width: 32, height: 32, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center', marginBottom: 3 },
   chip: { minHeight: size.hit, paddingHorizontal: space.s4, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
-  inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: space.s2 },
   replyBar: { flexDirection: 'row', alignItems: 'center', gap: space.s2, borderRadius: radius.lg, paddingLeft: space.s4, paddingRight: space.s1, paddingVertical: space.s2 },
   replyX: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   replyCtx: { borderRadius: 22, maxWidth: '90%', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24, marginBottom: -20 },
@@ -1196,5 +1093,5 @@ const st = StyleSheet.create({
   holdMenu: { position: 'absolute', minWidth: 200, borderRadius: radius.lg, paddingVertical: space.s1, overflow: 'hidden' },
   holdIcon: { width: 22, alignItems: 'center' },
   holdRow: { height: ROW_H, flexDirection: 'row', alignItems: 'center', gap: space.s3, paddingHorizontal: space.s4 },
-  input: { flex: 1, minHeight: size.hit, maxHeight: 132, paddingLeft: space.s4, paddingRight: space.s2, paddingTop: 10, paddingBottom: 10 },
+  input: { flex: 1, minHeight: 38, maxHeight: 132, paddingLeft: space.s1, paddingRight: space.s2, paddingTop: 7, paddingBottom: 7 },
 });
