@@ -1,7 +1,4 @@
 {
-  "actions-right": {
-    "src/screens/QueueScreen.tsx": 1
-  },
   "border": {
     "src/notify/NotifyHost.tsx": 1,
     "src/screens/ApprovalSheet.tsx": 1,

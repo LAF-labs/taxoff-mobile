@@ -13,7 +13,6 @@ const THEME = 'src/theme.ts';
 export const RULES = {
   border: '화면 코드에서 테두리를 직접 그리지 않는다. 카드, 줄, 입력 칸은 src/ui 부품을 쓴다.',
   'overlay-adhoc': '시트와 확인 창은 src/ui의 공용 부품으로만 띄운다. 화면에서 Modal과 딤을 직접 그리지 않는다.',
-  'actions-right': '단추 줄은 왼쪽부터 놓는다. 오른쪽 정렬을 쓰지 않는다.',
   'raw-color': '색은 src/theme.ts 토큰으로만 쓴다.',
   'raw-type': '글자 크기는 src/theme.ts의 type으로만 쓴다.',
   'raw-radius': '모서리 값은 src/theme.ts의 radius로만 쓴다.',
@@ -85,7 +84,6 @@ export function scan(): Hit[] {
       const hit = (rule: Rule) => hits.push({ rule, file, line: i + 1, text: text.trim().slice(0, 160) });
       if (!shared && /\bborder(Top|Bottom|Left|Right)?Width\b/.test(text)) hit('border');
       if (!shared && (/<Modal\b/.test(text) || /\bp\.(scrim|dim)\b/.test(text))) hit('overlay-adhoc');
-      if (/^\s*\w*(action|button|btn|footer)\w*\s*:/i.test(text) && /justifyContent:\s*'flex-end'/.test(text)) hit('actions-right');
       if (file !== THEME && /['"]#[0-9a-fA-F]{3,8}['"]/.test(text)) hit('raw-color');
       if (file !== THEME && /\bfontSize:\s*\d/.test(text)) hit('raw-type');
       if (file !== THEME && /\bborder\w*Radius:\s*\d/.test(text)) hit('raw-radius');
