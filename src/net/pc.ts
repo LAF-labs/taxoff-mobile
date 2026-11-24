@@ -65,7 +65,8 @@ function waitPeer(link: Link, ms: number): Promise<boolean> {
 export async function syncWithPc(d: SyncDeps): Promise<SyncResult> {
   const pair = d.data().pair;
   if (!pair) return { status: 'unpaired' };
-  const live = await viaLive(d, pair);
+  // 붙잡아 둔 연결로 PC가 없는 줄 이미 알면 3초 기다리지 않고 바로 큐에 맡긴다(맡기고 곧장 앱을 닫아도 가게).
+  const live = pcAway() ? { why: whyCode('peer', 'away') } : await viaLive(d, pair);
   if ('status' in live) return live;
   if (d.alive && !d.alive()) return { status: 'offline', why: live.why };
   const q = await viaQueue(d, pair);
@@ -89,18 +90,25 @@ export function onPresence(cb: ((p: Presence) => void) | null): void {
   presence = cb;
 }
 
+let heldDown = false;
+
+/** 붙잡아 둔 연결이 열려 있고 그 너머에 PC가 없다. */
+export function pcAway(): boolean {
+  return !!held && !held.closed && heldDown;
+}
+
 function hold(link: Link, peerNow: boolean): void {
   dropHeld();
   held = link;
-  let down = !peerNow;
+  heldDown = !peerNow;
   link.onPeerGone?.(() => {
-    if (held !== link || down) return;
-    down = true;
+    if (held !== link || heldDown) return;
+    heldDown = true;
     presence?.('down');
   });
   link.onPeer(() => {
-    if (held !== link || !down) return;
-    down = false;
+    if (held !== link || !heldDown) return;
+    heldDown = false;
     presence?.('up');
   });
   link.onClose(() => {
