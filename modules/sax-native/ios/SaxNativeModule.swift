@@ -193,7 +193,7 @@ public class SaxNativeModule: Module {
       ctx.localizedFallbackTitle = ""
       guard let key = pxKey(tag, ctx) else { throw VaultException("ux_missing") }
       guard var z = SecKeyCopyKeyExchangeResult(key, .ecdhKeyExchangeStandard, peer, [String: Any]() as CFDictionary, &err) as Data? else {
-        let code = err?.takeRetainedValue().map { CFErrorGetCode($0) } ?? 0
+        let code = err.map { CFErrorGetCode($0.takeRetainedValue()) } ?? 0
         if code == -2 || code == -4 || code == -9 || code == -3 || code == Int(errSecUserCanceled) { return nil }
         if code == -8 { throw VaultException("biometry_lockout") }
         throw VaultException("ux_failed:\(code)")
