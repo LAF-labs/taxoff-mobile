@@ -3,7 +3,7 @@ import { Animated, Easing, Keyboard, Platform, Pressable, StyleSheet, View } fro
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ChatItem } from '../chat';
 import { size, space, useReducedMotion, usePalette } from '../theme';
-import { T, TabInset, TabScroll, tap } from '../ui/kit';
+import { T, TabDrop, TabInset, TabScroll, tap } from '../ui/kit';
 import type { OfflineChatView } from '../offline/useOfflineChat';
 import { HomeScreen, type HomeRoute, type Todo } from './HomeScreen';
 import { MoneyScreen } from './MoneyScreen';
@@ -48,6 +48,15 @@ export function MainScreen({
   const p = usePalette();
   const [barH, setBarH] = useState(0);
   const [mini, setMini] = useState(false);
+  const still = useReducedMotion();
+  const k = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const to = mini ? 1 : 0;
+    if (still) return k.setValue(to);
+    Animated.timing(k, { toValue: to, duration: COMPACT_MS, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [mini, still]);
+  /** 줄어든 탭바 윗변이 내려가는 거리: 높이 줄어든 만큼 + 내려앉은 만큼. */
+  const drop = useRef(k.interpolate({ inputRange: [0, 1], outputRange: [0, BAR_H * (1 - COMPACT) + COMPACT_DROP] })).current;
   const lastY = useRef(0);
   useEffect(() => {
     lastY.current = 0;
@@ -89,10 +98,12 @@ export function MainScreen({
     <View style={[st.fill, { backgroundColor: p.canvas }]}>
       <TabInset.Provider value={kb ? 0 : barH}>
         <TabScroll.Provider value={onTabScroll}>
-          <View style={st.fill}>{scene(tab)}</View>
+          <TabDrop.Provider value={kb ? 0 : drop}>
+            <View style={st.fill}>{scene(tab)}</View>
+          </TabDrop.Provider>
         </TabScroll.Provider>
       </TabInset.Provider>
-      {!kb && <TabBar tab={tab} mini={mini} onTab={onTab} onHeight={setBarH} />}
+      {!kb && <TabBar tab={tab} k={k} onTab={onTab} onHeight={setBarH} />}
       {issueOpen && (
         <IssueSheet
           preview={issuePreview}
@@ -116,18 +127,11 @@ export function MainScreen({
   );
 }
 
-function TabBar({ tab, mini, onTab, onHeight }: { tab: Tab; mini: boolean; onTab: (t: Tab) => void; onHeight: (h: number) => void }) {
+function TabBar({ tab, k, onTab, onHeight }: { tab: Tab; k: Animated.Value; onTab: (t: Tab) => void; onHeight: (h: number) => void }) {
   const p = usePalette();
   const inset = useSafeAreaInsets();
-  const still = useReducedMotion();
   const dark = p.overlay === p.tint;
   const [wide, setWide] = useState(0);
-  const k = useRef(new Animated.Value(mini ? 1 : 0)).current;
-  useEffect(() => {
-    const to = mini ? 1 : 0;
-    if (still) return k.setValue(to);
-    Animated.timing(k, { toValue: to, duration: COMPACT_MS, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
-  }, [mini, still]);
   const gap = Math.max(inset.bottom - BAR_LIFT, space.s2);
   // 화면 여백은 늘 펼친 높이로 둔다: 여백이 따라 바뀌면 목록이 밀려 스크롤이 거꾸로 읽히고 탭바가 다시 펴진다.
   useEffect(() => onHeight(BAR_H + gap), [gap]);

@@ -11,6 +11,8 @@ import { MAX_FONT_SCALE, TextSizeContext, motion, radius, size, space, textScale
 export const TabInset = createContext(0);
 /** 탭 화면 스크롤 위치(위에서부터 떨어진 거리)를 떠 있는 탭바에 알린다. 탭바는 멀어지면 작아진다. */
 export const TabScroll = createContext<(y: number) => void>(() => {});
+/** 탭바가 줄어들며 내려앉는 거리(pt, 움직이는 값). 탭바 바로 위에 붙은 것(대화 입력창)이 같이 내려간다. */
+export const TabDrop = createContext<Animated.AnimatedInterpolation<number> | 0>(0);
 
 const keepAll = { wordBreak: 'keep-all', overflowWrap: 'anywhere' } as unknown as TextStyle;
 
