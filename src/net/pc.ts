@@ -9,12 +9,12 @@ import type { FileOutbox } from '../storage/outbox';
 import type { AppData } from '../storage/state';
 import { PHONE_CAPS, newerCopy, receiveCopy } from './pcCopy';
 import { driveCmds, trimCmds } from './issueLive';
+import { peerSession } from './peerSession';
 import { cmdsToQueue } from '../phoneCmd';
 import { enrollPx } from './pxLive';
 import type { PxDevice } from '../approvalKey';
 import { replaying, tapping } from './hold';
 import { causeOf, needsRelink, pushWhy, whyCode } from './pcWhy';
-import { peerSession } from './peerSession';
 
 export type PcStatus = 'unpaired' | 'connecting' | 'online' | 'queued' | 'stale' | 'relink' | 'offline';
 
@@ -164,6 +164,11 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
     if (used) await d.update((x) => ({ ...x, ikTs: Math.max(x.ikTs, used) }));
     if (!s) return { why: whyCode('session', sessionLink.closed ? 'closed' : 'no_answer') };
     channel = s.channel;
+    const finish = () => {
+      if (s.channel.closed) throw new Error('relay: closed');
+      s.channel.close();
+      channel = null;
+    };
     stage = 'live';
     await d.update((x) => ({ ...x, lastSeenPc: Date.now() }));
     d.onLive?.();
@@ -189,9 +194,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
       onCopy,
       alive: d.alive,
     });
-    if (sessionLink.closed) return { why: whyCode('live', 'relay.closed') };
-    s.channel.close();
-    channel = null;
+    finish();
     if (!link.closed && (!d.alive || d.alive())) {
       hold(link, true);
       link = null;
