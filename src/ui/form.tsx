@@ -17,7 +17,7 @@ function useFocusFace() {
 
 type Input = ComponentRef<typeof TextInput>;
 
-/** 찾기 칸: 높이 40, 모서리 12, 돋보기, 글이 있으면 지우기 단추. */
+/** 찾기 칸(기준판 ph-search, 문서함과 같은 부품): 높이 44, 모서리 12, 돋보기, 글이 있으면 지우기 단추. */
 export const SearchField = forwardRef<Input, { value: string; onChange: (v: string) => void; placeholder: string; label: string; testID?: string; autoFocus?: boolean }>(function SearchField(
   { value, onChange, placeholder, label, testID, autoFocus },
   ref,
@@ -144,8 +144,8 @@ export const BigInput = forwardRef<
 });
 
 const st = StyleSheet.create({
-  search: { flexDirection: 'row', alignItems: 'center', gap: space.s1 + 2, height: 40, paddingHorizontal: space.s3, borderRadius: radius.md, borderWidth: 1 },
-  searchText: { flex: 1, minWidth: 0, paddingVertical: 0, height: 40 },
+  search: { flexDirection: 'row', alignItems: 'center', gap: space.s2, height: 44, paddingHorizontal: space.s3 + 2, borderRadius: radius.md, borderWidth: 1 },
+  searchText: { flex: 1, minWidth: 0, paddingVertical: 0, height: 42 },
   clear: { width: 22, height: 22, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   field: { gap: space.s1 + 2 },
   box: { flexDirection: 'row', alignItems: 'center', minHeight: 52, paddingHorizontal: space.s4, borderRadius: radius.md, borderWidth: 1 },
