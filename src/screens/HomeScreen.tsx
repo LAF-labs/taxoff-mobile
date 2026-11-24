@@ -647,14 +647,16 @@ function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, cpOf, stale, 
         </SwipeReply>
       )}
       {it.card && (
-        <Card
-          card={it.card}
-          onIssue={(it.card.draft?.phone ? !it.card.sent : it.card.draft && (!openDrafts || openDrafts.has(it.card.draft.id))) ? (d) => onIssue(d, it.id) : undefined}
-          cp={it.card.draft ? cpOf(it.card.draft.counterpartyId) : null}
-          stale={stale}
-          edited={q.draftEdits.get(it.id)}
-          onEdit={(e) => q.editDraft(it.id, e)}
-        />
+        <View style={st.cardSlot}>
+          <Card
+            card={it.card}
+            onIssue={(it.card.draft?.phone ? !it.card.sent : it.card.draft && (!openDrafts || openDrafts.has(it.card.draft.id))) ? (d) => onIssue(d, it.id) : undefined}
+            cp={it.card.draft ? cpOf(it.card.draft.counterpartyId) : null}
+            stale={stale}
+            edited={q.draftEdits.get(it.id)}
+            onEdit={(e) => q.editDraft(it.id, e)}
+          />
+        </View>
       )}
       {state !== '' && (
         <T v="meta" c="ink3" style={{ textAlign: 'right' }} testID="chat-state">
@@ -1061,6 +1063,8 @@ const st = StyleSheet.create({
   follow: { marginTop: -(space.s4 - space.s1) },
   mine: { alignItems: 'flex-end' },
   theirs: { alignItems: 'flex-start' },
+  /** 대화 카드 자리: 말풍선은 글 폭만큼 왼쪽, 오른쪽에 붙지만 카드는 종류와 상관없이 언제나 대화 폭을 다 쓴다(대표 11-24). */
+  cardSlot: { alignSelf: 'stretch' },
   typing: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 44, paddingHorizontal: 15, borderRadius: 22 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   reacted: { marginBottom: 12 },
