@@ -1,5 +1,5 @@
 import { CAP, issueCmd, type Channel, type CmdAckBody, type GateRequestBody, type GateResolvedBody, type PhoneCopyBody, type RunEventBody } from '@sax/remote';
-import { applyAck, applyEvent, applyGate, applyHumanRequest, applyResolved, busyWaiting, forRetry, markAnswered, responseDue, retryDue, settled, type PhoneCmd } from '../phoneCmd.ts';
+import { applyAck, applyEvent, applyGate, applyHumanRequest, applyResolved, busyWaiting, forRetry, markAnswered, offlineNeedsRedate, responseDue, retryDue, settled, type PhoneCmd } from '../phoneCmd.ts';
 
 const WATCH_MS = 10 * 60_000;
 const TICK_MS = 2_000;
@@ -17,7 +17,8 @@ type Ch = Pick<Channel, 'send' | 'recv' | 'closed'>;
 
 export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, watchMs = WATCH_MS): Promise<'none' | 'pc_old' | 'settled' | 'closed' | 'timeout'> {
   const now = io.now ?? Date.now;
-  const open = io.cmds().filter((c) => !settled(c, now()));
+  const canDrive = (c: PhoneCmd, at: number) => !settled(c, at) && !offlineNeedsRedate(c, at);
+  const open = io.cmds().filter((c) => canDrive(c, now()));
   if (!open.length) return 'none';
   const ids = new Set<string>();
   if (!peerCaps.includes(CAP.issue)) {
@@ -75,8 +76,10 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
   for (;;) {
     await flushApprovals();
     for (const c of io.cmds()) {
-      if (retryDue(c, now())) await retry(c);
-      else if (!ids.has(c.cmdId) && !settled(c, now()) && !busyWaiting(c, now())) await send(c);
+      const at = now();
+      if (!canDrive(c, at)) continue;
+      if (retryDue(c, at)) await retry(c);
+      else if ((!ids.has(c.cmdId) || c.sentAt === undefined) && !busyWaiting(c, at)) await send(c);
     }
     for (const c of io.cmds()) {
       if (c.resumeAt === undefined || c.resumeSentAt !== undefined || !c.runId) continue;
@@ -98,7 +101,7 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
       }
       await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? { ...x, simpleOutSentAt: now() } : x)));
     }
-    if (io.cmds().filter((c) => ids.has(c.cmdId)).every((c) => settled(c, now()))) return 'settled';
+    if (!io.cmds().some((c) => ids.has(c.cmdId) && canDrive(c, now()))) return 'settled';
     if (ch.closed) return 'closed';
     if (io.alive && !io.alive()) return 'closed';
     const left = deadline - now();

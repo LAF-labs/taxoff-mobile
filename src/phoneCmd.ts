@@ -59,7 +59,12 @@ export function busyWaiting(c: PhoneCmd, now = Date.now()): boolean {
   return !c.pcOld && c.ack === 'rejected' && c.reason === 'pc_busy' && now - c.createdAt < BUSY_GIVE_UP_MS;
 }
 
-export const needsRedate = (c: PhoneCmd, now = Date.now()): boolean => busyWaiting(c, now) && c.req.day !== kstDay(now);
+export function offlineNeedsRedate(c: PhoneCmd, now = Date.now()): boolean {
+  return !c.pcOld && !c.runId && c.queuedAt !== undefined && c.ack === 'rejected' && c.reason === 'input_invalid'
+    && now - c.createdAt < BUSY_GIVE_UP_MS && c.req.day < kstDay(now);
+}
+
+export const needsRedate = (c: PhoneCmd, now = Date.now()): boolean => offlineNeedsRedate(c, now) || (busyWaiting(c, now) && c.req.day !== kstDay(now));
 
 export const retryDue = (c: PhoneCmd, now = Date.now()): boolean => busyWaiting(c, now) && !needsRedate(c, now) && (c.retryAt ?? 0) <= now;
 
@@ -68,6 +73,8 @@ export function forRetry(c: PhoneCmd): PhoneCmd {
 }
 
 export function redate(c: PhoneCmd, now = Date.now()): PhoneCmd {
+  if (offlineNeedsRedate(c, now)) return { ...c, req: { ...c.req, day: kstDay(now) }, ack: undefined, reason: undefined, sentAt: undefined, queuedAt: undefined };
+  if (!needsRedate(c, now)) return c;
   return { ...c, req: { ...c.req, day: kstDay(now) }, retryAt: now };
 }
 
@@ -173,7 +180,7 @@ export const deniedByPhone = (c: PhoneCmd): boolean => c.answer?.decision === 'd
 
 export function settled(c: PhoneCmd, now = Date.now()): boolean {
   if (c.pcOld) return true;
-  if (busyWaiting(c, now)) return false;
+  if (busyWaiting(c, now) || offlineNeedsRedate(c, now)) return false;
   if (c.ack === 'rejected') return true;
   if (deniedByPhone(c)) return true;
   if (c.phase === 'done') return !!c.result || c.code !== 'in_doubt';
