@@ -93,6 +93,8 @@ export function HomeScreen({ go, chat, draft = '', phone, menu: menuOpen = false
   const topPad = inset.top + TOP_SPACE;
   const [mine, setMine] = useState<ChatItem[]>([]);
   const [text, setText] = useState(draft);
+  /** iOS 여러 줄 입력칸은 값을 비워도 높이가 줄지 않는다. 보낼 때 새로 만들어 한 줄로 돌린다. */
+  const [inputKey, setInputKey] = useState(0);
   const [menu, setMenu] = useState(menuOpen);
   const [held, setHeld] = useState<Held | null>(null);
   const [replying, setReplying] = useState<ReplyTo | null>(null);
@@ -216,6 +218,7 @@ export function HomeScreen({ go, chat, draft = '', phone, menu: menuOpen = false
     const v = text.trim();
     if (!v || offline.busy) return;
     setText('');
+    setInputKey((k) => k + 1);
     if (canSend) {
       void offline.send(v, replying);
       setReplying(null);
@@ -346,6 +349,8 @@ export function HomeScreen({ go, chat, draft = '', phone, menu: menuOpen = false
                 <Plus color={p.ink} open={menu} />
               </Pressable>
               <TextInput
+                key={inputKey}
+                autoFocus={inputKey > 0 && kb}
                 ref={input}
                 testID="chat-input"
                 value={text}
