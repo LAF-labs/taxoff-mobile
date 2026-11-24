@@ -107,6 +107,11 @@ export function PushHost({ onQueue, onRun, onCard, askPreview }: {
       void cur.sync();
       return;
     }
+    // 잠긴 PC가 열어 달라고 한다: 연결하면 요청이 오고 열기 시트가 뜬다.
+    if (k === 'unlock') {
+      void cur.sync();
+      return;
+    }
     void cur.sync().finally(() => setWaitSheet(Date.now()));
   }, []);
   useEffect(() => {

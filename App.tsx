@@ -23,6 +23,7 @@ import { QueueScreen } from './src/screens/QueueScreen';
 import { QueueProvider } from './src/queueStore';
 import { ApprovalHost } from './src/screens/ApprovalHost';
 import { SimpleAuthHost } from './src/screens/SimpleAuthHost';
+import { UnlockHost } from './src/screens/UnlockHost';
 import { NotifyHost } from './src/notify/NotifyHost';
 import { PushHost } from './src/notify/PushHost';
 import { installWakeTap } from './src/notify/push';
@@ -208,6 +209,7 @@ export default function App() {
           }}
         />
         <SimpleAuthHost />
+        <UnlockHost />
         <NotifyHost
           onRunScreen={route === 'run'}
           onOpen={() => setStack((x) => (x[x.length - 1] === 'run' ? x : [...x, 'run']))}

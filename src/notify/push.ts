@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import { apnsToken, pushPlatform, tapKindOf, wakeKindOf, type PushPlatform, type WakeKind } from './wake';
+import { WAKE_RANK, apnsToken, pushPlatform, tapKindOf, wakeKindOf, type PushPlatform, type WakeKind } from './wake';
 
 const ios = Platform.OS === 'ios';
 
@@ -57,7 +57,7 @@ function take(r: Notifications.NotificationResponse | null | undefined): void {
   const k = tapKindOf(r.notification);
   if (!k) return;
   seen.add(id);
-  if (!pending || k === 'approve' || pending.kind === 'update') pending = { kind: k, at: Date.now() };
+  if (!pending || WAKE_RANK[k] >= WAKE_RANK[pending.kind]) pending = { kind: k, at: Date.now() };
   for (const l of listeners) l();
 }
 

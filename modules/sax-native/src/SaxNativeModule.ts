@@ -18,6 +18,10 @@ declare class SaxNativeModule extends NativeModule<Record<string, never>> {
   pxCreate?(tag: string): Promise<string>;
   pxSign?(tag: string, dataB64: string, prompt: string): Promise<string | null>;
   pxDelete?(tag: string): Promise<void>;
+  uxPublic?(tag: string): Promise<string | null>;
+  uxCreate?(tag: string): Promise<string>;
+  uxDelete?(tag: string): Promise<void>;
+  uxGrant?(tag: string, eB64: string, txPubB64: string, aadB64: string, prompt: string): Promise<{ enc: string; ct: string } | null>;
   recognizeTextBoxes?(uri: string): Promise<Array<{ text: string; x: number; y: number; w: number; h: number; conf: number }>>;
 }
 

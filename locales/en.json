@@ -2,7 +2,8 @@
   "ios": {
     "Localizable.strings": {
       "SAX_WAKE_APPROVE": "A tax invoice is waiting for your approval",
-      "SAX_WAKE_UPDATE": "There is news on a job you handed off"
+      "SAX_WAKE_UPDATE": "There is news on a job you handed off",
+      "SAX_WAKE_UNLOCK": "Your PC is asking to be unlocked"
     }
   }
 }

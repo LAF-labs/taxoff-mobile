@@ -7,7 +7,7 @@ import { ulid } from './ulid.ts';
 
 export type Role = 'desktop' | 'mobile';
 /** 스키마 type enum과 같아야 한다(tests/remote-envelope.test.ts가 대조). */
-export type MessageType = 'hello' | 'pair.ok' | 'kek.grant' | 'devlist.push' | 'mbx.reissue' | 'close' | 'ping' | 'pong' | 'receipt.offer' | 'receipt.chunk' | 'receipt.ack' | 'cash.entry' | 'cash.ack' | 'cmd.run' | 'cmd.abort' | 'cmd.resume' | 'run.event' | 'gate.request' | 'gate.response' | 'consent.request' | 'consent.response' | 'human.request' | 'human.response' | 'file.offer' | 'query.documents' | 'query.result' | 'rotate.static' | 'cmd.ack' | 'phone.copy' | 'share.key' | 'px.enroll' | 'px.ack' | 'gate.refresh' | 'gate.resolved';
+export type MessageType = 'hello' | 'pair.ok' | 'kek.grant' | 'devlist.push' | 'mbx.reissue' | 'close' | 'ping' | 'pong' | 'receipt.offer' | 'receipt.chunk' | 'receipt.ack' | 'cash.entry' | 'cash.ack' | 'cmd.run' | 'cmd.abort' | 'cmd.resume' | 'run.event' | 'gate.request' | 'gate.response' | 'consent.request' | 'consent.response' | 'human.request' | 'human.response' | 'file.offer' | 'query.documents' | 'query.result' | 'rotate.static' | 'cmd.ack' | 'phone.copy' | 'share.key' | 'px.enroll' | 'px.ack' | 'gate.refresh' | 'gate.resolved' | 'ux.enroll' | 'ux.ack' | 'unlock.request' | 'unlock.grant';
 
 export const ALL_MESSAGE_TYPES: readonly string[] = MESSAGE_TYPES as readonly string[];
 const BIN = new Set<string>(BINARY_KEYS as readonly string[]);
@@ -214,6 +214,26 @@ export interface PxAckBody {
   state: PxAckState;
   pxId: string;
 }
+/** v1.13(ADR-061 결정 3, 5): 폰 풀기 키(Ux) 등록과 PC 잠금 풀기 요청, 답. 바이너리 칸은 base64다. */
+export interface UxEnrollBody {
+  uxPub: string;
+  hw: PxHw;
+  sig: string;
+}
+export type UxAckState = 'enrolled' | 'needs_open' | 'off' | 'rejected';
+export interface UxAckBody {
+  state: UxAckState;
+}
+export type UnlockScopeWire = 'screen' | 'remote';
+export interface UnlockRequestBody {
+  unlockId: string;
+  unlockE: string;
+  txPub: string;
+  unlockN: string;
+  exp: number;
+  scope: UnlockScopeWire;
+}
+export type UnlockGrantBody = { unlockId: string; decision: 'open'; grantEnc: string; grantCt: string } | { unlockId: string; decision: 'deny' };
 export interface GateRefreshBody {
   runId: string;
   reqId: string;
@@ -304,6 +324,10 @@ export interface Bodies {
   'px.ack': PxAckBody;
   'gate.refresh': GateRefreshBody;
   'gate.resolved': GateResolvedBody;
+  'ux.enroll': UxEnrollBody;
+  'ux.ack': UxAckBody;
+  'unlock.request': UnlockRequestBody;
+  'unlock.grant': UnlockGrantBody;
 }
 export type KnownType = keyof Bodies;
 export type BodyOf<T extends string> = T extends KnownType ? Bodies[T] : object;

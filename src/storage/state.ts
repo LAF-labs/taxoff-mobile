@@ -4,6 +4,7 @@ import type { PhoneCopyBody } from '@sax/remote';
 import type { PhoneCmd } from '../phoneCmd';
 import type { PcWhy } from '../net/pcWhy';
 import type { PxState } from '../net/pxLive';
+import type { UxState } from '../net/unlockLive';
 import type { NotifyPrefs } from '../notify/events';
 import type { TextSize } from '../theme';
 import { File } from 'expo-file-system';
@@ -75,6 +76,10 @@ export interface AppData {
   cmds?: PhoneCmd[];
   pcLog?: PcWhy[];
   px?: PxState;
+  /** PC 잠금 풀기 키 등록 상태(ADR-061). */
+  ux?: UxState;
+  /** 설정에서 "이 폰으로 PC 열기"를 껐다. */
+  uxOff?: boolean;
   notify?: NotifyPrefs;
   pushHash?: string | null;
   pushAsked?: boolean;
