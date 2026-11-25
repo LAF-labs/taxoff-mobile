@@ -16,16 +16,42 @@
 - 대화 입력창은 떠 있는 캡슐이다. 양옆 38, 높이 46, 홈 인디케이터 위 4, 안에 [+], 글 칸, 보내기(32). 맨 아래로 단추는 34 동그라미이고 입력창 위 14에 뜬다.
 - 화면(`src/screens/`)에서 `Modal`, 딤, 테두리, 색 값, 글자 크기, 모서리 값을 직접 쓰지 않는다. `src/ui/` 부품과 `src/theme.ts` 토큰만 쓴다. 부품에 없는 모양이 필요하면 부품을 먼저 더한다.
 
-검사는 `node test/design-check.ts`(시험 `test/design-rules.spec.ts`, `pnpm check`에 들어 있다)다. 지금 남은 어긋남은 `test/design-baseline.json`에 파일별 개수로 적혀 있고(2026-11-24 기준 134곳), 개수가 늘면 시험이 실패한다. 고쳐서 줄이면 `--update`로 기준선을 낮춘다. 기준선을 올리지 않는다. `--list`를 붙이면 어긋난 곳을 줄 번호와 함께 찍는다.
+검사는 `node test/design-check.ts`(시험 `test/design-rules.spec.ts`, `pnpm check`에 들어 있다)다. 지금 남은 어긋남은 `test/design-baseline.json`에 파일별 개수로 적혀 있고, 개수가 늘면 시험이 실패한다. 고쳐서 줄이면 `--update`로 기준선을 낮춘다. 기준선을 올리지 않는다. `--list`를 붙이면 어긋난 곳을 줄 번호와 함께 찍는다.
 
-아직 코드에 없는 부품(승인 뒤 만든다): `Card`(종류 아이콘), `Actions`. 공용 `Sheet`(`src/ui/sheet.tsx`)는 거래처 추가부터 쓴다. 확인, 알림 허용, 승인, 발급, 간편인증, 다시 연결 시트는 아직 화면마다 따로 있고, 고칠 때 이 부품으로 옮긴다.
+### 부품은 하나씩이다(2026-11-25, 대표 "구버전 화면이 다시 나타나지 않도록")
+
+기준판 `kit.css`의 값을 그대로 옮긴 부품이다. 화면은 이것만 써서 짓고, 같은 모양을 화면 파일에서 다시 만들지 않는다.
+
+| 부품 | 파일 | 기준판 | 값 |
+|---|---|---|---|
+| `Card`, `CardIcon` | `src/ui/card.tsx` | `sx-card`, `sx-card-hd` | tint 면, 모서리 16, 안쪽 16, 사이 12. 제목 17/600 앞에 18 아이콘 |
+| `Kv`, `KvRow` | `src/ui/card.tsx` | `sx-kv ph-sub` | 15/22, 줄 사이 6. 라벨 ink3, 값 ink, 합계 600. 고르는 값은 꺾쇠, 그 자리에서 고치는 값은 `edit` |
+| `AmountEdit`, `CardInput` | `src/ui/card.tsx` | `sx-amt`, `sx-amt-in` | 윗줄 이름과 기존 금액(ink3), 아랫줄 44 칸, 모서리 12, 바탕색 면, 오른쪽 600. 숫자 자판 위 [완료](`KeyboardDone`) |
+| `Actions` | `src/ui/card.tsx` | `sx-actions is-fill` | 하나면 가득, 둘이면 반씩, 셋이면 한 줄에 하나씩. `fit`은 목록 카드의 오른쪽 단추 |
+| `ListCard` | `src/ui/card.tsx` | `ph-item` | 밀린 일 같은 목록의 카드. 윗줄 이름과 금액, 상태 한 줄, 단추 |
+| `CardChoice` | `src/ui/card.tsx` | | 카드 안에서 여럿 중 하나 고르기(어느 계산서인지) |
+| `Button` | `src/ui/kit.tsx` | `sx-btn` | 카드 안(`Card`, `ListCard`)이면 저절로 40, 15, 보조 면은 바탕색. 밖이면 52 |
+| `Sheet` | `src/ui/sheet.tsx` | `ph-sheet` | overlay 면, 모서리 22, 손잡이, 머리 줄(이전, 아이콘, 제목과 단계, 닫기 32). `height="fit"`은 내용 높이, 숫자면 고정 |
+| `ConfirmSheet` | `src/ui/sheet.tsx` | Phone-Confirm | 시트 머리에 묻는 말, 설명 한 줄(ink2), 큰 단추 반씩(주 단추 앞). 가운데 큰 아이콘 없음 |
+| `PickRows`, `ChoiceGrid` | `src/ui/sheet.tsx` | Phone-Reason | 시트 안 하나 고르기. 줄 52 체크, 또는 세 칸 격자(테두리와 체크) |
+| `Seg` | `src/ui/kit.tsx` | `.ph .sx-seg` | 알약, 칸 32, 15. 내용 폭만큼 왼쪽. `fill`이면 줄 폭 |
+| `Empty` | `src/ui/kit.tsx` | `ph-empty`, `ph-blank` | 단추가 있으면 굵은 한 줄과 꽉 찬 단추, 없으면 아이콘과 보통 한 줄 |
+
+지운 옛 부품: kit `ConfirmSheet`(가운데 아이콘), kit `SearchField`(form과 둘), card.tsx의 두 번째 `Sheet`, `actionFlex`, `PcGlyph`, `FlapText`. 승인 시트, 간편인증 시트, 발급 시트, 다시 연결 시트, 알림 허용 시트, 기록 시트는 모두 `Sheet` 하나로 옮겼다.
+
+design-check가 막는 것(위 규칙에 더해):
+
+- `card-adhoc`: 화면 파일에서 모서리 16, 22 면을 짓는 것(카드, 묶음, 시트를 따로 만듦)
+- `button-adhoc`: 화면 파일에서 `<Button style=…>`로 폭, 면, 높이를 덧입히는 것, `actionFlex`
+- `gray-note`: `Group note` 회색 설명 줄
+- `part-dup`: 같은 이름의 공용 부품이 `src/ui` 두 파일에 있는 것
+- `sheet-adhoc`: `src/ui/sheet.tsx`와 서랍(`drawer.tsx`) 밖에서 Modal이나 딤을 그리는 것
 
 거래처 화면(2026-11-24 대표 승인 캔버스 "폰 거래처 화면 시안")에서 더한 부품:
 
 - `SearchField`(`src/ui/form.tsx`): 찾기 칸(기준판 문서함과 같은 부품). 높이 44, 모서리 12, 돋보기, 글이 있으면 지우기 단추. 누르면 누른 입력 칸 모양.
 - `FormField`: 고치기 화면의 칸. 라벨 위, 테두리 없는 채움 칸(높이 52, 모서리 12). 바꿀 수 없는 칸은 흐린 글과 자물쇠.
 - `BigInput`: 시트에서 한 단계씩 묻는 칸. 묻는 말 22/700, 밑줄 하나에 값 22/600, 틀리면 황토 밑줄과 한 줄.
-- `Sheet`: 높이 고정(544) 시트. 머리 줄 왼쪽 이전 단계, 제목과 단계 수(1/2), 오른쪽 닫기. 시트 안 묶음 면은 `raisedTint`.
 - `Screen cta`: 바닥에 뜬 주 단추 줄(선 없이 위 24가 바탕색으로 흐려진다). `Screen backText`: 글이 붙은 뒤로(‹ 거래처), `TextButton`: 머리 줄 오른쪽 글 단추(수정).
 - 글자: `heading` 24/700(자세히 화면 맨 위 이름), `ask`와 `askValue` 22(시트의 묻는 말과 답). 큰 글씨는 이 셋과 페어링 6자리뿐이다.
 - 그림: 거래처 건물(더보기 메뉴), 돋보기, 더하기, 카메라, 자물쇠, 복사, 닫기.
@@ -59,11 +85,11 @@
 | `Button` | primary(ink 채움 알약) 한 화면에 하나, secondary(tint), quiet(글자). 주요 단추는 누를 때 가벼운 진동 |
 | `Group` / `Row` | 묶음과 줄. 왼쪽 라벨, 오른쪽 값, 누를 수 있으면 꺾쇠 |
 | `Field` | 확인 화면의 값 칸: 평소에는 글자, 누르면 그 자리에서 칸. 빈 칸은 `line-strong` 테두리가 늘 보인다. 오류는 칸 아래에 남고, 한 번에 고치는 제안(예: 합계 맞추기)을 붙일 수 있다 |
-| `Seg` | 둘 중 하나(매입·매출, 영수·청구) |
+| `Seg` | 둘이나 셋 중 하나. 알약 틀(안쪽 3), 칸 높이 32, 고른 칸은 바탕 면과 굵은 글(기준판 sx-seg). 카드 안에서는 글 폭만큼, `fill`이면 가로 전체 |
 | `Replies` | 전폭 답 후보(Muse 확인 UI). tint 채움 면, 테두리 없음(PC와 같게 점선 안 씀). 고르면 ink 실선 + 체크로 굳는다 |
 | `StatusDot` | 점 + 글자. 진행 중이면 2.4초 주기로 숨 쉰다(동작 줄이기면 멈춤) |
 | `Notice` | 사라지지 않는 안내 한 줄(한 화면에 하나까지) |
-| `Empty` | 빈 화면: 무엇이 비었는지 · 왜 · 다음 할 일 하나 |
+| `Empty` | 빈 화면. 할 일이 없으면 아이콘과 보통 글 한 줄(기준판 ph-empty), 할 일이 있으면 굵은 한 줄과 전체 폭 단추 하나(ph-blank) |
 | `Pill` | 묶음 줄 안의 작은 동작(바탕색 알약 36, 누름 영역 44). 밀린 일 [취소] [다시 맡기기] 등 |
 
 ## 돈 탭(기획 v2 PR 8, 11-cash-flow §3.7)
