@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
-import { Animated, Easing, Keyboard, Platform, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Animated, Easing, Keyboard, Platform, ScrollView, StyleSheet, TextInput } from 'react-native';
 import type { ChatItem } from '../chat';
 import { findByBizNo, orderedCounterparties, searchCounterparties, type Counterparty } from '../issue';
 import { useCustomers } from '../customers';

@@ -20,7 +20,6 @@ import type { AmendCard as AmendState } from '@sax/chat-core';
 import { onShowCard, shownCard } from '../cardFocus';
 import { splitAmount, type Counterparty, type VatMode } from '../issue';
 import { masked } from '../ui/field';
-import { FlapText } from '../ui/FlapText';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { jpegUri } from '../capture/thumb';
 import { useSession } from '../session';
@@ -578,8 +577,6 @@ function RunItem({ jobId, go }: { jobId: string; go: (to: HomeRoute) => void }) 
       compact
       onOpen={() => open('run')}
       onAction={(a) => q.runAction(job.id, a)}
-      onDoc={() => open('doc')}
-      onShare={() => open('doc')}
       onApprove={() => q.openSheet(job.id)}
     />
   );

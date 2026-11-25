@@ -16,6 +16,11 @@ export const RULES = {
   'raw-color': '색은 src/theme.ts 토큰으로만 쓴다.',
   'raw-type': '글자 크기는 src/theme.ts의 type으로만 쓴다.',
   'raw-radius': '모서리 값은 src/theme.ts의 radius로만 쓴다.',
+  'card-adhoc': '카드와 묶음 면(모서리 16, 22)을 화면에서 따로 짓지 않는다. src/ui/card.tsx의 Card, Kv와 kit의 Group을 쓴다.',
+  'button-adhoc': '단추 모양(폭, 면 색, 높이)을 화면에서 덧입히지 않는다. 단추 줄은 src/ui/card.tsx의 Actions가 정한다.',
+  'gray-note': '묶음 아래 회색 설명 줄(Group note)을 더하지 않는다(AGENTS.md "화면과 문구").',
+  'part-dup': '공용 부품은 src/ui 안에 한 번만 정의한다. 같은 이름의 부품이 두 파일에 있으면 하나를 지운다.',
+  'sheet-adhoc': '바닥 시트와 딤은 src/ui/sheet.tsx 한 곳에서만 그린다(왼쪽 서랍 drawer.tsx는 예외).',
 } as const;
 export type Rule = keyof typeof RULES;
 export interface Hit {
@@ -75,8 +80,12 @@ function sources(): string[] {
   return out.sort();
 }
 
+/** 시트와 딤을 그려도 되는 공용 파일. */
+const OVERLAY_OK = new Set(['src/ui/sheet.tsx', 'src/ui/drawer.tsx']);
+
 export function scan(): Hit[] {
   const hits: Hit[] = [];
+  const parts = new Map<string, { file: string; line: number; text: string }[]>();
   for (const file of sources()) {
     const shared = file.startsWith(UI_DIR);
     const lines = stripComments(fs.readFileSync(path.join(ROOT, file), 'utf8')).split('\n');
@@ -87,7 +96,18 @@ export function scan(): Hit[] {
       if (file !== THEME && /['"]#[0-9a-fA-F]{3,8}['"]/.test(text)) hit('raw-color');
       if (file !== THEME && /\bfontSize:\s*\d/.test(text)) hit('raw-type');
       if (file !== THEME && /\bborder\w*Radius:\s*\d/.test(text)) hit('raw-radius');
+      if (!shared && /\bborder\w*Radius:\s*radius\.(lg|xl)\b/.test(text)) hit('card-adhoc');
+      if (!shared && /<Button\b[^>]*\bstyle=/.test(text)) hit('button-adhoc');
+      if (!shared && /\bactionFlex\b/.test(text)) hit('button-adhoc');
+      if (!shared && (/<Group\b[^>]*\bnote=/.test(text) || /^\s*note=/.test(text))) hit('gray-note');
+      if (shared && !OVERLAY_OK.has(file) && (/<Modal\b/.test(text) || /\bp\.(scrim|dim)\b/.test(text))) hit('sheet-adhoc');
+      const def = shared && /^export (?:function|const) ([A-Z]\w*)\b/.exec(text);
+      if (def) parts.set(def[1]!, [...(parts.get(def[1]!) ?? []), { file, line: i + 1, text: text.trim().slice(0, 160) }]);
     });
+  }
+  for (const defs of parts.values()) {
+    if (new Set(defs.map((d) => d.file)).size < 2) continue;
+    for (const d of defs) hits.push({ rule: 'part-dup', ...d });
   }
   return hits;
 }

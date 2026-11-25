@@ -7,7 +7,7 @@ import { latestEntrusted } from '../notify/wake';
 import type { Job } from '../queue';
 import { useQueue } from '../queueStore';
 import { deviceUnlockKey, unlockDesk, type GrantResult, type UnlockAsk, type UnlockDesk, type UxDevice } from '../unlock';
-import { space, usePalette } from '../theme';
+import { space } from '../theme';
 import { Actions } from '../ui/card';
 import { Button, T, josa, success, warn } from '../ui/kit';
 import { ConfirmSheet } from '../ui/sheet';

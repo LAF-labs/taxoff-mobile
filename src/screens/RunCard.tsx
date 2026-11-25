@@ -35,14 +35,12 @@ export function useNow(fixed?: number, on = true): number {
 }
 
 /** 대화와 진행 화면의 발급 카드. 겉모양은 공용 Card(src/ui/card.tsx)이고, 상태는 제목 앞 아이콘으로만 나눈다. */
-export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, onShare, onApprove }: {
+export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onApprove }: {
   job: Job;
   now?: number;
   compact?: boolean;
   onOpen?: () => void;
   onAction?: (a: RunAction) => void;
-  onDoc?: () => void;
-  onShare?: () => void;
   onApprove?: () => void;
 }) {
   const r = job.run;

@@ -151,7 +151,7 @@ const chatOn = (d: number): ChatItem[] => [
   { kind: 'msg', id: 'c1', from: 'me', at: at(9, 2, d), text: '어제 가나식자재 세금계산서 발급됐어?' },
   {
     kind: 'msg', id: 'c2', from: 'pc', at: at(9, 2, d), text: '네, 어제 오후 4:12에 발급했고 국세청 전송까지 끝났어요.',
-    card: { title: '세금계산서 발급 완료', rows: [{ label: '받는 곳', value: '가나식자재' }, { label: '공급가액', value: '1,230,000원' }, { label: '세액', value: '123,000원' }, { label: '합계', value: '1,353,000원', strong: true }] },
+    card: { kind: 'done', title: '가나식자재 세금계산서', rows: [{ label: '작성일', value: '11월 24일' }, { label: '공급가액', value: '1,230,000원' }, { label: '부가세', value: '123,000원' }, { label: '합계', value: '1,353,000원', strong: true }] },
   },
   { kind: 'msg', id: 'c3', from: 'me', at: at(9, 5, d), text: '이번 달 매출 합계 알려줘' },
   {

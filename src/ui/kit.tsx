@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
 import {
-  ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View,
   type AccessibilityRole, type StyleProp, type TextStyle, type ViewStyle,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -423,25 +423,33 @@ export function Replies<K extends string>({
   );
 }
 
-export function Seg<K extends string>({ options, value, onChange, testID, style }: { options: Array<{ key: K; label: string }>; value: K | null; onChange: (k: K) => void; testID?: string; style?: StyleProp<ViewStyle> }) {
+/**
+ * 고르기 줄(기준판 .ph .sx-seg): 알약 모양, 내용 폭만큼 왼쪽에. 고른 칸은 바탕색 면에 굵은 글씨.
+ * fill이면 줄 폭을 나눠 쓴다(설정의 글자 크기처럼 두세 칸을 고르는 곳). 카드 안에서는 면이 바탕색이 된다.
+ */
+export function Seg<K extends string>({ options, value, onChange, testID, style, fill }: { options: Array<{ key: K; label: string }>; value: K | null; onChange: (k: K) => void; testID?: string; style?: StyleProp<ViewStyle>; fill?: boolean }) {
   const p = usePalette();
+  const onCard = useContext(OnCard);
+  const raised = useContext(Raised);
+  const face = onCard ? p.canvas : raised ? p.raisedTint : p.tint;
+  const on = onCard ? p.sunken : p.overlay === p.tint ? p.sunken : p.canvas;
   return (
-    <View style={[st.seg, { backgroundColor: p.tint }, style]} testID={testID} accessibilityRole="radiogroup">
+    <View style={[st.seg, fill ? st.segFill : st.segInline, { backgroundColor: face }, style]} testID={testID} accessibilityRole="radiogroup">
       {options.map((o) => {
-        const on = value === o.key;
+        const sel = value === o.key;
         return (
           <Pressable
             key={o.key}
             testID={`${testID ?? 'seg'}-${o.key}`}
             accessibilityRole="radio"
-            accessibilityState={{ selected: on }}
+            accessibilityState={{ selected: sel }}
             onPress={() => {
               tap();
               onChange(o.key);
             }}
-            style={[st.segItem, on && { backgroundColor: p.overlay === p.tint ? p.sunken : p.overlay, ...shadowCard }]}
+            style={[st.segItem, fill && { flex: 1 }, sel && { backgroundColor: on }]}
           >
-            <T v="subStrong" c={on ? 'ink' : 'ink3'}>
+            <T v={sel ? 'buttonSm' : 'sub'} c={sel ? 'ink' : 'ink2'} lines={1}>
               {o.label}
             </T>
           </Pressable>
@@ -451,7 +459,6 @@ export function Seg<K extends string>({ options, value, onChange, testID, style 
   );
 }
 
-const shadowCard = { shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 };
 
 export function Pill({ label, onPress, testID, quiet }: { label: string; onPress: () => void; testID?: string; quiet?: boolean }) {
   const p = usePalette();
@@ -471,12 +478,15 @@ export function Pill({ label, onPress, testID, quiet }: { label: string; onPress
   );
 }
 
+/**
+ * 빈 화면(기준판 ph-empty, ph-blank): 단추가 있으면 굵은 한 줄과 꽉 찬 주 단추, 없으면 아이콘과 보통 굵기 한 줄.
+ */
 export function Empty({ title, sub, action, testID, icon }: { title: string; sub?: string; action?: ReactNode; testID?: string; icon?: ReactNode }) {
   return (
-    <View style={st.empty} testID={testID}>
+    <View style={[st.empty, !action && { gap: space.s3 }]} testID={testID}>
       <View style={{ gap: space.s2, alignItems: 'center' }}>
         {icon}
-        <T v="strong" center>
+        <T v={action ? 'strong' : 'sub'} c={action ? 'ink' : 'ink2'} center>
           {title}
         </T>
         {sub && (
@@ -534,8 +544,10 @@ export const st = StyleSheet.create({
   reply: { minHeight: size.row, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: space.s4, paddingVertical: space.s3, flexDirection: 'row', alignItems: 'center', gap: space.s3 },
   ringBox: { width: 18, height: 18 },
   ring: { width: 18, height: 18, borderRadius: radius.full, borderWidth: 2.2 },
-  seg: { flexDirection: 'row', borderRadius: radius.md, padding: 3 },
-  segItem: { flex: 1, minHeight: 38, borderRadius: radius.sm + 1, alignItems: 'center', justifyContent: 'center' },
+  seg: { flexDirection: 'row', borderRadius: radius.full, padding: 3 },
+  segInline: { alignSelf: 'flex-start' },
+  segFill: { alignSelf: 'stretch' },
+  segItem: { height: 32, paddingHorizontal: 14, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
 });
 
 

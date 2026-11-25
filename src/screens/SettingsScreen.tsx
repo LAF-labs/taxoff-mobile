@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AppState, Linking, Platform, Switch, View } from 'react-native';
 import SaxNative from '../../modules/sax-native/src/SaxNativeModule';
-import { APP_VERSION, LOCK_AFTER_MS, PUBLIC_ORIGIN } from '../config';
+import { APP_VERSION, PUBLIC_ORIGIN } from '../config';
 import { useSession } from '../session';
 import { useBioInfo, type BioInfo } from '../biometry';
 import { chatCopyOf } from '../net/pcCopy';
@@ -63,7 +63,7 @@ export function SettingsScreen({
   const prefs = s.data.notify ?? DEFAULT_PREFS;
   const anyOn = prefs.run || prefs.money || wakeOn(prefs);
   const notifyValue = perm === 'granted' && anyOn ? '켜짐' : '꺼짐';
-  const lockSub = bio && bio.enrolled && bio.kind !== 'none' ? `${bioName(bio.kind)}, 안 되면 폰 암호` : '폰 암호';
+  const lockValue = bio && bio.enrolled && bio.kind !== 'none' ? bioName(bio.kind) : '폰 암호';
 
   return (
     <Screen title="설정" onBack={onDone} shell={!onDone} testID="settings">
@@ -72,8 +72,8 @@ export function SettingsScreen({
           <Row
             testID="settings-pc"
             label={pair.desktopName ?? '내 PC'}
-            sub={ask ? '잠겨 있어요' : line.label}
-            subInk={!ask && line.tone === 'attention' ? 'attention' : 'ink3'}
+            value={ask ? '잠겨 있어요' : line.label}
+            valueInk={!ask && line.tone === 'attention' ? 'attention' : 'ink2'}
             onPress={onConnection}
             chevron={!ask}
             accessory={ask ? <Button small label="열기" onPress={() => unlockDesk.hide(ask.unlockId, false)} testID="settings-pc-unlock" /> : undefined}
@@ -82,7 +82,7 @@ export function SettingsScreen({
           <Row testID="settings-pair" label="PC와 연결하기" sub="아직 연결한 PC가 없어요" onPress={onPair} />
         )}
         {pair?.accountEmail && <Row testID="settings-account" label="계정" value={pair.accountEmail} />}
-        <Row testID="settings-devices" label="연결된 기기" sub="PC와 폰을 3대씩 연결할 수 있어요" onPress={onDevices} />
+        <Row testID="settings-devices" label="연결된 기기" onPress={onDevices} />
       </Group>
 
       {usage && (
@@ -110,13 +110,10 @@ export function SettingsScreen({
           value={s.data.textSize ?? 'medium'}
           onChange={(k) => void s.update((d) => ({ ...d, textSize: k }))}
         />
-        <T v="meta" c="ink3" style={{ paddingHorizontal: space.s1 }}>
-          앱 안의 모든 글자에 적용돼요. 폰 설정의 글자 크기와 함께 커져요.
-        </T>
       </View>
 
-      <Group title="보안" note={`앱을 열 때와 ${Math.round(LOCK_AFTER_MS / 1000)}초 넘게 다른 앱에 있다 돌아올 때 잠가요. 앱 전환 화면에서는 내용을 가려요.`}>
-        <Row label="앱 잠금" value="켜짐" sub={lockSub} testID="settings-lock" />
+      <Group title="보안">
+        <Row label="앱 잠금" value={lockValue} testID="settings-lock" />
         {pair && ux && (
           <Row
             label="이 폰으로 PC 열기"

@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Pressable, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AppState } from 'react-native';
 import { accountOrigin } from '../net/account';
 import { deviceAuthFor, fetchJson } from '../net/devauth';
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
-import { radius, space, usePalette } from '../theme';
-import { Button, T } from '../ui/kit';
+import { ConfirmSheet } from '../ui/sheet';
 import { wakeOn } from './events';
 import { askPermission, notifyNow, permission, type Permission } from './local';
 import { PLATFORM, clearWakeNotifications, deviceToken, onTokenChange, onWakeReceived, onWakeTap, takeWake } from './push';
@@ -197,36 +195,16 @@ export function PushHost({ onQueue, onRun, onCard, askPreview }: {
 }
 
 export function AskSheet({ onYes, onNo }: { onYes: () => void; onNo: () => void }) {
-  const p = usePalette();
-  const inset = useSafeAreaInsets();
   return (
-    <View style={StyleSheet.absoluteFill} testID="push-ask">
-      <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: p.scrim }]} onPress={onNo} accessibilityLabel="닫기" accessibilityRole="button" />
-      <View style={[st.sheet, { backgroundColor: p.canvas, paddingBottom: Math.max(inset.bottom, space.s4) }]} accessibilityViewIsModal>
-        <View style={[st.grabber, { backgroundColor: p.sunken }]} />
-        <View style={st.body}>
-          <T v="title" role="header">
-            승인할 일이 생기면 알려 드릴까요?
-          </T>
-          <T v="sub" c="ink2">
-            앱을 닫아 둬도 PC가 승인을 기다리거나 맡긴 일에 새 소식이 있으면 알림이 와요.
-          </T>
-          <T v="meta" c="ink3">
-            잠금 화면에는 거래처와 금액을 보이지 않아요. 설정에서 언제든 끌 수 있어요.
-          </T>
-        </View>
-        <View style={st.footer}>
-          <Button label="알려 주세요" onPress={onYes} testID="push-ask-yes" />
-          <Button kind="quiet" label="괜찮아요" onPress={onNo} testID="push-ask-no" />
-        </View>
-      </View>
-    </View>
+    <ConfirmSheet
+      inline
+      testID="push-ask"
+      title="승인할 일이 생기면 알려 드릴까요?"
+      body="앱을 닫아 둬도 승인할 일이나 맡긴 일 소식이 오면 알려 드려요. 잠금 화면에는 거래처와 금액을 보이지 않아요."
+      yes="알려 주세요"
+      no="괜찮아요"
+      onYes={onYes}
+      onNo={onNo}
+    />
   );
 }
-
-const st = StyleSheet.create({
-  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingTop: space.s2 },
-  grabber: { alignSelf: 'center', width: 36, height: 5, borderRadius: 3, marginBottom: space.s2 },
-  body: { paddingHorizontal: space.s5, paddingTop: space.s3, paddingBottom: space.s4, gap: space.s3 },
-  footer: { paddingHorizontal: space.s5, paddingTop: space.s2, gap: space.s2 },
-});

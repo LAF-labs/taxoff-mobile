@@ -140,7 +140,7 @@ export function phoneChat(state: 'empty' | 'typing' | 'reply' | 'failed' | 'limi
         items: [
           ...reply.slice(0, 2),
           { kind: 'msg', id: 'pl', from: 'me', at: t(1), text: '32만원', state: 'failed' },
-          { kind: 'note', id: 'pln', at: t(1) + 1, text: '오늘 쓸 수 있는 AI 사용량을 다 썼어요. 새벽 4시에 다시 채워져요.', failed: {} },
+          { kind: 'note', id: 'pln', at: t(1) + 1, text: '이번 주 대화를 다 썼어요. 월요일에 다시 채워져요. 세금계산서 발급과 승인은 그대로 할 수 있어요.', failed: {} },
         ],
       };
   }

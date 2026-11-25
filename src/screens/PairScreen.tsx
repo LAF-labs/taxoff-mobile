@@ -1,7 +1,6 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, Easing, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
 import { MobilePairing, b64, fromB64, softNoiseStatic, type MobilePairFailure, type MobilePairResult } from '@sax/remote';
 import { BRAND, DEV_LOCAL, accountKeys, relayAllowlist } from '../config';
 import { deviceModel } from '../deviceModel';
@@ -13,6 +12,7 @@ import { useSession } from '../session';
 import { radius, space, usePalette, useReducedMotion } from '../theme';
 import { Button, Group, Notice, Screen, StatusDot, T, success } from '../ui/kit';
 import { STEP_PAIR } from '../ui/StepDots';
+import { Sheet } from '../ui/sheet';
 import { OnboardingStep, StepHint } from './OnboardingScreen';
 
 type Phase = 'scan' | 'warn' | 'confirm' | 'switch' | 'working' | 'sas' | 'done' | 'failed';
@@ -407,28 +407,19 @@ function Frame({ sheet, step, ...rest }: FrameProps) {
 const RELINK_STEPS = 3;
 
 function SheetFrame({ step = 1, title, onBack, footer, testID, children }: Omit<FrameProps, 'sheet'>) {
-  const p = usePalette();
-  const inset = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
+  const close = onBack ?? (() => undefined);
   return (
-    <View style={StyleSheet.absoluteFill} testID={testID}>
-      <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: p.scrim }]} onPress={onBack} accessibilityLabel="다시 연결 닫기" accessibilityRole="button" />
-      <View style={[st.sheet, { backgroundColor: p.canvas, height: Math.min(SHEET_H + Math.max(inset.bottom, space.s4), height * 0.9), paddingBottom: Math.max(inset.bottom, space.s4) }]} accessibilityViewIsModal>
-        <View style={[st.grabber, { backgroundColor: p.sunken }]} />
-        <View style={st.sheetHead}>
-          <T v="strong" role="header">
-            {title}
-          </T>
-          <View style={st.dots} accessible accessibilityLabel={`${RELINK_STEPS}단계 중 ${step}단계`}>
-            {Array.from({ length: RELINK_STEPS }, (_, i) => (
-              <View key={i} style={[st.dot, { width: i + 1 === step ? 16 : 4, backgroundColor: i + 1 <= step ? p.ink : p.line }]} />
-            ))}
-          </View>
-        </View>
-        <View style={st.sheetBody}>{children}</View>
-        {footer ? <View style={st.sheetFoot}>{footer}</View> : onBack ? <View style={st.sheetFoot}><Button kind="secondary" label="취소" onPress={onBack} testID="relink-cancel" /></View> : null}
-      </View>
-    </View>
+    <Sheet
+      title={title ?? '다시 연결'}
+      step={`${step}/${RELINK_STEPS}`}
+      onClose={close}
+      inline
+      a11yClose="다시 연결 닫기"
+      testID={testID}
+      footer={footer ?? (onBack ? <Button kind="secondary" label="취소" onPress={onBack} testID="relink-cancel" /> : undefined)}
+    >
+      {children}
+    </Sheet>
   );
 }
 
@@ -445,7 +436,6 @@ function RelinkDone({ onDone }: { onDone: () => void }) {
   );
 }
 
-const SHEET_H = 560;
 
 function PairedScene({ onStart, pcName }: { onStart: () => void; pcName: string | null }) {
   const p = usePalette();
@@ -488,13 +478,6 @@ function PairedScene({ onStart, pcName }: { onStart: () => void; pcName: string 
 
 const CORNER = 28;
 const st = StyleSheet.create({
-  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingTop: space.s2 },
-  grabber: { alignSelf: 'center', width: 36, height: 5, borderRadius: 3, marginBottom: space.s2 },
-  sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.s5, minHeight: 44 },
-  dots: { flexDirection: 'row', gap: 6, alignItems: 'center' },
-  dot: { height: 4, borderRadius: 2 },
-  sheetBody: { flex: 1, paddingHorizontal: space.s5, paddingTop: space.s2, paddingBottom: space.s3, gap: space.s3 },
-  sheetFoot: { paddingHorizontal: space.s5, gap: space.s1 },
   scanner: { width: '100%', aspectRatio: 1, borderRadius: radius.xl, overflow: 'hidden' },
   scannerFill: { flex: 1, aspectRatio: undefined, borderRadius: radius.lg },
   center: { alignItems: 'center', justifyContent: 'center' },

@@ -15,7 +15,6 @@ import { DEV_LOCAL, PHOTO_MAX_EDGE, PHOTO_QUALITY } from '../config';
 import { findByBizNo, type Counterparty } from '../issue';
 import { useCustomers } from '../customers';
 import { useQueue } from '../queueStore';
-import { useSession } from '../session';
 import { deleteQuietly, sweepCaptureTemps } from '../storage/files';
 import { radius, space, usePalette } from '../theme';
 import { glueAddress } from '../ui/address';
@@ -54,7 +53,6 @@ export function BizRegScreen({
 }) {
   const p = usePalette();
   const q = useQueue();
-  const s = useSession();
   const customers = useCustomers();
   const existing = given ?? customers.counterparties;
   const [saveFailed, setSaveFailed] = useState(false);
@@ -178,16 +176,7 @@ export function BizRegScreen({
     const badEmail = v.email !== '' && !EMAIL.test(v.email);
     const ready = !!v.name.trim() && digits.length === 10 && validBizNo(digits) && !badEmail;
     const save = async () => {
-      if (!customers.paired) {
-        cleanup();
-        const cp: Counterparty = {
-          id: `cp-${Date.now()}`, name: v.name.trim(), bizNo: v.bizNo, issued: 0, ceo: v.ceo.trim() || undefined, address: v.address.trim() || undefined,
-          bizType: v.bizType.trim() || undefined, item: v.item.trim() || undefined, email: v.email || undefined,
-        };
-        q.addCounterparty(cp, s.pc === 'online');
-        return onSaved(cp);
-      }
-      // PC 장부에 넣는다(tex ADR-066). 주소와 업태는 PC가 국세청 조회로 채운다.
+      // PC 장부에 넣는다(tex ADR-066). 연결 전이면 이 폰에 두었다가 연결하면 보낸다. 주소와 업태는 PC가 국세청 조회로 채운다.
       const id = await customers.add({ bizNo: v.bizNo, name: v.name, rep: v.ceo, email: v.email, item: v.item });
       if (!id) return setSaveFailed(true);
       cleanup();
