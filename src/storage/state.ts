@@ -5,6 +5,7 @@ import type { BookCmd } from '../book';
 import type { CachedPhoneCopy } from '../net/pcCopy';
 import type { PcWhy } from '../net/pcWhy';
 import type { PxState } from '../net/pxLive';
+import type { UxState } from '../net/unlockLive';
 import type { NotifyPrefs } from '../notify/events';
 import type { InboxItem } from '../notify/inbox';
 import type { TextSize } from '../theme';
@@ -86,6 +87,10 @@ export interface AppData {
   book?: BookCmd[];
   pcLog?: PcWhy[];
   px?: PxState;
+  /** PC 잠금 풀기 키 등록 상태(ADR-061). */
+  ux?: UxState;
+  /** 설정에서 "이 폰으로 PC 열기"를 껐다. */
+  uxOff?: boolean;
   notify?: NotifyPrefs;
   pushHash?: string | null;
   pushAsked?: boolean;

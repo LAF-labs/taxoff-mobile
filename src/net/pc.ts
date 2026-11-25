@@ -14,6 +14,8 @@ import { cmdBody, cmdsToQueue, type PhoneCmd } from '../phoneCmd';
 import { bookRun, bookToQueue, trimBook } from '../book';
 import { enrollPx } from './pxLive';
 import type { PxDevice } from '../approvalKey';
+import { unlockCaps, unlockDesk, type UxDevice } from '../unlock';
+import { enrollUx, holdForUnlock, unlockAware } from './unlockLive';
 import { replaying, tapping } from './hold';
 import { causeOf, needsRelink, pushWhy, whyCode } from './pcWhy';
 import { catchingShareKey, withShareKey } from './shareKey';
@@ -29,6 +31,7 @@ interface SyncDeps {
   onLive?: () => void;
   alive?: () => boolean;
   px?: PxDevice | null;
+  ux?: UxDevice | null;
 }
 
 interface SyncResult {
@@ -214,7 +217,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
       pairId: pair.pairId,
       noise,
       desktopStatic: fromB64(pair.desktopStatic),
-      hello: { appVersion: APP_VERSION, deviceListVersion: d.data().seenListVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash, CAP.share, ...PHONE_CAPS, ...(d.px ? [CAP.approve] : [])] },
+      hello: { appVersion: APP_VERSION, deviceListVersion: d.data().seenListVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash, CAP.share, ...PHONE_CAPS, ...(d.px ? [CAP.approve] : []), ...unlockCaps(d.ux, d.data().uxOff)] },
       nextTimestamp: () => (used = clock()),
       responseTimeoutMs: 8000,
     });
@@ -230,7 +233,10 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
     await d.update((x) => ({ ...x, lastSeenPc: Date.now() }));
     d.onLive?.();
     const held: Parameters<typeof s.channel.sendRaw>[0][] = [];
-    const ch = catchingShareKey(s.channel, (body) => void d.update((x) => withShareKey(x, body).next).catch(() => undefined));
+    const shared = catchingShareKey(s.channel, (body) => void d.update((x) => withShareKey(x, body).next).catch(() => undefined));
+    // PC 잠금 풀기: 둘 다 unlock.v1이면 세션 내내 풀기 요청을 받고 답을 보낸다(ADR-061 결정 5).
+    const unlocks = !!d.ux && !d.data().uxOff && s.peerHello.capabilities.includes(CAP.unlock);
+    const ch = unlocks ? unlockAware(shared, { desk: unlockDesk, pcDeviceId: pair.desktopDeviceId, phoneDeviceId: d.keys.deviceId, pcName: pair.desktopName ?? 'PC' }) : shared;
     const early = tapping(ch, held);
     const copy = await receiveCopy(early, s.peerHello.capabilities).catch(() => null);
     const onCopy = (c: PhoneCopyBody) =>
@@ -242,6 +248,8 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
     if (copy) await onCopy(copy);
     const px = await enrollPx(early, s.peerHello.capabilities, { pairId: pair.pairId, deviceId: d.keys.deviceId, vm: d.keys.vm, px: d.px ?? null, onCopy }).catch(() => null);
     if (px) await d.update((x) => ({ ...x, px }));
+    const ux = unlocks ? await enrollUx(early, s.peerHello.capabilities, { pairId: pair.pairId, deviceId: d.keys.deviceId, vm: d.keys.vm, ux: d.ux ?? null, onCopy }).catch(() => null) : null;
+    if (ux) await d.update((x) => ({ ...x, ux }));
     const flushed = await flushOutbox(early, d.outbox);
     if (flushed.sent.length) {
       const sent = new Set(flushed.sent);
@@ -268,7 +276,12 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
         if (e) await applyIncoming(e, approves, io);
       }
     });
-    finish();
+    if (unlocks) {
+      // 풀기를 기다리다 PC가 세션을 닫는 것은 정상 끝이다.
+      await holdForUnlock(replaying(ch, held), unlockDesk, d.alive);
+      s.channel.close();
+      channel = null;
+    } else finish();
     if (liveLink === link && (!d.alive || d.alive())) watchPresence(pair, auth, d.alive);
     return { status: 'online', flushed };
   } catch (e) {

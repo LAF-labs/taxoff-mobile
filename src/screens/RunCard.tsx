@@ -7,6 +7,7 @@ import { ACTION_LABEL, AUTH_APPS, STEPS, STEP_LABEL, STOP_COPY, actionsOf, chipO
 import { radius, space, usePalette } from '../theme';
 import { Check, Chevron, Pill, StatusDot, T, success, won } from '../ui/kit';
 import { CardApprove } from './CardApprove';
+import { UnlockInline } from './UnlockHost';
 
 
 const pcTurn = (r: RunView) => r.kind === 'myTurn' && (r.auth.method === 'pc' || (r.auth.method === 'simple' && !!r.auth.pc));
@@ -88,6 +89,7 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, 
       </View>
       {r.kind !== 'done' && r.kind !== 'refused' && !(r.kind === 'stopped' && (r.reason === 'pcStopped' || r.reason === 'appOld')) && (compact ? <FoldSteps id={job.id} r={r} /> : <StepBar r={r} />)}
       <StateLines r={r} />
+      {r.kind !== 'done' && r.kind !== 'refused' && <UnlockInline job={job} />}
       {onApprove && job.gate && job.state === 'approval' && <CardApprove job={job} gate={job.gate} onDetail={onApprove} now={fixedNow} />}
       {r.kind === 'done' && <ResultRows result={r.result} />}
       {compact && (!job.pcOnly || pcTurn(r)) && <CardActions r={r} now={now} onAction={onAction} onDoc={onDoc} onShare={onShare} />}

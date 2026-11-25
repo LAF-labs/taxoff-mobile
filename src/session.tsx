@@ -6,6 +6,7 @@ import { inflight } from './inflight';
 import type { DeviceKeys } from './keyring';
 import SaxNative from '../modules/sax-native/src/SaxNativeModule';
 import { deviceApprovalKey } from './approvalKey';
+import { deviceUnlockKey } from './unlock';
 import { closeLive, onPresence, syncWithPc, type PcStatus } from './net/pc';
 import { statusWhileSyncing } from './net/pcWhy';
 import { failed, netChanged, NET_SETTLE_MS, retryDelay, type NetShape } from './net/reconnect';
@@ -41,6 +42,7 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
   const [pc, setPc] = useState<PcStatus>(initial.pair ? 'connecting' : 'unpaired');
   const [syncing, setSyncing] = useState(false);
   const px = useMemo(() => deviceApprovalKey(SaxNative), []);
+  const ux = useMemo(() => deviceUnlockKey(SaxNative), []);
   const busy = useRef(false);
   const alive = useRef(true);
   const netGen = useRef(0);
@@ -95,7 +97,7 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
     let ok = false;
     try {
       const r = await inflight(() =>
-        syncWithPc({ keys, data: () => dataRef.current, update, outbox, px, onLive: () => current() && setPc('online'), alive: current }),
+        syncWithPc({ keys, data: () => dataRef.current, update, outbox, px, ux, onLive: () => current() && setPc('online'), alive: current }),
       );
       if (current()) {
         setPc(r.status);
@@ -118,7 +120,7 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
       fails.current += 1;
       later(retryDelay(fails.current, RECONNECT_MS));
     }
-  }, [keys, update, outbox, refreshPending, px, later]);
+  }, [keys, update, outbox, refreshPending, px, ux, later]);
   syncRef.current = sync;
 
   useEffect(() => {

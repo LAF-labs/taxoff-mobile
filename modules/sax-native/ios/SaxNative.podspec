@@ -2,7 +2,7 @@ Pod::Spec.new do |s|
   s.name           = 'SaxNative'
   s.version        = '1.0.0'
   s.summary        = 'SAX phone native helpers'
-  s.description    = 'Backup exclusion, file protection class, on-device Vision OCR, QuickLook preview'
+  s.description    = 'Backup exclusion, file protection class, on-device Vision OCR, QuickLook preview, Secure Enclave keys'
   s.author         = ''
   s.homepage       = 'https://docs.expo.dev/modules/'
   s.platforms      = {
@@ -12,7 +12,7 @@ Pod::Spec.new do |s|
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
-  s.frameworks = 'Vision', 'QuickLook'
+  s.frameworks = 'Vision', 'QuickLook', 'CryptoKit'
 
   # Swift/Objective-C compatibility
   s.pod_target_xcconfig = {

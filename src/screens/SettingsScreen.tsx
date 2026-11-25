@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { AppState, Linking, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { AppState, Linking, Platform, Switch, View } from 'react-native';
+import SaxNative from '../../modules/sax-native/src/SaxNativeModule';
 import { APP_VERSION, LOCK_AFTER_MS, PUBLIC_ORIGIN } from '../config';
 import { useSession } from '../session';
 import { useBioInfo, type BioInfo } from '../biometry';
@@ -8,10 +9,12 @@ import { offlineChat } from '../offline/device';
 import { bioName } from '../biometryLabel';
 import { DEFAULT_PREFS, wakeOn } from '../notify/events';
 import { permission, type Permission } from '../notify/local';
-import { space, type TextSize } from '../theme';
-import { Group, Row, Screen, Seg, T } from '../ui/kit';
+import { space, usePalette, type TextSize } from '../theme';
+import { deviceUnlockKey, unlockDesk } from '../unlock';
+import { Button, Group, Row, Screen, Seg, T, tap } from '../ui/kit';
 import { pcLine } from './HomeScreen';
 import { NotifyScreen } from './NotifyScreen';
+import { useUnlockAsk } from './UnlockHost';
 
 const HELP = {
   guide: `${PUBLIC_ORIGIN}/guide/`,
@@ -32,7 +35,10 @@ export function SettingsScreen({
   onDone, onConnection, onPair, onDevices, bioPreview, permPreview, sub: initialSub = null,
 }: { onDone?: () => void; onConnection: () => void; onPair: () => void; onDevices: () => void; bioPreview?: BioInfo; permPreview?: Permission; sub?: 'notify' | null }) {
   const s = useSession();
+  const p = usePalette();
   const bio = useBioInfo(bioPreview);
+  const ux = useMemo(() => deviceUnlockKey(SaxNative), []);
+  const ask = useUnlockAsk();
   const [sub, setSub] = useState<'notify' | null>(initialSub);
   const [perm, setPerm] = useState<Permission | null>(permPreview ?? null);
   const [usage, setUsage] = useState<{ percent: number; resetAt: number } | null>(null);
@@ -63,7 +69,15 @@ export function SettingsScreen({
     <Screen title="설정" onBack={onDone} shell={!onDone} testID="settings">
       <Group title="연결">
         {pair ? (
-          <Row testID="settings-pc" label={pair.desktopName ?? '내 PC'} sub={line.label} subInk={line.tone === 'attention' ? 'attention' : 'ink3'} onPress={onConnection} />
+          <Row
+            testID="settings-pc"
+            label={pair.desktopName ?? '내 PC'}
+            sub={ask ? '잠겨 있어요' : line.label}
+            subInk={!ask && line.tone === 'attention' ? 'attention' : 'ink3'}
+            onPress={onConnection}
+            chevron={!ask}
+            accessory={ask ? <Button small label="열기" onPress={() => unlockDesk.hide(ask.unlockId, false)} testID="settings-pc-unlock" /> : undefined}
+          />
         ) : (
           <Row testID="settings-pair" label="PC와 연결하기" sub="아직 연결한 PC가 없어요" onPress={onPair} />
         )}
@@ -103,6 +117,28 @@ export function SettingsScreen({
 
       <Group title="보안" note={`앱을 열 때와 ${Math.round(LOCK_AFTER_MS / 1000)}초 넘게 다른 앱에 있다 돌아올 때 잠가요. 앱 전환 화면에서는 내용을 가려요.`}>
         <Row label="앱 잠금" value="켜짐" sub={lockSub} testID="settings-lock" />
+        {pair && ux && (
+          <Row
+            label="이 폰으로 PC 열기"
+            testID="settings-pc-opener"
+            accessory={
+              <Switch
+                testID="settings-pc-opener-switch"
+                value={!s.data.uxOff}
+                onValueChange={(on) => {
+                  tap();
+                  if (on) void s.update((d) => ({ ...d, uxOff: false })).then(() => s.sync());
+                  else void ux.remove().then(() => s.update((d) => ({ ...d, uxOff: true, ux: undefined })));
+                }}
+                trackColor={{ true: p.ink, false: p.sunken }}
+                thumbColor={p.canvas}
+                {...(Platform.OS === 'web' ? { activeThumbColor: p.canvas } : {})}
+                ios_backgroundColor={p.sunken}
+                accessibilityLabel="이 폰으로 PC 열기"
+              />
+            }
+          />
+        )}
       </Group>
 
       <Group title="도움말">

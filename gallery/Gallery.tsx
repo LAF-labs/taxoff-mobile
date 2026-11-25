@@ -11,6 +11,8 @@ import type { CustomersPreview } from '../src/screens/CustomersScreen';
 import type { DocsPreview } from '../src/screens/DocsScreen';
 import type { DocItem } from '../src/docs/box';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
+import { UnlockHost } from '../src/screens/UnlockHost';
+import { unlockDesk, type UnlockAsk } from '../src/unlock';
 import { Banner } from '../src/notify/NotifyHost';
 import { AskSheet } from '../src/notify/PushHost';
 import { TextSizeHost } from '../src/ui/TextSizeHost';
@@ -345,6 +347,25 @@ const simpleSheet = (start?: Parameters<typeof SimpleAuthSheet>[0]['start'], rem
     </>
   ),
 });
+// PC 잠금 풀기(ADR-061): 갤러리는 한 장씩 열리므로 그 장을 그릴 때 요청 하나를 넣어 둔다.
+const unlockAsk = (scope: UnlockAsk['scope'], hidden = false): void => {
+  const a: UnlockAsk = { unlockId: `gallery-${scope}-unlock-00`.slice(0, 22), scope, pcName: '맥북 에어', pcDeviceId: 'pc-gallery', phoneDeviceId: 'phone-gallery', e: new Uint8Array(65), txPub: new Uint8Array(32), n: new Uint8Array(32), until: Date.now() + 3_600_000 };
+  unlockDesk.offer(a);
+  if (hidden) unlockDesk.hide(a.unlockId);
+};
+const unlockCase = (scope: UnlockAsk['scope']) => {
+  unlockAsk(scope);
+  return {
+    session: fake({ ...copyData(), cmds: scope === 'remote' ? [CMD({ phase: 'prepare' })] : [] }, 'online'),
+    notes: scope === 'remote' ? [{ kind: 'run' as const, id: 'run-cmd-G1', at: now - 20_000, jobId: 'cmd-G1' }] : undefined,
+    node: (
+      <>
+        <Main chat={CHAT} />
+        <UnlockHost bioPreview={FACE} />
+      </>
+    ),
+  };
+};
 const docCase = (state: DocState, result = RES) => ({
   session: fake(paired(), state.kind === 'pcOff' ? 'offline' : 'online'), jobs: [runJob({ kind: 'done', result, startedAt: T0 })], focus: 'r1', node: <DocScreen onDone={noop} state={state} />,
 });
@@ -540,6 +561,12 @@ const SCREENS: Record<
   'run-pc-turn-simple': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_auth' }),
   'run-pc-turn-other': () => pcRun({ phase: 'readback', turn: true, code: 'turn.other' }),
   'run-pc-turn-choice': () => pcRun({ phase: 'login', turn: true, code: 'login.simple_auth', simpleReq: '01JD0000000000000000000000' }),
+  'unlock-sheet': () => unlockCase('screen'),
+  'unlock-remote': () => unlockCase('remote'),
+  'settings-unlock': () => {
+    unlockAsk('screen', true);
+    return { session: fake(paired(), 'online'), node: <SettingsScreen onDone={noop} onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="granted" /> };
+  },
   'simple-sheet-app': () => simpleSheet({ step: 'app' }),
   'simple-sheet-carrier': () => simpleSheet({ step: 'carrier', draft: { ...draftOf(null), provider: 'pass' } }),
   'simple-sheet-name': () => simpleSheet({ step: 'name', draft: { ...draftOf(null), provider: 'kakao', name: '김가' } }),
