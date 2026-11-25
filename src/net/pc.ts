@@ -1,6 +1,6 @@
 import {
-  CAP, QUEUE, flushOutbox, fromB64, issueCmd, monotonicClock, openMobileSession, queueCmd, queueLeave, queueOutbox, relayOrigin, relayQueue, softNoiseStatic, softSigner, verifyQBundle,
-  wsRelayClient, VM_PURPOSES, type FlushResult, type Link, type PhoneCopyBody, type QueueSendResult, type WebSocketLike,
+  CAP, QUEUE, flushOutbox, fromB64, issueCmd, monotonicClock, openMobileSession, queueCmd, queueLeave, queueOutbox, queuedFrame, relayOrigin, relayQueue, softNoiseStatic, softSigner, verifyQBundle,
+  wsRelayClient, VM_PURPOSES, type Channel, type FlushResult, type Link, type PhoneCopyBody, type QueueSendResult, type WebSocketLike,
 } from '@sax/remote';
 import { APP_VERSION, DEV_RELAY_HOST, DEV_STACK, PUBLIC_ORIGIN, RECONNECT_MS } from '../config';
 import { deviceAuthFor, fetchJson, type Htm } from './devauth';
@@ -8,8 +8,9 @@ import type { DeviceKeys } from '../keyring';
 import type { FileOutbox } from '../storage/outbox';
 import type { AppData } from '../storage/state';
 import { PHONE_CAPS, newerCopy, receiveCopy } from './pcCopy';
-import { driveCmds, trimCmds } from './issueLive';
-import { cmdsToQueue } from '../phoneCmd';
+import { applyIncoming, driveCmds, trimCmds } from './issueLive';
+import { peerSession } from './peerSession';
+import { cmdsToQueue, type PhoneCmd } from '../phoneCmd';
 import { enrollPx } from './pxLive';
 import type { PxDevice } from '../approvalKey';
 import { replaying, tapping } from './hold';
@@ -183,14 +184,19 @@ export function closeLive(): void {
 
 async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: string }> {
   let link: Link | null = null;
+  let sessionLink: Link | null = null;
+  let channel: Channel | null = null;
   const noise = softNoiseStatic(d.keys.sm);
   let stage: 'join' | 'session' | 'live' = 'join';
   try {
     const auth = deviceAuthFor(pair.pairId, pair.cert, d.keys.vm);
     stopPresence();
-    link = await joinMailbox(relayFor(pair.relayHost, auth), pair);
+    let socket!: WebSocketLike;
+    link = await joinMailbox(relayFor(pair.relayHost, auth, (url, headers) => (socket = openRelaySocket(url, headers))), pair);
     if (d.alive && !d.alive()) return { status: 'offline' };
     liveLink = link;
+    const { session, drained } = peerSession(link, socket);
+    sessionLink = session;
     if (!(await waitPeer(link, PEER_WAIT_MS))) {
       const why = whyCode('peer', link.closed ? 'closed' : 'timeout');
       if (!link.closed && (!d.alive || d.alive())) {
@@ -202,7 +208,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
     stage = 'session';
     const clock = monotonicClock(d.data().ikTs);
     let used = 0;
-    const s = await openMobileSession(link, {
+    const s = await openMobileSession(sessionLink, {
       pairId: pair.pairId,
       noise,
       desktopStatic: fromB64(pair.desktopStatic),
@@ -211,7 +217,13 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
       responseTimeoutMs: 8000,
     });
     if (used) await d.update((x) => ({ ...x, ikTs: Math.max(x.ikTs, used) }));
-    if (!s) return { why: whyCode('session', link.closed ? 'closed' : 'no_answer') };
+    if (!s) return { why: whyCode('session', sessionLink.closed ? 'closed' : 'no_answer') };
+    channel = s.channel;
+    const finish = () => {
+      if (s.channel.closed) throw new Error('relay: closed');
+      s.channel.close();
+      channel = null;
+    };
     stage = 'live';
     await d.update((x) => ({ ...x, lastSeenPc: Date.now() }));
     d.onLive?.();
@@ -235,19 +247,34 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
         recent: x.recent.map((r) => (sent.has(r.msgId) ? { ...r, state: 'sent' as const } : r)),
       }));
     }
-    await driveCmds(replaying(s.channel, held), s.peerHello.capabilities, {
+    const io = {
       cmds: () => d.data().cmds ?? [],
-      save: (f) => d.update((x) => ({ ...x, cmds: trimCmds(f(x.cmds ?? [])) })),
+      save: (f: (cmds: PhoneCmd[]) => PhoneCmd[]) => d.update((x) => ({ ...x, cmds: trimCmds(f(x.cmds ?? [])) })),
       onCopy,
       alive: d.alive,
+    };
+    await driveCmds(replaying(s.channel, held), s.peerHello.capabilities, io).finally(async () => {
+      if (!session.closed) return;
+      await drained;
+      const approves = s.peerHello.capabilities.includes(CAP.approve);
+      for (const e of held) await applyIncoming(e, approves, io);
+      for (let frame = queuedFrame(session); frame; frame = queuedFrame(session)) {
+        const e = s.channel.accept(frame);
+        if (e) await applyIncoming(e, approves, io);
+      }
     });
-    s.channel.close();
+    finish();
     if (liveLink === link && (!d.alive || d.alive())) watchPresence(pair, auth, d.alive);
     return { status: 'online', flushed };
   } catch (e) {
     return { why: whyCode(stage, causeOf(e)) };
   } finally {
+    channel?.close();
     noise.destroy();
+    if (link && sessionLink?.closed && !link.closed && (!d.alive || d.alive())) {
+      hold(link, false);
+      link = null;
+    }
     if (link) {
       link.close();
       if (liveLink === link) liveLink = null;
