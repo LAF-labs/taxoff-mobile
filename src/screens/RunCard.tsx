@@ -230,7 +230,7 @@ function ResultRows({ result, full }: { result: IssueResult; full: boolean }) {
       <KvRow label="작성일" value={`${d.getMonth() + 1}월 ${d.getDate()}일`} />
       {full && (
         <KvRow label="승인번호">
-          <Pressable onLongPress={() => void copy()} accessibilityRole="button" accessibilityLabel={`승인번호 ${result.approvalNo}`} accessibilityHint="길게 누르면 복사해요" testID="result-approval-no">
+          <Pressable style={{ flexShrink: 1 }} onLongPress={() => void copy()} accessibilityRole="button" accessibilityLabel={`승인번호 ${result.approvalNo}`} accessibilityHint="길게 누르면 복사해요" testID="result-approval-no">
             <T v="subValue" style={{ textAlign: 'right' }}>
               {copied ? '복사했어요' : groupApprovalNo(result.approvalNo)}
             </T>
