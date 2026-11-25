@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { answerGate, askRefresh, askRetryCert, askSimple, busyWaiting, deniedByPhone, jobOf, redate, settled, simpleRequestValue } from './phoneCmd';
+import { answerGate, askRefresh, askRetryCert, askSimple, busyWaiting, deniedByPhone, jobOf, needsRedate, redate, settled, simpleRequestValue } from './phoneCmd';
 import type { SimpleId } from './storage/state';
 import { SessionContext } from './session';
 import { jobTimers } from './jobTimers';
@@ -158,12 +158,12 @@ export function QueueProvider({
         }
         if (action === 'redate' && id.startsWith('cmd-')) {
           const cmdId = id.slice(4);
-          void sess?.update((d) => ({ ...d, cmds: (d.cmds ?? []).map((c) => (c.cmdId === cmdId ? redate(c) : c)) }));
+          void sess?.update((d) => ({ ...d, cmds: (d.cmds ?? []).map((c) => (c.cmdId === cmdId ? redate(c) : c)) })).then(() => sess.sync());
           return;
         }
         if (action === 'cancel' && id.startsWith('cmd-')) {
           const cmdId = id.slice(4);
-          void sess?.update((d) => ({ ...d, cmds: (d.cmds ?? []).filter((c) => c.cmdId !== cmdId || (!!c.sentAt && !busyWaiting(c))) }));
+          void sess?.update((d) => ({ ...d, cmds: (d.cmds ?? []).filter((c) => c.cmdId !== cmdId || (!!c.sentAt && !busyWaiting(c) && !needsRedate(c))) }));
           return;
         }
         if (action === 'cancel') timers.clear(id);

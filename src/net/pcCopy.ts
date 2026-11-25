@@ -4,6 +4,8 @@ import type { Counterparty } from '../issue.ts';
 import { phoneCopyFrom } from '../offline/copy.ts';
 import { customersOf, type BookCmd, type Customer } from '../book.ts';
 
+export type CachedPhoneCopy = PhoneCopyBody & { ownerDesktopDeviceId?: string };
+
 export const PHONE_CAPS: readonly string[] = [CAP.copy, CAP.issue, CAP.sync, CAP.issued, CAP.book, CAP.amend];
 
 const COPY_WAIT_MS = 2000;
@@ -21,8 +23,11 @@ export async function receiveCopy(ch: Channel, peerCaps: readonly string[], ms =
   }
 }
 
-export function newerCopy(have: PhoneCopyBody | null | undefined, got: PhoneCopyBody): PhoneCopyBody {
-  return have && have.asOf >= got.asOf ? have : got;
+export function newerCopy(have: CachedPhoneCopy | null | undefined, got: CachedPhoneCopy): CachedPhoneCopy {
+  if (have && have.asOf >= got.asOf) return have;
+  return !got.money && have?.money && have.ownerDesktopDeviceId && have.ownerDesktopDeviceId === got.ownerDesktopDeviceId
+    ? { ...got, money: have.money }
+    : got;
 }
 
 /** '2026-11-03' → '11월 3일'. */

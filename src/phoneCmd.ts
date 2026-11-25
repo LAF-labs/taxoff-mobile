@@ -1,5 +1,4 @@
-import type { CmdAckBody, CmdAckState, CmdRejectReason, CmdRunBody, GateRequestBody, GateResolvedBody, GateResolvedBy, GateResponseBody, PhoneAmendRequest, PhoneIssueRequest, RunEventBody, RunPhase, RunResult } from '@sax/remote';
-import { amendCmd, issueCmd } from '../vendor/sax-remote/src/issue.ts';
+import { amendCmd, checkIssueRequest, issueCmd, type CmdAckBody, type CmdAckState, type CmdRejectReason, type CmdRunBody, type GateRequestBody, type GateResolvedBody, type GateResolvedBy, type GateResponseBody, type PhoneAmendRequest, type PhoneIssueRequest, type RunEventBody, type RunPhase, type RunResult } from '../vendor/sax-remote/src/index.ts';
 import type { PhoneGate } from './approval';
 import type { Job, NeedPcReason } from './queue';
 import { PASS_CARRIERS, STEPS, simpleAppOf, type RunView, type Step } from './run.ts';
@@ -19,7 +18,7 @@ export interface PhoneCmd {
   queuedAt?: number;
   ack?: CmdAckState;
   runId?: string;
-  reason?: CmdRejectReason;
+  reason?: CmdRejectReason | 'issue_date_stale';
   pcOld?: boolean;
   phase?: RunPhase;
   at?: number;
@@ -64,7 +63,12 @@ export function busyWaiting(c: PhoneCmd, now = Date.now()): boolean {
   return !c.pcOld && c.ack === 'rejected' && c.reason === 'pc_busy' && now - c.createdAt < BUSY_GIVE_UP_MS;
 }
 
-export const needsRedate = (c: PhoneCmd, now = Date.now()): boolean => busyWaiting(c, now) && c.req.day !== kstDay(now);
+export function offlineNeedsRedate(c: PhoneCmd, now = Date.now()): boolean {
+  return !c.pcOld && !c.runId && c.ack === 'rejected' && c.reason === 'issue_date_stale'
+    && now - c.createdAt < BUSY_GIVE_UP_MS;
+}
+
+export const needsRedate = (c: PhoneCmd, now = Date.now()): boolean => offlineNeedsRedate(c, now) || (busyWaiting(c, now) && c.req.day !== kstDay(now));
 
 export const retryDue = (c: PhoneCmd, now = Date.now()): boolean => busyWaiting(c, now) && !needsRedate(c, now) && (c.retryAt ?? 0) <= now;
 
@@ -73,6 +77,8 @@ export function forRetry(c: PhoneCmd): PhoneCmd {
 }
 
 export function redate(c: PhoneCmd, now = Date.now()): PhoneCmd {
+  if (offlineNeedsRedate(c, now)) return { ...c, req: { ...c.req, day: kstDay(now) }, ack: undefined, reason: undefined, sentAt: undefined, queuedAt: undefined };
+  if (!needsRedate(c, now)) return c;
   return { ...c, req: { ...c.req, day: kstDay(now) }, retryAt: now };
 }
 
@@ -80,11 +86,13 @@ export function kstDay(now = Date.now()): string {
   return new Date(now + 9 * 3_600_000).toISOString().slice(0, 10);
 }
 
+const issueTax = (supply: number): number => Math.floor(supply / 10);
+
 /** 거래처는 PC가 아는 ID(counterpartyRef)나, 폰에서 막 넣어 PC가 아직 모르는 등록번호와 상호(newCounterparty) 둘 중 하나. */
 export type IssueTarget = Pick<PhoneIssueRequest, 'counterpartyRef' | 'newCounterparty'>;
 
 export function issueRequest(p: { target: IssueTarget; supply: number; item: string; now?: number }): PhoneIssueRequest {
-  return { ...p.target, supply: p.supply, tax: Math.floor(p.supply / 10), item: p.item.trim(), day: kstDay(p.now) };
+  return { ...p.target, supply: p.supply, tax: issueTax(p.supply), item: p.item.trim(), day: kstDay(p.now) };
 }
 
 /** PC에 보낼 cmd.run 본문(발급 또는 수정). */
@@ -99,7 +107,14 @@ export function applyAck(c: PhoneCmd, a: CmdAckBody, now = Date.now()): PhoneCmd
   if (isReattach(a)) return { ...c, ack: c.ack && c.ack !== 'rejected' ? c.ack : 'pc_only', runId: a.runId, reason: undefined };
   if (a.state === 'rejected' && c.phase) return c;
   if (a.state === 'rejected' && a.reason === 'pc_busy') return { ...c, ack: 'rejected', reason: 'pc_busy', runId: a.runId ?? c.runId, retryAt: now + BUSY_RETRY_MS };
-  return { ...c, ack: a.state, runId: a.runId ?? c.runId, reason: a.state === 'rejected' ? a.reason : undefined };
+  const runId = a.runId ?? c.runId;
+  const reason = a.state === 'rejected' ? a.reason : undefined;
+  const { req } = c;
+  if (reason === 'input_invalid' && !runId && !c.amend && req.day < kstDay(now)
+    && !checkIssueRequest(req) && req.tax === issueTax(req.supply)) {
+    return { ...c, ack: 'rejected', reason: 'issue_date_stale' };
+  }
+  return { ...c, ack: a.state, runId, reason };
 }
 
 export function applyEvent(c: PhoneCmd, e: RunEventBody): PhoneCmd {
@@ -186,7 +201,7 @@ export const deniedByPhone = (c: PhoneCmd): boolean => c.answer?.decision === 'd
 
 export function settled(c: PhoneCmd, now = Date.now()): boolean {
   if (c.pcOld) return true;
-  if (busyWaiting(c, now)) return false;
+  if (busyWaiting(c, now) || offlineNeedsRedate(c, now)) return false;
   if (c.ack === 'rejected') return true;
   if (deniedByPhone(c)) return true;
   if (c.phase === 'done') return !!c.result || c.code !== 'in_doubt';
@@ -207,7 +222,7 @@ export const REJECT_LINE: Record<CmdRejectReason | 'pc_old', string> = {
 export function runViewOf(c: PhoneCmd): RunView | null {
   const startedAt = c.sentAt ?? c.createdAt;
   if (c.pcOld) return { kind: 'refused', reason: 'pc_old', startedAt };
-  if (c.ack === 'rejected') return { kind: 'refused', reason: c.reason ?? 'input_invalid', startedAt };
+  if (c.ack === 'rejected') return { kind: 'refused', reason: !c.reason || c.reason === 'issue_date_stale' ? 'input_invalid' : c.reason, startedAt };
   if (!c.ack) return c.sentAt ? { kind: 'running', step: 'prepare', startedAt, pcApproval: true } : null;
   if (c.turn && (c.resumeAt !== undefined || c.simpleOut !== undefined)) return { kind: 'running', step: 'login', startedAt, pcApproval: true };
   if (c.turn && c.code?.startsWith('login.simple_sent')) {

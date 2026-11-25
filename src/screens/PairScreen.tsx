@@ -142,6 +142,7 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
     try {
       await inflight(() => s.update((d) => ({
         ...d,
+        pcCopy: d.pair?.desktopDeviceId === r.desktopDeviceId ? d.pcCopy : undefined,
         pair: {
           pairId: r.pairId, desktopStatic: b64(r.desktopStatic), desktopVd: b64(r.desktopVd), desktopDeviceId: r.desktopDeviceId,
           accountEmail: r.identity.account.email, desktopName: r.identity.desktopName,

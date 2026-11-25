@@ -1,5 +1,5 @@
-import { CAP, type Channel, type CmdAckBody, type GateRequestBody, type GateResolvedBody, type PhoneCopyBody, type RunEventBody } from '@sax/remote';
-import { applyAck, cmdBody, applyEvent, applyGate, applyHumanRequest, applyResolved, busyWaiting, forRetry, markAnswered, responseDue, retryDue, settled, type PhoneCmd } from '../phoneCmd.ts';
+import { CAP, type Channel, type CmdAckBody, type Envelope, type GateRequestBody, type GateResolvedBody, type PhoneCopyBody, type RunEventBody } from '@sax/remote';
+import { applyAck, cmdBody, applyEvent, applyGate, applyHumanRequest, applyResolved, busyWaiting, forRetry, markAnswered, offlineNeedsRedate, responseDue, retryDue, settled, type PhoneCmd } from '../phoneCmd.ts';
 import { applyBookAck, bookOpen, bookReady, bookRun, linkBook, type BookCmd } from '../book.ts';
 
 const WATCH_MS = 10 * 60_000;
@@ -21,10 +21,15 @@ interface CmdIo {
 type Ch = Pick<Channel, 'send' | 'recv' | 'closed'>;
 
 export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, watchMs = WATCH_MS): Promise<'none' | 'pc_old' | 'settled' | 'closed' | 'timeout'> {
+  const requireLink = () => {
+    if (ch.closed) throw new Error('relay: closed');
+  };
+  requireLink();
   const now = io.now ?? Date.now;
   const book = io.book;
   const books = () => book?.list() ?? [];
-  const open = io.cmds().filter((c) => !settled(c, now()));
+  const canDrive = (c: PhoneCmd, at: number) => !settled(c, at) && !offlineNeedsRedate(c, at);
+  const open = io.cmds().filter((c) => canDrive(c, now()));
   if (!open.length && !books().some(bookReady)) return 'none';
   const ids = new Set<string>();
   const bookIds = new Set<string>();
@@ -56,16 +61,20 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
     if (!peerCaps.includes(CAP.issue) && !bookIds.size) return 'pc_old';
   }
   const send = async (c: PhoneCmd) => {
+    requireLink();
     ids.add(c.cmdId);
+    let body: ReturnType<typeof cmdBody>;
     try {
-      ch.send('cmd.run', cmdBody(c));
+      body = cmdBody(c);
     } catch {
       await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? { ...x, ack: 'rejected', reason: 'input_invalid' } : x)));
       return;
     }
+    ch.send('cmd.run', body);
     if (!c.sentAt) await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? { ...x, sentAt: now() } : x)));
   };
   const retry = async (c: PhoneCmd) => {
+    requireLink();
     await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? forRetry(x) : x)));
     const fresh = io.cmds().find((x) => x.cmdId === c.cmdId);
     if (fresh) await send(fresh);
@@ -81,6 +90,7 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
   const flushApprovals = async () => {
     if (!approves) return;
     for (const c of io.cmds()) {
+      requireLink();
       const r = responseDue(c, now());
       if (r) {
         try {
@@ -104,11 +114,14 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
   for (;;) {
     await flushApprovals();
     for (const c of io.cmds()) {
-      if (retryDue(c, now())) await retry(c);
-      else if (!ids.has(c.cmdId) && !settled(c, now()) && !busyWaiting(c, now())) await send(c);
+      const at = now();
+      if (!canDrive(c, at)) continue;
+      if (retryDue(c, at)) await retry(c);
+      else if ((!ids.has(c.cmdId) || c.sentAt === undefined) && !busyWaiting(c, at)) await send(c);
     }
     for (const c of io.cmds()) {
       if (c.resumeAt === undefined || c.resumeSentAt !== undefined || !c.runId) continue;
+      requireLink();
       ids.add(c.cmdId);
       try {
         (ch.send as unknown as (t: string, b: object) => unknown)('cmd.resume', { runId: c.runId });
@@ -119,6 +132,7 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
     }
     for (const c of io.cmds()) {
       if (c.simpleOut === undefined || c.simpleOutSentAt !== undefined || !c.simpleReq || !c.runId) continue;
+      requireLink();
       ids.add(c.cmdId);
       try {
         (ch.send as unknown as (t: string, b: object) => unknown)('human.response', { runId: c.runId, stepId: 's7e', reqId: c.simpleReq, value: c.simpleOut });
@@ -128,7 +142,7 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
       await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? { ...x, simpleOutSentAt: now() } : x)));
     }
     const booksDone = books().every((b) => !bookOpen(b) || (!bookIds.has(b.cmdId) && !(b.after && bookIds.has(b.after)))) && (!copyBy || now() >= copyBy);
-    if (booksDone && io.cmds().filter((c) => ids.has(c.cmdId)).every((c) => settled(c, now()))) return 'settled';
+    if (booksDone && !io.cmds().some((c) => ids.has(c.cmdId) && canDrive(c, now()))) return 'settled';
     if (ch.closed) return 'closed';
     if (io.alive && !io.alive()) return 'closed';
     const left = deadline - now();
@@ -136,36 +150,45 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
     const waiting = approves && io.cmds().some((c) => !!c.gate || (!!c.answer && !c.answer.sentAt) || !!c.refresh);
     const e = await ch.recv(Math.min(left, waiting ? GATE_TICK_MS : TICK_MS));
     if (!e) continue;
-    if (e.type === 'cmd.ack') {
+    if (e.type === 'cmd.ack' && book && bookIds.has((e.body as CmdAckBody).cmdId)) {
       const a = e.body as CmdAckBody;
-      if (book && bookIds.has(a.cmdId)) {
-        await book.save((bs) => linkBook(bs.map((b) => applyBookAck(b, a, now())), null));
-        if (a.state === 'saved') {
-          copyBy = now() + COPY_AFTER_SAVE_MS;
-          await sendBooks();
-        }
-      } else await io.save((cs) => cs.map((c) => applyAck(c, a, now())));
-    } else if (e.type === 'human.request') {
-      const b = e.body as { runId?: unknown; reqId?: unknown; kind?: unknown; prompt?: unknown };
-      await io.save((cs) => cs.map((c) => applyHumanRequest(c, b)));
-    } else if (e.type === 'run.event') {
-      const ev = e.body as RunEventBody;
-      await io.save((cs) => cs.map((c) => applyEvent(c, ev)));
-    } else if (e.type === 'gate.request' && approves) {
-      const g = e.body as GateRequestBody;
-      await io.save((cs) => cs.map((c) => applyGate(c, g)));
-    } else if (e.type === 'gate.resolved' && approves) {
-      const r = e.body as GateResolvedBody;
-      await io.save((cs) => cs.map((c) => applyResolved(c, r)));
-    } else if (e.type === 'phone.copy' && io.onCopy) {
-      await io.onCopy(e.body as PhoneCopyBody);
-      copyBy = 0;
+      await book.save((bs) => linkBook(bs.map((x) => applyBookAck(x, a, now())), null));
+      if (a.state === 'saved') {
+        copyBy = now() + COPY_AFTER_SAVE_MS;
+        await sendBooks();
+      }
+      continue;
     }
+    await applyIncoming(e, approves, io);
+    if (e.type === 'phone.copy') copyBy = 0;
+  }
+}
+
+export async function applyIncoming(e: Envelope, approves: boolean, io: Pick<CmdIo, 'save' | 'onCopy' | 'now'>): Promise<void> {
+  const now = io.now ?? Date.now;
+  if (e.type === 'cmd.ack') {
+    const a = e.body as CmdAckBody;
+    await io.save((cs) => cs.map((c) => applyAck(c, a, now())));
+  } else if (e.type === 'human.request') {
+    const b = e.body as { runId?: unknown; reqId?: unknown; kind?: unknown; prompt?: unknown };
+    await io.save((cs) => cs.map((c) => applyHumanRequest(c, b)));
+  } else if (e.type === 'run.event') {
+    const ev = e.body as RunEventBody;
+    await io.save((cs) => cs.map((c) => applyEvent(c, ev)));
+  } else if (e.type === 'gate.request' && approves) {
+    const g = e.body as GateRequestBody;
+    await io.save((cs) => cs.map((c) => applyGate(c, g)));
+  } else if (e.type === 'gate.resolved' && approves) {
+    const r = e.body as GateResolvedBody;
+    await io.save((cs) => cs.map((c) => applyResolved(c, r)));
+  } else if (e.type === 'phone.copy' && io.onCopy) {
+    await io.onCopy(e.body as PhoneCopyBody);
   }
 }
 
 export function trimCmds(cs: PhoneCmd[], keep = 20): PhoneCmd[] {
-  const done = cs.filter(settled).sort((a, b) => b.createdAt - a.createdAt).slice(0, keep);
+  const now = Date.now();
+  const done = cs.filter((c) => settled(c, now)).sort((a, b) => b.createdAt - a.createdAt).slice(0, keep);
   const keepIds = new Set(done.map((c) => c.cmdId));
-  return cs.filter((c) => !settled(c) || keepIds.has(c.cmdId));
+  return cs.filter((c) => !settled(c, now) || keepIds.has(c.cmdId));
 }
