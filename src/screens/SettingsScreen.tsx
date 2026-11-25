@@ -32,8 +32,8 @@ export function resetDay(ms: number): string {
 }
 
 export function SettingsScreen({
-  onDone, onConnection, onPair, onDevices, bioPreview, permPreview, sub: initialSub = null,
-}: { onDone?: () => void; onConnection: () => void; onPair: () => void; onDevices: () => void; bioPreview?: BioInfo; permPreview?: Permission; sub?: 'notify' | null }) {
+  onDone, onConnection, onPair, onDevices, bioPreview, permPreview, usagePreview, sub: initialSub = null,
+}: { onDone?: () => void; onConnection: () => void; onPair: () => void; onDevices: () => void; bioPreview?: BioInfo; permPreview?: Permission; usagePreview?: { percent: number; resetAt: number }; sub?: 'notify' | null }) {
   const s = useSession();
   const p = usePalette();
   const bio = useBioInfo(bioPreview);
@@ -41,10 +41,10 @@ export function SettingsScreen({
   const ask = useUnlockAsk();
   const [sub, setSub] = useState<'notify' | null>(initialSub);
   const [perm, setPerm] = useState<Permission | null>(permPreview ?? null);
-  const [usage, setUsage] = useState<{ percent: number; resetAt: number } | null>(null);
+  const [usage, setUsage] = useState<{ percent: number; resetAt: number } | null>(usagePreview ?? null);
   const pairNow = s.data.pair;
   useEffect(() => {
-    if (!pairNow) return;
+    if (!pairNow || usagePreview) return;
     let live = true;
     void offlineChat(pairNow, s.keys, () => chatCopyOf(s.data.pcCopy))?.usage().then((u) => live && setUsage(u)).catch(() => undefined);
     return () => { live = false; };

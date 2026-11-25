@@ -711,7 +711,7 @@ const SCREENS: Record<
   'money-mark': () => money(MONEY_OK, { start: 'mark' }),
   'money-mark-offline': () => money(MONEY_LAST, { start: 'mark', live: false, pc: 'offline' }),
   'records-empty': () => ({ session: fake(paired(), 'online'), node: <Main start="records" /> }),
-  settings: () => ({ session: fake(paired(), 'online'), node: <InShell><SettingsScreen onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="granted" /></InShell> }),
+  settings: () => ({ session: fake(paired(), 'online'), node: <InShell><SettingsScreen onConnection={noop} onPair={noop} onDevices={noop} bioPreview={FACE} permPreview="granted" usagePreview={{ percent: 42, resetAt: new Date(2026, 11, 1).getTime() }} /></InShell> }),
   inbox: () => ({ session: fake({ ...paired(), inbox: INBOX, inboxSeenAt: at(14, 0) }, 'online', { receipts: 1, cash: 0 }), jobs: JOBS.slice(6, 7), node: <InShell><InboxScreen onRun={noop} onCard={noop} onMoney={noop} onQueue={noop} now={now} /></InShell> }),
   'inbox-empty': () => ({ session: fake(paired(), 'online'), node: <InShell><InboxScreen onRun={noop} onCard={noop} onMoney={noop} onQueue={noop} now={now} /></InShell> }),
   menu: () => ({ session: fake({ ...paired(), inbox: INBOX, inboxSeenAt: at(14, 0) }, 'online'), node: <Main chat={CHAT} drawer /> }),

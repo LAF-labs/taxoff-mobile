@@ -5,6 +5,7 @@ import { actionFor, groupJobs, type Job, type JobAction, type JobState, type Nee
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
 import { radius, space, usePalette } from '../theme';
+import { Actions, ListCard } from '../ui/card';
 import { Button, Empty, Group, Row, Screen, T, tap, won } from '../ui/kit';
 import { SwipeAway } from '../ui/SwipeAway';
 import { CardApprove } from './CardApprove';
@@ -53,7 +54,7 @@ const PLAIN: Record<JobState, string> = {
   phoneWaiting: '앞의 일이 끝나면 이어서 해요',
   confirmStart: '시작하면 PC가 바로 해요',
   running: 'PC가 홈택스에서 하고 있어요',
-  approval: '승인하면 바로 발급해요',
+  approval: '승인을 기다리고 있어요',
   needPc: 'PC가 맡는 일이에요',
   verify: '홈택스에서 발급됐는지 확인해 주세요',
   expired: '3일이 지나 취소됐어요',
@@ -181,7 +182,6 @@ function Section({ title, note, right, children, testID }: { title: string; note
 }
 
 function JobCard({ job, state, onAction }: { job: Job; state: JobState; onAction: (a: JobAction) => void }) {
-  const p = usePalette();
   const action = actionFor(job, state);
   const isClosed = action?.key === 'dismiss';
   const line = statusLine(job, state);
@@ -193,68 +193,36 @@ function JobCard({ job, state, onAction }: { job: Job; state: JobState; onAction
   const label = button?.key === 'approve' ? '승인하기' : button?.label;
   const side = approve ? (button?.key === 'redate' ? { key: 'cancel' as const, label: '취소' } : null) : button && label ? { key: button.key, label } : null;
 
-  const body = (
-    <>
-      <View style={st.top}>
-        <T v="strong" c={dim ? 'ink2' : 'ink'} lines={1} style={{ flex: 1 }}>
-          {job.title}
-        </T>
-        {job.amount !== null && (
-          <T v="figure" c={dim ? 'ink3' : 'ink'} style={[{ flexShrink: 0 }, state === 'expired' && { textDecorationLine: 'line-through' }]}>
-            {won(job.amount)}
-          </T>
-        )}
-      </View>
-      <View style={st.bottom}>
-        <T v="sub" c={attention ? 'attention' : dim ? 'ink3' : 'ink2'} style={{ flex: 1 }} testID={`job-${job.id}-line`}>
-          {line}
-        </T>
-        {}
-        {side && (
-          <Pressable
-            testID={`job-${job.id}-${side.key}`}
-            accessibilityRole="button"
-            accessibilityLabel={`${job.title} ${side.label}`}
-            hitSlop={12}
-            onPress={() => onAction(side.key)}
-            style={({ pressed }) => [st.textBtn, pressed && { backgroundColor: p.sunken }]}
-          >
-            <T v="subStrong" c="ink2">
-              {side.label}
-            </T>
-          </Pressable>
-        )}
-      </View>
+  const lineInk = attention ? 'attention' : state === 'approval' ? 'accent' : dim ? 'ink3' : 'ink2';
+  return (
+    <ListCard
+      title={job.title}
+      amount={job.amount !== null ? won(job.amount) : null}
+      line={line}
+      lineInk={lineInk}
+      lineTestID={`job-${job.id}-line`}
+      dim={dim}
+      strike={state === 'expired'}
+      testID={`job-${job.id}`}
+      onPress={canOpen && !button ? () => onAction(state === 'done' ? 'result' : 'progress') : undefined}
+      a11y={`${job.title}. ${line}`}
+      a11yHint={isClosed ? '누르면 이유를 볼 수 있어요. 옆으로 밀면 치워져요' : '누르면 진행 화면을 열어요'}
+    >
       {button?.key === 'approve' && job.id.startsWith('cmd-') && job.gate ? (
         <CardApprove job={job} gate={job.gate} onDetail={() => onAction('approve')} />
-      ) : approve && button && (
-        <View style={st.actions}>
-          <Button small label={label ?? ''} onPress={() => onAction(button.key)} testID={`job-${job.id}-${button.key}`} />
-        </View>
+      ) : (
+        ((approve && button) || side) && (
+          <Actions fit>
+            {approve && button && <Button label={label ?? ''} onPress={() => onAction(button.key)} testID={`job-${job.id}-${button.key}`} />}
+            {side && <Button kind="secondary" label={side.label} onPress={() => onAction(side.key)} testID={`job-${job.id}-${side.key}`} />}
+          </Actions>
+        )
       )}
-    </>
-  );
-  if (!canOpen || button) return <View style={[st.card, { backgroundColor: p.tint }]} testID={`job-${job.id}`}>{body}</View>;
-  return (
-    <Pressable
-      testID={`job-${job.id}`}
-      accessibilityRole="button"
-      accessibilityLabel={`${job.title}. ${line}`}
-      accessibilityHint={isClosed ? '누르면 이유를 볼 수 있어요. 옆으로 밀면 치워져요' : '누르면 진행 화면을 열어요'}
-      onPress={() => onAction(state === 'done' ? 'result' : 'progress')}
-      style={({ pressed }) => [st.card, { backgroundColor: pressed ? p.sunken : p.tint }]}
-    >
-      {body}
-    </Pressable>
+    </ListCard>
   );
 }
 
 const st = StyleSheet.create({
-  card: { borderRadius: radius.lg, paddingHorizontal: space.s4, paddingVertical: space.s4, gap: space.s1 },
-  top: { flexDirection: 'row', alignItems: 'baseline', gap: space.s3 },
-  bottom: { flexDirection: 'row', alignItems: 'center', gap: space.s3 },
-  textBtn: { borderRadius: radius.full, paddingHorizontal: space.s2, minHeight: 32, justifyContent: 'center' },
-  actions: { flexDirection: 'row', justifyContent: 'flex-end', paddingTop: space.s2 },
   head: { flexDirection: 'row', alignItems: 'center', paddingLeft: space.s1, gap: space.s2, minHeight: 28 },
   headBtn: { borderRadius: radius.full, paddingHorizontal: space.s3, minHeight: 28, justifyContent: 'center' },
 });

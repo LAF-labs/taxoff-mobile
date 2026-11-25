@@ -3,6 +3,7 @@ import { InputAccessoryView, Keyboard, Platform, Pressable, StyleSheet, TextInpu
 import { MAX_FONT_SCALE, radius, size, space, type, usePalette } from '../theme';
 import { useFocusFace } from './form';
 import { Chevron, OnCard, T } from './kit';
+import type { Ink } from '../theme';
 
 /**
  * 대화 카드 부품(기준판 kit.css의 sx-card, sx-card-hd, sx-kv, sx-amt, sx-actions is-fill을 그대로 옮김).
@@ -194,11 +195,72 @@ export function AmountEdit({ label, before, children }: { label: string; before?
 }
 
 /**
+ * 목록의 카드(기준판 ph-item, 밀린 일): 한 일에 카드 하나. 윗줄 이름과 금액, 아랫줄 상태 한 줄, 그 아래 단추 줄.
+ * 누르면 자세히 여는 카드면 onPress를 준다(단추가 있으면 카드는 누를 수 없다).
+ */
+export function ListCard({ title, amount, line, lineInk = 'ink2', dim, strike, side, children, onPress, a11y, a11yHint, testID, lineTestID }: {
+  title: string;
+  amount?: string | null;
+  line?: string;
+  lineInk?: Ink;
+  dim?: boolean;
+  /** 금액에 취소선(시간이 지나 취소된 일). */
+  strike?: boolean;
+  /** 상태 줄 오른쪽의 글자 단추(취소 등). */
+  side?: ReactNode;
+  children?: ReactNode;
+  onPress?: () => void;
+  a11y?: string;
+  a11yHint?: string;
+  testID?: string;
+  lineTestID?: string;
+}) {
+  const p = usePalette();
+  const body = (
+    <OnCard.Provider value={true}>
+      <View style={st.itemTop}>
+        <T v="strong" c={dim ? 'ink2' : 'ink'} lines={1} style={{ flex: 1 }}>
+          {title}
+        </T>
+        {amount && (
+          <T v="figure" c={dim ? 'ink3' : 'ink'} style={[{ flexShrink: 0 }, strike && { textDecorationLine: 'line-through' }]}>
+            {amount}
+          </T>
+        )}
+      </View>
+      {(line || side) && (
+        <View style={st.itemLine}>
+          <T v="sub" c={lineInk} style={{ flex: 1 }} testID={lineTestID}>
+            {line}
+          </T>
+          {side}
+        </View>
+      )}
+      {children}
+    </OnCard.Provider>
+  );
+  if (!onPress) return <View style={[st.item, { backgroundColor: p.tint }]} testID={testID}>{body}</View>;
+  return (
+    <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={a11y} accessibilityHint={a11yHint} onPress={onPress} style={({ pressed }) => [st.item, { backgroundColor: pressed ? p.sunken : p.tint }]}>
+      {body}
+    </Pressable>
+  );
+}
+
+/**
  * 단추 한 줄: 폰 단추는 줄을 꽉 채운다. 하나면 가득, 둘이면 반씩, 셋 이상이면 한 줄에 하나씩(주 단추가 맨 위).
  * 가장 중요한 단추가 맨 앞. 폭이 덜 찬 단추를 두지 않는다.
  */
-export function Actions({ children, style, testID }: { children: ReactNode; style?: StyleProp<ViewStyle>; testID?: string }) {
+export function Actions({ children, style, testID, fit }: { children: ReactNode; style?: StyleProp<ViewStyle>; testID?: string; fit?: boolean }) {
   const items = Children.toArray(children).filter(isValidElement);
+  // fit: 목록 카드의 단추 줄(기준판 ph-item .sx-actions). 오른쪽에 글 폭만큼.
+  if (fit) {
+    return (
+      <View style={[st.fit, style]} testID={testID}>
+        {items}
+      </View>
+    );
+  }
   const stack = items.length >= 3;
   return (
     <View style={[stack ? st.stack : st.row, style]} testID={testID}>
@@ -260,6 +322,10 @@ const st = StyleSheet.create({
   row: { flexDirection: 'row', gap: space.s2 },
   cell: { flex: 1, minWidth: 0 },
   stack: { gap: space.s2 },
+  fit: { flexDirection: 'row', justifyContent: 'flex-end', gap: space.s2, paddingTop: space.s2 },
+  item: { alignSelf: 'stretch', borderRadius: radius.lg, padding: space.s4, gap: space.s1 },
+  itemTop: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space.s3 },
+  itemLine: { flexDirection: 'row', alignItems: 'center', gap: space.s3 },
   doneBar: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: space.s4, minHeight: 44, alignItems: 'center' },
   doneBtn: { paddingHorizontal: space.s2, minHeight: 44, justifyContent: 'center' },
   choice: { minHeight: size.row, borderRadius: radius.md, paddingHorizontal: space.s4, flexDirection: 'row', alignItems: 'center', gap: space.s2 },

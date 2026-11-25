@@ -65,7 +65,7 @@ export const FIELD_LABELS: Readonly<Record<string, string>> = {
   counterpartBizNo: '사업자번호',
   counterpartEmail: '받는 이메일',
   supplyAmount: '공급가액',
-  taxAmount: '세액',
+  taxAmount: '부가세',
   totalAmount: '합계',
   itemName: '품목',
   itemCount: '수량',

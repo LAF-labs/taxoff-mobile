@@ -20,8 +20,7 @@
     "src/screens/LockScreen.tsx": 1,
     "src/screens/MoneyScreen.tsx": 1,
     "src/screens/OnboardingScreen.tsx": 4,
-    "src/screens/PairScreen.tsx": 3,
-    "src/screens/QueueScreen.tsx": 1
+    "src/screens/PairScreen.tsx": 3
   },
   "gray-note": {
     "src/screens/BizRegScreen.tsx": 2,
