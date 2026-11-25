@@ -308,6 +308,42 @@ export interface CopyIssued {
   adjSupply?: number;
   adjTax?: number;
 }
+/** v1.16 월 리포트 사본(ADR-068 결정 8). a = 금액(null = 받지 못함, 0으로 보이지 않는다), p = 기간 일부만 받음 */
+export interface CopyLine {
+  a: number | null;
+  p: boolean;
+}
+export type CopyBankCats = Partial<Record<'receivable' | 'payable' | 'payroll' | 'card_payment' | 'tax' | 'card_sales' | 'interest' | 'other', number>>;
+export interface CopyReportMonth {
+  month: string;
+  sales: { inv: CopyLine; cr: CopyLine; card: CopyLine; cash: CopyLine };
+  purchase: { inv: CopyLine; card: CopyLine; cr: CopyLine; rcpt: CopyLine; pay: CopyLine };
+  /** 계좌를 잇지 않았으면 없다. done = 모든 계좌가 그달 전체를 덮음 */
+  bank?: { in: number; out: number; done: boolean; bin: CopyBankCats; bout: CopyBankCats };
+}
+export interface CopyRank {
+  /** i = 거래처 줄만, report.pm의 몇째 칸인가(v1.17) */
+  rows: { name: string | null; n: number; a: number; pct: number; settled?: number; left?: number; i?: number }[];
+  /** k = 묶인 거래처나 품목 수 */
+  rest: { k: number; n: number; a: number; pct: number } | null;
+  total: number;
+}
+export interface CopyReport {
+  month: string;
+  today: string;
+  bankTo?: string | null;
+  hometaxTo?: string | null;
+  /** month에서 끝나는 12달, 오래된 달이 앞 */
+  months: CopyReportMonth[];
+  /** month에서 끝나는 1, 3, 6, 12개월의 순위. ps/pp 거래처 매출/매입, is/ip 품목 매출/매입 */
+  windows: { months: 1 | 3 | 6 | 12; ps: CopyRank; pp: CopyRank; is: CopyRank; ip: CopyRank; split?: { inN: number; inA: number; outN: number; outA: number } }[];
+  /** d = 잔액을 읽은 날(v1.17) */
+  balances: { bank: string; last4: string; a: number | null; d?: string }[];
+  /** v1.17 사업장 이름과 번호(폰 PDF 머리) */
+  biz?: { name: string; bizNo: string | null };
+  /** v1.17 거래처 시트(ADR-068 결정 8): 순위에 나온 거래처마다 month에서 끝나는 12달의 달마다 금액(m, 오래된 달이 앞)과 다 받은(낸) 세금계산서의 받기까지 평균 날수(d, 없으면 null). 줄의 i로 찾는다 */
+  pm?: { m: number[]; d: number | null }[];
+}
 export interface PhoneCopyBody {
   asOf: number;
   counterparties: CopyCounterparty[];
@@ -315,6 +351,8 @@ export interface PhoneCopyBody {
   toIssue?: { ref: string; supply: number; item: string; due?: string }[];
   money?: { asOf: number; accounts?: number; receivable: MoneySide; payable: MoneySide; cashflow?: CopyCashflow };
   todayApprovalsLeft?: number;
+  /** v1.16, report.v1 폰에만 */
+  report?: CopyReport;
 }
 type Empty = Record<string, never>;
 

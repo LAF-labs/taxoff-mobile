@@ -6,7 +6,7 @@ import { customersOf, type BookCmd, type Customer } from '../book.ts';
 
 export type CachedPhoneCopy = PhoneCopyBody & { ownerDesktopDeviceId?: string };
 
-export const PHONE_CAPS: readonly string[] = [CAP.copy, CAP.issue, CAP.sync, CAP.issued, CAP.book, CAP.amend];
+export const PHONE_CAPS: readonly string[] = [CAP.copy, CAP.issue, CAP.sync, CAP.issued, CAP.book, CAP.amend, CAP.report];
 
 const COPY_WAIT_MS = 2000;
 const DAY = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
@@ -23,11 +23,14 @@ export async function receiveCopy(ch: Channel, peerCaps: readonly string[], ms =
   }
 }
 
+/**
+ * 새 사본으로 바꾼다. PC가 돈 요약이나 리포트를 읽지 못했거나 한 프레임에 넣으려 뺐으면(그 칸 없이 온 사본) 같은 PC의 마지막 값을 그대로 둔다.
+ */
 export function newerCopy(have: CachedPhoneCopy | null | undefined, got: CachedPhoneCopy): CachedPhoneCopy {
   if (have && have.asOf >= got.asOf) return have;
-  return !got.money && have?.money && have.ownerDesktopDeviceId && have.ownerDesktopDeviceId === got.ownerDesktopDeviceId
-    ? { ...got, money: have.money }
-    : got;
+  const same = !!have?.ownerDesktopDeviceId && have.ownerDesktopDeviceId === got.ownerDesktopDeviceId;
+  if (!same) return got;
+  return { ...got, ...(!got.money && have!.money ? { money: have!.money } : {}), ...(!got.report && have!.report ? { report: have!.report } : {}) };
 }
 
 /** '2026-11-03' → '11월 3일'. */

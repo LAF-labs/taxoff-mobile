@@ -426,10 +426,11 @@ export function Replies<K extends string>({
 /**
  * 고르기 줄(기준판 .ph .sx-seg): 알약 모양, 내용 폭만큼 왼쪽에. 고른 칸은 바탕색 면에 굵은 글씨.
  * fill이면 줄 폭을 나눠 쓴다(설정의 글자 크기처럼 두세 칸을 고르는 곳). 카드 안에서는 면이 바탕색이 된다.
+ * tint: 카드 안에서도 기준판 sx-seg 그대로(틀은 tint, 고른 칸은 바탕색). 리포트 카드의 [매출] [매입](기준판 Phone-Report).
  */
-export function Seg<K extends string>({ options, value, onChange, testID, style, fill }: { options: Array<{ key: K; label: string }>; value: K | null; onChange: (k: K) => void; testID?: string; style?: StyleProp<ViewStyle>; fill?: boolean }) {
+export function Seg<K extends string>({ options, value, onChange, testID, style, fill, tint }: { options: Array<{ key: K; label: string }>; value: K | null; onChange: (k: K) => void; testID?: string; style?: StyleProp<ViewStyle>; fill?: boolean; tint?: boolean }) {
   const p = usePalette();
-  const onCard = useContext(OnCard);
+  const onCard = useContext(OnCard) && !tint;
   const raised = useContext(Raised);
   const face = onCard ? p.canvas : raised ? p.raisedTint : p.tint;
   const on = onCard ? p.sunken : p.overlay === p.tint ? p.sunken : p.canvas;

@@ -99,10 +99,15 @@ export function Kv({ children, testID }: { children: ReactNode; testID?: string 
  * 라벨과 값 한 줄. total은 합계(굵게). onPress가 있으면 고를 수 있는 값(값 뒤 꺾쇠), edit이면 눌러서 그 자리에서 고치는 값(꺾쇠 없음).
  * children은 값 자리에 다른 것을 둘 때.
  */
-export function KvRow({ label, value, total, onPress, edit, children, quiet, testID }: { label: string; value?: string; total?: boolean; onPress?: () => void; edit?: boolean; children?: ReactNode; quiet?: boolean; testID?: string }) {
+export function KvRow({ label, value, total, onPress, edit, children, quiet, warn, testID }: {
+  label: string; value?: string; total?: boolean; onPress?: () => void; edit?: boolean; children?: ReactNode; quiet?: boolean;
+  /** 확인 못 한 값, 기간 일부만 받은 값(attention 글자, 리포트) */
+  warn?: boolean;
+  testID?: string;
+}) {
   const p = usePalette();
   const v = children ?? (
-    <T v={total ? 'subFigure' : 'subValue'} c={quiet ? 'ink4' : 'ink'} style={st.kvV} testID={testID}>
+    <T v={total ? 'subFigure' : 'subValue'} c={warn ? 'attention' : quiet ? 'ink4' : 'ink'} style={st.kvV} testID={testID}>
       {value}
     </T>
   );

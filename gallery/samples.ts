@@ -145,3 +145,94 @@ export function phoneChat(state: 'empty' | 'typing' | 'reply' | 'failed' | 'limi
       };
   }
 }
+
+/**
+ * 월 리포트 사본(기준판 Phone-Report 2026-11 숫자 그대로). 11월과 10월은 기준판 값, 그 밖 달은 기준판 막대 높이에서 거꾸로 셈한 값이다.
+ * 거래처와 품목 이름은 지어낸 값이다.
+ */
+type ReportCopy = import('@sax/remote').CopyReport;
+type ReportMonth = ReportCopy['months'][number];
+const RM = ['2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11'];
+const SALES_T = [36_300_000, 32_100_000, 34_600_000, 38_900_000, 40_200_000, 41_500_000, 39_330_000, 43_600_000, 35_900_000, 47_000_000];
+const BUY_T = [23_900_000, 21_400_000, 22_200_000, 25_200_000, 24_800_000, 26_100_000, 23_940_000, 26_500_000, 22_660_000, 29_070_000];
+const ln = (a: number | null) => ({ a, p: false });
+const rmonth = (month: string, i: number): ReportMonth => {
+  if (month === '2026-11') {
+    return {
+      month,
+      sales: { inv: ln(42_350_000), cr: ln(1_280_000), card: ln(4_870_000), cash: ln(null) },
+      purchase: { inv: ln(18_920_000), card: ln(2_315_400), cr: ln(486_000), rcpt: ln(0), pay: ln(6_200_000) },
+      bank: { in: 39_870_000, out: 31_245_600, done: true, bin: { receivable: 33_960_000, card_sales: 4_650_000, interest: 12_000, other: 1_248_000 }, bout: { payable: 16_480_000, payroll: 6_200_000, card_payment: 3_912_600, tax: 2_153_000, other: 2_500_000 } },
+    };
+  }
+  if (month === '2026-10') {
+    return {
+      month,
+      sales: { inv: ln(45_100_000), cr: ln(1_550_000), card: ln(4_650_000), cash: ln(null) },
+      purchase: { inv: ln(21_000_000), card: ln(2_640_000), cr: ln(360_000), rcpt: ln(0), pay: ln(6_200_000) },
+      bank: { in: 45_600_000, out: 35_100_000, done: true, bin: { receivable: 40_200_000, card_sales: 4_400_000, interest: 11_000, other: 989_000 }, bout: { payable: 19_800_000, payroll: 6_200_000, card_payment: 4_100_000, tax: 2_400_000, other: 2_600_000 } },
+    };
+  }
+  const s = SALES_T[i]!;
+  const b = BUY_T[i]!;
+  const cr = Math.round(s * 0.03 / 1000) * 1000;
+  const card = Math.round(s * 0.1 / 1000) * 1000;
+  const pay = 6_200_000;
+  const bc = Math.round((b - pay) * 0.09 / 1000) * 1000;
+  const bcr = Math.round((b - pay) * 0.02 / 1000) * 1000;
+  const bin = Math.round(s * 0.88 / 1000) * 1000;
+  const bout = Math.round(b * 1.12 / 1000) * 1000;
+  return {
+    month,
+    sales: { inv: ln(s - cr - card), cr: ln(cr), card: ln(card), cash: ln(null) },
+    purchase: { inv: ln(b - pay - bc - bcr), card: ln(bc), cr: ln(bcr), rcpt: ln(0), pay: ln(pay) },
+    bank: { in: bin, out: bout, done: true, bin: { receivable: bin - card, card_sales: card }, bout: { payable: bout - pay - bc, payroll: pay, card_payment: bc } },
+  };
+};
+const PARTNERS = ['대한테크', '가나식자재', '한빛물산', '세진물산', '스마일카페', '바다수산', '푸른물류', '초록농원', '해담식당'];
+const P_SHARE = [0.34, 0.22, 0.16, 0.13, 0.07, 0.032, 0.025, 0.015, 0.008];
+const SUPPLIERS = ['부림철강', '미래포장', '오성전기', '제일운수', '아름인쇄', '현대타일'];
+const S_SHARE = [0.41, 0.24, 0.15, 0.1, 0.06, 0.04];
+const ITEMS: Array<[string, number, number]> = [['유지보수', 6, 15_600_000], ['자재 납품', 9, 11_480_000], ['물류 대행', 3, 6_250_000], ['월 구독', 12, 5_520_000], ['컨설팅', 2, 3_500_000]];
+const BUY_ITEMS: Array<[string, number, number]> = [['철판', 4, 7_760_000], ['포장재', 6, 4_540_000], ['전기 공사', 1, 2_840_000], ['운송', 8, 1_890_000], ['인쇄', 2, 1_890_000]];
+const MONTHS = RM.map(rmonth);
+const winSum = (w: number, side: 'sales' | 'purchase') => MONTHS.slice(-w).reduce((t, m) => t + (side === 'sales' ? m.sales.inv.a! : m.purchase.inv.a!), 0);
+const round = (n: number) => Math.round(n / 10_000) * 10_000;
+// 거래처 시트: 대한테크 달마다(기준판 Phone-Report-Partner), 나머지는 비율대로
+const DAEHAN = [9_800_000, 8_900_000, 10_100_000, 12_300_000, 11_900_000, 12_600_000, 11_200_000, 14_950_000, 12_040_000, 13_880_000, 15_620_000, 14_300_000];
+const pmOf = (share: number, i: number) => (i === 0 ? DAEHAN : MONTHS.map((m) => round(m.sales.inv.a! * share)));
+const buyPm = (share: number) => MONTHS.map((m) => round(m.purchase.inv.a! * share));
+const window = (w: 1 | 3 | 6 | 12): ReportCopy['windows'][number] => {
+  const st = winSum(w, 'sales');
+  const pt = winSum(w, 'purchase');
+  const ps = PARTNERS.map((name, i) => {
+    const a = i === 0 ? DAEHAN.slice(-w).reduce((x, y) => x + y, 0) : w === 1 ? [9_240_000, 6_820_000, 5_410_000, 3_180_000, 1_400_000, 1_000_000, 650_000, 350_000][i - 1]! : round(st * P_SHARE[i]!);
+    return { name, n: Math.max(1, Math.round((w * 3 * P_SHARE[i]!) / 0.34)), a, pct: Math.round((a / st) * 100), left: i === 0 ? 9_350_000 : i === 1 ? 4_620_000 : 0, settled: 0, i };
+  });
+  const pp = SUPPLIERS.map((name, i) => {
+    const a = round(pt * S_SHARE[i]!);
+    return { name, n: Math.max(1, Math.round(w * 2 * S_SHARE[i]! * 3)), a, pct: Math.round((a / pt) * 100), left: i === 0 ? 3_300_000 : 0, settled: 0, i: PARTNERS.length + i };
+  });
+  const it = (rows: Array<[string, number, number]>, total: number) => rows.map(([name, n, a]) => ({ name, n: n * w, a: w === 1 ? a : round((a / 42_350_000) * total), pct: Math.round((a / 42_350_000) * 100) }));
+  return {
+    months: w,
+    ps: { rows: ps, rest: null, total: st },
+    pp: { rows: pp, rest: null, total: pt },
+    is: { rows: it(ITEMS, st), rest: null, total: st },
+    ip: { rows: it(BUY_ITEMS, pt), rest: null, total: pt },
+  };
+};
+export const SAMPLE_REPORT: ReportCopy = {
+  month: '2026-11',
+  today: '2026-11-25',
+  bankTo: '2026-11-24',
+  hometaxTo: '2026-11-25',
+  months: MONTHS,
+  windows: ([1, 3, 6, 12] as const).map(window),
+  balances: [
+    { bank: '우리은행', last4: '1234', a: 21_480_300, d: '2026-11-24' },
+    { bank: '국민은행', last4: '5678', a: 6_912_000, d: '2026-11-24' },
+  ],
+  pm: [...P_SHARE.map((s, i) => ({ m: pmOf(s, i), d: i === 0 ? 32 : i === 1 ? 18 : i < 5 ? 25 : null })), ...S_SHARE.map((s) => ({ m: buyPm(s), d: 14 }))],
+  biz: { name: '가나상사', bizNo: '123-45-67890' },
+};

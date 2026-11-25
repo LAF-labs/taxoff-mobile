@@ -8,8 +8,9 @@ import { radius, usePalette } from '../theme';
  * 더보기 메뉴는 같은 그림을 22로 키워 쓴다(대화 말풍선, 알림 종, 설정 조절 막대, 거래처 건물, 문서함 폴더).
  * 문서함 줄은 종류마다 문서 속을 바꾼다: 세금계산서는 두 줄(doc), 증명서는 체크(cert), 그 밖은 한 줄(paper).
  * 거래처 화면: 찾기 돋보기, 더하기, 등록증 찍기 카메라, 바꿀 수 없는 칸 자물쇠, 복사, 닫기 X.
+ * 리포트: 더보기 메뉴의 막대 셋(chart), PDF로 내보내기의 위 화살표 상자(share). 기준판 Phone-Menu, Phone-Report.
  */
-export type GlyphKind = 'done' | 'stop' | 'attention' | 'doc' | 'cert' | 'paper' | 'money' | 'list' | 'chat' | 'bell' | 'settings' | 'building' | 'folder' | 'search' | 'plus' | 'camera' | 'lock' | 'copy' | 'close';
+export type GlyphKind = 'done' | 'stop' | 'attention' | 'doc' | 'cert' | 'paper' | 'money' | 'list' | 'chat' | 'bell' | 'settings' | 'building' | 'folder' | 'search' | 'plus' | 'camera' | 'lock' | 'copy' | 'close' | 'chart' | 'share';
 
 const W = 1.75;
 
@@ -177,6 +178,32 @@ function Base({ kind, color }: { kind: GlyphKind; color: string }): ReactNode {
       </View>
     );
   }
+  if (kind === 'chart') {
+    // 기준판 M5 20V11 M12 20V5 M19 20v-6(24 칸)을 18 칸으로
+    return (
+      <View style={st.box} aria-hidden>
+        {[
+          [3.75, 6.75],
+          [9, 11.25],
+          [14.25, 4.5],
+        ].map(([x, h]) => (
+          <View key={x} style={[st.chartBar, fill, { left: x! - W / 2, height: h! + W }]} />
+        ))}
+      </View>
+    );
+  }
+  if (kind === 'share') {
+    // 기준판 PDF로 저장: 위 화살표와 위가 열린 상자
+    return (
+      <View style={st.box} aria-hidden>
+        <View style={[st.shareStem, fill]} />
+        <View style={[st.shareHead, { borderColor: color }]} />
+        <View style={[st.shareBox, line]} />
+        <View style={[st.shareLip, fill, { left: 3 }]} />
+        <View style={[st.shareLip, fill, { right: 3 }]} />
+      </View>
+    );
+  }
   if (kind === 'money') {
     return (
       <View style={st.box} aria-hidden>
@@ -240,6 +267,11 @@ const st = StyleSheet.create({
   lockBody: { position: 'absolute', left: 2.5, top: 8, width: 13, height: 9, borderRadius: radius.sm / 4 },
   sheetBack: { position: 'absolute', left: 1.5, top: 1.5, width: 11, height: 11, borderRadius: radius.sm / 4 },
   sheetFront: { position: 'absolute', left: 5.5, top: 5.5, width: 11, height: 11, borderRadius: radius.sm / 4 },
+  chartBar: { position: 'absolute', bottom: 2.25, width: W, borderRadius: radius.full },
+  shareStem: { position: 'absolute', left: 9 - W / 2, top: 2.5, width: W, height: 9, borderRadius: radius.full },
+  shareHead: { position: 'absolute', left: 9 - 2.6, top: 2.6, width: 5.2, height: 5.2, borderTopWidth: W, borderLeftWidth: W, transform: [{ rotate: '45deg' }] },
+  shareBox: { position: 'absolute', left: 3, top: 8.25, width: 12, height: 7.75, borderTopWidth: 0, borderRadius: radius.sm / 5 },
+  shareLip: { position: 'absolute', top: 8.25, width: 2, height: W, borderRadius: radius.full },
   list: { gap: 3.5, alignItems: 'flex-start', paddingLeft: 1 },
   listRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   listDot: { width: 2.5, height: 2.5, borderRadius: radius.full },
