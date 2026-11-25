@@ -122,11 +122,13 @@ export const unlockCaps = (ux: UxDevice | null | undefined, off: boolean | undef
  * 풀기 요청과 답을 잇는 곳. 연결(세션)은 요청을 넣고 답을 꺼내 보내고, 화면은 요청을 보여 주고 답을 넣는다.
  * 세션이 닫힌 뒤에 넣은 답은 다음 세션에서 보낸다(요청이 아직 살아 있을 때만).
  */
+type Outgoing = { body: UnlockGrantBody; until: number; pcDeviceId: string };
+
 export class UnlockDesk {
   private readonly asks = new Map<string, UnlockAsk>();
   private readonly hidden = new Set<string>();
   private readonly done = new Set<string>();
-  private out: Array<{ body: UnlockGrantBody; until: number }> = [];
+  private out: Outgoing[] = [];
   private readonly subs = new Set<() => void>();
   private readonly now: () => number;
 
@@ -153,8 +155,9 @@ export class UnlockDesk {
 
   offer(a: UnlockAsk): void {
     if (this.done.has(a.unlockId) || this.asks.has(a.unlockId)) return;
-    // 같은 PC가 새로 청하면 앞의 것은 버린다(PC도 마지막 것만 기다린다).
+    // 같은 PC가 새로 청하면 앞의 것은 버린다(PC도 마지막 것만 기다린다). 세션이 닫혀 못 보낸 앞 요청의 답도 함께 버린다.
     for (const [id, x] of this.asks) if (x.pcDeviceId === a.pcDeviceId) this.asks.delete(id);
+    this.out = this.out.filter((o) => o.pcDeviceId !== a.pcDeviceId);
     this.asks.set(a.unlockId, a);
     this.emit();
   }
@@ -184,7 +187,7 @@ export class UnlockDesk {
     if (!a) return;
     this.asks.delete(body.unlockId);
     this.done.add(body.unlockId);
-    this.out.push({ body, until: a.until });
+    this.out.push({ body, until: a.until, pcDeviceId: a.pcDeviceId });
     this.emit();
   }
 
@@ -202,7 +205,7 @@ export class UnlockDesk {
   }
 
   /** 보낼 답을 꺼낸다. 시간이 지난 답은 버린다. */
-  take(): Array<{ body: UnlockGrantBody; until: number }> {
+  take(): Outgoing[] {
     const t = this.now();
     const live = this.out.filter((o) => o.until > t);
     this.out = [];
@@ -210,7 +213,7 @@ export class UnlockDesk {
   }
 
   /** 보내지 못한 답을 다시 넣는다(세션이 닫혀 있었다). */
-  putBack(items: Array<{ body: UnlockGrantBody; until: number }>): void {
+  putBack(items: Outgoing[]): void {
     this.out.push(...items);
   }
 }
