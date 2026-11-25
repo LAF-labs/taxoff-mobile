@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
-import { Animated, Easing, FlatList, Keyboard, Platform, Pressable, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Animated, Easing, Keyboard, Platform, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import type { ChatItem } from '../chat';
 import { findByBizNo, orderedCounterparties, searchCounterparties, type Counterparty } from '../issue';
 import { useCustomers } from '../customers';
 import type { IssuePrefill } from '../queueStore';
-import { MAX_FONT_SCALE, radius, space, type as typeScale, usePalette } from '../theme';
+import { space } from '../theme';
+import { Actions } from '../ui/card';
+import { BigInput, SearchField } from '../ui/form';
 import { masked } from '../ui/mask';
-import { Button, Chevron, T, tap } from '../ui/kit';
+import { Button, Group, Row, T, tap } from '../ui/kit';
+import { Sheet } from '../ui/sheet';
 
 export type IssueStep = 'cp' | 'name' | 'bizNo';
 
@@ -54,9 +56,6 @@ export function IssueSheet({ onClose, onPick, onCapture, counterparties: given, 
   counterparties?: Counterparty[];
   preview?: IssueSheetPreview;
 }) {
-  const p = usePalette();
-  const inset = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
   const customers = useCustomers();
   const all = useMemo(() => orderedCounterparties(given ?? customers.counterparties), [given, customers.counterparties]);
 
@@ -64,17 +63,6 @@ export function IssueSheet({ onClose, onPick, onCapture, counterparties: given, 
   const [q, setQ] = useState(preview?.query ?? '');
   const [name, setName] = useState(preview?.name ?? '');
   const [bizNo, setBizNo] = useState(preview?.bizNo ?? '');
-
-  const [kb, setKb] = useState(preview?.kb ?? 0);
-  useEffect(() => {
-    if (preview?.kb !== undefined) return;
-    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (e) => setKb(e.endCoordinates.height));
-    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKb(0));
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, [preview?.kb]);
 
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   const search = useRef<ComponentRef<typeof TextInput>>(null);
@@ -116,187 +104,79 @@ export function IssueSheet({ onClose, onPick, onCapture, counterparties: given, 
   const back = () => (step === 'bizNo' ? go('name', true) : step === 'name' ? go('cp', true) : onClose());
 
   const underline = (key: 'name' | 'bizNo', value: string, set: (v: string) => void, opts: { placeholder: string; pad?: boolean; max: number; onDone: () => void }) => (
-    <View style={[st.input, { borderColor: p.ink }]}>
-      <TextInput
-        ref={input}
-        testID={`issue-sheet-${key}`}
-        value={value}
-        onChangeText={set}
-        placeholder={opts.placeholder}
-        placeholderTextColor={p.ink4}
-        keyboardType={opts.pad ? 'number-pad' : 'default'}
-        maxLength={opts.max}
-        maxFontSizeMultiplier={MAX_FONT_SCALE}
-        returnKeyType={opts.pad ? undefined : 'next'}
-        autoCorrect={false}
-        onSubmitEditing={opts.onDone}
-        accessibilityLabel={ASK[key]}
-        style={[typeScale.title, st.inputText, { color: p.ink }, { outlineStyle: 'none' } as object]}
-      />
-    </View>
+    <BigInput ref={input} testID={`issue-sheet-${key}`} label={ASK[key]} value={value} onChange={set} placeholder={opts.placeholder} pad={opts.pad} maxLength={opts.max} returnKey={opts.pad ? undefined : 'next'} onSubmit={opts.onDone} />
   );
 
   let body: React.ReactNode;
   let primary: { label: string; on: boolean; go: () => void } | null = null;
   if (step === 'cp') {
     const found = q.trim() ? searchCounterparties(all, q) : all;
-    body = (
-      <>
-        <T v="title" role="header">
-          {ASK.cp}
+    body =
+      all.length === 0 ? (
+        <T v="sub" c="ink2" testID="issue-sheet-empty">
+          아직 거래처가 없어요. 상호와 등록번호를 적으면 바로 쓸 수 있어요
         </T>
-        {all.length === 0 ? (
-          <View style={[st.empty, { backgroundColor: p.tint }]} testID="issue-sheet-empty">
-            <T v="subStrong">아직 거래처가 없어요</T>
-            <T v="sub" c="ink2">
-              상호와 등록번호를 적으면 바로 쓸 수 있어요
-            </T>
-          </View>
-        ) : (
-          <>
-            <TextInput
-              testID="issue-sheet-search"
-              ref={search}
-              value={q}
-              onChangeText={setQ}
-              placeholder="상호나 등록번호로 찾기"
-              placeholderTextColor={p.ink3}
-              accessibilityLabel="거래처 찾기"
-              maxFontSizeMultiplier={MAX_FONT_SCALE}
-              returnKeyType="search"
-              autoCorrect={false}
-              style={[typeScale.body, st.search, { backgroundColor: p.tint, color: p.ink }, { outlineStyle: 'none' } as object]}
-            />
-            <View style={[st.list, { borderColor: p.line }]}>
-              <FlatList
-                data={found}
-                keyExtractor={(c) => c.id}
-                keyboardShouldPersistTaps="handled"
-                keyboardDismissMode="none"
-                testID="issue-sheet-list"
-                ItemSeparatorComponent={() => <View style={[st.sep, { backgroundColor: p.line }]} />}
-                ListEmptyComponent={
-                  <View style={st.none} testID="issue-sheet-none">
-                    <T v="sub" c="ink2">
-                      찾는 거래처가 없어요. 직접 입력해 주세요
-                    </T>
-                  </View>
-                }
-                renderItem={({ item: c }) => (
-                  <Pressable
-                    onPress={() => pick({ cp: c })}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${c.name}, ${subOf(c)}`}
-                    testID={`issue-sheet-cp-${c.id}`}
-                    style={({ pressed }) => [st.row, pressed && { backgroundColor: p.tint }]}
-                  >
-                    <View style={{ flex: 1, gap: 1 }}>
-                      <T v="sub" lines={1}>
-                        {c.name}
-                      </T>
-                      <T v="meta" c="ink3" lines={1}>
-                        {subOf(c)}
-                      </T>
-                    </View>
-                    <Chevron color={p.ink4} sizePx={7} />
-                  </Pressable>
-                )}
-              />
-            </View>
-          </>
-        )}
-      </>
-    );
+      ) : (
+        <>
+          <SearchField ref={search} testID="issue-sheet-search" value={q} onChange={setQ} placeholder="상호나 등록번호로 찾기" label="거래처 찾기" />
+          <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" testID="issue-sheet-list">
+            {found.length ? (
+              <Group>
+                {found.map((c) => (
+                  <Row key={c.id} label={c.name} sub={subOf(c)} onPress={() => pick({ cp: c })} a11y={`${c.name}, ${subOf(c)}`} testID={`issue-sheet-cp-${c.id}`} />
+                ))}
+              </Group>
+            ) : (
+              <T v="sub" c="ink2" testID="issue-sheet-none">
+                찾는 거래처가 없어요. 직접 입력해 주세요
+              </T>
+            )}
+          </ScrollView>
+        </>
+      );
   } else if (step === 'name') {
     const on = name.trim().length > 0;
-    body = (
-      <>
-        <T v="title" role="header">
-          {ASK.name}
-        </T>
-        {underline('name', name, setName, { placeholder: '예: 동네마트', max: 60, onDone: () => on && go('bizNo') })}
-      </>
-    );
+    body = underline('name', name, setName, { placeholder: '예: 동네마트', max: 60, onDone: () => on && go('bizNo') });
     primary = { label: '다음', on, go: () => go('bizNo') };
   } else {
     const on = bizNo.replace(/\D/g, '').length === 10;
-    body = (
-      <>
-        <T v="title" role="header">
-          {ASK.bizNo}
-        </T>
-        {underline('bizNo', bizNo, (v) => setBizNo(masked('bizNo', v)), { placeholder: '000-00-00000', pad: true, max: 12, onDone: () => on && done() })}
-        <T v="meta" c="ink3">
-          사업자등록증에 있는 10자리예요
-        </T>
-      </>
-    );
+    body = underline('bizNo', bizNo, (v) => setBizNo(masked('bizNo', v)), { placeholder: '000-00-00000', pad: true, max: 12, onDone: () => on && done() });
     primary = { label: '확인', on, go: done };
   }
 
-  const bottomPad = Math.max(kb > 0 ? 0 : inset.bottom, space.s4);
-  const h = Math.min(SHEET_H + bottomPad, height - kb - inset.top - space.s2);
-
   return (
-    <View style={StyleSheet.absoluteFill} testID="issue-sheet">
-      <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: p.scrim }]} onPress={onClose} accessibilityLabel="세금계산서 발급 닫기" accessibilityRole="button" />
-      <View style={[st.sheet, { backgroundColor: p.canvas, height: h, bottom: kb, paddingBottom: bottomPad }]} accessibilityViewIsModal>
-        <View style={[st.grabber, { backgroundColor: p.sunken }]} />
-        <View style={st.head}>
-          <Pressable onPress={back} hitSlop={12} accessibilityRole="button" accessibilityLabel={step !== 'cp' ? '이전 단계' : '닫기'} style={st.headBtn} testID="issue-sheet-back">
-            {step !== 'cp' ? <Chevron dir="left" color={p.ink2} sizePx={9} /> : <T v="meta" c="ink3">닫기</T>}
-          </Pressable>
-          <T v="meta" c="ink3" style={{ flex: 1, textAlign: 'center' }}>
-            {step === 'cp' ? '세금계산서 발급' : '직접 입력'}
-          </T>
-          <View style={[st.headBtn, { alignItems: 'flex-end' }]}>
-            {step !== 'cp' && (
-              <T v="meta" c="ink3" testID="issue-sheet-progress">
-                {step === 'name' ? '1/2' : '2/2'}
-              </T>
-            )}
-          </View>
-        </View>
-        <Animated.View
-          key={step}
-          style={[
-            st.body,
-            { opacity: slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }), transform: [{ translateX: slide.interpolate({ inputRange: [0, 1], outputRange: [0, 28 * dir.current] }) }] },
-          ]}
-        >
-          {body}
-        </Animated.View>
-        <View style={st.foot}>
-          {step === 'cp' ? (
-            <View style={st.twin}>
-              <Button kind={all.length === 0 ? 'primary' : 'secondary'} label="직접 입력" onPress={manual} testID="issue-sheet-manual" style={{ flex: 1 }} />
-              <Button kind="secondary" label="등록증 찍기" onPress={onCapture} testID="issue-sheet-capture" style={{ flex: 1 }} />
-            </View>
-          ) : (
-            primary && <Button label={primary.label} onPress={primary.go} disabled={!primary.on} testID="issue-sheet-next" />
-          )}
-        </View>
-      </View>
-    </View>
+    <Sheet
+      title={step === 'cp' ? '어디에 발급할까요?' : '직접 입력'}
+      step={step === 'cp' ? undefined : step === 'name' ? '1/2' : '2/2'}
+      onBack={step !== 'cp' ? back : undefined}
+      onClose={onClose}
+      inline
+      a11yClose="세금계산서 발급 닫기"
+      testID="issue-sheet"
+      footer={
+        step === 'cp' ? (
+          <Actions>
+            <Button kind={all.length === 0 ? 'primary' : 'secondary'} label="직접 입력" onPress={manual} testID="issue-sheet-manual" />
+            <Button kind="secondary" label="등록증 찍기" onPress={onCapture} testID="issue-sheet-capture" />
+          </Actions>
+        ) : (
+          primary && <Button label={primary.label} onPress={primary.go} disabled={!primary.on} testID="issue-sheet-next" />
+        )
+      }
+    >
+      <Animated.View
+        key={step}
+        style={[
+          st.body,
+          { opacity: slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }), transform: [{ translateX: slide.interpolate({ inputRange: [0, 1], outputRange: [0, 28 * dir.current] }) }] },
+        ]}
+      >
+        {body}
+      </Animated.View>
+    </Sheet>
   );
 }
 
-const SHEET_H = 480;
-
 const st = StyleSheet.create({
-  sheet: { position: 'absolute', left: 0, right: 0, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingTop: space.s2 },
-  grabber: { alignSelf: 'center', width: 36, height: 5, borderRadius: 3, marginBottom: space.s2 },
-  head: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.s4, minHeight: 44 },
-  headBtn: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
-  body: { flex: 1, minHeight: 0, paddingHorizontal: space.s5, paddingTop: space.s2, paddingBottom: space.s3, gap: space.s3 },
-  foot: { paddingHorizontal: space.s5, gap: space.s2 },
-  twin: { flexDirection: 'row', gap: space.s2 },
-  search: { minHeight: 44, borderRadius: radius.full, paddingHorizontal: space.s4 },
-  list: { flex: 1, minHeight: 0, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.lg, overflow: 'hidden' },
-  row: { flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingHorizontal: space.s4, paddingVertical: space.s2, gap: space.s3 },
-  sep: { height: StyleSheet.hairlineWidth, marginLeft: space.s4 },
-  none: { padding: space.s4 },
-  empty: { borderRadius: radius.lg, padding: space.s4, gap: space.s1 },
-  input: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1.5, gap: space.s2 },
-  inputText: { flex: 1, paddingVertical: space.s3 },
+  body: { flex: 1, minHeight: 0, gap: space.s3 },
 });

@@ -10,7 +10,9 @@ import { dropTemp, fetchDoc, kindOf, loadIndex, saveIndex, syncIndex, writeTemp,
 import { fullDay, md } from '../money';
 import { useSession } from '../session';
 import { space, usePalette } from '../theme';
-import { ConfirmSheet, Empty, Group, Ring, Row, Screen, SearchField, Seg } from '../ui/kit';
+import { Empty, Group, Ring, Row, Screen, Seg } from '../ui/kit';
+import { SearchField } from '../ui/form';
+import { ConfirmSheet } from '../ui/sheet';
 import { Glyph, type GlyphKind } from '../ui/glyph';
 
 /** 갤러리와 시험 화면이 실제 계정 없이 그리는 상태. */
@@ -156,7 +158,7 @@ export function DocsScreen({ preview }: { preview?: DocsPreview }) {
   return (
     <Screen title="문서함" shell testID="docs">
       <View style={{ gap: space.s3 }}>
-        <SearchField value={query} onChange={setQuery} placeholder="문서 찾기" testID="docs-search" />
+        <SearchField value={query} onChange={setQuery} placeholder="문서 찾기" label="문서 찾기" testID="docs-search" />
         <Seg options={FILTERS} value={filter} onChange={setFilter} testID="docs-filter" />
       </View>
       {shown.length ? (

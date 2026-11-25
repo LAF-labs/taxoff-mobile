@@ -1,4 +1,4 @@
-import { AMEND_LABEL, isAmendWhat } from '../vendor/sax-chat-core/src/amend.ts';
+import { AMEND_LABEL, isAmendWhat, type AmendWhat } from '../vendor/sax-chat-core/src/amend.ts';
 import { CTX, approveMessage as wireApproveMessage, encodeCbor, fromB64, fromHex, jcs, sha256Hash, toHex, utf8 } from '../vendor/sax-remote/src/index.ts';
 
 export interface GateField {
@@ -112,7 +112,7 @@ interface GateReading {
   first: boolean;
   dups: Array<{ key: string; line: string; detail?: string }>;
   /** 수정세금계산서(ADR-058) 승인이면 사장님이 고른 사유의 말과 원래 계산서 승인번호 */
-  amend: { label: string; original: string } | null;
+  amend: { what: AmendWhat; label: string; original: string } | null;
 }
 
 export function readGate(g: Pick<PhoneGate, 'fields'>): GateReading {
@@ -128,7 +128,7 @@ export function readGate(g: Pick<PhoneGate, 'fields'>): GateReading {
     .map((k) => ({ key: k, line: DUP_LINE[k]!, detail: dupDetail(values[k]!) }));
   const what = values['$amend.what'];
   if (what !== undefined && !isAmendWhat(what)) unknown.push('$amend.what');
-  const amend = what !== undefined && isAmendWhat(what) ? { label: AMEND_LABEL[what], original: values['$amend.original'] ?? '' } : null;
+  const amend = what !== undefined && isAmendWhat(what) ? { what, label: AMEND_LABEL[what], original: values['$amend.original'] ?? '' } : null;
   return { unknown, values, first: isTrue(values['$first.bizNo']) || isTrue(values['$first.email']), dups, amend };
 }
 

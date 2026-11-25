@@ -152,11 +152,18 @@ export function Check({ color }: { color: string }) {
 }
 
 type Kind = 'primary' | 'secondary' | 'quiet' | 'approve';
+/** 카드 안인지 알리는 값. Card(src/ui/card.tsx)만 켠다. */
+export const OnCard = createContext(false);
+
 export function Button({
-  label, onPress, kind = 'primary', disabled, busy, testID, style, small, hint,
+  label, onPress, kind = 'primary', disabled, busy, testID, style, small: smallProp, hint,
 }: { label: string; onPress: () => void; kind?: Kind; disabled?: boolean; busy?: boolean; testID?: string; style?: StyleProp<ViewStyle>; small?: boolean; hint?: string }) {
   const p = usePalette();
-  const bg = kind === 'primary' ? p.ink : kind === 'approve' ? p.accent : kind === 'secondary' ? p.tint : 'transparent';
+  // 카드 안 단추는 언제나 40이고 보조 단추 면이 바탕색이다(기준판 .ph .sx-card .sx-btn). 화면이 따로 정하지 않는다.
+  const onCard = useContext(OnCard);
+  const raised = useContext(Raised);
+  const small = smallProp ?? onCard;
+  const bg = kind === 'primary' ? p.ink : kind === 'approve' ? p.accent : kind === 'secondary' ? (onCard ? p.canvas : raised ? p.raisedTint : p.tint) : 'transparent';
   const pressedBg = kind === 'primary' ? p.ink2 : kind === 'approve' ? p.accent : kind === 'secondary' ? p.sunken : p.tint;
   const fg = kind === 'primary' ? p.onInk : kind === 'approve' ? p.onAccent : kind === 'quiet' ? p.ink2 : p.ink;
   const off = disabled && !busy;
@@ -182,7 +189,7 @@ export function Button({
         style,
       ]}
     >
-      {busy ? <ActivityIndicator color={fg} /> : <T v={small ? 'subStrong' : 'button'} style={{ color: off ? p.ink4 : fg }} lines={1}>{label}</T>}
+      {busy ? <ActivityIndicator color={fg} /> : <T v={small ? (kind === 'primary' || kind === 'approve' ? 'buttonSm' : 'subStrong') : 'button'} style={{ color: off ? p.ink4 : fg }} lines={1}>{label}</T>}
     </Pressable>
   );
 }
@@ -276,31 +283,6 @@ export function Ring({ label, testID }: { label: string; testID?: string }) {
     <View accessible accessibilityRole="progressbar" accessibilityLabel={label} testID={testID} style={st.ringBox}>
       <View style={[st.ring, { borderColor: p.sunken }]} />
       <Animated.View style={[st.ring, StyleSheet.absoluteFill, { borderColor: 'transparent', borderTopColor: p.ink2, borderRightColor: p.ink2, transform: [{ rotate }] }]} />
-    </View>
-  );
-}
-
-/** 목록 위 찾기 칸: 테두리 없는 채움 면 한 줄, 앞에 돋보기. 지우기는 iOS 기본 지우기 단추. */
-export function SearchField({ value, onChange, placeholder, testID }: { value: string; onChange: (v: string) => void; placeholder: string; testID?: string }) {
-  const p = usePalette();
-  const base = type.body;
-  return (
-    <View style={[st.search, { backgroundColor: p.tint }]}>
-      <Glyph kind="search" color={p.ink3} />
-      <TextInput
-        testID={testID}
-        value={value}
-        onChangeText={onChange}
-        placeholder={placeholder}
-        placeholderTextColor={p.ink3}
-        accessibilityLabel={placeholder}
-        returnKeyType="search"
-        clearButtonMode="while-editing"
-        autoCorrect={false}
-        maxLength={60}
-        maxFontSizeMultiplier={MAX_FONT_SCALE}
-        style={[st.searchInput, { fontSize: base.fontSize * textScale.web, color: p.ink }]}
-      />
     </View>
   );
 }
@@ -552,75 +534,8 @@ export const st = StyleSheet.create({
   reply: { minHeight: size.row, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: space.s4, paddingVertical: space.s3, flexDirection: 'row', alignItems: 'center', gap: space.s3 },
   ringBox: { width: 18, height: 18 },
   ring: { width: 18, height: 18, borderRadius: radius.full, borderWidth: 2.2 },
-  search: { flexDirection: 'row', alignItems: 'center', gap: space.s2, minHeight: size.hit, paddingLeft: space.s3 + 2, paddingRight: space.s2, borderRadius: radius.md },
-  searchInput: { flex: 1, minHeight: size.hit, paddingVertical: 0 },
   seg: { flexDirection: 'row', borderRadius: radius.md, padding: 3 },
   segItem: { flex: 1, minHeight: 38, borderRadius: radius.sm + 1, alignItems: 'center', justifyContent: 'center' },
 });
 
-/**
- * 바닥에서 올라오는 확인 시트. 단추는 한 줄이다(하나면 가득, 둘이면 반씩, 주 단추가 앞).
- * 바깥 누르기와 뒤로 가기는 onClose(없으면 onNo)다. 거절과 그냥 닫기가 다른 뜻이면 onClose를 따로 준다.
- */
-export function ConfirmSheet({ title, body, yes, no, onYes, onNo, onClose, icon, busy, testID = 'confirm-sheet' }: {
-  title: string;
-  body?: string;
-  yes: string;
-  no?: string;
-  onYes: () => void;
-  onNo?: () => void;
-  onClose?: () => void;
-  icon?: ReactNode;
-  busy?: boolean;
-  testID?: string;
-}) {
-  const p = usePalette();
-  const inset = useSafeAreaInsets();
-  const close = onClose ?? onNo ?? onYes;
-  return (
-    <Modal transparent visible animationType="fade" onRequestClose={close}>
-      <View style={StyleSheet.absoluteFill} testID={testID}>
-        <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: p.scrim }]} onPress={close} accessibilityLabel="닫기" accessibilityRole="button" />
-        <View style={[sheetSt.sheet, { backgroundColor: p.canvas, paddingBottom: Math.max(inset.bottom, space.s4) }]} accessibilityViewIsModal>
-          <View style={[sheetSt.grabber, { backgroundColor: p.sunken }]} />
-          <View style={[sheetSt.body, icon ? sheetSt.bodyCenter : null]}>
-            {icon ? <View style={[sheetSt.icon, { backgroundColor: p.tint }]}>{icon}</View> : null}
-            <T v="title" role="header" style={icon ? sheetSt.center : undefined}>
-              {title}
-            </T>
-            {body ? (
-              <T v="sub" c="ink2" style={icon ? sheetSt.center : undefined}>
-                {body}
-              </T>
-            ) : null}
-          </View>
-          <View style={sheetSt.footer}>
-            <Button label={yes} onPress={onYes} busy={busy} testID="confirm-yes" style={sheetSt.half} />
-            {no && onNo ? <Button kind="secondary" label={no} onPress={onNo} disabled={busy} testID="confirm-no" style={sheetSt.half} /> : null}
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
 
-/** PC(노트북) 표시. 시트 머리의 동그란 면 안에 둔다. */
-export function PcGlyph({ color }: { color: string }) {
-  return (
-    <View style={{ alignItems: 'center', gap: 2 }} accessible={false}>
-      <View style={{ width: 18, height: 12, borderWidth: 1.5, borderColor: color }} />
-      <View style={{ width: 22, height: 1.5, backgroundColor: color }} />
-    </View>
-  );
-}
-
-const sheetSt = StyleSheet.create({
-  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingTop: space.s2 },
-  grabber: { alignSelf: 'center', width: 36, height: 5, borderRadius: 3, marginBottom: space.s2 },
-  body: { paddingHorizontal: space.s5, paddingTop: space.s3, paddingBottom: space.s4, gap: space.s3 },
-  footer: { paddingHorizontal: space.s5, paddingTop: space.s2, gap: space.s2, flexDirection: 'row' },
-  half: { flex: 1 },
-  bodyCenter: { alignItems: 'center' },
-  center: { textAlign: 'center' },
-  icon: { width: 48, height: 48, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
-});

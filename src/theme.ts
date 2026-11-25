@@ -81,9 +81,14 @@ export const type = {
   value: { fontSize: 17, lineHeight: 24, fontWeight: '400' as const, fontVariant: tnum },
   sub: { fontSize: 15, lineHeight: 22, fontWeight: '400' as const },
   subStrong: { fontSize: 15, lineHeight: 22, fontWeight: '500' as const },
+  /** 카드 값 줄의 값(15, 숫자 폭 고정)과 합계(굵게). */
+  subValue: { fontSize: 15, lineHeight: 22, fontWeight: '400' as const, fontVariant: tnum },
+  subFigure: { fontSize: 15, lineHeight: 22, fontWeight: '600' as const, fontVariant: tnum },
   label: { fontSize: 13, lineHeight: 18, fontWeight: '500' as const },
   meta: { fontSize: 13, lineHeight: 18, fontWeight: '400' as const, fontVariant: tnum },
   button: { fontSize: 17, lineHeight: 22, fontWeight: '600' as const },
+  /** 카드 안 작은 단추(40)의 주 단추 글. 보조 단추는 subStrong. */
+  buttonSm: { fontSize: 15, lineHeight: 22, fontWeight: '600' as const },
   /** 자세히 화면 맨 위 이름(거래처 이름 등). 큰 글씨는 이것과 시트의 묻는 말, 페어링 6자리뿐이다. */
   heading: { fontSize: 24, lineHeight: 32, fontWeight: '700' as const },
   /** 시트에서 한 단계씩 묻는 말과 그 답(밑줄 칸). */

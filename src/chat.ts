@@ -1,9 +1,12 @@
 import type { AmendCard, ReactionId } from '@sax/chat-core';
 import type { AppData, RecentRecord } from './storage/state';
 import type { Thumb } from './capture/thumb';
+import type { CardKind } from './ui/card';
 
 export interface ChatCard {
   title: string;
+  /** 제목 앞 아이콘(src/ui/card.tsx CardIcon). 없으면 문서. */
+  kind?: CardKind;
   rows: Array<{ label: string; value: string; strong?: boolean }>;
   note?: string;
   draft?: {

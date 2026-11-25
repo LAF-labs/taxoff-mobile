@@ -8,8 +8,10 @@ import { useOfflineChat, type OfflineChatView } from '../offline/useOfflineChat'
 import { kstDay } from '../phoneCmd';
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
-import { space } from '../theme';
-import { Actions, Sheet, actionFlex } from '../ui/card';
+import { usePalette } from '../theme';
+import { Actions, Kv, KvRow } from '../ui/card';
+import { Sheet } from '../ui/sheet';
+import { Glyph } from '../ui/glyph';
 import { Button, Empty, Group, Row, Screen, T, won } from '../ui/kit';
 import type { HomeRoute } from './HomeScreen';
 
@@ -26,6 +28,7 @@ interface Rec {
 }
 
 export function RecordsScreen({ go, onHome, phone }: { go: (to: HomeRoute) => void; onHome?: () => void; phone?: OfflineChatView }) {
+  const p = usePalette();
   const s = useSession();
   const q = useQueue();
   const live = useOfflineChat();
@@ -87,38 +90,39 @@ export function RecordsScreen({ go, onHome, phone }: { go: (to: HomeRoute) => vo
           <Sheet
             title={`${open.name} 세금계산서`}
             kind="doc"
+            height="fit"
             onClose={() => setOpen(null)}
             testID="record-sheet"
             footer={
-              (open.jobId || amendable) && (
+              open.jobId && (
                 <Actions>
-                  {open.jobId && (
-                    <Button
-                      kind="secondary"
-                      label="PDF 보기"
-                      onPress={() => {
-                        q.setFocus(open.jobId!);
-                        setOpen(null);
-                        go('doc');
-                      }}
-                      style={actionFlex}
-                      testID="record-pdf"
-                    />
-                  )}
-                  {amendable && <Button kind="secondary" label="고치기" onPress={() => void startAmend(open, false)} style={actionFlex} testID="record-amend" />}
-                  {amendable && <Button kind="secondary" label="취소" onPress={() => void startAmend(open, true)} style={actionFlex} testID="record-cancel" />}
+                  <Button
+                    label="PDF 보기"
+                    onPress={() => {
+                      q.setFocus(open.jobId!);
+                      setOpen(null);
+                      go('doc');
+                    }}
+                    testID="record-pdf"
+                  />
                 </Actions>
               )
             }
           >
-            <View style={{ gap: space.s3 }}>
-              <Line k="작성일" v={mdText(src?.issueDate ?? open.day)} />
-              {src && <Line k="공급가액" v={won(src.supply)} />}
-              {src && <Line k="부가세" v={won(src.tax)} />}
-              {src?.item && <Line k="품목" v={src.item} />}
-              <Line k="합계" v={open.total === null ? '금액 없음' : won(open.total)} strong />
-              {open.state && <Line k="상태" v={open.state} />}
-            </View>
+            <Kv>
+              <KvRow label="작성일" value={mdText(src?.issueDate ?? open.day)} />
+              {src && <KvRow label="공급가액" value={won(src.supply)} />}
+              {src && <KvRow label="부가세" value={won(src.tax)} />}
+              {src?.item && <KvRow label="품목" value={src.item} />}
+              <KvRow label="합계" value={open.total === null ? '금액 없음' : won(open.total)} total />
+              {open.state && <KvRow label="상태" value={open.state} />}
+            </Kv>
+            {amendable && (
+              <Group>
+                <Row icon={<Glyph kind="paper" size={20} color={p.ink2} />} label="고치기" onPress={() => void startAmend(open, false)} testID="record-amend" />
+                <Row icon={<Glyph kind="stop" size={20} color={p.ink2} />} label="발급 취소" onPress={() => void startAmend(open, true)} testID="record-cancel" />
+              </Group>
+            )}
           </Sheet>
         )}
       </Screen>
@@ -133,18 +137,5 @@ export function RecordsScreen({ go, onHome, phone }: { go: (to: HomeRoute) => vo
         action={paired ? <Button label="세금계산서 발급" onPress={() => go('issue')} testID="records-issue" /> : <Button label="PC 연결하기" onPress={() => go('pair')} />}
       />
     </Screen>
-  );
-}
-
-function Line({ k, v, strong }: { k: string; v: string; strong?: boolean }) {
-  return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: space.s3 }}>
-      <T v="value" c="ink3">
-        {k}
-      </T>
-      <T v={strong ? 'figure' : 'value'} style={{ flexShrink: 1, textAlign: 'right' }}>
-        {v}
-      </T>
-    </View>
   );
 }

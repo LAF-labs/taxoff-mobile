@@ -10,7 +10,7 @@ import { T } from './kit';
  */
 const noOutline = { outlineStyle: 'none' } as object;
 
-function useFocusFace() {
+export function useFocusFace() {
   const p = usePalette();
   return { backgroundColor: p.overlay, borderColor: p.ink4, shadowColor: p.ink, shadowOpacity: 0.12, shadowRadius: 7, shadowOffset: { width: 0, height: 4 }, elevation: 3 };
 }
@@ -106,8 +106,15 @@ export function FormField({
 /** 시트 안 한 단계 입력: 묻는 말(22/700), 밑줄 하나에 크게 쓴 값, 틀리면 황토 밑줄과 한 줄. */
 export const BigInput = forwardRef<
   Input,
-  { label: string; value: string; onChange: (v: string) => void; placeholder?: string; bad?: string | null; pad?: boolean; maxLength?: number; onSubmit?: () => void; testID?: string }
->(function BigInput({ label, value, onChange, placeholder, bad, pad, maxLength, onSubmit, testID }, ref) {
+  {
+    label: string; value: string; onChange: (v: string) => void; placeholder?: string; bad?: string | null; pad?: boolean; maxLength?: number; onSubmit?: () => void; testID?: string;
+    /** pad보다 앞선다(전화번호 phone-pad 등). */
+    keyboardType?: KeyboardTypeOptions;
+    autoComplete?: TextInputProps['autoComplete'];
+    /** 다음 단계가 있으면 'next'. */
+    returnKey?: 'done' | 'next';
+  }
+>(function BigInput({ label, value, onChange, placeholder, bad, pad, maxLength, onSubmit, testID, keyboardType, autoComplete, returnKey }, ref) {
   const p = usePalette();
   return (
     <View style={st.big}>
@@ -125,8 +132,9 @@ export const BigInput = forwardRef<
           accessibilityLabel={label}
           accessibilityHint={bad ?? undefined}
           maxFontSizeMultiplier={MAX_FONT_SCALE}
-          keyboardType={pad ? 'number-pad' : 'default'}
-          returnKeyType={pad ? undefined : 'done'}
+          keyboardType={keyboardType ?? (pad ? 'number-pad' : 'default')}
+          returnKeyType={returnKey ?? (pad ? undefined : 'done')}
+          autoComplete={autoComplete}
           autoCorrect={false}
           maxLength={maxLength}
           onSubmitEditing={onSubmit}

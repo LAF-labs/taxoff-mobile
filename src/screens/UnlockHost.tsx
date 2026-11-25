@@ -8,7 +8,9 @@ import type { Job } from '../queue';
 import { useQueue } from '../queueStore';
 import { deviceUnlockKey, unlockDesk, type GrantResult, type UnlockAsk, type UnlockDesk, type UxDevice } from '../unlock';
 import { space, usePalette } from '../theme';
-import { Button, ConfirmSheet, PcGlyph, T, josa, success, warn } from '../ui/kit';
+import { Actions } from '../ui/card';
+import { Button, T, josa, success, warn } from '../ui/kit';
+import { ConfirmSheet } from '../ui/sheet';
 
 /** desk의 지금 요청을 따라간다. 시간이 지나면 저절로 사라진다. */
 export function useUnlockAsk(desk: UnlockDesk = unlockDesk): UnlockAsk | null {
@@ -73,7 +75,6 @@ function useGrant(ux: UxDevice | null, bio: BioKind) {
  * 폰이 맡긴 일 때문에 온 요청(scope remote)은 그 일 카드 안에서 묻고, 카드가 없을 때만 시트로 묻는다.
  */
 export function UnlockHost({ bioPreview, askPreview }: { bioPreview?: BioInfo; askPreview?: UnlockAsk } = {}) {
-  const p = usePalette();
   const q = useQueue();
   const live = useUnlockAsk();
   const ask = askPreview ?? live;
@@ -90,7 +91,6 @@ export function UnlockHost({ bioPreview, askPreview }: { bioPreview?: BioInfo; a
   return (
     <ConfirmSheet
       testID="unlock-sheet"
-      icon={<PcGlyph color={p.ink} />}
       title={remote ? 'PC가 잠겨 있어요' : `${josa(ask.pcName, '을', '를')} 열까요?`}
       body={remote ? '맡긴 일을 하는 동안만 열어요' : '방금 PC에서 요청했어요'}
       yes={remote ? `${josa(bioName(bio), '으로', '로')} 맡기기` : unlockLabel(bio)}
@@ -121,7 +121,9 @@ export function UnlockInline({ job, bioPreview, askPreview }: { job: Job; bioPre
           {g.fail ?? '이 발급을 하는 동안만 열어요'}
         </T>
       </View>
-      <Button label={`${josa(bioName(bio), '으로', '로')} 맡기기`} busy={g.busy} onPress={() => void g.open(ask)} testID="unlock-inline-yes" />
+      <Actions>
+        <Button label={`${josa(bioName(bio), '으로', '로')} 맡기기`} busy={g.busy} onPress={() => void g.open(ask)} testID="unlock-inline-yes" />
+      </Actions>
     </View>
   );
 }

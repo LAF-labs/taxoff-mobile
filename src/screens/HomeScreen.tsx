@@ -11,6 +11,7 @@ import type { PhoneScreen, ReactionId } from '@sax/chat-core';
 import { BRAND } from '../config';
 import { useQueue, type DraftEdit } from '../queueStore';
 import { RunCard } from './RunCard';
+import { Actions, AmountEdit, Card as ShownCard, CardInput, Kv, KvRow } from '../ui/card';
 import { useCustomers } from '../customers';
 import { useIssueSubmit, type IssueSubmit } from '../issueSubmit';
 import { useEntrustAmend } from '../entrust';
@@ -68,14 +69,16 @@ export function PcPill({ pc, lastSeen, onPress }: { pc: PcStatus; lastSeen: numb
 
 /** 이 폰의 연결이 풀렸을 때 대화 끝에 한 번 보이는 카드. */
 function RelinkCard({ onRelink }: { onRelink: () => void }) {
-  const p = usePalette();
   return (
-    <View style={[st.relink, { backgroundColor: p.tint, borderColor: p.attention }]} testID="relink-card">
-      <T v="strong">PC와 연결이 풀렸어요</T>
-      <T v="sub" c="ink2">
-        부탁은 이 폰에 두었어요. 다시 연결하면 바로 보낼게요.
-      </T>
-      <Button testID="relink" small label="다시 연결" onPress={onRelink} />
+    <View style={st.relink}>
+      <ShownCard kind="check" tone="attention" title="PC와 연결이 풀렸어요" testID="relink-card">
+        <T v="sub" c="ink2">
+          부탁은 이 폰에 두었어요. 다시 연결하면 바로 보낼게요.
+        </T>
+        <Actions>
+          <Button testID="relink" label="다시 연결" onPress={onRelink} />
+        </Actions>
+      </ShownCard>
     </View>
   );
 }
@@ -546,18 +549,18 @@ const CANT_SEND_TEXT = '이 폰에서는 아직 대화를 보낼 수 없어요. 
 const at = (it: ChatItem) => (it.kind === 'merged' ? it.from : it.at);
 
 function Intro({ onPair }: { onPair: () => void }) {
-  const p = usePalette();
   return (
-    <View style={[st.card, { backgroundColor: p.tint }]} testID="unpaired">
-      <T v="strong">먼저 PC와 연결해 주세요</T>
+    <ShownCard title="먼저 PC와 연결해 주세요" testID="unpaired">
       <T v="sub" c="ink2">
         PC의 {BRAND} → 설정 → 기기{'\u00A0'}연결에서 [폰{'\u00A0'}연결]을 누르면 뜨는 QR을 이 폰으로 찍으면 돼요. 한 번만 하면 돼요.
       </T>
       <T v="sub" c="ink2">
         연결하면 여기서 PC에 일을 시키고, 종이 증빙을 찍고, 현금 매출을 적을 수 있어요.
       </T>
-      <Button testID="go-pair" label="PC와 연결" onPress={onPair} style={{ marginTop: space.s2 }} />
-    </View>
+      <Actions>
+        <Button testID="go-pair" label="PC와 연결" onPress={onPair} />
+      </Actions>
+    </ShownCard>
   );
 }
 
@@ -817,21 +820,19 @@ type OnCardIssue = (d: Draft) => Promise<IssueSubmit>;
 type OnAmend = (it: Extract<ChatItem, { kind: 'msg' }>) => { change: (c: AmendState) => void; issue: (c: AmendState) => Promise<AmendIssue> };
 
 function Card({ card, onIssue, cp, stale, edited, onEdit }: { card: ChatCard; onIssue?: OnCardIssue; cp: Counterparty | null; stale: boolean; edited?: DraftEdit; onEdit: (e: DraftEdit) => void }) {
-  const p = usePalette();
   if (card.draft) return <DraftCard card={card} draft={card.draft} onIssue={onIssue} cp={cp} stale={stale} edited={edited} onEdit={onEdit} />;
   return (
-    <View style={[st.card, { backgroundColor: p.tint }]} testID="chat-card">
-      <T v="subStrong">{card.title}</T>
+    <ShownCard kind={card.kind ?? 'doc'} title={card.title} testID="chat-card">
       {card.photo && <CardPhoto photo={card.photo} label={`${card.title} 사진`} />}
-      {card.rows.map((r, i) => (
-        <CardRow key={i} label={r.label} value={r.value} strong={r.strong} />
-      ))}
-      {card.note && (
-        <T v="meta" c="ink3">
-          {card.note}
-        </T>
+      {card.rows.length > 0 && (
+        <Kv>
+          {card.rows.map((r, i) => (
+            <KvRow key={i} label={r.label} value={r.value} total={r.strong} />
+          ))}
+        </Kv>
       )}
-    </View>
+      {card.note && <T v="sub" c="ink2">{card.note}</T>}
+    </ShownCard>
   );
 }
 
@@ -842,40 +843,12 @@ function CardPhoto({ photo, label }: { photo: NonNullable<ChatCard['photo']>; la
   return <PhotoSlot thumb={photo.thumb} load={load} label={label} />;
 }
 
-function CardValue({ text, strong, quiet }: { text: string; strong?: boolean; quiet?: boolean }) {
-  return (
-    <T v={strong ? 'figure' : 'value'} c={quiet ? 'ink4' : 'ink'} style={{ flexShrink: 1, textAlign: 'right' }}>
-      {text}
-    </T>
-  );
-}
-
-function CardRow({ label, value, strong, children, fixed, flap }: { label: string; value?: string; strong?: boolean; children?: React.ReactNode; fixed?: boolean; flap?: boolean }) {
-  return (
-    <View style={[st.cardRow, fixed && st.cardRowFixed]}>
-      {flap ? (
-        <FlapText text={label} />
-      ) : (
-        <T v="sub" c="ink2" style={{ flexShrink: 1 }}>
-          {label}
-        </T>
-      )}
-      {children ?? (
-        <T v={strong ? 'figure' : 'value'} style={{ flexShrink: 0, textAlign: 'right' }}>
-          {value}
-        </T>
-      )}
-    </View>
-  );
-}
-
 const VAT_OPTIONS = [
   { key: 'excl' as const, label: '별도' },
   { key: 'incl' as const, label: '포함' },
 ];
 
 function DraftCard({ card, draft, onIssue, cp, stale, edited, onEdit }: { card: ChatCard; draft: Draft; onIssue?: OnCardIssue; cp: Counterparty | null; stale: boolean; edited?: DraftEdit; onEdit: (e: DraftEdit) => void }) {
-  const p = usePalette();
   const val: DraftEdit = edited ?? { amount: draft.amount, vat: draft.vat === 'included' ? 'incl' : 'excl', item: draft.item ?? '' };
   const openEdit = !!onIssue && !!draft.phone?.edit && !edited;
   const [edit, setEdit] = useState<null | { amount: string; vat: VatMode; item: string }>(openEdit ? { amount: draft.amount > 0 ? masked('won', String(draft.amount)) : '', vat: val.vat, item: val.item } : null);
@@ -898,89 +871,67 @@ function DraftCard({ card, draft, onIssue, cp, stale, edited, onEdit }: { card: 
     setBusy(false);
     if (sent !== 'sent') setFailed(sent);
   };
-  const dark = p.overlay === p.tint;
-  const inputStyle = [st.cardInput, { backgroundColor: p.canvas, color: p.ink, borderColor: p.line }];
   return (
-    <View style={[st.card, st.cardDraft, { backgroundColor: p.tint }]} testID="chat-card">
-      <T v="subStrong" style={{ paddingBottom: space.s1 }}>{card.title}</T>
-      {}
-      <CardRow label={edit?.vat === 'incl' ? '합계 금액' : '공급가액'} fixed flap>
-        {edit ? (
-          <TextInput
-            testID="card-amount"
-            value={edit.amount}
-            onChangeText={(v) => setEdit({ ...edit, amount: masked('won', v) })}
-            keyboardType="number-pad"
-            accessibilityLabel="금액"
-            autoFocus={openEdit}
-            placeholder="0"
-            placeholderTextColor={p.ink4}
-            maxFontSizeMultiplier={MAX_FONT_SCALE}
-            style={[type.value, ...inputStyle, { textAlign: 'right' }]}
-          />
-        ) : (
-          <CardValue text={won(a.supply)} />
-        )}
-      </CardRow>
-      <CardRow label={edit ? '부가세' : `부가세 ${shown.vat === 'incl' ? '포함' : '별도'}`} fixed flap>
-        {edit ? (
-          <Seg testID="card-vat" options={VAT_OPTIONS} value={edit.vat} onChange={(v) => setEdit({ ...edit, vat: v })} style={[st.cardSeg, { backgroundColor: dark ? p.canvas : p.sunken }]} />
-        ) : (
-          <CardValue text={won(a.tax)} />
-        )}
-      </CardRow>
-      <CardRow label="품목" fixed>
-        {edit ? (
-          <TextInput
-            testID="card-item"
-            value={edit.item}
-            onChangeText={(v) => setEdit({ ...edit, item: v })}
-            placeholder="없음"
-            placeholderTextColor={p.ink4}
-            accessibilityLabel="품목"
-            maxFontSizeMultiplier={MAX_FONT_SCALE}
-            style={[type.value, ...inputStyle, { textAlign: 'right' }]}
-          />
-        ) : (
-          <CardValue text={shown.item || '없음'} quiet={!shown.item} />
-        )}
-      </CardRow>
-      <CardRow label="합계" fixed>
-        <CardValue text={won(a.total)} strong />
-      </CardRow>
+    <ShownCard kind="doc" title={card.title} testID="chat-card">
+      {edit ? (
+        <>
+          <AmountEdit label={edit.vat === 'incl' ? '합계 금액' : '공급가액'}>
+            <CardInput
+              testID="card-amount"
+              label="금액"
+              value={edit.amount}
+              suffix="원"
+              onChange={(v) => setEdit({ ...edit, amount: masked('won', v) })}
+              keyboardType="number-pad"
+              autoFocus={openEdit}
+              placeholder="0"
+            />
+          </AmountEdit>
+          <Kv>
+            <KvRow label="부가세">
+              <Seg testID="card-vat" options={VAT_OPTIONS} value={edit.vat} onChange={(v) => setEdit({ ...edit, vat: v })} />
+            </KvRow>
+          </Kv>
+          <AmountEdit label="품목">
+            <CardInput testID="card-item" label="품목" plain value={edit.item} onChange={(v) => setEdit({ ...edit, item: v })} placeholder="없음" />
+          </AmountEdit>
+          <Kv>
+            <KvRow label="공급가액" value={won(a.supply)} />
+            <KvRow label="부가세" value={won(a.tax)} />
+            <KvRow label="합계" value={won(a.total)} total />
+          </Kv>
+        </>
+      ) : (
+        <Kv>
+          <KvRow label="공급가액" value={won(a.supply)} />
+          <KvRow label="부가세" value={won(a.tax)} />
+          <KvRow label="품목" value={shown.item || '없음'} quiet={!shown.item} />
+          <KvRow label="합계" value={won(a.total)} total />
+        </Kv>
+      )}
       {onIssue && !edit && (closed || stale) && (
-        <T v="meta" c="attention" testID={closed ? 'card-closed' : 'card-stale'}>
+        <T v="sub" c="attention" testID={closed ? 'card-closed' : 'card-stale'}>
           {closed ? `${closed.on}에 ${closed.what}한 곳으로 조회돼요` : 'PC를 켜면 맡길 수 있어요'}
         </T>
       )}
       {failed && (
-        <T v="meta" c="attention" testID="card-failed">
+        <T v="sub" c="attention" testID="card-failed">
           {ISSUE_FAILED[failed]}
         </T>
       )}
-      {onIssue && (
-        <View style={st.cardButtons}>
-          {edit ? (
-            <>
-              <Button testID="card-cancel" kind="secondary" label="취소" onPress={() => setEdit(null)} style={[st.cardBtn, { backgroundColor: p.canvas }]} />
-              <Button testID="card-done" label="완료" onPress={done} disabled={splitAmount(Number(edit.amount.replace(/\D/g, '')), edit.vat).supply <= 0} style={st.cardBtn} />
-            </>
-          ) : (
-            <>
-              <Button
-                testID="card-issue"
-                label={closed ? '그래도 발급' : '발급하기'}
-                onPress={() => void issue()}
-                busy={busy}
-                disabled={busy || stale || a.supply <= 0}
-                style={st.cardBtn}
-              />
-              <Button testID="card-edit" kind="secondary" label="수정" onPress={startEdit} disabled={busy} style={[st.cardBtn, { backgroundColor: p.canvas }]} />
-            </>
-          )}
-        </View>
-      )}
-    </View>
+      {onIssue &&
+        (edit ? (
+          <Actions>
+            <Button testID="card-done" label="완료" onPress={done} disabled={splitAmount(Number(edit.amount.replace(/\D/g, '')), edit.vat).supply <= 0} />
+            <Button testID="card-cancel" kind="secondary" label="취소" onPress={() => setEdit(null)} />
+          </Actions>
+        ) : (
+          <Actions>
+            <Button testID="card-issue" label={closed ? '그래도 발급' : '발급하기'} onPress={() => void issue()} busy={busy} disabled={busy || stale || a.supply <= 0} />
+            <Button testID="card-edit" kind="secondary" label="수정" onPress={startEdit} disabled={busy} />
+          </Actions>
+        ))}
+    </ShownCard>
   );
 }
 
@@ -1064,7 +1015,7 @@ function Chip({ label, onPress, testID }: { label: string; onPress: () => void; 
 const st = StyleSheet.create({
   fill: { flex: 1 },
   pcDot: { width: 8, height: 8, borderRadius: radius.full },
-  relink: { gap: space.s3, padding: space.s4, borderRadius: radius.lg, borderWidth: 1, marginHorizontal: space.s5, marginBottom: space.s3 },
+  relink: { marginHorizontal: space.s5, marginBottom: space.s3 },
   lines: { paddingHorizontal: space.s5, gap: space.s2, paddingBottom: space.s2 },
   pcLine: { minHeight: size.hit, flexDirection: 'row', alignItems: 'center', gap: space.s3, marginHorizontal: -space.s2, paddingHorizontal: space.s2, borderRadius: radius.md },
   newReplyWrap: { position: 'absolute', left: 0, right: 0, bottom: space.s3, alignItems: 'center' },
@@ -1084,14 +1035,6 @@ const st = StyleSheet.create({
   reaction: { position: 'absolute', right: 4, bottom: -20, height: 28, minWidth: 38, paddingHorizontal: 8.5, borderRadius: 14, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   reactionGlyph: { fontSize: 16, lineHeight: 18 },
   bubble: { borderRadius: 22, minHeight: 44, maxWidth: '90%', paddingHorizontal: 15, paddingVertical: 11, justifyContent: 'center' },
-  card: { alignSelf: 'stretch', borderRadius: radius.lg, padding: space.s4, gap: space.s2 },
-  cardDraft: { gap: 0 },
-  cardInput: { width: 180, flexShrink: 1, height: 40, paddingHorizontal: space.s3, paddingVertical: 0, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth },
-  cardSeg: { width: 180, flexShrink: 1 },
-  cardButtons: { flexDirection: 'row', gap: space.s2, marginTop: space.s2 },
-  cardBtn: { flex: 1 },
-  cardRowFixed: { minHeight: 44, alignItems: 'center' },
-  cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: space.s3 },
   note: { flexDirection: 'row', gap: space.s2, alignItems: 'flex-start' },
   failed: { borderRadius: radius.lg, paddingHorizontal: space.s4, paddingVertical: space.s3, gap: space.s2 },
   replies: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s2 },

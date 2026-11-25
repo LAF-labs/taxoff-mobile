@@ -1,30 +1,31 @@
-import type { ReactNode } from 'react';
-import { Modal, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { radius, space, usePalette } from '../theme';
-import { Check, T } from './kit';
+import { Children, forwardRef, isValidElement, useContext, useState, type ComponentRef, type ReactNode } from 'react';
+import { Pressable, StyleSheet, TextInput, View, type KeyboardTypeOptions, type StyleProp, type ViewStyle } from 'react-native';
+import { MAX_FONT_SCALE, radius, size, space, type, usePalette } from '../theme';
+import { useFocusFace } from './form';
+import { Chevron, OnCard, T } from './kit';
 
 /**
- * 확정 기준 v3.0(docs/design.md)의 공용 부품: 카드 종류 아이콘, 카드, 단추 한 줄, 시트.
- * 화면은 테두리, 딤, 색 값을 직접 쓰지 않고 이 부품을 쓴다.
+ * 대화 카드 부품(기준판 kit.css의 sx-card, sx-card-hd, sx-kv, sx-amt, sx-actions is-fill을 그대로 옮김).
+ * 대화에 뜨는 카드는 종류와 상관없이 이 부품만 써서 만든다. 화면 파일에서 면, 머리 줄, 값 줄, 단추 줄을 따로 조립하지 않는다.
+ * 값: 면 tint, 모서리 16, 안쪽 16, 줄 사이 12. 제목 17/600. 값 줄 15/22(라벨 ink3, 값 ink, 합계 600). 카드 단추 40, 15.
  */
 export type CardKind = 'doc' | 'amend' | 'cancel' | 'done' | 'failed' | 'check';
+/** wait: 내 승인을 기다림(accent). attention: 확인이 필요함. */
 export type CardTone = 'quiet' | 'wait' | 'attention';
+
 
 const ICON = 18;
 const LINE = 1.5;
 
-/** 제목 앞 18px 선 아이콘. 그림 라이브러리 없이 면과 선으로 그린다. 취소는 늘 danger, 그 밖은 기본 ink2, 승인 대기 accent, 확인 필요 attention. */
+/** 제목 앞 18px 선 아이콘. 취소는 늘 danger, 그 밖은 기본 ink2, 승인 대기 accent, 확인 필요 attention. 완료와 실패에는 색을 쓰지 않는다. */
 export function CardIcon({ kind, tone = 'quiet' }: { kind: CardKind; tone?: CardTone }) {
   const p = usePalette();
-  const color = kind === 'cancel' ? p.danger : tone === 'wait' ? p.accent : tone === 'attention' ? p.attention : p.ink2;
-  const ring = { width: ICON - 2, height: ICON - 2, borderRadius: ICON, borderWidth: LINE, borderColor: color, alignItems: 'center' as const, justifyContent: 'center' as const };
+  const color = kind === 'cancel' ? p.danger : kind === 'done' || kind === 'failed' ? p.ink2 : tone === 'wait' ? p.accent : tone === 'attention' ? p.attention : p.ink2;
+  const ring = { width: ICON - 2, height: ICON - 2, borderRadius: radius.full, borderWidth: LINE, borderColor: color, alignItems: 'center' as const, justifyContent: 'center' as const };
   const bar = (rot: string, w = 8) => <View style={{ position: 'absolute', width: w, height: LINE, backgroundColor: color, transform: [{ rotate: rot }] }} />;
   let body: ReactNode;
   if (kind === 'amend') {
-    body = (
-      <View style={{ width: 5, height: 15, borderWidth: LINE, borderColor: color, borderBottomLeftRadius: radius.xs, borderBottomRightRadius: radius.xs, transform: [{ rotate: '45deg' }] }} />
-    );
+    body = <View style={{ width: 5, height: 15, borderWidth: LINE, borderColor: color, borderBottomLeftRadius: radius.xs, borderBottomRightRadius: radius.xs, transform: [{ rotate: '45deg' }] }} />;
   } else if (kind === 'doc') {
     body = (
       <View style={{ width: 12, height: 15, borderWidth: LINE, borderColor: color, borderRadius: radius.xs, gap: 2.5, paddingTop: 4, alignItems: 'center' }}>
@@ -40,9 +41,20 @@ export function CardIcon({ kind, tone = 'quiet' }: { kind: CardKind; tone?: Card
         <View style={{ width: 7, height: 4, borderLeftWidth: LINE, borderBottomWidth: LINE, borderColor: color, transform: [{ rotate: '-45deg' }], marginTop: -2 }} />
       </View>
     );
-  } else {
+  } else if (kind === 'check') {
+    // 세모 느낌표(확인 필요)
     body = (
-      <View style={[ring, kind === 'check' && { borderRadius: radius.xs, transform: [{ rotate: '0deg' }] }]}>
+      <View style={{ width: ICON, height: ICON, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 2 }}>
+        <View style={{ position: 'absolute', top: 1, width: 0, height: 0, borderLeftWidth: 8.5, borderRightWidth: 8.5, borderBottomWidth: 15, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderBottomColor: color }} />
+        <View style={{ position: 'absolute', top: 3.6, width: 0, height: 0, borderLeftWidth: 6.4, borderRightWidth: 6.4, borderBottomWidth: 11.2, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderBottomColor: p.tint }} />
+        <View style={{ width: LINE, height: 4, backgroundColor: color, marginBottom: 1.2 }} />
+        <View style={{ width: LINE, height: LINE, backgroundColor: color }} />
+      </View>
+    );
+  } else {
+    // 동그라미 느낌표(발급 실패)
+    body = (
+      <View style={ring}>
         <View style={{ width: LINE, height: 5, backgroundColor: color, marginBottom: 1.5 }} />
         <View style={{ width: LINE, height: LINE, backgroundColor: color }} />
       </View>
@@ -55,122 +67,176 @@ export function CardIcon({ kind, tone = 'quiet' }: { kind: CardKind; tone?: Card
   );
 }
 
-/** 카드: tint 채움 면 하나, 모서리 lg, 안쪽 20. 머리 줄은 종류 아이콘과 제목. */
-export function Card({ kind, tone, title, children, testID }: { kind: CardKind; tone?: CardTone; title: string; children?: ReactNode; testID?: string }) {
+/** 카드: tint 채움 면 하나. 어떤 상태에서도 테두리, 띠, 그림자를 더하지 않는다. 대화 폭을 다 쓴다. */
+export function Card({ kind, tone, title, children, testID, style }: { kind?: CardKind; tone?: CardTone; title: string; children?: ReactNode; testID?: string; style?: StyleProp<ViewStyle> }) {
   const p = usePalette();
   return (
-    <View style={[cst.card, { backgroundColor: p.tint }]} testID={testID}>
-      <View style={cst.head}>
-        <CardIcon kind={kind} tone={tone} />
-        <T v="subStrong" style={{ flexShrink: 1 }} role="header">
-          {title}
+    <OnCard.Provider value={true}>
+      <View style={[st.card, { backgroundColor: p.tint }, style]} testID={testID}>
+        <View style={st.head}>
+          {kind && <CardIcon kind={kind} tone={tone} />}
+          <T v="strong" style={{ flex: 1 }} role="header">
+            {title}
+          </T>
+        </View>
+        {children}
+      </View>
+    </OnCard.Provider>
+  );
+}
+
+/** 라벨과 값 줄 묶음(sx-kv): 줄 사이 6. */
+export function Kv({ children, testID }: { children: ReactNode; testID?: string }) {
+  return (
+    <View style={st.kv} testID={testID}>
+      {children}
+    </View>
+  );
+}
+
+/**
+ * 라벨과 값 한 줄. total은 합계(굵게). onPress가 있으면 고를 수 있는 값(값 뒤 꺾쇠), edit이면 눌러서 그 자리에서 고치는 값(꺾쇠 없음).
+ * children은 값 자리에 다른 것을 둘 때.
+ */
+export function KvRow({ label, value, total, onPress, edit, children, quiet, testID }: { label: string; value?: string; total?: boolean; onPress?: () => void; edit?: boolean; children?: ReactNode; quiet?: boolean; testID?: string }) {
+  const p = usePalette();
+  const v = children ?? (
+    <T v={total ? 'subFigure' : 'subValue'} c={quiet ? 'ink4' : 'ink'} style={st.kvV} testID={testID}>
+      {value}
+    </T>
+  );
+  return (
+    <View style={st.kvRow}>
+      <T v="sub" c="ink3" style={st.kvK}>
+        {label}
+      </T>
+      {onPress ? (
+        <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${label} ${value ?? ''}, ${edit ? '고치기' : '바꾸기'}`} hitSlop={8} style={({ pressed }) => [st.pick, pressed && { opacity: 0.5 }]} testID={testID ? `${testID}-press` : undefined}>
+          {v}
+          {!edit && <Chevron color={p.ink4} sizePx={7} />}
+        </Pressable>
+      ) : (
+        v
+      )}
+    </View>
+  );
+}
+
+type Input = ComponentRef<typeof TextInput>;
+
+/** 카드 안 입력 칸(sx-amt-in): 높이 44, 모서리 12, 바탕색 면, 오른쪽 정렬 굵은 숫자. 누르면 어디서나 같은 누른 칸 모양. */
+export const CardInput = forwardRef<
+  Input,
+  {
+    value: string; onChange: (v: string) => void; label: string; placeholder?: string; keyboardType?: KeyboardTypeOptions; autoFocus?: boolean; onDone?: () => void; testID?: string;
+    /** 숫자가 아닌 값(날짜, 번호, 품목): 굵지 않게. */
+    plain?: boolean;
+    /** 값 뒤에 붙는 단위(원). */
+    suffix?: string;
+    editable?: boolean;
+  }
+>(function CardInput({ value, onChange, label, placeholder, keyboardType, autoFocus, onDone, testID, plain, suffix, editable = true }, ref) {
+  const p = usePalette();
+  const focusFace = useFocusFace();
+  const [focus, setFocus] = useState(!!autoFocus);
+  return (
+    <View style={[st.in, { backgroundColor: p.canvas, borderColor: 'transparent' }, focus && focusFace]}>
+      <TextInput
+        ref={ref}
+        testID={testID}
+        value={value}
+        onChangeText={onChange}
+        accessibilityLabel={label}
+        placeholder={placeholder}
+        placeholderTextColor={p.ink4}
+        keyboardType={keyboardType}
+        autoFocus={autoFocus}
+        returnKeyType="done"
+        onSubmitEditing={onDone}
+        onFocus={() => setFocus(true)}
+        onBlur={() => {
+          setFocus(false);
+          onDone?.();
+        }}
+        maxFontSizeMultiplier={MAX_FONT_SCALE}
+        selectionColor={p.accent}
+        editable={editable}
+        style={[plain ? type.subValue : type.subFigure, st.inText, { color: p.ink }, noOutline]}
+      />
+      {suffix && value !== '' && <T v={plain ? 'subValue' : 'subFigure'}>{suffix}</T>}
+    </View>
+  );
+});
+const noOutline = { outlineStyle: 'none' } as object;
+
+/** 금액 고치기(sx-amt): 윗줄 이름과 기존 금액, 아랫줄 카드 폭을 다 쓰는 고칠 금액 칸. */
+export function AmountEdit({ label, before, children }: { label: string; before?: string; children: ReactNode }) {
+  return (
+    <View style={st.amt}>
+      <View style={st.kvRow}>
+        <T v="sub" c="ink3" style={st.kvK}>
+          {label}
         </T>
+        {before !== undefined && (
+          <T v="subValue" c="ink3" style={st.kvV}>
+            {before}
+          </T>
+        )}
       </View>
       {children}
     </View>
   );
 }
 
-/** 단추 한 줄(v3.0): 하나면 가득, 둘이면 반씩, 셋이면 셋이 한 줄을 나눈다. 가장 중요한 단추가 맨 앞. 두 줄로 쌓지 않는다. */
-export function Actions({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
-  return <View style={[cst.actions, style]}>{children}</View>;
-}
-/** Actions 안의 단추 한 칸 폭(같은 몫). */
-export const actionFlex = { flex: 1, paddingHorizontal: space.s2 } as const;
-
 /**
- * 시트(v3.0): 바닥에서 올라오는 overlay 면, 위 모서리 22, 손잡이, 머리 줄 오른쪽 닫기 단추. 닫기 단추와 바깥 누르기로 닫힌다.
- * 바닥 단추 줄은 footer로 넘긴다.
+ * 단추 한 줄: 폰 단추는 줄을 꽉 채운다. 하나면 가득, 둘이면 반씩, 셋 이상이면 한 줄에 하나씩(주 단추가 맨 위).
+ * 가장 중요한 단추가 맨 앞. 폭이 덜 찬 단추를 두지 않는다.
  */
-export function Sheet({ title, kind, onClose, children, footer, testID }: { title: string; kind?: CardKind; onClose: () => void; children?: ReactNode; footer?: ReactNode; testID?: string }) {
-  const p = usePalette();
-  const inset = useSafeAreaInsets();
+export function Actions({ children, style, testID }: { children: ReactNode; style?: StyleProp<ViewStyle>; testID?: string }) {
+  const items = Children.toArray(children).filter(isValidElement);
+  const stack = items.length >= 3;
   return (
-    <Modal transparent visible animationType="slide" onRequestClose={onClose}>
-      <View style={StyleSheet.absoluteFill} testID={testID}>
-        <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: p.scrim }]} onPress={onClose} accessibilityLabel="닫기" accessibilityRole="button" />
-        <View style={[cst.sheet, { backgroundColor: p.overlay, paddingBottom: Math.max(inset.bottom, space.s4) }]} accessibilityViewIsModal>
-          <View style={[cst.grab, { backgroundColor: p.sunken }]} />
-          <View style={cst.sheetHead}>
-            <View style={[cst.head, { flex: 1 }]}>
-              {kind && <CardIcon kind={kind} />}
-              <T v="subStrong" role="header" style={{ flexShrink: 1 }}>
-                {title}
-              </T>
-            </View>
-            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="닫기" hitSlop={6} style={({ pressed }) => [cst.close, { backgroundColor: pressed ? p.sunken : p.tint }]} testID={testID ? `${testID}-close` : 'sheet-close'}>
-              <View style={{ position: 'absolute', width: 13, height: 1.6, backgroundColor: p.ink2, transform: [{ rotate: '45deg' }] }} />
-              <View style={{ position: 'absolute', width: 13, height: 1.6, backgroundColor: p.ink2, transform: [{ rotate: '-45deg' }] }} />
-            </Pressable>
-          </View>
-          <View style={cst.sheetBody}>{children}</View>
-          {footer && <View style={cst.sheetFoot}>{footer}</View>}
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-/**
- * 시트 안 고르기 목록(기준판 "폰 사유 고르기"): 묶음 이름, 두 줄 글 줄(굵지 않은 제목과 아래 한 줄), 고른 줄 끝 체크.
- * 줄을 누르면 onPick. 고른 뒤 닫는 것은 부르는 쪽이 한다.
- */
-export function PickRows<V extends string>({ groups, value, onPick, testID }: { groups: ReadonlyArray<{ label?: string; items: ReadonlyArray<{ value: V; label: string; hint?: string }> }>; value: V | null; onPick: (v: V) => void; testID?: string }) {
-  const p = usePalette();
-  // 어두운 화면에서는 시트 면(overlay)과 tint가 같아 한 단계 밝게
-  const face = p.overlay === p.tint ? p.sunken : p.tint;
-  return (
-    <View style={{ gap: space.s5 }} testID={testID}>
-      {groups.map((g, gi) => (
-        <View key={gi} style={{ gap: space.s2 }}>
-          {g.label && (
-            <T v="label" c="ink3" style={{ paddingHorizontal: space.s1 }}>
-              {g.label}
-            </T>
-          )}
-          <View style={[cst.rows, { backgroundColor: face }]} accessibilityRole="radiogroup">
-            {g.items.map((x, i) => (
-              <Pressable
-                key={x.value}
-                onPress={() => onPick(x.value)}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: x.value === value }}
-                accessibilityLabel={x.hint ? `${x.label}, ${x.hint}` : x.label}
-                style={({ pressed }) => [cst.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: p.line }, pressed && { backgroundColor: p.overlay === p.tint ? p.tint : p.sunken }]}
-                testID={testID ? `${testID}-${x.value}` : undefined}
-              >
-                <View style={{ flex: 1, gap: 2 }}>
-                  <T>{x.label}</T>
-                  {x.hint && (
-                    <T v="meta" c="ink3">
-                      {x.hint}
-                    </T>
-                  )}
-                </View>
-                {x.value === value && (
-                  <View style={{ width: 20, height: 20, alignItems: 'center', justifyContent: 'center', marginTop: 2 }}>
-                    <Check color={p.ink} />
-                  </View>
-                )}
-              </Pressable>
-            ))}
-          </View>
+    <View style={[stack ? st.stack : st.row, style]} testID={testID}>
+      {items.map((c, i) => (
+        <View key={i} style={stack ? undefined : st.cell}>
+          {c}
         </View>
       ))}
     </View>
   );
 }
 
-const cst = StyleSheet.create({
-  card: { alignSelf: 'stretch', borderRadius: radius.lg, padding: space.s5, gap: space.s4 },
-  head: { flexDirection: 'row', alignItems: 'center', gap: space.s2 },
-  actions: { flexDirection: 'row', gap: space.s2 },
-  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingTop: space.s2 },
-  grab: { alignSelf: 'center', width: 36, height: 5, borderRadius: radius.xs, marginBottom: space.s2 },
-  sheetHead: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.s5, paddingTop: space.s1, gap: space.s3 },
-  close: { width: 32, height: 32, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
-  sheetBody: { paddingHorizontal: space.s5, paddingTop: space.s4, paddingBottom: space.s4, gap: space.s4 },
-  sheetFoot: { paddingHorizontal: space.s5, paddingTop: space.s2 },
-  rows: { borderRadius: radius.lg, overflow: 'hidden' },
-  row: { flexDirection: 'row', alignItems: 'flex-start', gap: space.s3, paddingHorizontal: space.s4, paddingVertical: 14 },
+/** 카드 안에서 여럿 중 하나 고르기(어느 계산서인지 등): 바탕색 면 한 줄 52, 오른쪽 꺾쇠. */
+export function CardChoice({ children, onPress, a11y, testID }: { children: ReactNode; onPress?: () => void; a11y?: string; testID?: string }) {
+  const p = usePalette();
+  return (
+    <Pressable onPress={onPress} disabled={!onPress} accessibilityRole="button" accessibilityLabel={a11y} style={({ pressed }) => [st.choice, { backgroundColor: pressed ? p.sunken : p.canvas }]} testID={testID}>
+      <View style={st.choiceBody}>{children}</View>
+      {onPress && <Chevron color={p.ink4} sizePx={7} />}
+    </Pressable>
+  );
+}
+
+/** 카드 안 단추 높이(카드 밖 주 단추는 size.button). */
+export const CARD_BUTTON = size.buttonSm;
+
+/** 카드 안인지: 단추가 크기와 면을 정할 때 쓴다. */
+export const useOnCard = () => useContext(OnCard);
+
+const st = StyleSheet.create({
+  card: { alignSelf: 'stretch', borderRadius: radius.lg, padding: space.s4, gap: space.s3 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: space.s2, minHeight: 22 },
+  kv: { gap: 6 },
+  kvRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.s4 },
+  kvK: { flexShrink: 0 },
+  kvV: { flexShrink: 1, textAlign: 'right' },
+  pick: { flexDirection: 'row', alignItems: 'center', flexShrink: 1, gap: 0 },
+  amt: { gap: 6 },
+  in: { minHeight: 44, flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.s3, borderRadius: radius.md, borderWidth: 1 },
+  inText: { flex: 1, minHeight: 42, paddingVertical: 0, textAlign: 'right' },
+  row: { flexDirection: 'row', gap: space.s2 },
+  cell: { flex: 1, minWidth: 0 },
+  stack: { gap: space.s2 },
+  choice: { minHeight: size.row, borderRadius: radius.md, paddingHorizontal: space.s4, flexDirection: 'row', alignItems: 'center', gap: space.s2 },
+  choiceBody: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.s3 },
 });
