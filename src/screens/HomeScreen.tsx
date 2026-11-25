@@ -196,10 +196,10 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
   const canSend = offline.available;
   const phoneAnswers = pcOff && canSend;
   const carded = new Set(q.notes.flatMap((n) => (n.kind === 'run' ? [n.jobId] : [])));
-  const waiting: ChatItem[] = q.jobs
-    .filter((j) => j.id.startsWith('cmd-') && j.run && j.state === 'approval' && !carded.has(j.id))
+  const cmdRuns: ChatItem[] = q.jobs
+    .filter((j) => j.id.startsWith('cmd-') && j.run && !carded.has(j.id))
     .map((j) => ({ kind: 'run', id: `run-${j.id}`, at: j.createdAt, jobId: j.id }));
-  const items = [...(chat ?? chatFromData(s.data)), ...q.notes, ...waiting, ...mine, ...(chat && !phone ? [] : offline.items)].sort((a, b) => at(a) - at(b));
+  const items = [...(chat ?? chatFromData(s.data)), ...q.notes, ...cmdRuns, ...mine, ...(chat && !phone ? [] : offline.items)].sort((a, b) => at(a) - at(b));
   const data = [...items].reverse();
   const last = items.at(-1);
   const lastId = last?.id ?? '';
@@ -1033,11 +1033,6 @@ function DraftCard({ card, draft, onIssue, cp, stale, edited, onEdit }: { card: 
       <CardRow label="합계" fixed>
         <CardValue text={won(a.total)} strong />
       </CardRow>
-      {card.note && !onIssue && (
-        <T v="meta" c="ink3">
-          {card.note}
-        </T>
-      )}
       {onIssue && !edit && (closed || stale) && (
         <T v="meta" c="attention" testID={closed ? 'card-closed' : 'card-stale'}>
           {closed ? `${closed.on}에 ${closed.what}한 곳으로 조회돼요` : 'PC를 켜면 맡길 수 있어요'}

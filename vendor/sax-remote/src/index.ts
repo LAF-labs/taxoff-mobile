@@ -1,3 +1,4 @@
+export * from './book.ts';
 export * from './bytes.ts';
 export * from './cbor.ts';
 export * from './channel.ts';
@@ -5,6 +6,7 @@ export * from './contexts.ts';
 export * from './crypto.ts';
 export * from './devauth.ts';
 export * from './devlist.ts';
+export * from './docs.ts';
 export * from './envelope.ts';
 export * from './frame.ts';
 export * from './hpke.ts';

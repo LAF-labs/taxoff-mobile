@@ -98,7 +98,7 @@ describe('사진 보호(ADR-034 결정 9·D07)', () => {
   it('소스에 앨범 저장이 없고, 고르기는 src/capture/pick.ts 한 곳뿐', () => {
     for (const { f, s } of appSources) {
       assert.doesNotMatch(s, /saveToLibrary|MediaLibrary|CameraRoll|pickFileAsync/, f);
-      if (!f.endsWith('src/capture/pick.ts')) assert.doesNotMatch(s, /launchImageLibrary|expo-image-picker/, f);
+      if (f !== join(root, 'src/capture/pick.ts')) assert.doesNotMatch(s, /launchImageLibrary|expo-image-picker/, f);
     }
   });
   it('보관 파일은 봉인 후 보호 지정(writeProtected), 보호 불가면 거부', () => {

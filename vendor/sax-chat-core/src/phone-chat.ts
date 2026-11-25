@@ -32,7 +32,7 @@ import { amendCardNew, amendSaidDelta, type AmendCard, type AmendSaid, type Amen
 import { splitVat } from './fill.ts';
 import { ACK_REPLY_HINT, REACTIONS, TurnRecorder, capStreak, isReaction, reactedLine, routeAck, type ReactionId, type RouteAck, type TurnEvent } from './turn.ts';
 
-/** 한 번 부를 때의 입력 상한(추정 토큰, 머리말·도구 정의 포함). 하루 한도(체험 50원·구독 300원) 안에서 대화 횟수를 지키는 값이다. */
+/** 한 번 부를 때의 입력 상한(추정 토큰, 머리말·도구 정의 포함). 주간 한도(한 주 1,000원, ADR-067) 안에서 대화 횟수를 지키는 값이다. */
 export const PHONE_CONTEXT_MAX_TOKENS = 8000;
 /** chat_phone 머리말 + 도구 정의 + 출력 스키마의 추정 토큰(넉넉하게). 시험이 실제 머리말의 추정값이 이보다 작은지 본다. */
 export const PHONE_PREFIX_EST_TOKENS = 5800;
@@ -71,7 +71,8 @@ export const PHONE_ASK_TEXT: Record<AgentAsk, string> = {
 };
 export const PHONE_SLOT_MISSING_TEXT = '정확한 값은 아래 표에 있어요.';
 export const PHONE_UNAVAILABLE_TEXT = '답을 받지 못했어요. 잠시 뒤 [다시 시도]를 눌러 주세요.';
-export const PHONE_ENTRUST_TEXT = (name: string): string => `${name} 세금계산서를 맡겼어요. PC가 켜지면 시작하고, 발급 전에 한 번 더 확인을 받아요.`;
+/** 카드에서 [발급하기]를 누른 기록. PC가 받을지는 아직 모르므로 맡긴 사실만 적는다. */
+export const PHONE_ENTRUST_TEXT = (name: string): string => `${name} 세금계산서 발급을 PC에 맡겼어요.`;
 
 /** 오류 코드 → 대화 문장과 [다시 시도]. 화면이 다른 문구를 쓰려면 code로 바꾼다. */
 export const PHONE_ERROR_TEXT: Record<PhoneChatErrorCode, { text: string; retry: boolean }> = {
@@ -79,7 +80,7 @@ export const PHONE_ERROR_TEXT: Record<PhoneChatErrorCode, { text: string; retry:
   'chat.bad_response': { text: PHONE_UNAVAILABLE_TEXT, retry: true },
   'chat.budget_exceeded': { text: '대화가 길어졌어요. 잠시 뒤에 다시 말해 주세요.', retry: true },
   'chat.quota_exceeded': { text: '이번 달 대화를 다 썼어요.', retry: false },
-  'chat.daily_limit': { text: '오늘 쓸 수 있는 대화를 다 썼어요. 새벽 4시에 다시 채워져요.', retry: false },
+  'chat.weekly_limit': { text: '이번 주 대화를 다 썼어요. 월요일에 다시 채워져요. 세금계산서 발급과 승인은 그대로 할 수 있어요.', retry: false },
   'chat.subscription_required': { text: '무료 체험이 끝났어요. 구독하면 대화를 다시 쓸 수 있어요.', retry: false },
   'chat.rate_limited': { text: '요청이 잠깐 몰렸어요. 조금 뒤에 다시 보내 주세요.', retry: true },
   'chat.device_suspended': { text: '이 폰의 연결이 정지되어 있어요. 설정의 연결된 기기에서 확인해 주세요.', retry: false },
@@ -250,9 +251,6 @@ interface Turn {
 
 const KINDS: ReadonlySet<PhoneReplyKind> = new Set(PHONE_REPLY_KINDS);
 
-/** PC가 켜져 있을 때 맡긴 한 줄: PC가 바로 홈택스에서 준비하고, 발급은 PC 승인으로만 된다. */
-export const PHONE_ENTRUST_ONLINE_TEXT = (name: string): string => `${name} 세금계산서를 PC에 맡겼어요. PC가 홈택스에서 준비하고, 발급 전에 한 번 더 확인을 받아요.`;
-
 const INTENT_MISSED: ReadonlySet<PhoneReplyKind> = new Set(['smalltalk', 'answer', 'cannot']);
 
 /**
@@ -268,7 +266,7 @@ const out = (status: PhoneToolStatus, ref: string | null = null, needs: ToolNeed
 function messageOf(v: unknown): ChatMessage | null {
   const m = v as Partial<ChatMessage> | null;
   if (!m || typeof m !== 'object' || typeof m.id !== 'string' || typeof m.at !== 'number' || (m.from !== 'user' && m.from !== 'app') || typeof m.text !== 'string') return null;
-  return { id: m.id, at: m.at, from: m.from, text: m.text, ...(m.ctx ? { ctx: m.ctx } : {}), ...(m.kind ? { kind: m.kind } : {}), ...(m.from === 'user' && isReaction(m.reaction) ? { reaction: m.reaction } : {}), ...(m.from === 'user' && typeof m.replyTo === 'string' ? { replyTo: m.replyTo } : {}) };
+  return { id: m.id, at: m.at, from: m.from, text: m.text, ...(m.ctx ? { ctx: m.ctx } : {}), ...(m.kind ? { kind: m.kind } : {}), ...(m.from === 'user' && isReaction(m.reaction) ? { reaction: m.reaction } : {}), ...(m.from === 'user' && typeof m.replyTo === 'string' ? { replyTo: m.replyTo } : {}), ...(m.hidden === true ? { hidden: true as const } : {}) };
 }
 
 const emptyState = (): State => ({ v: 1, seq: 0, phone: [], fold: null, drafts: [] });
@@ -325,10 +323,8 @@ export class PhoneChat {
       if (!d || d.state !== 'open') return null;
       d.state = 'entrusted';
       const name = this.ports.copy()?.counterparties.find((c) => c.id === d.counterpartyId)?.name ?? '거래처';
-      const line = this.ports.pcOnline?.() ? PHONE_ENTRUST_ONLINE_TEXT : PHONE_ENTRUST_TEXT;
-      const text = line(name);
       const tok = '[NAME_1]';
-      this.push(st, { from: 'app', text, kind: 'did', ctx: { t: line(tok), e: { [tok]: { k: 'NAME', v: name, r: `cp:${d.counterpartyId}` } } } });
+      this.push(st, { from: 'app', text: PHONE_ENTRUST_TEXT(name), kind: 'did', hidden: true, ctx: { t: PHONE_ENTRUST_TEXT(tok), e: { [tok]: { k: 'NAME', v: name, r: `cp:${d.counterpartyId}` } } } });
       await this.save(st);
       return { ...d };
     });
@@ -378,7 +374,7 @@ export class PhoneChat {
     }
   }
 
-  private push(st: State, m: Pick<ChatMessage, 'from' | 'text'> & Partial<Pick<ChatMessage, 'ctx' | 'kind' | 'reaction' | 'replyTo'>>): ChatMessage {
+  private push(st: State, m: Pick<ChatMessage, 'from' | 'text'> & Partial<Pick<ChatMessage, 'ctx' | 'kind' | 'reaction' | 'replyTo' | 'hidden'>>): ChatMessage {
     const msg: ChatMessage = { id: this.ports.newId(), at: this.ports.now(), ...m };
     st.phone.push(msg);
     return msg;

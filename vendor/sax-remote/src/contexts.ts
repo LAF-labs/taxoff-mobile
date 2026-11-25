@@ -28,6 +28,8 @@ export const CTX = {
   share: 'SAX-share-v1',
   pxEnroll: 'SAX-px-enroll-v1',
   uxEnroll: 'SAX-ux-enroll-v1',
+  docRecord: 'SAX-docrec-v2',
+  docBlob: 'SAX-docblob-v1',
 } as const;
 
 /** AIK 용도(D05 §5.1 AikPurpose). */

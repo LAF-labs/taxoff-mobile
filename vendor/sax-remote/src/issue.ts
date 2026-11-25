@@ -1,10 +1,16 @@
+import { isBizNo } from './book.ts';
 import { encodeEnvelope, makeEnvelope, type CmdRunBody, type EnvelopeCtx, type PhoneCopyBody } from './envelope.ts';
 import { MAX_INNER } from './frame.ts';
 
 export const ISSUE_PLAYBOOK = 'hometax.invoice.issue';
 
+/**
+ * 받는 곳은 PC 거래처 ID(counterpartyRef) 하나, 또는 폰에서 추가해 아직 ID를 모르는 거래처의 등록번호와 상호(newCounterparty) 하나다(ADR-066).
+ * PC는 newCounterparty의 등록번호로 장부를 찾고, 없으면 먼저 추가한다.
+ */
 export interface PhoneIssueRequest {
-  counterpartyRef: string;
+  counterpartyRef?: string;
+  newCounterparty?: { bizNo: string; name: string };
   supply: number;
   tax: number;
   item: string;
@@ -17,7 +23,10 @@ const MAX_WON = 100_000_000_000;
 
 /** 입력이 맞지 않으면 이유 코드(로컬 UI용). */
 export function checkIssueRequest(r: PhoneIssueRequest): 'ref' | 'supply' | 'tax' | 'item' | 'day' | null {
-  if (!REF.test(r.counterpartyRef)) return 'ref';
+  const n = r.newCounterparty;
+  if ((r.counterpartyRef === undefined) === (n === undefined)) return 'ref';
+  if (r.counterpartyRef !== undefined && !REF.test(r.counterpartyRef)) return 'ref';
+  if (n && (!isBizNo(n.bizNo) || n.name.trim().length < 1 || n.name.trim().length > 60)) return 'ref';
   if (!Number.isSafeInteger(r.supply) || r.supply <= 0 || r.supply > MAX_WON) return 'supply';
   if (!Number.isSafeInteger(r.tax) || r.tax < 0 || r.tax > MAX_WON) return 'tax';
   const item = r.item.trim();
@@ -32,7 +41,7 @@ export function issueInputs(r: PhoneIssueRequest): Record<string, unknown> {
   if (bad) throw new Error(`issue: bad ${bad}`);
   const item = r.item.trim();
   return {
-    counterpart: { counterpartyRef: r.counterpartyRef },
+    counterpart: r.newCounterparty ? { bizNo: r.newCounterparty.bizNo, name: r.newCounterparty.name.trim() } : { counterpartyRef: r.counterpartyRef },
     amounts: { supply: r.supply, tax: r.tax },
     items: [{ name: item, supply: r.supply, tax: r.tax }],
     issueDay: r.day,

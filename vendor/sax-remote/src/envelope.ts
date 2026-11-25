@@ -145,12 +145,14 @@ export interface CmdRunBody {
   playbookId: string;
   inputs: Record<string, unknown>;
 }
-export type CmdAckState = 'accepted' | 'start_gate' | 'pc_only' | 'rejected';
+export type CmdAckState = 'accepted' | 'start_gate' | 'pc_only' | 'rejected' | 'saved';
 export type CmdRejectReason = 'playbook_unavailable' | 'input_invalid' | 'counterparty_unknown' | 'duplicate' | 'pc_busy' | 'hometax_paused';
 export interface CmdAckBody {
   cmdId: string;
   state: CmdAckState;
   runId?: string;
+  /** saved일 때 PC 거래처 ID(ADR-066). */
+  ref?: string;
   reason?: CmdRejectReason;
 }
 export type RunPhase = 'prepare' | 'login' | 'readback' | 'approve' | 'issue' | 'verify' | 'done' | 'stopped';
@@ -272,6 +274,11 @@ export interface CopyCounterparty {
   aliases?: string[];
   bizNo?: string;
   emailHint?: string;
+  rep?: string;
+  item?: string;
+  /** 국세청 사업 상태가 계속 사업이 아닐 때만(02 휴업, 03 폐업). */
+  state?: 'paused' | 'closed';
+  stateOn?: string;
   phoneApprovable?: boolean;
   last?: { supply: number; vatMode: 'excl' | 'incl'; item: string; day: string };
 }
@@ -288,7 +295,7 @@ export interface CopyIssued {
   name: string;
   day: string;
   total: number | null;
-  /** v1.14 amend.v1 폰에만(ADR-058): 승인번호, 부호 있는 공급가액과 세액, 품목, 작성일자, 수정 상태 */
+  /** v1.15 amend.v1 폰에만(ADR-058): 승인번호, 부호 있는 공급가액과 세액, 품목, 작성일자, 수정 상태 */
   approvalNo?: string;
   supply?: number;
   tax?: number;
