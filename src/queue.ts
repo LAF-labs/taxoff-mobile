@@ -57,6 +57,13 @@ export function actionFor(job: Job, state: JobState): { key: JobAction; label: s
   return STATE_ACTION[state];
 }
 
+/** 카드가 이 상태에서 내미는 단추들. 큐 화면이 그리는 단추와 큐가 받아 주는 동작이 이 하나를 본다. */
+export function actionsFor(job: Job, state: JobState): JobAction[] {
+  const a = actionFor(job, state);
+  if (!a) return [];
+  return a.key === 'redate' ? ['redate', 'cancel'] : [a.key];
+}
+
 export function stateAt(job: Job, now: number): JobState {
   const waiting = job.state === 'entrusted' || job.state === 'phoneWaiting';
   return waiting && now - job.createdAt >= EXPIRE_MS ? 'expired' : job.state;
@@ -77,7 +84,10 @@ export function queueCounts(jobs: Job[], now: number): { approvals: number; back
   return { approvals, backlog };
 }
 
+/** 카드에 없는 동작(이미 끝난 일을 다시 맡기기 등)은 받지 않는다. */
 export function applyAction(jobs: Job[], id: string, action: JobAction, now: number): Job[] {
+  const job = jobs.find((j) => j.id === id);
+  if (!job || !actionsFor(job, stateAt(job, now)).includes(action)) return jobs;
   if (action === 'cancel') return jobs.filter((j) => j.id !== id);
   if (action === 'retry') return jobs.map((j) => (j.id === id ? { ...j, state: 'entrusted' as const, createdAt: now } : j));
   return jobs;

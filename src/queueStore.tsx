@@ -1,12 +1,12 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { answerGate, askRefresh, askRetryCert, askSimple, busyWaiting, deniedByPhone, jobOf, needsRedate, redate, settled, simpleRequestValue } from './phoneCmd';
+import { answerGate, askRefresh, askRetryCert, askSimple, busyWaiting, deniedByPhone, jobOf, needsRedate, redate, reentrust, settled, simpleRequestValue } from './phoneCmd';
 import type { SimpleId } from './storage/state';
 import { SessionContext } from './session';
 import { jobTimers } from './jobTimers';
 import { josa } from './ui/josa';
 import { DAILY_LIMIT, GATE_TTL_MS, buildGate, type AttestState, type PhoneGate, type READBACK_KEYS } from './approval';
 import type { ChatItem } from './chat';
-import { applyAction, startAll as startAllJobs, type DoneJob, type Job, type JobAction, type NeedPcReason } from './queue';
+import { actionsFor, applyAction, startAll as startAllJobs, stateAt, type DoneJob, type Job, type JobAction, type NeedPcReason } from './queue';
 import type { IssueResult, RunAction, RunView } from './run';
 import type { Counterparty, VatMode } from './issue';
 import sampleDoc from '../assets/sample/tax-invoice.pdf';
@@ -151,6 +151,14 @@ export function QueueProvider({
         else note(jobId, text);
       },
       act: (id, action) => {
+        const now = Date.now();
+        const j = jobs.find((x) => x.id === id);
+        if (!j || !actionsFor(j, stateAt(j, now)).includes(action)) return;
+        if (action === 'retry' && id.startsWith('cmd-')) {
+          const cmdId = id.slice(4);
+          void sess?.update((d) => ({ ...d, cmds: (d.cmds ?? []).map((c) => (c.cmdId === cmdId ? reentrust(c, now) : c)) }));
+          return;
+        }
         if (action === 'dismiss' && id.startsWith('cmd-')) {
           const cmdId = id.slice(4);
           void sess?.update((d) => ({ ...d, cmds: (d.cmds ?? []).filter((c) => c.cmdId !== cmdId || !settled(c)) }));
@@ -167,7 +175,7 @@ export function QueueProvider({
           return;
         }
         if (action === 'cancel') timers.clear(id);
-        setJobs((js) => applyAction(js, id, action, Date.now()));
+        setJobs((js) => applyAction(js, id, action, now));
       },
       startAll: () => setJobs((js) => startAllJobs(js, Date.now())),
       add: (job, text, readback) => {
