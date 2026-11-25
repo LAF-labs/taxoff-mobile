@@ -15,6 +15,7 @@ import { enrollPx } from './pxLive';
 import type { PxDevice } from '../approvalKey';
 import { replaying, tapping } from './hold';
 import { causeOf, needsRelink, pushWhy, whyCode } from './pcWhy';
+import { catchingShareKey, withShareKey } from './shareKey';
 
 export type PcStatus = 'unpaired' | 'connecting' | 'online' | 'queued' | 'stale' | 'relink' | 'offline';
 
@@ -154,7 +155,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
       pairId: pair.pairId,
       noise,
       desktopStatic: fromB64(pair.desktopStatic),
-      hello: { appVersion: APP_VERSION, deviceListVersion: d.data().seenListVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash, ...PHONE_CAPS, ...(d.px ? [CAP.approve] : [])] },
+      hello: { appVersion: APP_VERSION, deviceListVersion: d.data().seenListVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash, CAP.share, ...PHONE_CAPS, ...(d.px ? [CAP.approve] : [])] },
       nextTimestamp: () => (used = clock()),
       responseTimeoutMs: 8000,
     });
@@ -164,7 +165,8 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
     await d.update((x) => ({ ...x, lastSeenPc: Date.now() }));
     d.onLive?.();
     const held: Parameters<typeof s.channel.sendRaw>[0][] = [];
-    const early = tapping(s.channel, held);
+    const ch = catchingShareKey(s.channel, (body) => void d.update((x) => withShareKey(x, body).next).catch(() => undefined));
+    const early = tapping(ch, held);
     const copy = await receiveCopy(early, s.peerHello.capabilities).catch(() => null);
     const onCopy = (c: PhoneCopyBody) =>
       d.update((x) => {
@@ -183,7 +185,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
         recent: x.recent.map((r) => (sent.has(r.msgId) ? { ...r, state: 'sent' as const } : r)),
       }));
     }
-    await driveCmds(replaying(s.channel, held), s.peerHello.capabilities, {
+    await driveCmds(replaying(ch, held), s.peerHello.capabilities, {
       cmds: () => d.data().cmds ?? [],
       save: (f) => d.update((x) => ({ ...x, cmds: trimCmds(f(x.cmds ?? [])) })),
       onCopy,

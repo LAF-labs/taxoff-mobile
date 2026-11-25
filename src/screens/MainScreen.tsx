@@ -7,6 +7,7 @@ import { HomeScreen, PcPill, type HomeRoute } from './HomeScreen';
 import { MoneyScreen } from './MoneyScreen';
 import { RecordsScreen } from './RecordsScreen';
 import { CustomersScreen, type CustomersPreview } from './CustomersScreen';
+import { DocsScreen, type DocsPreview } from './DocsScreen';
 import { InboxScreen } from './InboxScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { IssueSheet, issueCard, type IssueSheetPreview } from './IssueSheet';
@@ -21,7 +22,7 @@ import { Drawer, NavGap, NavPush, NavRow } from '../ui/drawer';
 import { Glyph, type GlyphKind } from '../ui/glyph';
 
 /** 더보기 메뉴로 오가는 맨 위 화면. 아래 탭바는 없다(2026-11-24 대표). */
-export type Tab = 'home' | 'money' | 'records' | 'customers' | 'inbox' | 'settings';
+export type Tab = 'home' | 'money' | 'records' | 'customers' | 'docs' | 'inbox' | 'settings';
 export type MainRoute = HomeRoute;
 
 const NAV: Array<{ key: Tab; label: string; icon: GlyphKind }> = [
@@ -29,13 +30,14 @@ const NAV: Array<{ key: Tab; label: string; icon: GlyphKind }> = [
   { key: 'money', label: '돈', icon: 'money' },
   { key: 'records', label: '발급 기록', icon: 'doc' },
   { key: 'customers', label: '거래처', icon: 'building' },
+  { key: 'docs', label: '문서함', icon: 'folder' },
 ];
 
 export function MainScreen({
-  tab, onTab, go, chat, draft, phone, menu, focusAfter, issue: issuePreview, issueCps, drawer: drawerOpen = false, customers: customersPreview,
+  tab, onTab, go, chat, draft, phone, menu, focusAfter, issue: issuePreview, issueCps, drawer: drawerOpen = false, customers: customersPreview, docs,
 }: {
   tab: Tab; onTab: (t: Tab) => void; go: (to: MainRoute) => void; chat?: ChatItem[]; draft?: string; phone?: OfflineChatView; menu?: boolean; focusAfter?: number;
-  issue?: IssueSheetPreview; issueCps?: Counterparty[]; drawer?: boolean; customers?: CustomersPreview;
+  issue?: IssueSheetPreview; issueCps?: Counterparty[]; drawer?: boolean; customers?: CustomersPreview; docs?: DocsPreview;
 }) {
   const p = usePalette();
   const q = useQueue();
@@ -84,6 +86,8 @@ export function MainScreen({
           q.addCard(issueCard({ cp }));
         }}
       />
+    ) : tab === 'docs' ? (
+      <DocsScreen preview={docs} />
     ) : tab === 'inbox' ? (
       <InboxScreen
         onQueue={() => go('queue')}

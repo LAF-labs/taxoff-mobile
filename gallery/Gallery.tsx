@@ -8,6 +8,8 @@ import type { ChatItem } from '../src/chat';
 import { SessionContext, useSession, type Session } from '../src/session';
 import { MainScreen, type Tab } from '../src/screens/MainScreen';
 import type { CustomersPreview } from '../src/screens/CustomersScreen';
+import type { DocsPreview } from '../src/screens/DocsScreen';
+import type { DocItem } from '../src/docs/box';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
 import { Banner } from '../src/notify/NotifyHost';
 import { AskSheet } from '../src/notify/PushHost';
@@ -193,9 +195,24 @@ function LongChat() {
 }
 
 
-function Main({ start = 'home', chat, phone, menu, focusAfter, issue, drawer, customers }: { start?: Tab; chat?: ChatItem[]; phone?: OfflineChatView; menu?: boolean; focusAfter?: number; issue?: IssueSheetPreview; drawer?: boolean; customers?: CustomersPreview }) {
+/** 문서함 보기용 가짜 문서(이름과 날짜만, 열쇠는 0). 기준판 폰 문서함과 같은 줄. */
+const docDay = (d: number) => iso(new Date(now - d * DAY));
+const doc = (n: number, name: string, docType: string, issued: number, expires?: number): DocItem => ({
+  docId: `gallery-doc-${String(n).padStart(10, '0')}`, rev: 1, name, docType, issuedOn: docDay(issued), expiresOn: expires === undefined ? null : docDay(expires), bytes: 1, sha256: '', dek: '', chunks: 1,
+});
+const DOCS: DocItem[] = [
+  doc(1, '가나식자재 세금계산서', 'tax_invoice', 0),
+  doc(2, '사업자등록증명', 'biz_registration_cert', 4),
+  doc(3, '납세증명서', 'national_tax_cert', 6, -24),
+  doc(4, '대한테크 세금계산서', 'tax_invoice', 7),
+  doc(5, '스마일카페 세금계산서', 'tax_invoice', 25),
+  doc(6, '지방세 납세증명서', 'local_tax_cert', 53, 23),
+  doc(7, '사무실 임대차계약서', 'other', 54),
+];
+
+function Main({ start = 'home', chat, phone, menu, focusAfter, issue, drawer, customers, docs }: { start?: Tab; chat?: ChatItem[]; phone?: OfflineChatView; menu?: boolean; focusAfter?: number; issue?: IssueSheetPreview; drawer?: boolean; customers?: CustomersPreview; docs?: DocsPreview }) {
   const [tab, setTab] = useState<Tab>(start);
-  return <MainScreen tab={tab} onTab={setTab} go={noop} chat={chat} phone={phone} menu={menu} focusAfter={focusAfter} issue={issue} drawer={drawer} customers={customers} />;
+  return <MainScreen tab={tab} onTab={setTab} go={noop} chat={chat} phone={phone} menu={menu} focusAfter={focusAfter} issue={issue} drawer={drawer} customers={customers} docs={docs} />;
 }
 
 /** 거래처 100곳(캔버스 "1 거래처 목록 (100곳)"). 이름과 번호는 지어낸 값이다. */
@@ -466,6 +483,10 @@ const SCREENS: Record<
   'run-simple-auth': () => runCase({ kind: 'myTurn', step: 'login', auth: { method: 'simple', app: '카카오뱅크' }, startedAt: now - 50_000 }),
   'run-simple-auth-left': () => runCase({ kind: 'myTurn', step: 'login', auth: { method: 'simple', app: '카카오뱅크', deadline: now + 130_000 }, startedAt: now - 50_000 }),
   'run-simple-auth-timeout': () => runCase({ kind: 'myTurn', step: 'login', auth: { method: 'simple', app: '카카오뱅크', deadline: now - 1_000 }, startedAt: now - 200_000 }),
+  'docs-list': () => ({ session: fake(paired(), 'online'), node: <Main start="docs" docs={{ items: DOCS }} /> }),
+  'docs-opening': () => ({ session: fake(paired(), 'online'), node: <Main start="docs" docs={{ items: DOCS, busy: DOCS[0]!.docId }} /> }),
+  'docs-failed': () => ({ session: fake(paired(), 'online'), node: <Main start="docs" docs={{ items: DOCS, failed: true }} /> }),
+  'docs-empty': () => ({ session: fake(paired(), 'online'), node: <Main start="docs" docs={{ items: [] }} /> }),
   'records-list': () => ({ session: fake(paired(), 'online'), jobs: [runJob({ kind: 'done', result: RES, startedAt: T0 }), { ...runJob({ kind: 'done', result: { ...RES_LONG, approvalNo: '20261115-41000000-87654321', doc: { ...RES_LONG.doc, issuedOn: iso(new Date(now - DAY)) } }, startedAt: T0 - DAY }), id: 'r2', createdAt: now - DAY }], node: <Main start="records" /> }),
   'run-simple-auth-unknown': () => runCase({ kind: 'myTurn', step: 'login', auth: { method: 'simple', app: '○○은행' }, startedAt: now - 50_000 }),
   'run-cert': () => runCase({ kind: 'myTurn', step: 'login', auth: { method: 'cert' }, startedAt: now - 40_000 }),
