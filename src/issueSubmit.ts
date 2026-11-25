@@ -12,7 +12,7 @@ interface IssueInput {
 
 export type IssueSubmit = 'sent' | 'save_failed' | 'new_counterparty';
 
-export function useViaPc(): (cp: Counterparty | null) => boolean {
+function useViaPc(): (cp: Counterparty | null) => boolean {
   const s = useSession();
   const copy = s.data.pcCopy ?? null;
   return (cp) => !!cp && !!copy && !!s.data.pair && counterpartiesOf(copy).some((c) => c.id === cp.id);

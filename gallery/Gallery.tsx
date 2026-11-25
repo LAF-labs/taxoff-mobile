@@ -16,7 +16,6 @@ import { PairScreen } from '../src/screens/PairScreen';
 import { OnboardingScreen } from '../src/screens/OnboardingScreen';
 import type { BioInfo } from '../src/biometry';
 import { QueueScreen } from '../src/screens/QueueScreen';
-import { IssueScreen, type IssuePreview } from '../src/screens/IssueScreen';
 import { counterpartiesOf } from '../src/net/pcCopy';
 import { issueCard, type IssuePick, type IssueSheetPreview } from '../src/screens/IssueSheet';
 import { QueueProvider, type ApprovalSettings } from '../src/queueStore';
@@ -35,7 +34,7 @@ import { MarkReceivedScreen } from '../src/screens/MarkReceivedScreen';
 import { DocScreen, type DocState } from '../src/screens/DocScreen';
 import type { IssueResult, RunView } from '../src/run';
 import type { DoneJob, Job } from '../src/queue';
-import type { Counterparty, IssuedToday } from '../src/issue';
+import type { Counterparty } from '../src/issue';
 import { CashScreen } from '../src/screens/CashScreen';
 import { ConnectionScreen } from '../src/screens/ConnectionScreen';
 import { CaptureScreen, formFrom, type CapturePreview } from '../src/screens/CaptureScreen';
@@ -204,7 +203,6 @@ const CPS: Counterparty[] = [
   { id: 'gw', name: '그린위생', bizNo: '128-17-99001', lastSupply: 150_000, lastItem: '방역', lastAt: now - 40 * DAY, issued: 1 },
   { id: 'sb', name: '새봄꽃집', bizNo: '402-11-55667', issued: 0 },
 ];
-const DUP: IssuedToday[] = [{ counterpartyId: 'ga', total: 1_353_000, at: at(10, 20) }];
 
 const H = 3_600_000;
 const JOBS: Job[] = [
@@ -294,11 +292,6 @@ const biz = (pv: Partial<BizRegPreview>, existing: Counterparty[] = CPS) => ({
   session: fake(paired(), 'online'),
   node: <BizRegScreen existing={existing} onDone={noop} onSaved={noop} onUseExisting={noop} preview={{ phase: 'confirm', shot: BIZ_SHOT, values: BIZ_VALUES, conf: HIGH, ...pv }} />,
 });
-const NEW_CP: Counterparty = { id: 'new', name: '동네마트 성수점', bizNo: '220-81-12341', issued: 0, email: 'tax@dongne.example' };
-const issueNew = (status: Counterparty['status'], pc: PcStatus = 'online') => ({
-  session: fake(pc === 'online' ? paired() : { ...paired(), lastSeenPc: now - 3 * H }, pc),
-  node: issue({ phase: 'form', cpId: 'new', amount: '320,000' }, [...CPS, { ...NEW_CP, status }]),
-});
 
 const dayOff = (n: number) => iso(new Date(now + n * DAY));
 const rv = (id: string, cpName: string, total: number, writtenAgo: number, dueIn: number | null, o: Partial<ReceivableView> = {}): ReceivableView => ({
@@ -381,9 +374,6 @@ const devices = (load: DevicesPreview['load']) => ({
   session: fake(paired(), 'online'),
   node: <DevicesScreen onDone={noop} onReset={noop} onPair={noop} preview={{ load, selfId: DEVICE_SELF }} />,
 });
-const issue = (preview: IssuePreview, cps = CPS, today: IssuedToday[] = [], left = 5) => (
-  <IssueScreen counterparties={cps} issuedToday={today} approvalsLeft={left} onDone={noop} onCapture={noop} onSubmitted={noop} preview={preview} />
-);
 
 const SCREENS: Record<
   string,
@@ -410,9 +400,6 @@ const SCREENS: Record<
   'bizreg-long': () => biz({
     values: { name: '주식회사 새봄꽃과 정원 관리 서비스 성수동 본점', bizNo: '105-22-12346', ceo: '이견본', address: '서울특별시 성동구 왕십리로 000, 새봄빌딩 3층 301호(성수동2가, 새봄꽃과정원관리서비스)', bizType: '서비스업', item: '조경관리 및 실내 식물 관리', email: 'very.long.address.for.invoices@flower-garden-service.example' },
   }),
-  'issue-new-checking': () => issueNew({ kind: 'checking' }),
-  'issue-new-pc-off': () => issueNew({ kind: 'waitPc' }, 'offline'),
-  'issue-new-closed': () => issueNew({ kind: 'closed', what: '폐업', on: '2026-09-30' }),
   'run-prepare': () => runCase({ kind: 'running', step: 'prepare', startedAt: now - 12_000 }),
   'run-login': () => runCase({ kind: 'running', step: 'login', startedAt: now - 35_000 }),
   'run-readback': () => runCase({ kind: 'running', step: 'readback', startedAt: T0 }),
@@ -637,18 +624,6 @@ const SCREENS: Record<
     node: <QueueScreen onDone={noop} onConnection={noop} onOpen={noop} now={now} />,
   }),
   'queue-empty': () => ({ session: fake(paired(), 'online'), last: LAST_DONE, node: <QueueScreen onDone={noop} onConnection={noop} onOpen={noop} now={now} /> }),
-  'issue-picker': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'pick' }) }),
-  'issue-picker-empty': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'pick' }, []) }),
-  'issue-picker-copy': () => ({ session: fake(copyData(), 'offline'), node: <IssueScreen onDone={noop} onCapture={noop} onSubmitted={noop} preview={{ phase: 'pick' }} /> }),
-  'issue-copy-online': () => ({ session: fake(copyData(), 'online'), node: <IssueScreen onDone={noop} onCapture={noop} onSubmitted={noop} preview={{ phase: 'form', cpId: 'cp_gana' }} /> }),
-  'issue-copy-filled': () => ({ session: fake(copyData(), 'offline'), node: <IssueScreen onDone={noop} onCapture={noop} onSubmitted={noop} preview={{ phase: 'form', cpId: 'cp_gana' }} /> }),
-  'issue-filled-online': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'form', cpId: 'ga' }) }),
-  'issue-filled-offline': () => ({ session: fake({ ...paired(), lastSeenPc: now - 3 * H }, 'offline'), node: issue({ phase: 'form', cpId: 'dm', amount: '352,000', vat: 'incl' }) }),
-  'issue-stale': () => ({ session: fake({ ...paired(), lastSeenPc: now - 9 * DAY }, 'stale'), node: issue({ phase: 'form', cpId: 'ga' }) }),
-  'issue-first-counterparty': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'form', cpId: 'sb', amount: '300,000' }) }),
-  'issue-duplicate': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'form', cpId: 'ga' }, CPS, DUP) }),
-  'issue-inexact': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'form', cpId: 'ga', amount: '21', vat: 'incl' }) }),
-  'issue-limit': () => ({ session: fake(paired(), 'online'), node: issue({ phase: 'form', cpId: 'sc' }, CPS, [], 1) }),
   cash: () => ({ session: fake(paired(), 'online'), node: <CashScreen onDone={noop} /> }),
   devices: () => devices({ kind: 'ready', devices: DEVICES_NORMAL() }),
   'devices-full': () => devices({ kind: 'ready', devices: DEVICES_FULL() }),
