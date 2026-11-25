@@ -128,7 +128,8 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
 }
 
 export function trimCmds(cs: PhoneCmd[], keep = 20): PhoneCmd[] {
-  const done = cs.filter(settled).sort((a, b) => b.createdAt - a.createdAt).slice(0, keep);
+  const now = Date.now();
+  const done = cs.filter((c) => settled(c, now)).sort((a, b) => b.createdAt - a.createdAt).slice(0, keep);
   const keepIds = new Set(done.map((c) => c.cmdId));
-  return cs.filter((c) => !settled(c) || keepIds.has(c.cmdId));
+  return cs.filter((c) => !settled(c, now) || keepIds.has(c.cmdId));
 }
