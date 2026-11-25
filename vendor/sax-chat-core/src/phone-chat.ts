@@ -28,7 +28,7 @@ import {
 import { estimateTokens } from './tokens.ts';
 import { ACK_REPLY_HINT, REACTIONS, TurnRecorder, capStreak, isReaction, reactedLine, routeAck, type ReactionId, type RouteAck, type TurnEvent } from './turn.ts';
 
-/** 한 번 부를 때의 입력 상한(추정 토큰, 머리말·도구 정의 포함). 하루 한도(체험 50원·구독 300원) 안에서 대화 횟수를 지키는 값이다. */
+/** 한 번 부를 때의 입력 상한(추정 토큰, 머리말·도구 정의 포함). 주간 한도(한 주 1,000원, ADR-067) 안에서 대화 횟수를 지키는 값이다. */
 export const PHONE_CONTEXT_MAX_TOKENS = 8000;
 /** chat_phone 머리말 + 도구 정의 + 출력 스키마의 추정 토큰(넉넉하게). 시험이 실제 머리말의 추정값이 이보다 작은지 본다. */
 export const PHONE_PREFIX_EST_TOKENS = 5400;
@@ -76,7 +76,7 @@ export const PHONE_ERROR_TEXT: Record<PhoneChatErrorCode, { text: string; retry:
   'chat.bad_response': { text: PHONE_UNAVAILABLE_TEXT, retry: true },
   'chat.budget_exceeded': { text: '대화가 길어졌어요. 잠시 뒤에 다시 말해 주세요.', retry: true },
   'chat.quota_exceeded': { text: '이번 달 대화를 다 썼어요.', retry: false },
-  'chat.daily_limit': { text: '오늘 쓸 수 있는 대화를 다 썼어요. 새벽 4시에 다시 채워져요.', retry: false },
+  'chat.weekly_limit': { text: '이번 주 대화를 다 썼어요. 월요일에 다시 채워져요. 세금계산서 발급과 승인은 그대로 할 수 있어요.', retry: false },
   'chat.subscription_required': { text: '무료 체험이 끝났어요. 구독하면 대화를 다시 쓸 수 있어요.', retry: false },
   'chat.rate_limited': { text: '요청이 잠깐 몰렸어요. 조금 뒤에 다시 보내 주세요.', retry: true },
   'chat.device_suspended': { text: '이 폰의 연결이 정지되어 있어요. 설정의 연결된 기기에서 확인해 주세요.', retry: false },
