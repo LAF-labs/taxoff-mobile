@@ -46,14 +46,14 @@ export function RecordsScreen({ go, onHome, phone }: { go: (to: HomeRoute) => vo
   });
   const recs = [...fromPhone, ...fromCopy].sort((a, b) => b.day.localeCompare(a.day));
 
-  const startAmend = (r: Rec, cancel: boolean) => {
+  const startAmend = async (r: Rec, cancel: boolean) => {
     if (!copy || !r.row) return;
     const src = amendSourcesOf(copy, [r.row]);
     if (!src.length) return;
     let card = amendCardNew(src, {}, kstDay());
     if (cancel) card = amendCardUpdate(card, { what: 'deal_cancelled' });
     setOpen(null);
-    void chat.update?.({ kind: 'msg', id: `amend-${ulid()}`, from: 'pc', via: 'phone', at: Date.now(), card: { title: card.view.title, rows: [], amend: { id: ulid(), card } } });
+    await chat.update?.({ kind: 'msg', id: `amend-${ulid()}`, from: 'pc', via: 'phone', at: Date.now(), card: { title: card.view.title, rows: [], amend: { id: ulid(), card } } });
     onHome?.();
   };
 
@@ -105,8 +105,8 @@ export function RecordsScreen({ go, onHome, phone }: { go: (to: HomeRoute) => vo
                       testID="record-pdf"
                     />
                   )}
-                  {amendable && <Button kind="secondary" label="고치기" onPress={() => startAmend(open, false)} style={actionFlex} testID="record-amend" />}
-                  {amendable && <Button kind="secondary" label="취소" onPress={() => startAmend(open, true)} style={actionFlex} testID="record-cancel" />}
+                  {amendable && <Button kind="secondary" label="고치기" onPress={() => void startAmend(open, false)} style={actionFlex} testID="record-amend" />}
+                  {amendable && <Button kind="secondary" label="취소" onPress={() => void startAmend(open, true)} style={actionFlex} testID="record-cancel" />}
                 </Actions>
               )
             }

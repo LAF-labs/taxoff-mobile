@@ -109,7 +109,7 @@ export function AmendCard({ card, onChange, onIssue, sent, stale }: { card: Amen
         {v.rows.map((r) => (
           <Kv key={r.field} label={r.label}>
             {editing === r.field ? (
-              <Edit field={r.field} value={raw[r.field]!} onDone={(x) => (setEditing(null), x !== null && update({ field: r.field, value: x }))} />
+              <Edit field={r.field} value={raw[r.field]!} onDone={(x) => (setEditing(null), x !== null && x.trim() !== '' && update({ field: r.field, value: x }))} />
             ) : r.edit && live ? (
               <Pressable onPress={() => setEditing(r.field)} accessibilityRole="button" accessibilityLabel={`${r.label} ${r.value}, 고치기`} style={({ pressed }) => [sx.val, { backgroundColor: pressed ? p.sunken : p.canvas }]} testID={`amend-edit-${r.field}`}>
                 <T v="value">{r.value}</T>
@@ -127,7 +127,7 @@ export function AmendCard({ card, onChange, onIssue, sent, stale }: { card: Amen
                   <T v="value" c="ink3">{`기존 ${won(a.before)}`}</T>
                 </Kv>
                 {editing === a.field ? (
-                  <Edit field={a.field} value={String(a.after)} big onDone={(x) => (setEditing(null), x !== null && update({ field: a.field, value: Number(x.replace(/\D/g, '')) }))} />
+                  <Edit field={a.field} value={String(a.after)} big onDone={(x) => (setEditing(null), x !== null && /\d/.test(x) && update({ field: a.field, value: Number(x.replace(/\D/g, '')) }))} />
                 ) : (
                   <Pressable onPress={live ? () => setEditing(a.field) : undefined} accessibilityRole="button" accessibilityLabel={`${a.label} ${won(a.after)}, 고치기`} style={({ pressed }) => [sx.field, { backgroundColor: pressed && live ? p.sunken : p.canvas }]} testID={`amend-field-${a.field}`}>
                     <T v="figure">{won(a.after)}</T>
@@ -193,7 +193,7 @@ function Kv({ label, value, children }: { label: string; value?: string; childre
   );
 }
 
-/** 값 하나를 그 자리에서 고친다. 완료(키보드 완료, 다른 곳 누름)면 값, 그대로 두면 null. */
+/** 값 하나를 그 자리에서 고친다. 완료(키보드 완료, 다른 곳 누름)면 값, 그대로 두면 null. 비운 채 끝내면 부르는 쪽이 기존 값을 둔다. */
 function Edit({ field, value, big, onDone }: { field: AmendField; value: string; big?: boolean; onDone: (v: string | null) => void }) {
   const p = usePalette();
   const [text, setText] = useState(field === 'counterpartBizNo' ? value.replace(/^(\d{3})(\d{2})(\d{5})$/, '$1-$2-$3') : big ? Number(value).toLocaleString('ko-KR') : value);
