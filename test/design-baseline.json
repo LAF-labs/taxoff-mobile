@@ -4,7 +4,6 @@
     "src/screens/ApprovalSheet.tsx": 1,
     "src/screens/BizRegScreen.tsx": 5,
     "src/screens/CaptureScreen.tsx": 5,
-    "src/screens/CardApprove.tsx": 1,
     "src/screens/CashScreen.tsx": 1,
     "src/screens/HomeScreen.tsx": 7,
     "src/screens/IssueSheet.tsx": 2,

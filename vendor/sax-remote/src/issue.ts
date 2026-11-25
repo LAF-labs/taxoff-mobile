@@ -52,6 +52,48 @@ export function issueCmd(cmdId: string, r: PhoneIssueRequest): CmdRunBody {
   return { cmdId, playbookId: ISSUE_PLAYBOOK, inputs: issueInputs(r) };
 }
 
+/** 수정세금계산서 플레이북(ADR-058). */
+export const AMEND_PLAYBOOK = 'hometax.invoice.amend';
+export const AMEND_WHATS = ['wrong_entry', 'duplicate', 'local_lc', 'amount_changed', 'deal_cancelled', 'returned'] as const;
+
+/**
+ * 폰에서 고른 수정 한 건(ADR-058 결정 8). original은 사본의 당초분 승인번호, what은 사장님이 카드에서 고른 사유,
+ * values는 카드에서 고친 "고친 뒤"의 값이다. 차액, 부호, 나갈 장은 PC 엔진이 같은 식(chat-core amendPlan)으로 다시 계산한다.
+ */
+export interface PhoneAmendRequest {
+  original: string;
+  what: (typeof AMEND_WHATS)[number];
+  values: { issueDate: string; supply: number; tax: number; item: string; counterpartBizNo: string };
+}
+
+const APPROVAL = /^\d{8}-\d{8}-\d{8}$/;
+export function checkAmendRequest(r: PhoneAmendRequest): 'original' | 'what' | 'values' | null {
+  if (typeof r?.original !== 'string' || !APPROVAL.test(r.original)) return 'original';
+  if (!(AMEND_WHATS as readonly string[]).includes(r.what)) return 'what';
+  const v = r.values;
+  const keys = v && typeof v === 'object' ? Object.keys(v).sort().join() : '';
+  if (keys !== 'counterpartBizNo,issueDate,item,supply,tax') return 'values';
+  if (!DAY.test(v.issueDate) || !Number.isSafeInteger(v.supply) || v.supply < 0 || v.supply > MAX_WON || !Number.isSafeInteger(v.tax) || v.tax < 0 || v.tax > MAX_WON) return 'values';
+  if (typeof v.item !== 'string' || v.item.trim().length > 100 || typeof v.counterpartBizNo !== 'string' || !/^\d{10}$/.test(v.counterpartBizNo)) return 'values';
+  return null;
+}
+
+export function amendCmd(cmdId: string, r: PhoneAmendRequest): CmdRunBody {
+  const bad = checkAmendRequest(r);
+  if (bad) throw new Error(`amend: bad ${bad}`);
+  return { cmdId, playbookId: AMEND_PLAYBOOK, inputs: { amend: { original: r.original, what: r.what, values: { ...r.values, item: r.values.item.trim() } } } };
+}
+
+/** cmd.run inputs → 수정 요청. 모양이 다르면 null. */
+export function parseAmendInputs(inputs: unknown): PhoneAmendRequest | null {
+  const o = inputs as { amend?: unknown } | null;
+  if (!o || typeof o !== 'object' || Array.isArray(o) || Object.keys(o).join() !== 'amend') return null;
+  const a = o.amend as Record<string, unknown> | null;
+  if (!a || typeof a !== 'object' || Object.keys(a).sort().join() !== 'original,values,what') return null;
+  const r = a as unknown as PhoneAmendRequest;
+  return checkAmendRequest(r) ? null : r;
+}
+
 /**
  * phone.copy가 한 프레임(MAX_INNER)에 들어가도록 오래된 발급 기록부터 덜고, 그래도 넘치면 발급 기록을 모두 빼고 거래처 목록을 뒤(오래 안 쓴 쪽)에서부터 줄인다.
  * 줄인 거래처 개수를 함께 돌려준다. 거래처를 모두 빼도 안 들어가면 null.

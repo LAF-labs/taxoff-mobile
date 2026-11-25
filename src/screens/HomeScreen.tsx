@@ -13,6 +13,9 @@ import { useQueue, type DraftEdit } from '../queueStore';
 import { RunCard } from './RunCard';
 import { useCustomers } from '../customers';
 import { useIssueSubmit, type IssueSubmit } from '../issueSubmit';
+import { useEntrustAmend } from '../entrust';
+import { AmendCard, type AmendIssue } from './AmendCard';
+import type { AmendCard as AmendState } from '@sax/chat-core';
 import { onShowCard, shownCard } from '../cardFocus';
 import { splitAmount, type Counterparty, type VatMode } from '../issue';
 import { masked } from '../ui/field';
@@ -122,6 +125,15 @@ export function HomeScreen({ go, chat, draft = '', phone, menu: menuOpen = false
     if (sent === 'sent' && d.phone) q.markSent(itemId);
     return sent;
   };
+  const entrustAmend = useEntrustAmend();
+  const amendFrom = (it: Extract<ChatItem, { kind: 'msg' }>) => ({
+    change: (c: AmendState) => void offline.update?.({ ...it, card: { ...it.card!, amend: { id: it.card!.amend!.id, card: c } } }),
+    issue: async (c: AmendState): Promise<AmendIssue> => {
+      if (!(await entrustAmend(c))) return 'save_failed';
+      await offline.update?.({ ...it, card: { ...it.card!, amend: { id: it.card!.amend!.id, card: c }, sent: true } });
+      return 'sent';
+    },
+  });
   const list = useRef<FlatList<ChatItem>>(null);
   const [barH, setBarH] = useState(0);
   const y = useRef(0);
@@ -290,7 +302,7 @@ export function HomeScreen({ go, chat, draft = '', phone, menu: menuOpen = false
                   {it.kind === 'run' ? (
                     <RunItem jobId={it.jobId} go={go} />
                   ) : (
-                    <Item it={it} group={bubbleGroup(items, i)} onRetry={(id) => void offline.retry(id)} retryOff={offline.busy} openDrafts={offline.openDrafts} onIssue={issueFrom} cpOf={cpOf} stale={s.pc === 'stale'} onHold={setHeld} onReply={canSend ? startReply : undefined} />
+                    <Item it={it} group={bubbleGroup(items, i)} onRetry={(id) => void offline.retry(id)} retryOff={offline.busy} openDrafts={offline.openDrafts} onIssue={issueFrom} onAmend={offline.update ? amendFrom : undefined} cpOf={cpOf} stale={s.pc === 'stale'} onHold={setHeld} onReply={canSend ? startReply : undefined} />
                   )}
                 </View>
               );
@@ -570,7 +582,7 @@ function RunItem({ jobId, go }: { jobId: string; go: (to: HomeRoute) => void }) 
   );
 }
 
-function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, cpOf, stale, onHold, onReply }: { it: Exclude<ChatItem, { kind: 'run' }>; group: { first: boolean; last: boolean }; onRetry: (noteId: string) => void; retryOff?: boolean; openDrafts?: ReadonlySet<string>; onIssue: OnIssue; cpOf: (id: string) => Counterparty | null; stale: boolean; onHold: (h: Held) => void; onReply?: (r: ReplyTo) => void }) {
+function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, onAmend, cpOf, stale, onHold, onReply }: { it: Exclude<ChatItem, { kind: 'run' }>; group: { first: boolean; last: boolean }; onRetry: (noteId: string) => void; retryOff?: boolean; openDrafts?: ReadonlySet<string>; onIssue: OnIssue; onAmend?: OnAmend; cpOf: (id: string) => Counterparty | null; stale: boolean; onHold: (h: Held) => void; onReply?: (r: ReplyTo) => void }) {
   const p = usePalette();
   const q = useQueue();
   const bubble = useRef<ComponentRef<typeof Pressable>>(null);
@@ -649,14 +661,18 @@ function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, cpOf, stale, 
       )}
       {it.card && (
         <View style={st.cardSlot}>
-          <Card
-            card={it.card}
-            onIssue={(it.card.draft?.phone ? !it.card.sent : it.card.draft && (!openDrafts || openDrafts.has(it.card.draft.id))) ? (d) => onIssue(d, it.id) : undefined}
-            cp={it.card.draft ? cpOf(it.card.draft.counterpartyId) : null}
-            stale={stale}
-            edited={q.draftEdits.get(it.id)}
-            onEdit={(e) => q.editDraft(it.id, e)}
-          />
+          {it.card.amend ? (
+            <AmendCard card={it.card.amend.card} sent={it.card.sent} stale={stale} onChange={onAmend?.(it).change ?? (() => undefined)} onIssue={onAmend && !it.card.sent ? onAmend(it).issue : undefined} />
+          ) : (
+            <Card
+              card={it.card}
+              onIssue={(it.card.draft?.phone ? !it.card.sent : it.card.draft && (!openDrafts || openDrafts.has(it.card.draft.id))) ? (d) => onIssue(d, it.id) : undefined}
+              cp={it.card.draft ? cpOf(it.card.draft.counterpartyId) : null}
+              stale={stale}
+              edited={q.draftEdits.get(it.id)}
+              onEdit={(e) => q.editDraft(it.id, e)}
+            />
+          )}
         </View>
       )}
       {state !== '' && (
@@ -798,6 +814,7 @@ const ISSUE_FAILED: Record<Exclude<IssueSubmit, 'sent'>, string> = {
 };
 type OnIssue = (d: Draft, itemId: string) => Promise<IssueSubmit>;
 type OnCardIssue = (d: Draft) => Promise<IssueSubmit>;
+type OnAmend = (it: Extract<ChatItem, { kind: 'msg' }>) => { change: (c: AmendState) => void; issue: (c: AmendState) => Promise<AmendIssue> };
 
 function Card({ card, onIssue, cp, stale, edited, onEdit }: { card: ChatCard; onIssue?: OnCardIssue; cp: Counterparty | null; stale: boolean; edited?: DraftEdit; onEdit: (e: DraftEdit) => void }) {
   const p = usePalette();

@@ -53,6 +53,8 @@ import { DEVICES_FULL, DEVICES_NORMAL, DEVICES_SUSPENDED, DEVICE_SELF, SAMPLE_IN
 import type { OfflineChatView } from '../src/offline/useOfflineChat';
 import { DevicesScreen, type DevicesPreview } from '../src/screens/DevicesScreen';
 import { parsePaperInvoice } from '../src/capture/invoice';
+import { amendCardNew, amendCardUpdate, amendSourcesOf, type AmendCard as AmendState } from '@sax/chat-core';
+import { chatCopyOf } from '../src/net/pcCopy';
 
 const DAY = 86_400_000;
 const now = Date.now();
@@ -447,6 +449,52 @@ const issue = (preview: IssuePreview, cps = CPS, today: IssuedToday[] = [], left
   <IssueScreen counterparties={cps} issuedToday={today} approvalsLeft={left} onDone={noop} onCapture={noop} onSubmitted={noop} preview={preview} />
 );
 
+// 수정세금계산서(ADR-058) 장면: 사본 발급 줄(amend.v1)과 그 줄로 만든 수정 카드
+const AMEND_COPY: PhoneCopyBody = {
+  ...COPY_MANY,
+  counterparties: [...COPY_MANY.counterparties, { ref: 'cp_daehan', name: '대한테크', bizNo: '120-87-12345', last: lastOn(7, 3_300_000, '유지보수') }],
+  issued: [
+    { ref: 'cp_daehan', name: '대한테크', day: iso(new Date(now - 7 * DAY)), total: 3_630_000, approvalNo: '20261117-41000000-00000117', supply: 3_300_000, tax: 330_000, item: '유지보수', wrtDay: iso(new Date(now - 7 * DAY)) },
+    { ref: 'cp_daehan', name: '대한테크', day: iso(new Date(now - 14 * DAY)), total: 1_650_000, approvalNo: '20261110-41000000-00000110', supply: 1_500_000, tax: 150_000, item: '부품', wrtDay: iso(new Date(now - 14 * DAY)) },
+    { ref: 'cp_gana', name: '가나식자재', day: iso(new Date(now - 12 * DAY)), total: 1_353_000, approvalNo: '20261112-41000000-00000112', supply: 1_230_000, tax: 123_000, item: '식자재', wrtDay: iso(new Date(now - 12 * DAY)), adjSupply: -500_000, adjTax: -50_000 },
+    { ref: 'cp_gana', name: '가나식자재', day: iso(new Date(now - 5 * DAY)), total: -550_000, approvalNo: '20261119-41000000-00000119', supply: -500_000, tax: -50_000, item: '식자재', amendOf: '20261112-41000000-00000112' },
+    { ref: 'cp_seoul', name: '서울청과', day: iso(new Date(now - 14 * DAY)), total: 605_000, approvalNo: '20261110-41000000-00000210', supply: 550_000, tax: 55_000, item: '과일 납품', amendState: 'cancelled' },
+    { ref: 'cp_mirae', name: '미래포장', day: iso(new Date(now - 19 * DAY)), total: 1_100_000, approvalNo: '20261105-41000000-00000105', supply: 1_000_000, tax: 100_000, item: '포장재', amendState: 'replaced' },
+  ],
+};
+const amendSrc = (no?: string) => {
+  const c = chatCopyOf(AMEND_COPY)!;
+  return amendSourcesOf(c, (c.issued ?? []).filter((r) => (no ? r.approvalNo === no : r.counterpartyId === 'cp_daehan')));
+};
+const amendCard = (o: { no?: string; what?: AmendState['what']; said?: Parameters<typeof amendCardNew>[1] } = {}): AmendState => {
+  let c = amendCardNew(amendSrc(o.no), o.said ?? {}, iso(today));
+  if (o.no && o.what) c = amendCardUpdate(c, { what: o.what });
+  return c;
+};
+const amendMsg = (id: string, me: string, card: AmendState, m: number): ChatItem[] => [
+  { kind: 'msg', id: `${id}m`, from: 'me', at: now - m * 60_000, text: me },
+  { kind: 'msg', id: `${id}r`, from: 'pc', via: 'phone', at: now - m * 60_000, text: '고칠 계산서를 카드로 띄웠어요.' },
+  { kind: 'msg', id, from: 'pc', via: 'phone', at: now - m * 60_000, card: { title: card.view.title, rows: [], amend: { id: `${id}a`, card } } },
+];
+function AmendChat({ items: first, start }: { items: ChatItem[]; start?: Tab }) {
+  const [items, setItems] = useState(first);
+  const phone: OfflineChatView = {
+    available: true, busy: false, chips: [], items, send: async () => {}, retry: async () => {}, react: async () => {},
+    update: async (it) => setItems((xs) => (xs.some((x) => x.id === it.id) ? xs.map((x) => (x.id === it.id ? it : x)) : [...xs, it])),
+  };
+  return <Main live chat={[]} phone={phone} start={start} />;
+}
+const D117 = '20261117-41000000-00000117';
+const amendScene = (items: ChatItem[], start?: Tab) => ({ session: fake(copyData(AMEND_COPY), 'online'), approval: HW, node: <AmendChat items={items} start={start} /> });
+const AMEND_GATE = () => {
+  const g = buildGate({
+    readback: { ...RB, counterpartName: '대한테크', counterpartBizNo: '1208712345', itemName: '유지보수', supplyAmount: '-3300000', taxAmount: '-330000', totalAmount: '-3630000' },
+    reserved: [...NO_FIRST, { key: '$amend.what', value: 'deal_cancelled' }, { key: '$amend.original', value: D117 }],
+    packageDigest: 'ab'.repeat(32), authorizes: ['s21'], intentId: '01JD8Z6Q3B9K2M4N5P7R8S9T0V', reqId: '01JD0000000000000000000000', challenge: 'A'.repeat(43) + '=', exp: now + 8 * 60_000,
+  });
+  return { ...g, stepId: 's21' };
+};
+
 const SCREENS: Record<
   string,
   () => {
@@ -534,6 +582,21 @@ const SCREENS: Record<
     approval: HW,
     node: <QueueScreen onDone={noop} onConnection={noop} onOpen={noop} now={now} />,
   }),
+  'amend-which': () => amendScene(amendMsg('aw', '대한테크 계산서 고쳐야 해', amendCard(), 1)),
+  'amend-what': () => amendScene(amendMsg('at', '대한테크 지난주 계산서 고쳐야 해', amendCard({ no: D117 }), 1)),
+  'amend-wrong': () => amendScene(amendMsg('ar', '대한테크 지난주 계산서 300만원인데 330으로 나갔어', amendCard({ no: D117, what: 'wrong_entry', said: { supply: 3_000_000, tax: 300_000 } }), 1)),
+  'amend-changed': () => amendScene(amendMsg('ac', '대한테크 지난주 거 30만원 깎아 줬어', amendCard({ no: D117, what: 'amount_changed', said: { supply: 300_000, tax: 30_000, delta: true } }), 1)),
+  'amend-returned': () => amendScene(amendMsg('an', '가나식자재 5만원어치 반품 들어왔어', amendCard({ no: '20261112-41000000-00000112', what: 'returned', said: { supply: 50_000, tax: 5_000, delta: true } }), 1)),
+  'amend-cancel': () => amendScene(amendMsg('ax', '대한테크 계약 깨졌어. 지난주 계산서 취소해줘', amendCard({ no: D117, what: 'deal_cancelled' }), 1)),
+  'amend-local-lc': () => amendScene(amendMsg('al', '대한테크 내국신용장 나왔어', amendCard({ no: D117, what: 'local_lc' }), 1)),
+  'amend-approve': () => ({
+    session: fake({ ...copyData(AMEND_COPY), cmds: [CMD({ phase: 'approve', ack: 'accepted', cpName: '대한테크', total: -3_630_000, title: '대한테크 세금계산서 취소', gate: AMEND_GATE() })] }, 'online'),
+    approval: HW,
+    notes: [...amendMsg('ap', '대한테크 계약 깨졌어. 지난주 계산서 취소해줘', amendCard({ no: D117, what: 'deal_cancelled' }), 2).slice(0, 2), { kind: 'run', id: 'run-cmd-G1', at: now - 90_000, jobId: 'cmd-G1' }],
+    node: <Main chat={[]} live />,
+  }),
+  'amend-approval-sheet': () => sheetCase(AMEND_GATE()),
+  'amend-records': () => amendScene([], 'records'),
   'home-chat-pc-run': () => ({
     session: fake({ ...copyData(), cmds: [CMD({ phase: 'approve' })] }, 'online'),
     notes: [{ kind: 'run', id: 'run-cmd-G1', at: now - 90_000, jobId: 'cmd-G1' }],

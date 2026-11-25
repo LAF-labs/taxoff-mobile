@@ -40,7 +40,7 @@ function fakeChannel(envs: Array<{ type: string; body: unknown }>): Ch {
 
 describe('폰 사본 받기', () => {
   it('폰은 hello에 copy.v1·issue.v1을 알리고, PC가 보낸 사본 봉투는 스키마를 지난다', () => {
-    assert.deepEqual(PHONE_CAPS, [CAP.copy, CAP.issue, CAP.sync, CAP.issued, CAP.book]);
+    assert.deepEqual(PHONE_CAPS, [CAP.copy, CAP.issue, CAP.sync, CAP.issued, CAP.book, CAP.amend]);
     assert.ok(encodeEnvelope(makeEnvelope('phone.copy', BODY, { pairId: '01JD0000000000000000000000', from: 'desktop', seq: 1 })));
   });
   it('PC가 copy.v1을 알렸으면 phone.copy를 받고, 그 앞의 다른 봉투는 건너뛴다', async () => {

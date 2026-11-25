@@ -1,4 +1,4 @@
-import type { ReactionId } from '@sax/chat-core';
+import type { AmendCard, ReactionId } from '@sax/chat-core';
 import type { AppData, RecentRecord } from './storage/state';
 import type { Thumb } from './capture/thumb';
 
@@ -10,6 +10,8 @@ export interface ChatCard {
     id: string; counterpartyId: string; amount: number; vat: 'separate' | 'included' | null; item: string | null;
     phone?: { name: string; bizNo: string; edit?: boolean; draftId?: string };
   };
+  /** 수정세금계산서 카드(ADR-058). 사장님이 고친 상태를 그대로 담아 대화 기록에 남긴다. */
+  amend?: { id: string; card: AmendCard };
   sent?: boolean;
   photo?: { thumb: Thumb; msgId?: string };
 }

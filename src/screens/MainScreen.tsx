@@ -76,7 +76,7 @@ export function MainScreen({
     ) : tab === 'money' ? (
       <MoneyScreen go={goMain} />
     ) : tab === 'records' ? (
-      <RecordsScreen go={goMain} />
+      <RecordsScreen go={goMain} onHome={() => onTab('home')} phone={phone} />
     ) : tab === 'customers' ? (
       <CustomersScreen
         go={goMain}

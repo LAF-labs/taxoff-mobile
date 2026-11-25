@@ -295,6 +295,18 @@ export interface CopyIssued {
   name: string;
   day: string;
   total: number | null;
+  /** v1.15 amend.v1 폰에만(ADR-058): 승인번호, 부호 있는 공급가액과 세액, 품목, 작성일자, 수정 상태 */
+  approvalNo?: string;
+  supply?: number;
+  tax?: number;
+  item?: string;
+  wrtDay?: string;
+  /** 이 줄이 수정분이면 당초분 승인번호 */
+  amendOf?: string;
+  amendState?: 'cancelled' | 'replaced';
+  /** 금액 바뀜, 반품 수정분의 공급가액 합과 세액 합(음수일 수 있다) */
+  adjSupply?: number;
+  adjTax?: number;
 }
 export interface PhoneCopyBody {
   asOf: number;

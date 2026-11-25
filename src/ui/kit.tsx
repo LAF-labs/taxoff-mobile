@@ -520,7 +520,8 @@ export function ago(ts: number | null, now = Date.now()): string {
 
 export { josa } from './josa';
 
-export const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
+/** 금액 글. 수정세금계산서의 음수는 빼기 기호(−)로 쓴다. */
+export const won = (n: number) => `${n < 0 ? '−' : ''}${Math.abs(n).toLocaleString('ko-KR')}원`;
 export const st = StyleSheet.create({
   header: { height: size.header, flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.s2 },
   headerSide: { width: 72, justifyContent: 'center' },

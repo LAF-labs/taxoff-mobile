@@ -1,5 +1,5 @@
 import {
-  CAP, QUEUE, flushOutbox, fromB64, issueCmd, monotonicClock, openMobileSession, queueCmd, queueLeave, queueOutbox, relayOrigin, relayQueue, softNoiseStatic, softSigner, verifyQBundle,
+  CAP, QUEUE, flushOutbox, fromB64, monotonicClock, openMobileSession, queueCmd, queueLeave, queueOutbox, relayOrigin, relayQueue, softNoiseStatic, softSigner, verifyQBundle,
   wsRelayClient, VM_PURPOSES, type FlushResult, type Link, type PhoneCopyBody, type QueueSendResult, type WebSocketLike,
 } from '@sax/remote';
 import { APP_VERSION, DEV_RELAY_HOST, DEV_STACK, PUBLIC_ORIGIN } from '../config';
@@ -9,7 +9,7 @@ import type { FileOutbox } from '../storage/outbox';
 import type { AppData } from '../storage/state';
 import { PHONE_CAPS, newerCopy, receiveCopy } from './pcCopy';
 import { driveCmds, trimCmds } from './issueLive';
-import { cmdsToQueue } from '../phoneCmd';
+import { cmdBody, cmdsToQueue } from '../phoneCmd';
 import { bookRun, bookToQueue, trimBook } from '../book';
 import { enrollPx } from './pxLive';
 import type { PxDevice } from '../approvalKey';
@@ -273,7 +273,7 @@ async function viaQueue(d: SyncDeps, pair: Pair): Promise<SyncResult> {
       await d.update((x) => ({ ...x, book: (x.book ?? []).map((b) => (booksQueued.has(b.cmdId) ? { ...b, queuedAt: at } : b)) }));
     }
     const cmdsQueued: string[] = [];
-    for (const c of cmds) if ((await queueCmd(issueCmd(c.cmdId, c.req), send).catch(() => 'failed' as const)) === 'ok') cmdsQueued.push(c.cmdId);
+    for (const c of cmds) if ((await queueCmd(cmdBody(c), send).catch(() => 'failed' as const)) === 'ok') cmdsQueued.push(c.cmdId);
     if (cmdsQueued.length) {
       const at = Date.now();
       const done = new Set(cmdsQueued);

@@ -1,3 +1,4 @@
+import { AMEND_LABEL, isAmendWhat } from '../vendor/sax-chat-core/src/amend.ts';
 import { CTX, approveMessage as wireApproveMessage, encodeCbor, fromB64, fromHex, jcs, sha256Hash, toHex, utf8 } from '../vendor/sax-remote/src/index.ts';
 
 export interface GateField {
@@ -75,7 +76,7 @@ export const FIELD_LABELS: Readonly<Record<string, string>> = {
   supplierBizNo: '사업자번호',
 };
 
-const RESERVED_KEYS = ['$first.bizNo', '$first.email', '$dup.businessKey', '$dup.priorNotCommitted', '$dup.otherDevice'] as const;
+const RESERVED_KEYS = ['$first.bizNo', '$first.email', '$dup.businessKey', '$dup.priorNotCommitted', '$dup.otherDevice', '$amend.what', '$amend.original'] as const;
 const DUP_LINE: Readonly<Record<string, string>> = {
   '$dup.businessKey': '같은 건을 이미 발급했어요',
   '$dup.priorNotCommitted': '같은 건을 전에 시도했는데 발급되지 않았어요',
@@ -110,6 +111,8 @@ interface GateReading {
   values: Record<string, string>;
   first: boolean;
   dups: Array<{ key: string; line: string; detail?: string }>;
+  /** 수정세금계산서(ADR-058) 승인이면 사장님이 고른 사유의 말과 원래 계산서 승인번호 */
+  amend: { label: string; original: string } | null;
 }
 
 export function readGate(g: Pick<PhoneGate, 'fields'>): GateReading {
@@ -123,11 +126,15 @@ export function readGate(g: Pick<PhoneGate, 'fields'>): GateReading {
   const dups = Object.keys(DUP_LINE)
     .filter((k) => isTrue(values[k]))
     .map((k) => ({ key: k, line: DUP_LINE[k]!, detail: dupDetail(values[k]!) }));
-  return { unknown, values, first: isTrue(values['$first.bizNo']) || isTrue(values['$first.email']), dups };
+  const what = values['$amend.what'];
+  if (what !== undefined && !isAmendWhat(what)) unknown.push('$amend.what');
+  const amend = what !== undefined && isAmendWhat(what) ? { label: AMEND_LABEL[what], original: values['$amend.original'] ?? '' } : null;
+  return { unknown, values, first: isTrue(values['$first.bizNo']) || isTrue(values['$first.email']), dups, amend };
 }
 
 export function showValue(key: string, v: string): string {
-  if (AMOUNT_KEYS.has(key) && /^\d{1,15}$/.test(v)) return `${Number(v).toLocaleString('ko-KR')}원`;
+  // 수정세금계산서의 금액은 부호가 있다(줄이거나 취소하는 장은 −)
+  if (AMOUNT_KEYS.has(key) && /^-?\d{1,15}$/.test(v)) return `${v.startsWith('-') ? '−' : ''}${Math.abs(Number(v)).toLocaleString('ko-KR')}원`;
   return v;
 }
 

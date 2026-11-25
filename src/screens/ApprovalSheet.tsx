@@ -156,7 +156,7 @@ export function ApprovalSheet({
         <View style={[st.grabber, { backgroundColor: p.sunken }]} />
         <View style={st.head}>
           <T v="title" role="header" style={{ flex: 1 }}>
-            세금계산서 발급 승인
+            {r.amend ? '수정세금계산서 발급 승인' : '세금계산서 발급 승인'}
           </T>
           {open && (
             <T v={state.urgent ? 'subStrong' : 'meta'} c={state.urgent ? 'attention' : 'ink3'} testID="sheet-left" style={{ fontVariant: ['tabular-nums'] }}>
@@ -203,6 +203,18 @@ export function ApprovalSheet({
                 </View>
               );
             })}
+          {r.amend && (
+            <View style={{ gap: space.s2 }}>
+              <T v="label" c="ink3" style={{ paddingHorizontal: space.s1 }}>
+                고치는 계산서
+              </T>
+              <View style={[st.group, { backgroundColor: p.tint }]}>
+                <ValueLine label="사유" value={r.amend.label} kind="text" testID="sheet-amend-what" />
+                <View style={[st.sep, { backgroundColor: p.line }]} />
+                <ValueLine label="원래 계산서" value={r.amend.original} kind="text" testID="sheet-amend-original" />
+              </View>
+            </View>
+          )}
           {SHEET_GROUPS.map((g) => {
             const keys = g.keys.filter((k) => k in r.values && !(k === 'remark' && r.values[k] === ''));
             if (!keys.length) return null;
