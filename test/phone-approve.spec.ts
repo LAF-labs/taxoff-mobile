@@ -81,7 +81,7 @@ const gateReq = (o: Partial<GateRequestBody> = {}): GateRequestBody => ({
 });
 const cmd = (o: Partial<PhoneCmd> = {}): PhoneCmd => ({
   cmdId: '01JDCMD0000000000000000001',
-  req: issueRequest({ ref: 'cp_gana', supply: 320_000, item: '식자재', now: T0 }),
+  req: issueRequest({ target: { counterpartyRef: 'cp_gana' }, supply: 320_000, item: '식자재', now: T0 }),
   cpName: '가나식자재',
   total: 352_000,
   createdAt: T0,

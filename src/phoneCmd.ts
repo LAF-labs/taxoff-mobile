@@ -75,8 +75,11 @@ export function kstDay(now = Date.now()): string {
   return new Date(now + 9 * 3_600_000).toISOString().slice(0, 10);
 }
 
-export function issueRequest(p: { ref: string; supply: number; item: string; now?: number }): PhoneIssueRequest {
-  return { counterpartyRef: p.ref, supply: p.supply, tax: Math.floor(p.supply / 10), item: p.item.trim(), day: kstDay(p.now) };
+/** 거래처는 PC가 아는 ID(counterpartyRef)나, 폰에서 막 넣어 PC가 아직 모르는 등록번호와 상호(newCounterparty) 둘 중 하나. */
+export type IssueTarget = Pick<PhoneIssueRequest, 'counterpartyRef' | 'newCounterparty'>;
+
+export function issueRequest(p: { target: IssueTarget; supply: number; item: string; now?: number }): PhoneIssueRequest {
+  return { ...p.target, supply: p.supply, tax: Math.floor(p.supply / 10), item: p.item.trim(), day: kstDay(p.now) };
 }
 
 const isReattach = (a: CmdAckBody): boolean => a.state === 'rejected' && a.reason === 'duplicate' && !!a.runId;
@@ -185,7 +188,7 @@ export const REJECT_LINE: Record<CmdRejectReason | 'pc_old', string> = {
   playbook_unavailable: 'PC에 발급 절차가 아직 준비되지 않았어요. 아무것도 발급하지 않았어요.',
   input_invalid: 'PC가 이 내용을 받지 않았어요. 금액과 품목을 다시 확인해 주세요.',
   counterparty_unknown: '이 거래처를 찾지 못했어요. 거래처를 다시 골라 주세요.',
-  duplicate: '같은 일을 이미 PC에 맡겼어요. 진행은 지금 할 일에서 볼 수 있어요.',
+  duplicate: '같은 일을 이미 PC에 맡겼어요.',
   pc_busy: 'PC가 다른 일을 하고 있어요. 끝나면 다시 맡겨 주세요.',
   hometax_paused: '홈택스가 잠시 접속을 막아서 PC가 발급을 쉬고 있어요. 아무것도 발급하지 않았어요.',
   pc_old: 'PC 앱이 오래된 버전이라 폰에서 맡길 수 없어요.',

@@ -2,9 +2,11 @@ import type { Thumb } from '../capture/thumb';
 import type { MoneySnapshot } from '../money';
 import type { PhoneCopyBody } from '@sax/remote';
 import type { PhoneCmd } from '../phoneCmd';
+import type { BookCmd } from '../book';
 import type { PcWhy } from '../net/pcWhy';
 import type { PxState } from '../net/pxLive';
 import type { NotifyPrefs } from '../notify/events';
+import type { InboxItem } from '../notify/inbox';
 import type { TextSize } from '../theme';
 import { File } from 'expo-file-system';
 import { fromUtf8, utf8, xOpen, xSeal, type DeviceListJson, type SignedCert } from '@sax/remote';
@@ -73,6 +75,8 @@ export interface AppData {
   money?: MoneySnapshot | null;
   pcCopy?: PhoneCopyBody | null;
   cmds?: PhoneCmd[];
+  /** 폰에서 넣거나 고친 거래처. PC가 받아 사본에 실을 때까지 둔다(tex ADR-066). */
+  book?: BookCmd[];
   pcLog?: PcWhy[];
   px?: PxState;
   notify?: NotifyPrefs;
@@ -80,6 +84,8 @@ export interface AppData {
   pushAsked?: boolean;
   simpleId?: SimpleId | null;
   textSize?: TextSize;
+  inbox?: InboxItem[];
+  inboxSeenAt?: number;
 }
 
 export const emptyData = (): AppData => ({ v: 1, pair: null, deviceList: null, seenListVersion: 0, ikTs: 0, lastSeenPc: null, cash: [], recent: [], queueSeq: 0, qbundleSeq: 0 });

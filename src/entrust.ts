@@ -2,14 +2,15 @@ import { ulid } from '@sax/remote';
 import { chatCopyOf } from './net/pcCopy';
 import { entrustNote } from './net/pcWhy';
 import { offlineChat } from './offline/device';
-import { issueRequest, type PhoneCmd } from './phoneCmd';
+import { issueRequest, type IssueTarget, type PhoneCmd } from './phoneCmd';
 import { useQueue } from './queueStore';
 import { useSession } from './session';
 
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
 
 interface EntrustInput {
-  cp: { id: string; name: string };
+  cp: { name: string };
+  target: IssueTarget;
   supply: number;
   total: number;
   item: string;
@@ -19,8 +20,8 @@ interface EntrustInput {
 export function useEntrust(): (x: EntrustInput) => Promise<boolean> {
   const s = useSession();
   const queue = useQueue();
-  return async ({ cp, supply, total, item, draftId }) => {
-    const cmd: PhoneCmd = { cmdId: ulid(), req: issueRequest({ ref: cp.id, supply, item }), cpName: cp.name, total, createdAt: Date.now() };
+  return async ({ cp, target, supply, total, item, draftId }) => {
+    const cmd: PhoneCmd = { cmdId: ulid(), req: issueRequest({ target, supply, item }), cpName: cp.name, total, createdAt: Date.now() };
     try {
       await s.update((d) => ({ ...d, cmds: [...(d.cmds ?? []), cmd] }));
     } catch {

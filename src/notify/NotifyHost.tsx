@@ -6,9 +6,10 @@ import { useQueue } from '../queueStore';
 import { useSession } from '../session';
 import type { AppData } from '../storage/state';
 import { radius, space, usePalette } from '../theme';
-import { T, tap } from '../ui/kit';
+import { T, tap, won } from '../ui/kit';
 import { DEFAULT_PREFS, moneyReminder, nextMorning, runEvents, type MoneyCounts, type RunEvent } from './events';
 import { configureNotifications, notifyNow, onOpened, scheduleMoney } from './local';
+import { addInbox, fromRun, moneyItem, newApprovals, type InboxItem } from './inbox';
 import type { Job } from '../queue';
 
 const SHOW_MS = 6000;
@@ -49,8 +50,14 @@ export function NotifyHost({ onOpen, onMoney, onRunScreen, preview }: {
     });
   }, []);
 
+  const keep = (items: InboxItem[]) => {
+    if (items.length) void s.update((d) => ({ ...d, inbox: addInbox(d.inbox ?? [], items, Date.now()) }));
+  };
+
   useEffect(() => {
     const evs = runEvents(prev.current, q.jobs);
+    const now = Date.now();
+    keep([...newApprovals(prev.current, q.jobs, now, won), ...evs.map((e) => fromRun(e, now))]);
     prev.current = q.jobs;
     const ev = evs[evs.length - 1];
     if (!prefs.run || !ev) return;
@@ -70,8 +77,11 @@ export function NotifyHost({ onOpen, onMoney, onRunScreen, preview }: {
   const counts = moneyCounts(s.data);
   const key = counts ? `${counts.recvOverdue}.${counts.recvSoon}.${counts.payOverdue}.${counts.paySoon}` : '';
   useEffect(() => {
-    const c = prefs.money && counts ? moneyReminder(counts) : null;
-    void scheduleMoney(c, nextMorning(Date.now()));
+    const r = counts ? moneyReminder(counts) : null;
+    const now = Date.now();
+    const today = new Date(now).setHours(9, 0, 0, 0);
+    if (r && now >= today) keep([moneyItem(r, today)]);
+    void scheduleMoney(prefs.money ? r : null, nextMorning(now));
   }, [key, prefs.money]);
 
   if (!banner) return null;

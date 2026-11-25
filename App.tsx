@@ -18,7 +18,6 @@ import { LockScreen } from './src/screens/LockScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { MainScreen, type MainRoute, type Tab } from './src/screens/MainScreen';
 import { PairScreen } from './src/screens/PairScreen';
-import { SettingsScreen } from './src/screens/SettingsScreen';
 import { QueueScreen } from './src/screens/QueueScreen';
 import { QueueProvider } from './src/queueStore';
 import { ApprovalHost } from './src/screens/ApprovalHost';
@@ -160,7 +159,6 @@ export default function App() {
         )}
         {route === 'capture' && <CaptureScreen onDone={back} />}
         {route === 'cash' && <CashScreen onDone={back} />}
-        {route === 'settings' && <SettingsScreen onDone={back} onConnection={() => go('connection')} onPair={() => go('pair')} onDevices={() => go('devices')} />}
         {route === 'queue' && <QueueScreen onDone={back} onConnection={() => go('connection')} onOpen={(j) => (j.run ? go('run') : home())} />}
         {route === 'run' && (
           <RunScreen

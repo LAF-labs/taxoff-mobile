@@ -1,14 +1,19 @@
 import { CAP, issueCmd, type Channel, type CmdAckBody, type GateRequestBody, type GateResolvedBody, type PhoneCopyBody, type RunEventBody } from '@sax/remote';
 import { applyAck, applyEvent, applyGate, applyHumanRequest, applyResolved, busyWaiting, forRetry, markAnswered, responseDue, retryDue, settled, type PhoneCmd } from '../phoneCmd.ts';
+import { applyBookAck, bookOpen, bookReady, bookRun, linkBook, type BookCmd } from '../book.ts';
 
 const WATCH_MS = 10 * 60_000;
 const TICK_MS = 2_000;
 const GATE_TICK_MS = 300;
+/** 거래처를 저장한 PC는 같은 연결로 새 사본을 보낸다. 그 사본을 받을 때까지만 더 기다린다. */
+const COPY_AFTER_SAVE_MS = 3_000;
 
 interface CmdIo {
   cmds: () => PhoneCmd[];
   save: (f: (cs: PhoneCmd[]) => PhoneCmd[]) => Promise<void>;
   onCopy?: (c: PhoneCopyBody) => Promise<void>;
+  /** 폰에서 넣고 고친 거래처(ADR-066). 발급보다 먼저 보낸다. */
+  book?: { list: () => BookCmd[]; save: (f: (bs: BookCmd[]) => BookCmd[]) => Promise<void> };
   alive?: () => boolean;
   now?: () => number;
 }
@@ -17,15 +22,39 @@ type Ch = Pick<Channel, 'send' | 'recv' | 'closed'>;
 
 export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, watchMs = WATCH_MS): Promise<'none' | 'pc_old' | 'settled' | 'closed' | 'timeout'> {
   const now = io.now ?? Date.now;
+  const book = io.book;
+  const books = () => book?.list() ?? [];
   const open = io.cmds().filter((c) => !settled(c, now()));
-  if (!open.length) return 'none';
+  if (!open.length && !books().some(bookReady)) return 'none';
   const ids = new Set<string>();
-  if (!peerCaps.includes(CAP.issue)) {
-    const old = new Set(open.map((c) => c.cmdId));
-    await io.save((cs) => cs.map((c) => (old.has(c.cmdId) ? { ...c, pcOld: true } : c)));
-    return 'pc_old';
-  }
+  const bookIds = new Set<string>();
   const t0 = now();
+  let copyBy = 0;
+  /** 보낼 수 있는 거래처 명령을 보낸다. 넣기 답을 받은 뒤 이어 고친 명령도 여기서 나간다. */
+  const sendBooks = async () => {
+    if (!book) return;
+    for (const b of books().filter((x) => bookReady(x) && !bookIds.has(x.cmdId))) {
+      bookIds.add(b.cmdId);
+      try {
+        ch.send('cmd.run', bookRun(b));
+      } catch {
+        await book.save((bs) => bs.map((x) => (x.cmdId === b.cmdId ? { ...x, failed: 'input_invalid' as const } : x)));
+        continue;
+      }
+      if (!b.sentAt) await book.save((bs) => bs.map((x) => (x.cmdId === b.cmdId ? { ...x, sentAt: now() } : x)));
+    }
+  };
+  if (book && books().some(bookReady)) {
+    if (!peerCaps.includes(CAP.book)) {
+      await book.save((bs) => bs.map((b) => (bookOpen(b) ? { ...b, failed: 'pc_old' as const } : b)));
+    } else await sendBooks();
+  }
+  if (!peerCaps.includes(CAP.issue) || (!peerCaps.includes(CAP.book) && open.some((c) => !!c.req.newCounterparty))) {
+    // 옛 PC: 발급을 못 받거나, 등록번호로 가리킨 새 거래처를 모른다.
+    const old = new Set(open.filter((c) => !peerCaps.includes(CAP.issue) || !!c.req.newCounterparty).map((c) => c.cmdId));
+    await io.save((cs) => cs.map((c) => (old.has(c.cmdId) ? { ...c, pcOld: true } : c)));
+    if (!peerCaps.includes(CAP.issue) && !bookIds.size) return 'pc_old';
+  }
   const send = async (c: PhoneCmd) => {
     ids.add(c.cmdId);
     try {
@@ -41,7 +70,7 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
     const fresh = io.cmds().find((x) => x.cmdId === c.cmdId);
     if (fresh) await send(fresh);
   };
-  for (const c of open) {
+  for (const c of io.cmds().filter((x) => !settled(x, now()))) {
     if (busyWaiting(c, now())) {
       if (retryDue(c, now())) await retry(c);
       else ids.add(c.cmdId);
@@ -98,7 +127,8 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
       }
       await io.save((cs) => cs.map((x) => (x.cmdId === c.cmdId ? { ...x, simpleOutSentAt: now() } : x)));
     }
-    if (io.cmds().filter((c) => ids.has(c.cmdId)).every((c) => settled(c, now()))) return 'settled';
+    const booksDone = books().every((b) => !bookOpen(b) || (!bookIds.has(b.cmdId) && !(b.after && bookIds.has(b.after)))) && (!copyBy || now() >= copyBy);
+    if (booksDone && io.cmds().filter((c) => ids.has(c.cmdId)).every((c) => settled(c, now()))) return 'settled';
     if (ch.closed) return 'closed';
     if (io.alive && !io.alive()) return 'closed';
     const left = deadline - now();
@@ -108,7 +138,13 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
     if (!e) continue;
     if (e.type === 'cmd.ack') {
       const a = e.body as CmdAckBody;
-      await io.save((cs) => cs.map((c) => applyAck(c, a, now())));
+      if (book && bookIds.has(a.cmdId)) {
+        await book.save((bs) => linkBook(bs.map((b) => applyBookAck(b, a, now())), null));
+        if (a.state === 'saved') {
+          copyBy = now() + COPY_AFTER_SAVE_MS;
+          await sendBooks();
+        }
+      } else await io.save((cs) => cs.map((c) => applyAck(c, a, now())));
     } else if (e.type === 'human.request') {
       const b = e.body as { runId?: unknown; reqId?: unknown; kind?: unknown; prompt?: unknown };
       await io.save((cs) => cs.map((c) => applyHumanRequest(c, b)));
@@ -123,6 +159,7 @@ export async function driveCmds(ch: Ch, peerCaps: readonly string[], io: CmdIo, 
       await io.save((cs) => cs.map((c) => applyResolved(c, r)));
     } else if (e.type === 'phone.copy' && io.onCopy) {
       await io.onCopy(e.body as PhoneCopyBody);
+      copyBy = 0;
     }
   }
 }
