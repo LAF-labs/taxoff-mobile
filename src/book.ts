@@ -74,13 +74,28 @@ function overlay(c: Customer, s: PhoneCounterpartySave): Customer {
   return out;
 }
 
+/** 사본의 그 거래처가 이 명령이 보낸 칸의 값을 담고 있는가. */
+function shows(c: CopyCounterparty, s: PhoneCounterpartySave): boolean {
+  if (c.name !== s.name.trim()) return false;
+  if (s.rep !== undefined && (c.rep ?? '') !== s.rep.trim()) return false;
+  if (s.item !== undefined && (c.item ?? '') !== s.item.trim()) return false;
+  if (s.email !== undefined && (c.emailHint ?? '') !== (s.email.trim() ? maskEmail(s.email.trim()) : '')) return false;
+  return true;
+}
+
 /**
- * 사본이 이 명령을 이미 담았는가: 저장한 뒤에 만든 사본이면 PC 값이 맞다.
+ * 사본이 이 명령을 이미 담았는가. PC가 저장한 명령은 사본에 그 거래처가 실제로 있어야 한다(사본은 거래처를 100곳까지만 담아
+ * 새 거래처가 빠질 수 있다). 있으면 값이 같거나, 저장한 뒤에 만든 사본일 때 PC 값이 맞다. savedAt은 폰 시계, asOf는 PC 시계라
+ * 시각만으로는 PC 시계가 늦을 때 폰의 옛 값이 남으므로 값으로도 본다.
  * 큐로 맡긴 넣기는 답이 폰에 오지 않으니, 사본에 같은 등록번호가 보이면 PC가 받은 것이다.
  */
 function inCopy(b: BookCmd, copy: PhoneCopyBody | null): boolean {
   if (!copy) return false;
-  if (b.savedAt) return copy.asOf >= b.savedAt;
+  if (b.savedAt) {
+    const ref = b.ref ?? b.save.ref;
+    const c = ref ? copy.counterparties.find((x) => x.ref === ref) : undefined;
+    return !!c && (shows(c, b.save) || copy.asOf >= b.savedAt);
+  }
   return !b.save.ref && !b.after && !!b.queuedAt && copy.counterparties.some((c) => !!c.bizNo && sameBiz(c.bizNo, b.save.bizNo));
 }
 
@@ -98,7 +113,7 @@ export function customersOf(copy: PhoneCopyBody | null | undefined, book: readon
       if (list[i]!.pending) list[i] = overlay(list[i]!, b.save);
       continue;
     }
-    list.push(overlay({ id: b.ref ?? newId(b.cmdId), ref: b.ref ?? null, name: b.save.name, bizNo: bizNoDashed(b.save.bizNo), pending: true }, b.save));
+    list.push(overlay({ id: b.ref ?? newId(b.cmdId), ref: b.ref ?? null, name: b.save.name, bizNo: bizNoDashed(b.save.bizNo), pending: !b.savedAt }, b.save));
   }
   return list;
 }
