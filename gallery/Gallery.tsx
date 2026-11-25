@@ -482,7 +482,7 @@ function AmendChat({ items: first, start }: { items: ChatItem[]; start?: Tab }) 
     available: true, busy: false, chips: [], items, send: async () => {}, retry: async () => {}, react: async () => {},
     update: async (it) => setItems((xs) => (xs.some((x) => x.id === it.id) ? xs.map((x) => (x.id === it.id ? it : x)) : [...xs, it])),
   };
-  return <Main live chat={[]} phone={phone} start={start} />;
+  return <Main chat={[]} phone={phone} start={start} />;
 }
 const D117 = '20261117-41000000-00000117';
 const amendScene = (items: ChatItem[], start?: Tab) => ({ session: fake(copyData(AMEND_COPY), 'online'), approval: HW, node: <AmendChat items={items} start={start} /> });
@@ -593,7 +593,7 @@ const SCREENS: Record<
     session: fake({ ...copyData(AMEND_COPY), cmds: [CMD({ phase: 'approve', ack: 'accepted', cpName: '대한테크', total: -3_630_000, title: '대한테크 세금계산서 취소', gate: AMEND_GATE() })] }, 'online'),
     approval: HW,
     notes: [...amendMsg('ap', '대한테크 계약 깨졌어. 지난주 계산서 취소해줘', amendCard({ no: D117, what: 'deal_cancelled' }), 2).slice(0, 2), { kind: 'run', id: 'run-cmd-G1', at: now - 90_000, jobId: 'cmd-G1' }],
-    node: <Main chat={[]} live />,
+    node: <Main chat={[]} />,
   }),
   'amend-approval-sheet': () => sheetCase(AMEND_GATE()),
   'amend-records': () => amendScene([], 'records'),

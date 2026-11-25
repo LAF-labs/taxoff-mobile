@@ -50,7 +50,7 @@ export function useEntrustAmend(): (card: AmendCard) => Promise<boolean> {
     const total = plan.sheets.reduce((n, x) => n + x.total, 0);
     const cmd: PhoneCmd = {
       cmdId: ulid(),
-      req: issueRequest({ ref: o.counterpartyId, supply: Math.abs(plan.main.supply), item: card.values.item || o.item }),
+      req: issueRequest({ target: { counterpartyRef: o.counterpartyId }, supply: Math.abs(plan.main.supply), item: card.values.item || o.item }),
       amend: { original: o.approvalNo, what: card.what, values: { ...card.values } },
       title: card.view.title,
       cpName: o.counterpartName,
