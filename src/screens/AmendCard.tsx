@@ -1,8 +1,8 @@
-import { useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { amendCardUpdate, type AmendCard as AmendState, type AmendField, type AmendWhat } from '@sax/chat-core';
 import { MAX_FONT_SCALE, radius, size, space, type, usePalette } from '../theme';
-import { Actions, Card, PickRows, Sheet, actionFlex } from '../ui/card';
+import { Actions, Card, KeyboardDone, KEYBOARD_DONE_ID, PickRows, Sheet, actionFlex } from '../ui/card';
 import { Button, Chevron, Notice, T } from '../ui/kit';
 
 /**
@@ -19,7 +19,23 @@ const ISSUE_FAILED: Record<Exclude<AmendIssue, 'sent'>, string> = {
 const won = (n: number) => `${n < 0 ? '−' : ''}${Math.abs(n).toLocaleString('ko-KR')}원`;
 const md = (d: string) => (/^\d{4}-\d{2}-\d{2}$/.test(d) ? `${Number(d.slice(5, 7))}월 ${Number(d.slice(8, 10))}일` : d);
 
-export function AmendCard({ card, onChange, onIssue, sent, stale }: { card: AmendState; onChange: (c: AmendState) => void; onIssue?: (c: AmendState) => Promise<AmendIssue>; sent?: boolean; stale?: boolean }) {
+type Props = { card: AmendState; onChange: (c: AmendState) => void; onIssue?: (c: AmendState) => Promise<AmendIssue>; sent?: boolean; stale?: boolean };
+
+/**
+ * 대화 목록이 다시 그려질 때 카드는 값이 같으면 그리지 않는다(부르는 쪽 콜백은 매번 새로 만들어지므로 비교하지 않고 최신 것을 ref로 쓴다).
+ */
+export const AmendCard = memo(AmendCardView, (a, b) => a.card === b.card && a.sent === b.sent && a.stale === b.stale && !!a.onIssue === !!b.onIssue);
+
+function AmendCardView(props: Props) {
+  const latest = useRef(props);
+  latest.current = props;
+  const { card: saved, sent, stale } = props;
+  const onChange = (c: AmendState) => latest.current.onChange(c);
+  const onIssue = props.onIssue ? (c: AmendState) => latest.current.onIssue!(c) : undefined;
+  // 금액을 치는 동안은 이 카드 안에서만 다시 계산해 보인다(부가세, 합계가 그 자리에서 따라 바뀐다). 저장은 칸을 벗어날 때 한 번.
+  const [typing, setTyping] = useState<AmendState | null>(null);
+  useEffect(() => setTyping(null), [saved]);
+  const card = typing ?? saved;
   const p = usePalette();
   const v = card.view;
   const [editing, setEditing] = useState<AmendField | null>(null);
@@ -28,7 +44,7 @@ export function AmendCard({ card, onChange, onIssue, sent, stale }: { card: Amen
   const [whyOpen, setWhyOpen] = useState(false);
   const update = (patch: Parameters<typeof amendCardUpdate>[1]) => {
     try {
-      onChange(amendCardUpdate(card, patch));
+      onChange(amendCardUpdate(saved, patch));
     } catch {
       // 맞지 않는 값은 받지 않는다(카드는 그대로)
     }
@@ -92,7 +108,7 @@ export function AmendCard({ card, onChange, onIssue, sent, stale }: { card: Amen
     if (!onIssue || busy) return;
     setBusy(true);
     setFailed(null);
-    const r = await onIssue(card);
+    const r = await onIssue(saved);
     setBusy(false);
     if (r !== 'sent') setFailed(r);
   };
@@ -127,7 +143,24 @@ export function AmendCard({ card, onChange, onIssue, sent, stale }: { card: Amen
                   <T v="value" c="ink3">{`기존 ${won(a.before)}`}</T>
                 </Kv>
                 {editing === a.field ? (
-                  <Edit field={a.field} value={String(a.after)} big onDone={(x) => (setEditing(null), x !== null && /\d/.test(x) && update({ field: a.field, value: Number(x.replace(/\D/g, '')) }))} />
+                  <Edit
+                    field={a.field}
+                    value={String(saved.view.amounts?.find((x) => x.field === a.field)?.after ?? a.after)}
+                    big
+                    onText={(x) => {
+                      if (!/\d/.test(x)) return setTyping(null);
+                      try {
+                        setTyping(amendCardUpdate(saved, { field: a.field, value: Number(x.replace(/\D/g, '')) }));
+                      } catch {
+                        setTyping(null);
+                      }
+                    }}
+                    onDone={(x) => {
+                      setEditing(null);
+                      if (x !== null && /\d/.test(x)) update({ field: a.field, value: Number(x.replace(/\D/g, '')) });
+                      else setTyping(null);
+                    }}
+                  />
                 ) : (
                   <Pressable onPress={live ? () => setEditing(a.field) : undefined} accessibilityRole="button" accessibilityLabel={`${a.label} ${won(a.after)}, 고치기`} style={({ pressed }) => [sx.field, { backgroundColor: pressed && live ? p.sunken : p.canvas }]} testID={`amend-field-${a.field}`}>
                     <T v="figure">{won(a.after)}</T>
@@ -152,6 +185,7 @@ export function AmendCard({ card, onChange, onIssue, sent, stale }: { card: Amen
           <Button testID="amend-modify" kind="secondary" label="수정" onPress={() => (first ? setEditing(first) : setWhyOpen(true))} disabled={busy} style={[actionFlex, { backgroundColor: p.canvas }]} />
         </Actions>
       )}
+      {editing && <KeyboardDone />}
       {whyOpen && (
         <Sheet title="왜 고치나요?" onClose={() => setWhyOpen(false)} testID="amend-why">
           <PickRows<AmendWhat>
@@ -194,9 +228,10 @@ function Kv({ label, value, children }: { label: string; value?: string; childre
 }
 
 /** 값 하나를 그 자리에서 고친다. 완료(키보드 완료, 다른 곳 누름)면 값, 그대로 두면 null. 비운 채 끝내면 부르는 쪽이 기존 값을 둔다. */
-function Edit({ field, value, big, onDone }: { field: AmendField; value: string; big?: boolean; onDone: (v: string | null) => void }) {
+function Edit({ field, value, big, onDone, onText }: { field: AmendField; value: string; big?: boolean; onDone: (v: string | null) => void; onText?: (v: string) => void }) {
   const p = usePalette();
-  const [text, setText] = useState(field === 'counterpartBizNo' ? value.replace(/^(\d{3})(\d{2})(\d{5})$/, '$1-$2-$3') : big ? Number(value).toLocaleString('ko-KR') : value);
+  // 금액은 빈 칸으로 열리고 지금 금액은 흐리게 보인다. 지우지 않고 바로 새 금액을 친다. 비운 채 끝내면 지금 금액 그대로다.
+  const [text, setText] = useState(field === 'counterpartBizNo' ? value.replace(/^(\d{3})(\d{2})(\d{5})$/, '$1-$2-$3') : big ? '' : value);
   const done = useRef(false);
   const finish = (v: string | null) => {
     if (done.current) return;
@@ -209,12 +244,17 @@ function Edit({ field, value, big, onDone }: { field: AmendField; value: string;
       testID={`amend-input-${field}`}
       autoFocus
       value={text}
-      onChangeText={(t) => setText(big ? (t.replace(/\D/g, '') ? Number(t.replace(/\D/g, '').slice(0, 13)).toLocaleString('ko-KR') : '') : t)}
+      onChangeText={(t) => {
+        const next = big ? (t.replace(/\D/g, '') ? Number(t.replace(/\D/g, '').slice(0, 13)).toLocaleString('ko-KR') : '') : t;
+        setText(next);
+        onText?.(next);
+      }}
       onSubmitEditing={() => finish(text)}
       onBlur={() => finish(text)}
       keyboardType={numeric ? 'number-pad' : field === 'issueDate' ? 'numbers-and-punctuation' : 'default'}
       returnKeyType="done"
-      placeholder={field === 'issueDate' ? '2026-11-24' : undefined}
+      inputAccessoryViewID={numeric ? KEYBOARD_DONE_ID : undefined}
+      placeholder={big ? Number(value).toLocaleString('ko-KR') : field === 'issueDate' ? '2026-11-24' : undefined}
       placeholderTextColor={p.ink4}
       accessibilityLabel={field}
       maxFontSizeMultiplier={MAX_FONT_SCALE}

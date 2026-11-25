@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Modal, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { InputAccessoryView, Keyboard, Modal, Platform, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radius, space, usePalette } from '../theme';
 import { Check, T } from './kit';
@@ -161,6 +161,24 @@ export function PickRows<V extends string>({ groups, value, onPick, testID }: { 
   );
 }
 
+/** 숫자 자판 위 [완료] 줄(iOS 숫자 자판에는 완료 키가 없다). 입력 칸은 inputAccessoryViewID={KEYBOARD_DONE_ID}로 붙는다. */
+export const KEYBOARD_DONE_ID = 'keyboard-done';
+export function KeyboardDone() {
+  const p = usePalette();
+  if (Platform.OS !== 'ios') return null;
+  return (
+    <InputAccessoryView nativeID={KEYBOARD_DONE_ID} backgroundColor={p.tint}>
+      <View style={cst.doneBar}>
+        <Pressable onPress={() => Keyboard.dismiss()} accessibilityRole="button" hitSlop={8} style={cst.doneBtn} testID="keyboard-done">
+          <T v="subStrong" c="accent">
+            완료
+          </T>
+        </Pressable>
+      </View>
+    </InputAccessoryView>
+  );
+}
+
 const cst = StyleSheet.create({
   card: { alignSelf: 'stretch', borderRadius: radius.lg, padding: space.s5, gap: space.s4 },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.s2 },
@@ -172,5 +190,7 @@ const cst = StyleSheet.create({
   sheetBody: { paddingHorizontal: space.s5, paddingTop: space.s4, paddingBottom: space.s4, gap: space.s4 },
   sheetFoot: { paddingHorizontal: space.s5, paddingTop: space.s2 },
   rows: { borderRadius: radius.lg, overflow: 'hidden' },
+  doneBar: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: space.s4, minHeight: 44, alignItems: 'center' },
+  doneBtn: { paddingHorizontal: space.s2, minHeight: 44, justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: space.s3, paddingHorizontal: space.s4, paddingVertical: 14 },
 });
