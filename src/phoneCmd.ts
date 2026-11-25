@@ -1,6 +1,6 @@
 import type { CmdAckBody, CmdAckState, CmdRejectReason, GateRequestBody, GateResolvedBody, GateResolvedBy, GateResponseBody, PhoneIssueRequest, RunEventBody, RunPhase, RunResult } from '@sax/remote';
 import type { PhoneGate } from './approval';
-import type { Job, NeedPcReason } from './queue';
+import { EXPIRE_MS, type Job, type NeedPcReason } from './queue.ts';
 import { PASS_CARRIERS, STEPS, simpleAppOf, type RunView, type Step } from './run.ts';
 
 export interface PhoneCmd {
@@ -69,6 +69,12 @@ export function forRetry(c: PhoneCmd): PhoneCmd {
 
 export function redate(c: PhoneCmd, now = Date.now()): PhoneCmd {
   return { ...c, req: { ...c.req, day: kstDay(now) }, retryAt: now };
+}
+
+/** 3일 동안 PC에 닿지 못해 취소된 일을 오늘 날짜로 다시 맡긴다. PC가 받은 적 있는 일은 그대로 둔다. */
+export function reentrust(c: PhoneCmd, now = Date.now()): PhoneCmd {
+  if (c.sentAt || c.ack || now - c.createdAt < EXPIRE_MS) return c;
+  return { ...c, req: { ...c.req, day: kstDay(now) }, createdAt: now, queuedAt: undefined };
 }
 
 export function kstDay(now = Date.now()): string {
@@ -275,5 +281,6 @@ export function jobOf(c: PhoneCmd): Job {
 
 /** PC가 꺼져 있을 때 큐에 맡길 발급: 아직 PC에 닿지 않았고 큐에도 넣지 않은 것. 큐가 24시간 뒤 지우면 다시 넣는다. */
 export function cmdsToQueue(cmds: readonly PhoneCmd[], ttlMs: number, now = Date.now()): PhoneCmd[] {
-  return cmds.filter((c) => !c.sentAt && !c.ack && (!c.queuedAt || now - c.queuedAt >= ttlMs) && !settled(c, now));
+  // 3일이 지나 큐 화면에서 "취소된 일"이 된 일은 다시 올리지 않는다([다시 맡기기]가 reentrust로 살린다).
+  return cmds.filter((c) => !c.sentAt && !c.ack && now - c.createdAt < EXPIRE_MS && (!c.queuedAt || now - c.queuedAt >= ttlMs) && !settled(c, now));
 }
