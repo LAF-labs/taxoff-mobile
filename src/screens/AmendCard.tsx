@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { amendCardUpdate, type AmendCard as AmendState, type AmendField, type AmendWhat } from '@sax/chat-core';
 import { space } from '../theme';
-import { Actions, AmountEdit, Card, CardChoice, CardInput, Kv, KvRow } from '../ui/card';
+import { Actions, AmountEdit, Card, CardChoice, CardInput, KeyboardDone, Kv, KvRow } from '../ui/card';
 import { Button, Notice, T } from '../ui/kit';
 import { PickRows, Sheet } from '../ui/sheet';
 
@@ -20,7 +20,23 @@ const ISSUE_FAILED: Record<Exclude<AmendIssue, 'sent'>, string> = {
 const won = (n: number) => `${n < 0 ? '−' : ''}${Math.abs(n).toLocaleString('ko-KR')}원`;
 const md = (d: string) => (/^\d{4}-\d{2}-\d{2}$/.test(d) ? `${Number(d.slice(5, 7))}월 ${Number(d.slice(8, 10))}일` : d);
 
-export function AmendCard({ card, onChange, onIssue, sent, stale }: { card: AmendState; onChange: (c: AmendState) => void; onIssue?: (c: AmendState) => Promise<AmendIssue>; sent?: boolean; stale?: boolean }) {
+type Props = { card: AmendState; onChange: (c: AmendState) => void; onIssue?: (c: AmendState) => Promise<AmendIssue>; sent?: boolean; stale?: boolean };
+
+/**
+ * 대화 목록이 다시 그려질 때 카드는 값이 같으면 그리지 않는다(부르는 쪽 콜백은 매번 새로 만들어지므로 비교하지 않고 최신 것을 ref로 쓴다).
+ */
+export const AmendCard = memo(AmendCardView, (a, b) => a.card === b.card && a.sent === b.sent && a.stale === b.stale && !!a.onIssue === !!b.onIssue);
+
+function AmendCardView(props: Props) {
+  const latest = useRef(props);
+  latest.current = props;
+  const { card: saved, sent, stale } = props;
+  const onChange = (c: AmendState) => latest.current.onChange(c);
+  const onIssue = props.onIssue ? (c: AmendState) => latest.current.onIssue!(c) : undefined;
+  // 금액을 치는 동안은 이 카드 안에서만 다시 계산해 보인다(부가세, 합계가 그 자리에서 따라 바뀐다). 저장은 칸을 벗어날 때 한 번.
+  const [typing, setTyping] = useState<AmendState | null>(null);
+  useEffect(() => setTyping(null), [saved]);
+  const card = typing ?? saved;
   const v = card.view;
   const [editing, setEditing] = useState<AmendField | null>(null);
   const [busy, setBusy] = useState(false);
@@ -33,7 +49,7 @@ export function AmendCard({ card, onChange, onIssue, sent, stale }: { card: Amen
   }, [live, v.stage]);
   const update = (patch: Parameters<typeof amendCardUpdate>[1]) => {
     try {
-      onChange(amendCardUpdate(card, patch));
+      onChange(amendCardUpdate(saved, patch));
     } catch {
       // 맞지 않는 값은 받지 않는다(카드는 그대로)
     }
@@ -93,7 +109,7 @@ export function AmendCard({ card, onChange, onIssue, sent, stale }: { card: Amen
     if (!onIssue || busy) return;
     setBusy(true);
     setFailed(null);
-    const r = await onIssue(card);
+    const r = await onIssue(saved);
     setBusy(false);
     if (r !== 'sent') setFailed(r);
   };
@@ -121,11 +137,22 @@ export function AmendCard({ card, onChange, onIssue, sent, stale }: { card: Amen
               <Money
                 field={a.field}
                 label={a.label}
-                value={a.after}
+                value={saved.view.amounts?.find((x) => x.field === a.field)?.after ?? a.after}
                 live={live}
-                autoFocus={editing === a.field}
                 onFocus={() => setEditing(a.field)}
-                onDone={(n) => (setEditing(null), n !== null && update({ field: a.field, value: n }))}
+                onText={(n) => {
+                  if (n === null) return setTyping(null);
+                  try {
+                    setTyping(amendCardUpdate(saved, { field: a.field, value: n }));
+                  } catch {
+                    setTyping(null);
+                  }
+                }}
+                onDone={(n) => {
+                  setEditing(null);
+                  if (n !== null) update({ field: a.field, value: n });
+                  else setTyping(null);
+                }}
               />
             </AmountEdit>
           ))}
@@ -143,39 +170,44 @@ export function AmendCard({ card, onChange, onIssue, sent, stale }: { card: Amen
           <Button testID="amend-modify" kind="secondary" label="수정" onPress={() => (first ? setEditing(first) : setWhyOpen(true))} disabled={busy} />
         </Actions>
       )}
+      {editing && <KeyboardDone />}
       {why}
     </Card>
   );
 }
 
-/** 금액 칸: 늘 입력 칸 모양으로 보이고(기준판 sx-amt-in), 누르면 바로 고친다. 끝내면 숫자, 비우면 null. */
-function Money({ field, label, value, live, autoFocus, onFocus, onDone }: { field: AmendField; label: string; value: number; live: boolean; autoFocus: boolean; onFocus: () => void; onDone: (n: number | null) => void }) {
-  const fmt = (n: number) => n.toLocaleString('ko-KR');
-  const [text, setText] = useState(fmt(value));
-  const [dirty, setDirty] = useState(false);
-  useEffect(() => {
-    if (!dirty) setText(fmt(value));
-  }, [value, dirty]);
+/**
+ * 금액 칸: 늘 입력 칸 모양으로 보인다(기준판 sx-amt-in). 누르면 빈 칸이 되고 지금 금액은 흐리게 보여, 지우지 않고 바로 새 금액을 친다.
+ * 치는 동안 onText로 다른 금액이 따라 바뀌고, 끝내면 onDone(비운 채 끝내면 null, 지금 금액 그대로).
+ */
+function Money({ field, label, value, live, onFocus, onText, onDone }: { field: AmendField; label: string; value: number; live: boolean; onFocus: () => void; onText: (n: number | null) => void; onDone: (n: number | null) => void }) {
+  const fmt = (n: number) => `${n < 0 ? '−' : ''}${Math.abs(n).toLocaleString('ko-KR')}`;
+  const [text, setText] = useState<string | null>(null);
+  const sign = value < 0 ? -1 : 1;
+  const shown = text ?? fmt(value);
   return (
     <CardInput
       testID={`amend-field-${field}`}
       label={label}
-      value={text}
+      value={shown}
+      placeholder={fmt(value)}
       suffix="원"
       editable={live}
-      autoFocus={autoFocus}
       keyboardType="number-pad"
+      onFocus={() => {
+        setText('');
+        onFocus();
+      }}
       onChange={(t) => {
-        if (!dirty) onFocus();
-        setDirty(true);
         const d = t.replace(/\D/g, '').slice(0, 13);
-        setText(d ? fmt(Number(d)) : '');
+        setText(d ? `${sign < 0 ? '−' : ''}${Number(d).toLocaleString('ko-KR')}` : '');
+        // 줄이거나 취소하는 장은 금액이 음수다. 숫자 자판에는 −가 없으니 지금 금액의 부호를 따른다.
+        onText(d ? sign * Number(d) : null);
       }}
       onDone={() => {
-        if (!dirty) return;
-        setDirty(false);
-        const d = text.replace(/\D/g, '');
-        onDone(d ? Number(d) : null);
+        const d = (text ?? '').replace(/\D/g, '');
+        setText(null);
+        onDone(d ? sign * Number(d) : null);
       }}
     />
   );

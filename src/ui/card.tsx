@@ -1,5 +1,5 @@
 import { Children, forwardRef, isValidElement, useContext, useState, type ComponentRef, type ReactNode } from 'react';
-import { Pressable, StyleSheet, TextInput, View, type KeyboardTypeOptions, type StyleProp, type ViewStyle } from 'react-native';
+import { InputAccessoryView, Keyboard, Platform, Pressable, StyleSheet, TextInput, View, type KeyboardTypeOptions, type StyleProp, type ViewStyle } from 'react-native';
 import { MAX_FONT_SCALE, radius, size, space, type, usePalette } from '../theme';
 import { useFocusFace } from './form';
 import { Chevron, OnCard, T } from './kit';
@@ -134,8 +134,9 @@ export const CardInput = forwardRef<
     /** 값 뒤에 붙는 단위(원). */
     suffix?: string;
     editable?: boolean;
+    onFocus?: () => void;
   }
->(function CardInput({ value, onChange, label, placeholder, keyboardType, autoFocus, onDone, testID, plain, suffix, editable = true }, ref) {
+>(function CardInput({ value, onChange, label, placeholder, keyboardType, autoFocus, onDone, testID, plain, suffix, editable = true, onFocus }, ref) {
   const p = usePalette();
   const focusFace = useFocusFace();
   const [focus, setFocus] = useState(!!autoFocus);
@@ -152,8 +153,11 @@ export const CardInput = forwardRef<
         keyboardType={keyboardType}
         autoFocus={autoFocus}
         returnKeyType="done"
-        onSubmitEditing={onDone}
-        onFocus={() => setFocus(true)}
+        blurOnSubmit
+        onFocus={() => {
+          setFocus(true);
+          onFocus?.();
+        }}
         onBlur={() => {
           setFocus(false);
           onDone?.();
@@ -161,6 +165,7 @@ export const CardInput = forwardRef<
         maxFontSizeMultiplier={MAX_FONT_SCALE}
         selectionColor={p.accent}
         editable={editable}
+        inputAccessoryViewID={keyboardType === 'number-pad' || keyboardType === 'phone-pad' ? KEYBOARD_DONE_ID : undefined}
         style={[plain ? type.subValue : type.subFigure, st.inText, { color: p.ink }, noOutline]}
       />
       {suffix && value !== '' && <T v={plain ? 'subValue' : 'subFigure'}>{suffix}</T>}
@@ -217,6 +222,24 @@ export function CardChoice({ children, onPress, a11y, testID }: { children: Reac
   );
 }
 
+/** 숫자 자판 위 [완료] 줄(iOS 숫자 자판에는 완료 키가 없다). 숫자 CardInput은 저절로 붙는다. 입력 칸이 열린 카드 안에 한 번 둔다. */
+export const KEYBOARD_DONE_ID = 'keyboard-done';
+export function KeyboardDone() {
+  const p = usePalette();
+  if (Platform.OS !== 'ios') return null;
+  return (
+    <InputAccessoryView nativeID={KEYBOARD_DONE_ID} backgroundColor={p.tint}>
+      <View style={st.doneBar}>
+        <Pressable onPress={() => Keyboard.dismiss()} accessibilityRole="button" hitSlop={8} style={st.doneBtn} testID="keyboard-done">
+          <T v="subStrong" c="accent">
+            완료
+          </T>
+        </Pressable>
+      </View>
+    </InputAccessoryView>
+  );
+}
+
 /** 카드 안 단추 높이(카드 밖 주 단추는 size.button). */
 export const CARD_BUTTON = size.buttonSm;
 
@@ -237,6 +260,8 @@ const st = StyleSheet.create({
   row: { flexDirection: 'row', gap: space.s2 },
   cell: { flex: 1, minWidth: 0 },
   stack: { gap: space.s2 },
+  doneBar: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: space.s4, minHeight: 44, alignItems: 'center' },
+  doneBtn: { paddingHorizontal: space.s2, minHeight: 44, justifyContent: 'center' },
   choice: { minHeight: size.row, borderRadius: radius.md, paddingHorizontal: space.s4, flexDirection: 'row', alignItems: 'center', gap: space.s2 },
   choiceBody: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.s3 },
 });
