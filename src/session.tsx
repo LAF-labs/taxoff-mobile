@@ -44,7 +44,7 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
   const busy = useRef(false);
   const alive = useRef(true);
   const netGen = useRef(0);
-  const again = useRef(false);
+  const retryAfterSync = useRef<number | null>(null);
   const fails = useRef(0);
   const retry = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncRef = useRef<() => Promise<void>>(async () => {});
@@ -58,6 +58,7 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
   useEffect(
     () => () => {
       alive.current = false;
+      closeLive();
       if (retry.current) clearTimeout(retry.current);
     },
     [],
@@ -82,30 +83,35 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
     }
     if (busy.current) {
       // 도는 중에 새로 맡긴 것이 생기면 끝난 뒤 한 번 더 돈다(버리지 않는다).
-      again.current = true;
+      retryAfterSync.current ??= NET_SETTLE_MS;
       return;
     }
     busy.current = true;
-    again.current = false;
+    retryAfterSync.current = null;
     setSyncing(true);
     setPc(statusWhileSyncing);
     const gen = netGen.current;
-    let ok: boolean;
+    const current = () => alive.current && netGen.current === gen;
+    let ok = false;
     try {
       const r = await inflight(() =>
-        syncWithPc({ keys, data: () => dataRef.current, update, outbox, px, onLive: () => alive.current && setPc('online'), alive: () => alive.current && netGen.current === gen }),
+        syncWithPc({ keys, data: () => dataRef.current, update, outbox, px, onLive: () => current() && setPc('online'), alive: current }),
       );
-      setPc(r.status);
-      ok = !failed(r.status);
+      if (current()) {
+        setPc(r.status);
+        ok = !failed(r.status);
+      }
     } finally {
       busy.current = false;
       setSyncing(false);
       await refreshPending();
     }
-    if (!alive.current) return;
-    if (again.current) {
+    if (!alive.current || AppState.currentState !== 'active') return;
+    if (retryAfterSync.current !== null) {
       fails.current = 0;
-      later(NET_SETTLE_MS);
+      later(retryAfterSync.current);
+    } else if (!current()) {
+      return;
     } else if (ok) {
       fails.current = 0;
     } else {
@@ -133,8 +139,14 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
       if (AppState.currentState === 'active') void sync();
     }, RECONNECT_MS);
     const sub = AppState.addEventListener('change', (st) => {
-      if (st === 'active') void sync();
-      else if (st === 'background') closeLive();
+      if (st === 'active') {
+        if (busy.current) retryAfterSync.current ??= 0;
+        else void sync();
+      } else if (st === 'background') {
+        netGen.current += 1;
+        closeLive();
+        setPc((prev) => (prev === 'online' ? 'connecting' : prev));
+      }
     });
     let net: NetShape | null = null;
     const unNet = NetInfo.addEventListener((st) => {
@@ -144,7 +156,7 @@ export function SessionProvider({ keys, initial, children }: { keys: DeviceKeys;
       if (!changed) return;
       netGen.current += 1;
       fails.current = 0;
-      if (busy.current) again.current = true;
+      if (busy.current) retryAfterSync.current = NET_SETTLE_MS;
       else if (AppState.currentState === 'active') later(NET_SETTLE_MS);
     });
     return () => {
