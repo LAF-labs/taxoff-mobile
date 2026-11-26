@@ -4,7 +4,8 @@ import type { Counterparty } from '../issue.ts';
 import { phoneCopyFrom } from '../offline/copy.ts';
 import { customersOf, type BookCmd, type Customer } from '../book.ts';
 
-export type CachedPhoneCopy = PhoneCopyBody & { ownerDesktopDeviceId?: string };
+/** reportCap: 이 사본을 보낸 PC가 report.v1을 알렸는지(리포트가 없을 때 옛 PC인지, PC가 만들지 못했는지 가른다) */
+export type CachedPhoneCopy = PhoneCopyBody & { ownerDesktopDeviceId?: string; reportCap?: boolean };
 
 export const PHONE_CAPS: readonly string[] = [CAP.copy, CAP.issue, CAP.sync, CAP.issued, CAP.book, CAP.amend, CAP.report];
 

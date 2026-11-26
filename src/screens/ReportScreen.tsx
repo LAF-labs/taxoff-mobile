@@ -7,7 +7,7 @@ import { Actions, Card, Kv, KvRow } from '../ui/card';
 import { Button, Empty, Group, Row, Screen, Seg, T, won } from '../ui/kit';
 import { BarChart, Legend, MonthStep, RankRows, Tip, type BarCol, type RankItem, type TipRow } from '../ui/report';
 import { Sheet } from '../ui/sheet';
-import { clampMonth, partnerMonths, reportView, shiftMonth, spanText, topOf, WINDOWS, type ChartCol, type Line, type Months, type Rank, type RankRow } from '../report';
+import { clampMonth, partnerMonths, reportView, reportWait, shiftMonth, spanText, topOf, WINDOWS, type ChartCol, type Line, type Months, type Rank, type RankRow, type ReportWait } from '../report';
 import { canReportPdf, shareReportPdf } from '../reportPdf';
 import type { HomeRoute } from './HomeScreen';
 
@@ -36,6 +36,12 @@ const amountText = (l: Line) => (l.amount === null ? '확인 못 함' : won(l.am
 const unsure = (l: Line) => l.amount === null || l.partial;
 const pctText = (share: number) => `${Math.round(share * 100)}%`;
 const monthNo = (m: string) => Number(m.slice(5, 7));
+const WAIT_TEXT: Record<ReportWait, string> = {
+  off: 'PC가 켜지면 리포트를 받아 와요',
+  loading: '리포트를 받아 오는 중이에요',
+  pc_old: 'PC 앱이 업데이트되면 리포트가 보여요',
+  not_made: 'PC가 리포트를 아직 만들지 못했어요',
+};
 
 export function ReportScreen({ go, onMoney, preview }: { go: (to: HomeRoute) => void; onMoney: () => void; preview?: ReportPreview }) {
   const s = useSession();
@@ -48,9 +54,14 @@ export function ReportScreen({ go, onMoney, preview }: { go: (to: HomeRoute) => 
     );
   }
   if (!copy) {
+    const wait = reportWait(s.pc, s.data.pcCopy);
     return (
       <Screen title="리포트" shell scroll={false} testID="report">
-        <Empty testID="report-none" title="PC가 켜지면 리포트를 받아 와요" action={<Button kind="secondary" label="연결한 PC 보기" onPress={() => go('connection')} />} />
+        <Empty
+          testID={`report-none-${wait}`}
+          title={WAIT_TEXT[wait]}
+          action={wait === 'off' ? <Button kind="secondary" label="연결한 PC 보기" onPress={() => go('connection')} /> : undefined}
+        />
       </Screen>
     );
   }

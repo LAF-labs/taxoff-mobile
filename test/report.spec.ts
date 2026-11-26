@@ -15,7 +15,7 @@ registerHooks({
 });
 
 const { decodeEnvelope, encodeEnvelope, makeEnvelope, reportDocHtml, ulid } = await import('@sax/remote');
-const { clampMonth, monthsFor, partnerMonths, periodText, reportDocOf, reportFileName, reportView, spanText, topOf } = await import('../src/report.ts');
+const { clampMonth, monthsFor, partnerMonths, periodText, reportDocOf, reportFileName, reportView, reportWait, spanText, topOf } = await import('../src/report.ts');
 const { newerCopy } = await import('../src/net/pcCopy.ts');
 type Copy = import('@sax/remote').CopyReport;
 type Month = Copy['months'][number];
@@ -140,6 +140,16 @@ describe('폰 월 리포트 사본 읽기(tex ADR-068 결정 8)', () => {
     const pastHtml = reportDocHtml(past);
     assert.ok(!pastHtml.includes('매출 거래처') && !pastHtml.includes('매출 품목') && !pastHtml.includes('<td>없음</td>'));
     assert.ok(pastHtml.includes('2026년 10월'));
+  });
+
+  it('리포트가 없을 때: PC가 켜져 있으면 "PC가 켜지면"이라고 하지 않고 옛 PC와 못 만든 것을 가른다', () => {
+    const base = { asOf: 1, counterparties: [] };
+    assert.equal(reportWait('offline', { ...base, reportCap: true }), 'off');
+    assert.equal(reportWait('connecting', null), 'off');
+    assert.equal(reportWait('online', null), 'loading');
+    assert.equal(reportWait('online', base), 'loading', '이번 연결의 사본이 오기 전(저장된 옛 사본)');
+    assert.equal(reportWait('online', { ...base, reportCap: false }), 'pc_old');
+    assert.equal(reportWait('online', { ...base, reportCap: true }), 'not_made');
   });
 
   it('새 사본에 리포트가 없으면(PC가 읽지 못했거나 한 프레임에 넣으려 뺌) 같은 PC의 마지막 리포트를 둔다', () => {

@@ -1,4 +1,6 @@
 import type { CopyBankCats, CopyLine, CopyRank, CopyReport, CopyReportMonth, ReportDoc, ReportDocPartners, ReportDocRank } from '@sax/remote';
+import type { PcStatus } from './net/pc';
+import type { CachedPhoneCopy } from './net/pcCopy';
 
 /**
  * 폰 월 리포트(tex ADR-068 결정 8): PC가 계산해 보낸 사본(phone.copy.report)만으로 고른 달과 기간의 값을 만든다.
@@ -214,6 +216,17 @@ export function topOf(r: Rank, n = 5, unit = '곳'): { rows: RankRow[]; rest: Ra
 }
 
 /** 기간 글: "11월", "9월부터 11월", 해가 바뀌어도 달만("12월부터 11월") */
+/**
+ * 리포트가 아직 없을 때 무엇을 말할지. PC가 켜져 있는데 "PC가 켜지면"이라고 하지 않는다(2026-11-26 실기기, PC 0.1.41).
+ * off: PC가 꺼졌거나 연결 중이 아님. loading: 켜졌고 이번 연결의 사본을 기다림. pc_old: 사본을 보낸 PC가 리포트를 모름. not_made: PC가 리포트를 만들지 못함(PC 로그 main.phone_copy_report).
+ */
+export type ReportWait = 'off' | 'loading' | 'pc_old' | 'not_made';
+export function reportWait(pc: PcStatus, copy: CachedPhoneCopy | null | undefined): ReportWait {
+  if (pc !== 'online') return 'off';
+  if (!copy || copy.reportCap === undefined) return 'loading';
+  return copy.reportCap ? 'not_made' : 'pc_old';
+}
+
 export const spanText = (month: string, months: Months) => (months === 1 ? `${monthNo(month)}월` : `${monthNo(shiftMonth(month, 1 - months))}월부터 ${monthNo(month)}월`);
 
 /** 거래처 시트의 달마다 줄: 사본 마지막 달에서 거꾸로 여섯 달(새 달이 위) */

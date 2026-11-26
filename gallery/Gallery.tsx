@@ -835,7 +835,9 @@ const SCREENS: Record<
   'report-all': () => rep({ all: 'partners' }),
   'report-past': () => rep({ month: '2026-10' }),
   'report-menu': () => ({ session: fake(copyData({ ...COPY, report: SAMPLE_REPORT }), 'online'), node: <Main start="report" drawer /> }),
-  'report-none': () => ({ session: fake(copyData(COPY), 'online'), node: <Main start="report" /> }),
+  'report-none': () => ({ session: fake(copyData(COPY), 'offline'), node: <Main start="report" /> }),
+  'report-pc-old': () => ({ session: fake(copyData({ ...COPY, reportCap: false } as PhoneCopyBody), 'online'), node: <Main start="report" /> }),
+  'report-not-made': () => ({ session: fake(copyData({ ...COPY, reportCap: true } as PhoneCopyBody), 'online'), node: <Main start="report" /> }),
 };
 function rep(report: ReportPreview, pc: PcStatus = 'online') {
   return { session: fake({ ...copyData({ ...COPY, report: SAMPLE_REPORT }), ...(pc === 'offline' ? { lastSeenPc: now - 15 * H } : {}) }, pc), node: <Main start="report" report={report} /> };

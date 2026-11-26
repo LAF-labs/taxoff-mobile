@@ -242,7 +242,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
     const onCopy = (c: PhoneCopyBody) =>
       d.update((x) => {
         if (x.pair?.pairId !== pair.pairId) return x;
-        const pcCopy = newerCopy(x.pcCopy, { ...c, ownerDesktopDeviceId: pair.desktopDeviceId });
+        const pcCopy = newerCopy(x.pcCopy, { ...c, ownerDesktopDeviceId: pair.desktopDeviceId, reportCap: s.peerHello.capabilities.includes(CAP.report) });
         return { ...x, pcCopy, book: trimBook(x.book ?? [], pcCopy) };
       });
     if (copy) await onCopy(copy);
