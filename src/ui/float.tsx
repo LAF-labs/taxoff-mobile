@@ -102,25 +102,45 @@ export function TopFade() {
   );
 }
 
+/**
+ * 제목 자리. 오른쪽 PC 알약이 넓어도 제목을 덮지 않게 양쪽 단추 폭을 재서 정한다(SE에서 "PC 꺼짐 15시간 전"이 "리포트"를 덮던 것).
+ * 화면 가운데에 놓을 자리가 있으면 가운데, 없으면 두 단추 사이 가운데(애플 내비게이션 막대와 같은 방식). 그래도 길면 한 줄로 줄인다.
+ */
+export function titleBox(row: number, right: number, title: number): { left: number; right: number } {
+  const left = FLOAT_H + space.s4;
+  const side = Math.max(FLOAT_H, right) + space.s4;
+  if (!row || !title || (row - title) / 2 >= side) return { left: side, right: side };
+  return { left, right: right + space.s4 };
+}
+
 /** 맨 위 화면의 위 줄: 왼쪽 더보기, 가운데 제목, 오른쪽 PC 상태. 본문은 그 밑으로 지나간다. */
 export function ShellTop({ title }: { title?: ReactNode }) {
   const sh = useShell();
   const p = usePalette();
   const inset = useSafeAreaInsets();
+  const [rowW, setRowW] = useState(0);
+  const [rightW, setRightW] = useState(0);
+  const [titleW, setTitleW] = useState(0);
   if (!sh) return null;
   return (
     <>
       <TopFade />
-      <View pointerEvents="box-none" style={[st.top, { top: inset.top + space.s1 }]}>
+      <View pointerEvents="box-none" style={[st.top, { top: inset.top + space.s1 }]} onLayout={(e) => setRowW(e.nativeEvent.layout.width)}>
         {title !== undefined && (
-          <View pointerEvents="none" style={st.title}>
-            {title}
-          </View>
+          <>
+            {/* 제목 본래 폭을 재는 보이지 않는 사본(줄인 뒤 폭으로 다시 재면 자리가 오락가락한다) */}
+            <View pointerEvents="none" style={[st.title, st.measure]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <View onLayout={(e) => setTitleW(e.nativeEvent.layout.width)}>{title}</View>
+            </View>
+            <View pointerEvents="none" style={[st.title, titleBox(rowW, rightW, titleW)]}>
+              {title}
+            </View>
+          </>
         )}
         <FloatButton testID="menu" label="더보기 메뉴" badge={sh.badge} onPress={sh.onMenu}>
           <MenuGlyph color={p.ink} />
         </FloatButton>
-        {sh.right}
+        <View onLayout={(e) => setRightW(e.nativeEvent.layout.width)}>{sh.right}</View>
       </View>
     </>
   );
@@ -169,6 +189,7 @@ export function useKeyboardShown(): boolean {
 const st = StyleSheet.create({
   top: { position: 'absolute', left: space.s4, right: space.s4, height: FLOAT_H, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { position: 'absolute', left: FLOAT_H + space.s4, right: FLOAT_H + space.s4, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
+  measure: { left: 0, right: 0, opacity: 0 },
   shadow: { borderRadius: radius.full, shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   pressed: { opacity: 0.7 },
   face: { height: FLOAT_H, borderRadius: radius.full, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
