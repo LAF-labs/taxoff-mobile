@@ -13,7 +13,7 @@ import type { HomeRoute } from './HomeScreen';
 
 /**
  * 월 리포트(tex ADR-068, 기준판 Phone-Report 2026-11-25 대표 승인). PC가 보낸 사본만으로 그린다.
- * PC가 꺼져 있으면 마지막 사본을 그대로 보이고, 위 PC 알약이 꺼짐을 말한다(따로 안내 글을 두지 않는다).
+ * PC가 꺼져 있으면 마지막 사본을 그대로 보인다(따로 안내 글을 두지 않는다).
  */
 
 type Side = 'sale' | 'purchase';

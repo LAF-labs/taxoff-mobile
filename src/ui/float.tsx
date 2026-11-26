@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radius, space, usePalette } from '../theme';
 
 /**
- * 폰 틀: 아래 탭바 없이 왼쪽 위 더보기, 오른쪽 위 PC 상태, 아래에 떠 있는 입력창.
+ * 폰 틀: 아래 탭바 없이 왼쪽 위 더보기, 오른쪽 위 PC 상태(대화 화면만), 아래에 떠 있는 입력창.
  * ChatGPT iOS 캡처(393pt)를 재서 맞춘 값을 따른다(2026-11-24 대표 승인, 기준판 폰 화면).
  * 위 단추: 44, 화면 끝에서 16, 상태 막대 바로 아래. 입력창: 양옆 38, 높이 46, 홈 인디케이터 위 4. 맨 아래로 단추: 34, 입력창 위 14.
  */
@@ -18,7 +18,7 @@ export const CAPSULE_SIDE = 38;
 export const DOWN_SIZE = 34;
 export const DOWN_GAP = 14;
 
-/** 더보기 메뉴와 오른쪽 위 PC 상태. 맨 위 화면(대화, 돈, 발급 기록, 알림함, 설정)이 같이 쓴다. */
+/** 더보기 메뉴와 오른쪽 위 PC 상태. 맨 위 화면이 같이 쓰고, PC 상태는 대화 화면만 보인다. */
 export interface ShellValue {
   onMenu: () => void;
   badge: boolean;
@@ -113,8 +113,11 @@ export function titleBox(row: number, right: number, title: number): { left: num
   return { left, right: right + space.s4 };
 }
 
-/** 맨 위 화면의 위 줄: 왼쪽 더보기, 가운데 제목, 오른쪽 PC 상태. 본문은 그 밑으로 지나간다. */
-export function ShellTop({ title }: { title?: ReactNode }) {
+/**
+ * 맨 위 화면의 위 줄: 왼쪽 더보기, 가운데 제목. 오른쪽 PC 상태는 대화 화면에만 둔다(pc, 2026-11-26 대표: "PC 켜짐은 채팅화면에만").
+ * 본문은 그 밑으로 지나간다.
+ */
+export function ShellTop({ title, pc = false }: { title?: ReactNode; pc?: boolean }) {
   const sh = useShell();
   const p = usePalette();
   const inset = useSafeAreaInsets();
@@ -132,7 +135,7 @@ export function ShellTop({ title }: { title?: ReactNode }) {
             <View pointerEvents="none" style={[st.title, st.measure]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
               <View onLayout={(e) => setTitleW(e.nativeEvent.layout.width)}>{title}</View>
             </View>
-            <View pointerEvents="none" style={[st.title, titleBox(rowW, rightW, titleW)]}>
+            <View pointerEvents="none" style={[st.title, titleBox(rowW, pc ? rightW : 0, titleW)]}>
               {title}
             </View>
           </>
@@ -140,7 +143,7 @@ export function ShellTop({ title }: { title?: ReactNode }) {
         <FloatButton testID="menu" label="더보기 메뉴" badge={sh.badge} onPress={sh.onMenu}>
           <MenuGlyph color={p.ink} />
         </FloatButton>
-        <View onLayout={(e) => setRightW(e.nativeEvent.layout.width)}>{sh.right}</View>
+        {pc && <View onLayout={(e) => setRightW(e.nativeEvent.layout.width)}>{sh.right}</View>}
       </View>
     </>
   );

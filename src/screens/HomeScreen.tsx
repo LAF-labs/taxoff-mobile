@@ -311,7 +311,7 @@ export function HomeScreen({ go, chat, draft = '', phone, menu: menuOpen = false
             }}
           />
         )}
-        <ShellTop />
+        <ShellTop pc />
         {endBtn && <NewReply fresh={endBtn === 'new'} onPress={toEnd} lift={barH - space.s4 + DOWN_GAP} />}
 
         {paired && (
@@ -501,10 +501,11 @@ function HoldRow({ icon, label, onPress, testID }: { icon: React.ReactNode; labe
 }
 
 const FADE = Array.from({ length: 10 }, (_, i) => Number(((1 - i / 10) ** 1.6).toFixed(2)));
+/** 입력창 줄 뒤 딤. 줄 높이의 아래 절반만 덮는다(2026-11-26 대표: 높이를 절반으로). */
 function BottomFade() {
   const p = usePalette();
   return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+    <View pointerEvents="none" style={st.bottomFade}>
       {[...FADE].reverse().map((o, i) => (
         <View key={i} style={{ height: 2, backgroundColor: p.canvas, opacity: o * 0.94 }} />
       ))}
@@ -1010,6 +1011,7 @@ function Chip({ label, onPress, testID }: { label: string; onPress: () => void; 
 }
 
 const st = StyleSheet.create({
+  bottomFade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '50%' },
   fill: { flex: 1 },
   pcDot: { width: 8, height: 8, borderRadius: radius.full },
   relink: { marginHorizontal: space.s5, marginBottom: space.s3 },
