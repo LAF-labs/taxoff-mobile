@@ -130,7 +130,7 @@ function salesOf(ms: CopyReportMonth[]): ReportSales {
   const cr = line(ms.map((m) => m.sales.cr));
   const card = line(ms.map((m) => m.sales.card));
   const cash = optional(ms.map((m) => m.sales.cash));
-  return { inv, cr, card, cash, total: totalOf([inv, cr, card, cash], [cr, card]) };
+  return { inv, cr, card, cash, total: totalOf([inv, cr, card, cash], [inv, cr, card]) };
 }
 function purchaseOf(ms: CopyReportMonth[]): ReportPurchase {
   const inv = line(ms.map((m) => m.purchase.inv));
@@ -138,7 +138,7 @@ function purchaseOf(ms: CopyReportMonth[]): ReportPurchase {
   const cr = line(ms.map((m) => m.purchase.cr));
   const rcpt = line(ms.map((m) => m.purchase.rcpt));
   const pay = optional(ms.map((m) => m.purchase.pay));
-  return { inv, card, cr, rcpt, pay, total: totalOf([inv, card, cr, rcpt, pay], [card, cr]) };
+  return { inv, card, cr, rcpt, pay, total: totalOf([inv, card, cr, rcpt, pay], [inv, card, cr]) };
 }
 function bankOf(ms: CopyReportMonth[]): ReportBank | null {
   if (!ms.some((m) => m.bank)) return null;
