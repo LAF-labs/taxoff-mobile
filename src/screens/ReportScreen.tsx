@@ -5,7 +5,7 @@ import { useSession } from '../session';
 import { space } from '../theme';
 import { Actions, Card, Kv, KvRow } from '../ui/card';
 import { Button, Empty, Group, Row, Screen, Seg, T, won } from '../ui/kit';
-import { BarChart, Legend, MonthStep, RankRows, Tip, type BarCol, type RankItem, type TipRow } from '../ui/report';
+import { BarChart, Legend, MonthStep, RankRows, Tip, type BarCol, type RankItem } from '../ui/report';
 import { Sheet } from '../ui/sheet';
 import { clampMonth, partnerMonths, reportView, reportWait, shiftMonth, spanText, topOf, WINDOWS, type ChartCol, type Line, type Months, type Rank, type RankRow, type ReportWait } from '../report';
 import { canReportPdf, shareReportPdf } from '../reportPdf';
@@ -153,10 +153,11 @@ function Report({ copy, onMoney, preview }: { copy: CopyReport; onMoney: () => v
           cols={v.chart.map((c) => barOf(c))}
           label={`${v.chart[0]!.label}부터 ${v.chart.at(-1)!.label}까지 달마다 매출과 매입`}
           onPick={(m) => setPicked(m)}
+          step={{ prev: v.first ? null : () => setPicked(shiftMonth(month, -1)), next: v.latest ? null : () => setPicked(shiftMonth(month, 1)) }}
           holding={preview?.hold ?? null}
           tip={(m) => {
             const c = v.chart.find((x) => x.month === m)!;
-            return <Tip title={`${monthNo(c.month)}월`} rows={tipRows(c)} testID="report-tip" />;
+            return <Tip rows={[{ k: '매출', v: amountText(c.sales.total), warn: unsure(c.sales.total) }, { k: '매입', v: amountText(c.purchase.total), warn: unsure(c.purchase.total) }]} testID="report-tip" />;
           }}
         />
       </Card>
@@ -230,34 +231,6 @@ function barOf(c: ChartCol): BarCol {
     out: !c.inWindow,
     a11y: `${monthNo(c.month)}월 매출 ${amountText(c.sales.total)}, 매입 ${amountText(c.purchase.total)}${c.on ? '' : ', 이 달 보기'}`,
   };
-}
-
-/** 말풍선 줄: PC 리포트 막대 말풍선과 같은 줄(shell-report.js tipRows) */
-function tipRows(c: ChartCol): TipRow[] {
-  const L = (k: string, l: Line): TipRow => ({ k, v: amountText(l), warn: unsure(l) });
-  const s = c.sales;
-  const p = c.purchase;
-  return [
-    { k: '매출', v: amountText(s.total), head: true, warn: unsure(s.total) },
-    L('세금계산서', s.inv),
-    L('현금영수증', s.cr),
-    L('카드 매출', s.card),
-    ...(s.cash.amount !== null ? [L('현금 매출', s.cash)] : []),
-    { k: '매입', v: amountText(p.total), head: true, warn: unsure(p.total) },
-    L('세금계산서', p.inv),
-    L('사업용 카드', p.card),
-    L('현금영수증', p.cr),
-    ...(p.rcpt.amount ? [L('영수증', p.rcpt)] : []),
-    ...(p.pay.amount !== null ? [L('급여', p.pay)] : []),
-    ...(c.bank
-      ? [
-          { k: '통장', head: true },
-          { k: '들어온 돈', v: won(c.bank.in) },
-          { k: '나간 돈', v: won(c.bank.out) },
-          { k: '남은 돈', v: won(c.bank.net) },
-        ]
-      : []),
-  ];
 }
 
 const itemOf = (x: RankRow, i: number, kind: 'partners' | 'items', onRow?: (row: RankRow) => void): RankItem =>

@@ -37,7 +37,7 @@
 | `Seg` | `src/ui/kit.tsx` | `.ph .sx-seg` | 알약, 칸 32, 15. 내용 폭만큼 왼쪽. `fill`이면 줄 폭. `tint`면 카드 안에서도 틀 tint, 고른 칸 바탕색(리포트 카드) |
 | `Empty` | `src/ui/kit.tsx` | `ph-empty`, `ph-blank` | 단추가 있으면 굵은 한 줄과 꽉 찬 단추, 없으면 아이콘과 보통 한 줄 |
 | `MonthStep` | `src/ui/report.tsx` | `rp-month-row` | 리포트 맨 위 ‹ 11월 ›(단추 40, 달 20/700 `type.month`), 오른쪽 PDF 40 단추(`Glyph share`) |
-| `BarChart`, `Legend`, `Tip` | `src/ui/report.tsx` | `rp-chart`, `rp-legend`, `sx-tip` | 막대 칸 120, 막대 12(12칸이면 7), 기간 밖 0.35. 누르면 그 달, 누르고 있으면 말풍선(overlay 면, 모서리 `radius.tip` 14, 15/22), 떼면 닫힘 |
+| `BarChart`, `Legend`, `Tip` | `src/ui/report.tsx` | `rp-chart`, `rp-legend`, `sx-tip` | 막대 칸 120, 막대 12(12칸이면 7), 기간 밖 0.35. 누르면 그 달, 누르고 있으면 누른 막대 바로 위 가운데에 작은 말풍선(매출, 매입 합계만, 13/18, 모서리 8), 떼면 닫힘. 좌우로 밀면 앞 달, 다음 달(2026-11-26 대표) |
 | `RankRows` | `src/ui/report.tsx` | `rp-rank` | 이름, 금액, 비율(44) 또는 이름, 건수(36), 금액. 아래 2 높이 비율 막대. 줄 사이 12 |
 
 지운 옛 부품: kit `ConfirmSheet`(가운데 아이콘), kit `SearchField`(form과 둘), card.tsx의 두 번째 `Sheet`, `actionFlex`, `PcGlyph`, `FlapText`. 승인 시트, 간편인증 시트, 발급 시트, 다시 연결 시트, 알림 허용 시트, 기록 시트는 모두 `Sheet` 하나로 옮겼다.

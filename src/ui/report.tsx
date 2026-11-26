@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
-import { radius, size, space, usePalette } from '../theme';
+import { useRef, useState, type ReactNode } from 'react';
+import { Animated, PanResponder, Pressable, StyleSheet, View, type PanResponderGestureState } from 'react-native';
+import { radius, size, space, usePalette, useReducedMotion } from '../theme';
 import { Glyph } from './glyph';
 import { Chevron, T, tap } from './kit';
 
@@ -84,32 +84,25 @@ export function Legend({ a, b }: { a: string; b: string }) {
 
 export interface TipRow {
   k: string;
-  v?: string;
-  /** 묶음 머리 줄(굵게) */
-  head?: boolean;
+  v: string;
   warn?: boolean;
 }
 
-/** 말풍선(sx-tip): overlay 면, 모서리 14, 그림자. 제목 한 줄과 라벨 값 줄. */
-export function Tip({ title, rows, testID }: { title: string; rows: TipRow[]; testID?: string }) {
+/** 막대 말풍선(sx-tip): overlay 면, 작은 글씨로 매출, 매입 합계만(2026-11-26 대표: 총금액만 작게). */
+export function Tip({ rows, testID }: { rows: TipRow[]; testID?: string }) {
   const p = usePalette();
   return (
     <View style={[st.tip, { backgroundColor: p.overlay, shadowColor: p.ink }]} testID={testID} accessibilityRole="summary" pointerEvents="none">
-      <T v="subFigure">{title}</T>
-      <View style={st.tipRows}>
-        {rows.map((r, i) => (
-          <View key={i} style={[st.tipRow, r.head && i > 0 && { marginTop: space.s2 }]}>
-            <T v={r.head ? 'subFigure' : 'sub'} c={r.head ? 'ink' : 'ink3'}>
-              {r.k}
-            </T>
-            {r.v !== undefined && (
-              <T v={r.head ? 'subFigure' : 'subValue'} c={r.warn ? 'attention' : 'ink'}>
-                {r.v}
-              </T>
-            )}
-          </View>
-        ))}
-      </View>
+      {rows.map((r) => (
+        <View key={r.k} style={st.tipRow}>
+          <T v="meta" c="ink3">
+            {r.k}
+          </T>
+          <T v="meta" c={r.warn ? 'attention' : 'ink'}>
+            {r.v}
+          </T>
+        </View>
+      ))}
     </View>
   );
 }
@@ -128,29 +121,82 @@ export interface BarCol {
 }
 
 const BARS_H = 120;
+/** 말풍선 아래 끝과 막대 위 끝 사이 */
+const TIP_GAP = 6;
+/** 이만큼 밀고 떼면 달이 넘어간다 */
+const SWIPE = 48;
+
+type Box = { x: number; y: number; w: number };
 
 /**
  * 달마다 막대(rp-chart): 6칸이면 막대 12, 12칸이면 7. 누르면 그 달로(onPick), 누르고 있으면 그 달 말풍선(tip), 떼면 닫힌다.
- * 말풍선은 막대 위, 카드 폭에 맞춰 뜬다(기준판 Phone-Report-Press).
+ * 말풍선은 누른 칸의 막대 바로 위 가운데에 뜨고, 막대 영역 밖으로 나가지 않는다.
+ * 좌우로 밀면 앞 달, 다음 달로 넘긴다(step, 2026-11-26 대표: x축에 달이 다 보이지 않으니 밀어서 넘기게).
  */
-export function BarChart({ cols, onPick, tip, label, testID = 'report-chart', holding = null }: {
+export function BarChart({ cols, onPick, tip, label, step, testID = 'report-chart', holding = null }: {
   cols: BarCol[]; onPick?: (key: string) => void; tip: (key: string) => ReactNode; label: string; testID?: string;
+  /** 오른쪽으로 밀면 prev, 왼쪽으로 밀면 next. null이면 그쪽은 끝 */
+  step?: { prev: (() => void) | null; next: (() => void) | null };
   /** 갤러리: 처음부터 누르고 있는 칸 */
   holding?: string | null;
 }) {
   const p = usePalette();
+  const still = useReducedMotion();
   const [held, setHeld] = useState<string | null>(holding);
+  const [width, setWidth] = useState(0);
+  const [boxes, setBoxes] = useState<Record<string, Box>>({});
+  // 누른 칸의 말풍선 크기(금액 길이가 달라 칸마다 잰다)
+  const [tipSize, setTipSize] = useState<{ key: string; w: number; h: number } | null>(null);
   const dense = cols.length > 6;
   const max = Math.max(1, ...cols.flatMap((c) => [c.a ?? 0, c.b ?? 0]));
   const h = (v: number | null) => Math.max(v ? 2 : 0, Math.round(((v && v > 0 ? v : 0) / max) * BARS_H));
+
+  const x = useRef(new Animated.Value(0)).current;
+  const steps = useRef(step);
+  steps.current = step;
+  const horizontal = (g: PanResponderGestureState) => !!steps.current && Math.abs(g.dx) > 10 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5;
+  const back = () => Animated.spring(x, { toValue: 0, stiffness: 420, damping: 34, useNativeDriver: true }).start();
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => horizontal(g),
+      onMoveShouldSetPanResponderCapture: (_, g) => horizontal(g),
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => setHeld(null),
+      onPanResponderMove: (_, g) => {
+        if (still) return;
+        // 끝 쪽으로는 조금만 따라온다
+        const open = g.dx > 0 ? steps.current?.prev : steps.current?.next;
+        x.setValue(open ? g.dx * 0.5 : g.dx * 0.15);
+      },
+      onPanResponderRelease: (_, g) => {
+        const go = g.dx >= SWIPE ? steps.current?.prev : g.dx <= -SWIPE ? steps.current?.next : null;
+        if (go) {
+          tap();
+          go();
+        }
+        back();
+      },
+      onPanResponderTerminate: back,
+    }),
+  ).current;
+
+  const box = held ? boxes[held] : undefined;
+  const col = held ? cols.find((c) => c.key === held) : undefined;
+  const tipAt =
+    box && col && tipSize?.key === held && width
+      ? {
+          // 오른쪽 끝에 닿으면 오른쪽에 붙인다(왼쪽 여백으로 밀면 남은 폭에서 줄이 바뀐다)
+          left: box.x + box.w / 2 + tipSize.w / 2 >= width ? null : Math.max(0, box.x + box.w / 2 - tipSize.w / 2),
+          top: box.y + BARS_H - Math.max(h(col.a), h(col.b)) - TIP_GAP - tipSize.h,
+        }
+      : null;
+
   return (
-    <View testID={testID} accessibilityLabel={label}>
-      {held && (
-        <View style={st.tipAt} pointerEvents="none">
-          {tip(held)}
-        </View>
-      )}
-      <View style={[st.chart, dense && { gap: space.s1 }]}>
+    <View testID={testID} accessibilityLabel={label} {...pan.panHandlers}>
+      <Animated.View
+        style={[st.chart, dense && { gap: space.s1 }, { transform: [{ translateX: x }] }]}
+        onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+      >
         {cols.map((c) => (
           <Pressable
             key={c.key}
@@ -159,6 +205,10 @@ export function BarChart({ cols, onPick, tip, label, testID = 'report-chart', ho
             accessibilityLabel={c.a11y}
             accessibilityState={{ selected: !!c.on }}
             delayLongPress={250}
+            onLayout={(e) => {
+              const { x: bx, y, width: w } = e.nativeEvent.layout;
+              setBoxes((o) => (o[c.key]?.x === bx && o[c.key]?.y === y && o[c.key]?.w === w ? o : { ...o, [c.key]: { x: bx, y, w } }));
+            }}
             onLongPress={() => {
               tap();
               setHeld(c.key);
@@ -181,7 +231,21 @@ export function BarChart({ cols, onPick, tip, label, testID = 'report-chart', ho
             </T>
           </Pressable>
         ))}
-      </View>
+      </Animated.View>
+      {held && (
+        // 줄은 막대 영역 폭 전부, 말풍선은 그 안에서 왼쪽 여백으로 옮긴다(오른쪽 끝 칸에서도 줄바꿈 없이 제 폭)
+        <View style={[st.tipAt, tipAt ? { top: tipAt.top } : st.tipMeasure]} pointerEvents="none">
+          <View
+            style={[st.tipBox, tipAt && (tipAt.left === null ? st.tipEnd : { marginLeft: tipAt.left })]}
+            onLayout={(e) => {
+              const { width: w, height: th } = e.nativeEvent.layout;
+              if (tipSize?.key !== held || tipSize.w !== w || tipSize.h !== th) setTipSize({ key: held, w, h: th });
+            }}
+          >
+            {tip(held)}
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -261,11 +325,13 @@ const st = StyleSheet.create({
   legend: { flexDirection: 'row', gap: space.s4 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot: { width: 8, height: 8, borderRadius: radius.xs - 1 },
-  // 말풍선 아래 끝이 카드 제목 줄 바로 밑에 온다(기준판: 카드 위에서 60, 막대 위로 24)
-  tipAt: { position: 'absolute', left: 0, right: 0, bottom: '100%', paddingBottom: space.s4 + space.s2, zIndex: 5 },
-  tip: { gap: space.s2, paddingVertical: space.s3, paddingHorizontal: 14, borderRadius: radius.tip, shadowOpacity: 0.16, shadowRadius: 24, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
-  tipRows: { gap: 2 },
-  tipRow: { flexDirection: 'row', justifyContent: 'space-between', gap: space.s4 },
+  tipAt: { position: 'absolute', left: 0, right: 0, zIndex: 5 },
+  // 크기를 재는 첫 그림: 보이지 않게 맨 위에
+  tipMeasure: { top: 0, opacity: 0 },
+  tipBox: { alignSelf: 'flex-start' },
+  tipEnd: { alignSelf: 'flex-end' },
+  tip: { gap: 2, paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.sm, shadowOpacity: 0.16, shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
+  tipRow: { flexDirection: 'row', justifyContent: 'space-between', gap: space.s3 },
   chart: { flexDirection: 'row', alignItems: 'flex-end', gap: space.s2 },
   col: { flex: 1, minWidth: 0, alignItems: 'center', gap: space.s2 },
   colOn: { fontWeight: '600' },
