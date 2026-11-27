@@ -323,9 +323,9 @@ export interface CopyReportMonth {
 }
 export interface CopyRank {
   /** i = 거래처 줄만, report.pm의 몇째 칸인가(v1.17) */
-  rows: { name: string | null; n: number; a: number; pct: number; settled?: number; left?: number; i?: number }[];
+  rows: { name: string | null; n: number; a: number; pct: number; settled?: number; left?: number; late?: number; i?: number }[];
   /** k = 묶인 거래처나 품목 수 */
-  rest: { k: number; n: number; a: number; pct: number } | null;
+  rest: { k: number; n: number; a: number; pct: number; left?: number } | null;
   total: number;
 }
 export interface CopyReport {
@@ -336,7 +336,20 @@ export interface CopyReport {
   /** month에서 끝나는 12달, 오래된 달이 앞 */
   months: CopyReportMonth[];
   /** month에서 끝나는 1, 3, 6, 12개월의 순위. ps/pp 거래처 매출/매입, is/ip 품목 매출/매입 */
-  windows: { months: 1 | 3 | 6 | 12; ps: CopyRank; pp: CopyRank; is: CopyRank; ip: CopyRank; split?: { inN: number; inA: number; outN: number; outA: number } }[];
+  windows: {
+    months: 1 | 3 | 6 | 12;
+    ps: CopyRank;
+    pp: CopyRank;
+    is: CopyRank;
+    ip: CopyRank;
+    split?: { inN: number; inA: number; outN: number; outA: number };
+    /** v1.18 바로 앞 같은 길이 기간의 매출(s), 매입(p) 합계 */
+    prev?: { s: CopyLine; p: CopyLine };
+    /** v1.18 이 기간 매출 세금계산서의 받은 돈, 남은 돈, 기한 지난 건수와 금액 */
+    recv?: { got: number; left: number; lateN: number; lateA: number };
+  }[];
+  /** v1.18 month가 든 부가세 과세기간(h 1기, 2기)의 from부터 to까지. s 매출 부가세, sn 건수, p 매입 세금계산서 부가세(null = 모름), dl 신고 기한 */
+  vat?: { h: 1 | 2; from: string; to: string; s: number | null; sn: number; p: number | null; dl: string };
   /** d = 잔액을 읽은 날(v1.17) */
   balances: { bank: string; last4: string; a: number | null; d?: string }[];
   /** v1.17 사업장 이름과 번호(폰 PDF 머리) */
