@@ -111,7 +111,7 @@ export function Banner({ ev, onPress, onClose }: { ev: RunEvent; onPress: () => 
         accessibilityLabel={`${ev.title}. ${ev.line}`}
         accessibilityHint="누르면 진행 화면을 열어요"
         onPress={onPress}
-        style={({ pressed }) => [st.card, { backgroundColor: pressed ? p.sunken : p.tint, borderColor: attention ? p.attention : p.lineStrong }]}
+        style={({ pressed }) => [st.card, { backgroundColor: pressed ? p.sunken : p.overlay, shadowColor: p.ink }]}
       >
         <View style={{ flex: 1, gap: 2 }}>
           <T v="subStrong" c={attention ? 'attention' : 'ink'}>
@@ -133,6 +133,6 @@ export function Banner({ ev, onPress, onClose }: { ev: RunEvent; onPress: () => 
 
 const st = StyleSheet.create({
   wrap: { position: 'absolute', left: space.s4, right: space.s4 },
-  card: { flexDirection: 'row', alignItems: 'center', gap: space.s3, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, paddingVertical: space.s3, paddingLeft: space.s4, paddingRight: space.s3 },
+  card: { flexDirection: 'row', alignItems: 'center', gap: space.s3, borderRadius: radius.lg, paddingVertical: space.s3, paddingLeft: space.s4, paddingRight: space.s3, shadowOpacity: 0.1, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
   close: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center' },
 });

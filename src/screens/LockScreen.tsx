@@ -127,7 +127,7 @@ function FirstRun({ bio, noBio, err, busy, onStart, onBack }: { bio: BioInfo | n
       art={
         <View style={st.keyArt} testID="lock-first">
           <Image source={dark ? MARK.dark : MARK.light} style={st.mark} accessibilityIgnoresInvertColors accessible={false} />
-          <View style={[st.key, { backgroundColor: p.canvas, borderColor: p.line }]} testID="lock-key-note">
+          <View style={[st.key, { backgroundColor: p.tint }]} testID="lock-key-note">
             <View style={st.keyRow}>
               <Check color={p.ink2} />
               <T v="sub" c="ink2" style={{ flex: 1 }}>
@@ -154,6 +154,6 @@ const st = StyleSheet.create({
   btn: { alignSelf: 'stretch' },
   keyArt: { alignItems: 'center', gap: space.s5 },
   mark: { width: MARK_SIZE, height: MARK_SIZE },
-  key: { alignSelf: 'stretch', borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: space.s4, gap: space.s2 },
+  key: { alignSelf: 'stretch', borderRadius: radius.lg, padding: space.s4, gap: space.s2 },
   keyRow: { flexDirection: 'row', alignItems: 'center', gap: space.s3 },
 });
