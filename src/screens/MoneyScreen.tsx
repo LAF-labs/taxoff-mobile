@@ -45,7 +45,7 @@ export function MoneyScreen({ go }: { go: (to: HomeRoute) => void }) {
   }
   const cm = s.data.pcCopy?.money;
   if (!m.snap && cm) return <CopyMoney money={cm} />;
-  if (!m.snap && s.pc === 'online') {
+  if (!m.snap && s.pc === 'online' && !s.data.pcCopy) {
     // PC가 켜져 있는데 'PC가 켜지면'이라고 하지 않는다(11-27 점검). 사본은 연결될 때마다 온다.
     return (
       <Screen title="돈" shell scroll={false} testID="money">
