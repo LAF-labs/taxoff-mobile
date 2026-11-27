@@ -27,7 +27,7 @@ interface Rec {
   jobId: string | null;
 }
 
-export function RecordsScreen({ go, onHome, phone }: { go: (to: HomeRoute) => void; onHome?: () => void; phone?: OfflineChatView }) {
+export function RecordsScreen({ go, onHome, onDocs, phone }: { go: (to: HomeRoute) => void; onHome?: () => void; onDocs?: () => void; phone?: OfflineChatView }) {
   const p = usePalette();
   const s = useSession();
   const q = useQueue();
@@ -99,9 +99,8 @@ export function RecordsScreen({ go, onHome, phone }: { go: (to: HomeRoute) => vo
                   <Button
                     label="PDF 보기"
                     onPress={() => {
-                      q.setFocus(open.jobId!);
                       setOpen(null);
-                      go('doc');
+                      onDocs?.();
                     }}
                     testID="record-pdf"
                   />

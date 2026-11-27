@@ -1,4 +1,3 @@
-import { Asset } from 'expo-asset';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { File } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
@@ -8,7 +7,7 @@ import { Image, Modal, Pressable, ScrollView, StyleSheet, View, type LayoutRecta
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { makeReceiptOffer, type PaperInvoice as WireInvoice, type ReceiptCandidates } from '@sax/remote';
 import { toWire } from '../capture/invoice-wire';
-import { DEV_LOCAL, PHOTO_MAX_EDGE, PHOTO_QUALITY } from '../config';
+import { PHOTO_MAX_EDGE, PHOTO_QUALITY } from '../config';
 import { GUIDE_RATIO, fitEdge, guideCrop, guideRect } from '../capture/crop';
 import { blocking, checkInvoice, issueText, looksLikeInvoice, parsePaperInvoice, toRows, toV1Candidates } from '../capture/invoice';
 import { FIELD_KEY, editInvoiceForm, emptyInvoiceForm, formFrom, invoiceOf, type InvoiceForm } from '../capture/invoice-form';
@@ -20,7 +19,6 @@ import { deleteQuietly, sweepCaptureTemps } from '../storage/files';
 import { radius, space, usePalette } from '../theme';
 import { Field, masked } from '../ui/field';
 import { Button, Group, Notice, Row, Screen, Seg, StatusDot, T, success, tap, warn, won } from '../ui/kit';
-import sampleReceipt from '../../assets/dev/sample-receipt.jpg';
 
 interface Shot {
   uri: string;
@@ -161,15 +159,6 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
     } catch {
       setErr('사진을 찍지 못했어요.');
     }
-  }
-
-  async function devSample() {
-    const a = Asset.fromModule(sampleReceipt);
-    await a.downloadAsync();
-    const src = new File(a.localUri!);
-    const copy = new File(src.parentDirectory, `dev-shot-${Date.now()}.jpg`);
-    src.copySync(copy);
-    await process({ uri: copy.uri, width: a.width ?? 1200, height: a.height ?? 1800 }, false);
   }
 
   function receiptCandidates(): ReceiptCandidates | string {
@@ -387,7 +376,7 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
         <View style={st.camClose} />
       </View>
       <View style={{ flex: 1 }} onLayout={(e) => setView(e.nativeEvent.layout)}>
-        {perm?.granted && !DEV_LOCAL ? (
+        {perm?.granted ? (
           <CameraView ref={cam} style={StyleSheet.absoluteFill} facing="back" animateShutter />
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: '#1C1D1F' }]} />
@@ -404,7 +393,7 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
             <StatusDot busy label="글자를 읽는 중" tone="quiet" />
           </View>
         )}
-        {!perm?.granted && !DEV_LOCAL && (
+        {!perm?.granted && (
           <View style={[StyleSheet.absoluteFill, st.center, { padding: space.s6, gap: space.s4 }]}>
             <View style={{ gap: space.s1 }}>
               <T v="subStrong" c="onCamera" center>
@@ -423,26 +412,22 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
         <View style={{ alignSelf: 'stretch' }}>
           <CamSeg value={mode} onChange={setMode} />
         </View>
-        {DEV_LOCAL ? (
-          <Button testID="dev-sample" kind="secondary" label="개발: 견본 영수증으로 찍기" onPress={() => void devSample()} busy={phase === 'reading'} style={{ alignSelf: 'stretch' }} />
-        ) : (
-          <View style={st.shutterRow}>
-            {}
-            <Pressable testID="capture-album" accessibilityRole="button" accessibilityLabel="앨범에서 고르기" onPress={() => void album()} disabled={phase === 'reading'} style={({ pressed }) => [st.side, pressed && { opacity: 0.6 }]}>
-              <T v="subStrong" c="onCamera">
-                앨범
-              </T>
+        <View style={st.shutterRow}>
+          {}
+          <Pressable testID="capture-album" accessibilityRole="button" accessibilityLabel="앨범에서 고르기" onPress={() => void album()} disabled={phase === 'reading'} style={({ pressed }) => [st.side, pressed && { opacity: 0.6 }]}>
+            <T v="subStrong" c="onCamera">
+              앨범
+            </T>
+          </Pressable>
+          {perm?.granted ? (
+            <Pressable testID="shutter" accessibilityRole="button" accessibilityLabel="찍기" disabled={phase === 'reading'} onPress={() => void take()} style={st.shutter}>
+              {({ pressed }) => <View style={[st.shutterIn, { transform: [{ scale: pressed ? 0.92 : 1 }] }]} />}
             </Pressable>
-            {perm?.granted ? (
-              <Pressable testID="shutter" accessibilityRole="button" accessibilityLabel="찍기" disabled={phase === 'reading'} onPress={() => void take()} style={st.shutter}>
-                {({ pressed }) => <View style={[st.shutterIn, { transform: [{ scale: pressed ? 0.92 : 1 }] }]} />}
-              </Pressable>
-            ) : (
-              <View style={{ width: 76, height: 76 }} />
-            )}
-            <View style={st.side} />
-          </View>
-        )}
+          ) : (
+            <View style={{ width: 76, height: 76 }} />
+          )}
+          <View style={st.side} />
+        </View>
       </View>
     </SafeAreaView>
   );

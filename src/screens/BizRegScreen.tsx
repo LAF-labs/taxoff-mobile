@@ -1,6 +1,4 @@
-import { Asset } from 'expo-asset';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { File } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { useEffect, useRef, useState } from 'react';
 import { Image, Linking, Modal, Pressable, ScrollView, StyleSheet, View, type LayoutRectangle } from 'react-native';
@@ -11,7 +9,7 @@ import { toRows } from '../capture/invoice';
 import { ocrEngine } from '../capture/ocr';
 import { PDF_LINE, pickPhoto } from '../capture/pick';
 import { validBizNo } from '../capture/parser';
-import { DEV_LOCAL, PHOTO_MAX_EDGE, PHOTO_QUALITY } from '../config';
+import { PHOTO_MAX_EDGE, PHOTO_QUALITY } from '../config';
 import { findByBizNo, type Counterparty } from '../issue';
 import { useCustomers } from '../customers';
 import { useQueue } from '../queueStore';
@@ -20,7 +18,6 @@ import { radius, space, usePalette } from '../theme';
 import { glueAddress } from '../ui/address';
 import { Field } from '../ui/field';
 import { Button, Group, Notice, Screen, StatusDot, T, tap } from '../ui/kit';
-import sampleBizReg from '../../assets/dev/sample-bizreg.jpg';
 
 interface Shot {
   uri: string;
@@ -146,15 +143,6 @@ export function BizRegScreen({
     } catch {
       setErr('사진을 찍지 못했어요.');
     }
-  }
-
-  async function devSample() {
-    const a = Asset.fromModule(sampleBizReg);
-    await a.downloadAsync();
-    const src = new File(a.localUri!);
-    const copy = new File(src.parentDirectory, `dev-bizreg-${Date.now()}.jpg`);
-    src.copySync(copy);
-    await process({ uri: copy.uri, width: a.width ?? 1140, height: a.height ?? 1608 }, false);
   }
 
   const retake = () => {
@@ -284,7 +272,7 @@ export function BizRegScreen({
         사업자등록증 전체가 보이게 찍어 주세요
       </T>
       <View style={{ flex: 1 }} onLayout={(e) => setView(e.nativeEvent.layout)}>
-        {perm?.granted && !DEV_LOCAL ? (
+        {perm?.granted ? (
           <CameraView ref={cam} style={StyleSheet.absoluteFill} facing="back" animateShutter />
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: '#1C1D1F' }]} />
@@ -301,7 +289,7 @@ export function BizRegScreen({
             <StatusDot busy label="글자를 읽는 중" tone="quiet" />
           </View>
         )}
-        {!perm?.granted && !DEV_LOCAL && (
+        {!perm?.granted && (
           <View style={[StyleSheet.absoluteFill, st.center, { padding: space.s6, gap: space.s4 }]} testID="bizreg-perm">
             <View style={{ gap: space.s1 }}>
               <T v="subStrong" c="onCamera" center>
@@ -321,33 +309,29 @@ export function BizRegScreen({
       </View>
       <View style={st.camBar}>
         {err && <Notice testID="bizreg-cam-err">{err}</Notice>}
-        {DEV_LOCAL ? (
-          <Button kind="secondary" label="개발: 견본 등록증으로 찍기" onPress={() => void devSample()} busy={phase === 'reading'} style={{ alignSelf: 'stretch' }} />
-        ) : (
-          <View style={st.shutterRow}>
-            {}
-            <Pressable testID="bizreg-album" accessibilityRole="button" accessibilityLabel="앨범에서 고르기" onPress={() => void album()} disabled={phase === 'reading'} style={({ pressed }) => [st.side, pressed && { opacity: 0.6 }]}>
-              <T v="subStrong" c="onCamera">
-                앨범
-              </T>
+        <View style={st.shutterRow}>
+          {}
+          <Pressable testID="bizreg-album" accessibilityRole="button" accessibilityLabel="앨범에서 고르기" onPress={() => void album()} disabled={phase === 'reading'} style={({ pressed }) => [st.side, pressed && { opacity: 0.6 }]}>
+            <T v="subStrong" c="onCamera">
+              앨범
+            </T>
+          </Pressable>
+          {perm?.granted ? (
+            <Pressable
+              testID="bizreg-shutter"
+              accessibilityRole="button"
+              accessibilityLabel="찍기"
+              disabled={phase === 'reading'}
+              onPress={() => void take()}
+              style={st.shutter}
+            >
+              {({ pressed }) => <View style={[st.shutterIn, { transform: [{ scale: pressed ? 0.92 : 1 }] }]} />}
             </Pressable>
-            {perm?.granted ? (
-              <Pressable
-                testID="bizreg-shutter"
-                accessibilityRole="button"
-                accessibilityLabel="찍기"
-                disabled={phase === 'reading'}
-                onPress={() => void take()}
-                style={st.shutter}
-              >
-                {({ pressed }) => <View style={[st.shutterIn, { transform: [{ scale: pressed ? 0.92 : 1 }] }]} />}
-              </Pressable>
-            ) : (
-              <View style={st.shutterSpace} />
-            )}
-            <View style={st.side} />
-          </View>
-        )}
+          ) : (
+            <View style={st.shutterSpace} />
+          )}
+          <View style={st.side} />
+        </View>
       </View>
     </SafeAreaView>
   );

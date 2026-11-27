@@ -81,7 +81,7 @@ export function MainScreen({
     ) : tab === 'report' ? (
       <ReportScreen go={goMain} onMoney={() => onTab('money')} preview={report} />
     ) : tab === 'records' ? (
-      <RecordsScreen go={goMain} onHome={() => onTab('home')} phone={phone} />
+      <RecordsScreen go={goMain} onHome={() => onTab('home')} onDocs={() => onTab('docs')} phone={phone} />
     ) : tab === 'customers' ? (
       <CustomersScreen
         go={goMain}

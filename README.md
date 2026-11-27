@@ -25,7 +25,7 @@
 | 밀린 일: 상태별 묶음, 줄마다 쉬운 말 한 줄 + 동작 하나, 시작 확인이면 [모두 시작], 72시간 지나면 만료 | P-13 | `src/screens/QueueScreen.tsx`, `src/queue.ts`, `src/queueStore.tsx` |
 | 승인 시트: 되읽은 값 전체, 해시 재계산이 맞을 때만 [승인하고 발급](유일한 파랑 채움), 0.8초 무장 지연, 120초, 멈춤 상태 | P-03 | `src/screens/ApprovalSheet.tsx`, `src/approval.ts`, `src/approvalKey.ts` |
 | 진행·결과 카드: 단계 줄(준비 → 홈택스 로그인 → 값 확인 → 승인 → 발급 → 확인), 내 차례(간편인증·인증서 PC 전용), 중지(08 §11 문구), 확인 중·확인 필요(다시 발급 단추 없음), 결과(승인번호 길게 눌러 복사) | P-04 | `src/screens/RunCard.tsx`, `RunScreen.tsx`, `src/run.ts` |
-| 서류 보기: 파일 이름·발급일, 첫 쪽 미리보기, [공유] [파일에 저장], 여는 중·받는 중·PC 꺼짐·백업·열 수 없음 | P-05 | `src/screens/DocScreen.tsx`, `src/doc.ts`, `assets/sample/` |
+| 서류 보기: 발급이 끝나면 [서류 보기]가 문서함을 연다. 실제 PDF는 문서함에서 받아 연다 | P-05 | `src/screens/RunScreen.tsx`, `src/screens/DocsScreen.tsx` |
 | 사업자등록증 찍기: 앱 안 카메라(A4 세로 틀) → 기기 안 OCR → 상호·사업자번호(검증식)·대표자·주소·업태·종목 확인, 받을 이메일 → 거래처로 저장 → 발급 작성(휴·폐업 확인 줄, 처음 거래처 안내). 이미 있는 번호면 그 거래처로 | 기획 v2 PR 7 | `src/screens/BizRegScreen.tsx`, `src/capture/bizreg.ts` |
 | 발급: [+]의 시트에서 거래처만 고르면 대화에 채운 카드가 뜨고, 카드 [수정]으로 고친다. 따로 열리던 발급 화면은 없앴다(#45) | P-10, P-11 | `src/screens/IssueSheet.tsx`, `src/issue.ts` |
 | 폰 연결(QR 스캔 → 24시간 경고 → 6자리 + "PC 화면에만 입력" 경고) | S-03 | `src/screens/PairScreen.tsx` |
@@ -59,13 +59,12 @@
 ```bash
 pnpm install
 pnpm check                      # 타입·린트·시험(영수증·세금계산서 파서, 자르기, SP-1 설정, node --test)
-pnpm gallery                    # 화면 갤러리(웹, dist-gallery/). docs/design.md "점검"
 pnpm dummy-pc                   # 더미 PC + 개발 릴레이(localhost:8787)
 pnpm smoke                      # Node 폰으로 더미 PC와 페어링·전송 스모크
 npx expo prebuild -p ios && npx expo run:ios   # 시뮬레이터
 ```
 
-시뮬레이터 개발 빌드(`__DEV__ && !Device.isDevice`)에서만: QR 대신 [개발: 더미 PC의 QR 받기], 카메라 대신 [개발: 견본 영수증으로 찍기](앱에 묶인 견본, 갤러리 아님), 키 항목은 생체 없이(여전히 ThisDeviceOnly), 릴레이 `localhost:8787`(ws) 허용. 더미 PC에 6자리 입력은 `curl -XPOST localhost:8787/dev/sas -d '{"code":"123456"}'`.
+시뮬레이터 개발 빌드(`__DEV__ && !Device.isDevice`)에서만: QR 대신 [개발: 더미 PC의 QR 받기], 키 항목은 생체 없이(여전히 ThisDeviceOnly), 릴레이 `localhost:8787`(ws) 허용. 더미 PC에 6자리 입력은 `curl -XPOST localhost:8787/dev/sas -d '{"code":"123456"}'`.
 
 시뮬레이터 빌드: 키체인은 entitlement가 있어야 열리므로 서명 없는 빌드(`CODE_SIGNING_ALLOWED=NO`)는 잠금 화면에서 멈춘다(의도한 동작, `reports/raw/mobile/00`). `ios/`에서 애드혹 서명으로 빌드한다.
 
