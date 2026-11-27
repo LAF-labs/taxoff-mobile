@@ -28,7 +28,7 @@ import { MAX_FONT_SCALE, TextSizeContext, radius, size, space, textScale, type, 
 import { Button, Check, Chevron, Pill, Seg, T, ago, success, tap, won, type Tone } from '../ui/kit';
 import { CAPSULE_SIDE, Capsule, DOWN_GAP, DownButton, FloatPill, ShellTop, TOP_SPACE, useKeyboardShown } from '../ui/float';
 
-export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'devices' | 'issue' | 'queue' | 'inbox' | 'run' | 'doc' | 'bizreg' | 'recv' | 'pay' | 'mark';
+export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'devices' | 'issue' | 'queue' | 'inbox' | 'run' | 'bizreg' | 'recv' | 'pay' | 'mark';
 
 export function pcLine(pc: PcStatus, lastSeen: number | null): { tone: Tone; label: string; sub?: string; busy?: boolean } {
   switch (pc) {
@@ -570,7 +570,7 @@ function RunItem({ jobId, go }: { jobId: string; go: (to: HomeRoute) => void }) 
   const q = useQueue();
   const job = q.jobs.find((j) => j.id === jobId);
   if (!job?.run) return null;
-  const open = (to: 'run' | 'doc') => {
+  const open = (to: 'run') => {
     q.setFocus(job.id);
     go(to);
   };

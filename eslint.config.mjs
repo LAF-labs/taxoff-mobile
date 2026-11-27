@@ -3,7 +3,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default [
-  { ignores: ['ios/**', 'android/**', '.expo/**', 'dev/out/**', 'dist-gallery/**', 'node_modules/**', 'vendor/**'] },
+  { ignores: ['ios/**', 'android/**', '.expo/**', 'dev/out/**', 'node_modules/**', 'vendor/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

@@ -18,7 +18,8 @@ import { unlockCaps, unlockDesk, type UxDevice } from '../unlock';
 import { enrollUx, holdForUnlock, unlockAware } from './unlockLive';
 import { replaying, tapping } from './hold';
 import { causeOf, needsRelink, pushWhy, whyCode } from './pcWhy';
-import { catchingShareKey, withShareKey } from './shareKey';
+import { catchingDocs, newDocsInbox, syncDocs } from './pcDocs';
+import { dropAll as dropDocs } from '../docs/box';
 import { retryDelay } from './reconnect';
 
 export type PcStatus = 'unpaired' | 'connecting' | 'online' | 'queued' | 'stale' | 'relink' | 'offline';
@@ -73,7 +74,10 @@ function waitPeer(link: Link, ms: number): Promise<boolean> {
 
 export async function syncWithPc(d: SyncDeps): Promise<SyncResult> {
   const pair = d.data().pair;
-  if (!pair) return { status: 'unpaired' };
+  if (!pair) {
+    dropDocs();
+    return { status: 'unpaired' };
+  }
   // 붙잡아 둔 연결로 PC가 없는 줄 이미 알면 3초 기다리지 않고 바로 큐에 맡긴다(맡기고 곧장 앱을 닫아도 가게).
   const live = pcAway() ? { why: whyCode('peer', 'away') } : await viaLive(d, pair);
   if ('status' in live) return live;
@@ -217,7 +221,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
       pairId: pair.pairId,
       noise,
       desktopStatic: fromB64(pair.desktopStatic),
-      hello: { appVersion: APP_VERSION, deviceListVersion: d.data().seenListVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash, CAP.share, ...PHONE_CAPS, ...(d.px ? [CAP.approve] : []), ...unlockCaps(d.ux, d.data().uxOff)] },
+      hello: { appVersion: APP_VERSION, deviceListVersion: d.data().seenListVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash, ...PHONE_CAPS, ...(d.px ? [CAP.approve] : []), ...unlockCaps(d.ux, d.data().uxOff)] },
       nextTimestamp: () => (used = clock()),
       responseTimeoutMs: 8000,
     });
@@ -233,7 +237,8 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
     await d.update((x) => ({ ...x, lastSeenPc: Date.now() }));
     d.onLive?.();
     const held: Parameters<typeof s.channel.sendRaw>[0][] = [];
-    const shared = catchingShareKey(s.channel, (body) => void d.update((x) => withShareKey(x, body).next).catch(() => undefined));
+    const docsInbox = newDocsInbox();
+    const shared = catchingDocs(s.channel, docsInbox);
     // PC 잠금 풀기: 둘 다 unlock.v1이면 세션 내내 풀기 요청을 받고 답을 보낸다(ADR-061 결정 5).
     const unlocks = !!d.ux && !d.data().uxOff && s.peerHello.capabilities.includes(CAP.unlock);
     const ch = unlocks ? unlockAware(shared, { desk: unlockDesk, pcDeviceId: pair.desktopDeviceId, phoneDeviceId: d.keys.deviceId, pcName: pair.desktopName ?? 'PC' }) : shared;
@@ -276,6 +281,7 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
         if (e) await applyIncoming(e, approves, io);
       }
     });
+    await syncDocs({ ch, peerCaps: s.peerHello.capabilities, inbox: docsInbox, pairId: pair.pairId, fileKey: d.keys.fileKey, alive: d.alive }).catch(() => undefined);
     if (unlocks) {
       // 풀기를 기다리다 PC가 세션을 닫는 것은 정상 끝이다.
       await holdForUnlock(replaying(ch, held), unlockDesk, d.alive);

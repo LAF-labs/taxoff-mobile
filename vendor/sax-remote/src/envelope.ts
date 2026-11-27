@@ -4,10 +4,11 @@ import { decodeCbor, encodeCbor, type CborValue } from './cbor.ts';
 import { MAX_INNER } from './frame.ts';
 import { BINARY_KEYS, MESSAGE_TYPES, validate as schemaValidate } from './schema.gen.ts';
 import { ulid } from './ulid.ts';
+import { DOC_CHUNK, type DocChunkBody, type DocListBody, type DocWantBody } from './docbox.ts';
 
 export type Role = 'desktop' | 'mobile';
 /** 스키마 type enum과 같아야 한다(tests/remote-envelope.test.ts가 대조). */
-export type MessageType = 'hello' | 'pair.ok' | 'kek.grant' | 'devlist.push' | 'mbx.reissue' | 'close' | 'ping' | 'pong' | 'receipt.offer' | 'receipt.chunk' | 'receipt.ack' | 'cash.entry' | 'cash.ack' | 'cmd.run' | 'cmd.abort' | 'cmd.resume' | 'run.event' | 'gate.request' | 'gate.response' | 'consent.request' | 'consent.response' | 'human.request' | 'human.response' | 'file.offer' | 'query.documents' | 'query.result' | 'rotate.static' | 'cmd.ack' | 'phone.copy' | 'share.key' | 'px.enroll' | 'px.ack' | 'gate.refresh' | 'gate.resolved' | 'ux.enroll' | 'ux.ack' | 'unlock.request' | 'unlock.grant';
+export type MessageType = 'hello' | 'pair.ok' | 'kek.grant' | 'devlist.push' | 'mbx.reissue' | 'close' | 'ping' | 'pong' | 'receipt.offer' | 'receipt.chunk' | 'receipt.ack' | 'cash.entry' | 'cash.ack' | 'cmd.run' | 'cmd.abort' | 'cmd.resume' | 'run.event' | 'gate.request' | 'gate.response' | 'consent.request' | 'consent.response' | 'human.request' | 'human.response' | 'file.offer' | 'query.documents' | 'query.result' | 'rotate.static' | 'cmd.ack' | 'phone.copy' | 'share.key' | 'px.enroll' | 'px.ack' | 'gate.refresh' | 'gate.resolved' | 'ux.enroll' | 'ux.ack' | 'unlock.request' | 'unlock.grant' | 'doc.list' | 'doc.want' | 'doc.chunk';
 
 export const ALL_MESSAGE_TYPES: readonly string[] = MESSAGE_TYPES as readonly string[];
 const BIN = new Set<string>(BINARY_KEYS as readonly string[]);
@@ -343,12 +344,12 @@ export interface CopyReport {
     is: CopyRank;
     ip: CopyRank;
     split?: { inN: number; inA: number; outN: number; outA: number };
-    /** v1.18 바로 앞 같은 길이 기간의 매출(s), 매입(p) 합계 */
+    /** v1.19 바로 앞 같은 길이 기간의 매출(s), 매입(p) 합계 */
     prev?: { s: CopyLine; p: CopyLine };
-    /** v1.18 이 기간 매출 세금계산서의 받은 돈, 남은 돈, 기한 지난 건수와 금액 */
+    /** v1.19 이 기간 매출 세금계산서의 받은 돈, 남은 돈, 기한 지난 건수와 금액 */
     recv?: { got: number; left: number; lateN: number; lateA: number };
   }[];
-  /** v1.18 month가 든 부가세 과세기간(h 1기, 2기)의 from부터 to까지. s 매출 부가세, sn 건수, p 매입 세금계산서 부가세(null = 모름), dl 신고 기한 */
+  /** v1.19 month가 든 부가세 과세기간(h 1기, 2기)의 from부터 to까지. s 매출 부가세, sn 건수, p 매입 세금계산서 부가세(null = 모름), dl 신고 기한 */
   vat?: { h: 1 | 2; from: string; to: string; s: number | null; sn: number; p: number | null; dl: string };
   /** d = 잔액을 읽은 날(v1.17) */
   balances: { bank: string; last4: string; a: number | null; d?: string }[];
@@ -398,6 +399,9 @@ export interface Bodies {
   'ux.ack': UxAckBody;
   'unlock.request': UnlockRequestBody;
   'unlock.grant': UnlockGrantBody;
+  'doc.list': DocListBody;
+  'doc.want': DocWantBody;
+  'doc.chunk': DocChunkBody;
 }
 export type KnownType = keyof Bodies;
 export type BodyOf<T extends string> = T extends KnownType ? Bodies[T] : object;
@@ -420,11 +424,28 @@ export interface Envelope<T extends string = string> {
 export const RECEIPT_CHUNK = 49152;
 export const RECEIPT_MAX_BYTES = 4194304;
 
+function chunkOk(data: string, max: number): boolean {
+  try {
+    const n = fromB64(data).length;
+    return n >= 1 && n <= max;
+  } catch {
+    return false;
+  }
+}
+
 function semanticOk(e: Envelope): boolean {
   if (e.from === e.to) return false;
   if (e.type === 'receipt.offer') {
     const b = e.body as ReceiptOfferBody;
     return b.chunkCount === Math.ceil(b.bytes / b.chunkSize);
+  }
+  if (e.type === 'doc.chunk') {
+    const b = e.body as DocChunkBody;
+    return b.index < b.count && chunkOk(b.data, DOC_CHUNK);
+  }
+  if (e.type === 'doc.list') {
+    const b = e.body as DocListBody;
+    return b.page < b.pages;
   }
   if (e.type === 'receipt.chunk') {
     const b = e.body as ReceiptChunkBody;
