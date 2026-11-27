@@ -19,7 +19,6 @@ interface MoneyStore {
   marks: Record<string, MarkState>;
   focus: ReceivableView | null;
   setFocus: (id: string | null) => void;
-  reload: () => void;
   markReceived: (rv: ReceivableView, p: { method: PhoneMarkMethod; amount: number; on: string }, pcOnline: boolean) => void;
   undo: (rid: string) => void;
 }
@@ -27,18 +26,17 @@ interface MoneyStore {
 const Ctx = createContext<MoneyStore | null>(null);
 
 export function MoneyProvider({
-  status: initialStatus = 'none', snap = null, live = false, simulate = false, marks: initialMarks = {}, focus: initialFocus = null, children,
+  status: initialStatus = 'none', snap = null, live = false, marks: initialMarks = {}, focus: initialFocus = null, children,
 }: {
   status?: MoneyStatus;
   snap?: MoneySnapshot | null;
   live?: boolean;
-  simulate?: boolean;
   marks?: Record<string, MarkState>;
   focus?: string | null;
   children: ReactNode;
 }) {
   const q = useQueue();
-  const [status, setStatus] = useState<MoneyStatus>(initialStatus);
+  const [status] = useState<MoneyStatus>(initialStatus);
   const [marks, setMarks] = useState<Record<string, MarkState>>(initialMarks);
   const [focusId, setFocusId] = useState<string | null>(initialFocus);
   const [seq, setSeq] = useState(100);
@@ -51,11 +49,6 @@ export function MoneyProvider({
       marks,
       focus: snap?.receivables.find((r) => r.id === focusId) ?? null,
       setFocus: setFocusId,
-      reload: () => {
-        if (!simulate) return;
-        setStatus('loading');
-        setTimeout(() => setStatus(snap ? 'ready' : 'none'), 900);
-      },
       markReceived: (rv, p, pcOnline) => {
         if (!pcOnline) {
           q.add(
@@ -75,7 +68,7 @@ export function MoneyProvider({
       },
       undo: (rid) => setMarks((m) => ({ ...m, [rid]: { kind: 'undone' } })),
     }),
-    [status, snap, live, marks, focusId, seq, simulate, q],
+    [status, snap, live, marks, focusId, seq, q],
   );
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

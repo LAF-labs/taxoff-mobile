@@ -5,7 +5,6 @@ import { Pressable, View } from 'react-native';
 import { space, usePalette } from '../theme';
 import { Chevron, T } from '../ui/kit';
 import { RunCard, actionLabel, openAuthApp, useNow } from './RunCard';
-import { shareDoc } from '../doc';
 
 export function RunScreen({ onDone, onDoc, onRecords, now: fixedNow }: { onDone: () => void; onDoc: () => void; onRecords: () => void; now?: number }) {
   const q = useQueue();
@@ -43,7 +42,7 @@ export function RunScreen({ onDone, onDoc, onRecords, now: fixedNow }: { onDone:
     footer = (
       <>
         <Button label="서류 보기" onPress={onDoc} testID="run-doc" />
-        <Button kind="secondary" label="공유" onPress={() => void shareDoc(r.result.doc.name)} testID="run-share" />
+        <Button kind="secondary" label="닫기" onPress={onDone} />
       </>
     );
   } else {

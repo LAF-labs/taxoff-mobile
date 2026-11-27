@@ -4,15 +4,11 @@ import type { SimpleId } from './storage/state';
 import { SessionContext } from './session';
 import { jobTimers } from './jobTimers';
 import { josa } from './ui/josa';
-import { DAILY_LIMIT, GATE_TTL_MS, buildGate, type AttestState, type PhoneGate, type READBACK_KEYS } from './approval';
+import { DAILY_LIMIT, type AttestState } from './approval';
 import type { ChatItem } from './chat';
 import { actionsFor, applyAction, startAll as startAllJobs, stateAt, type DoneJob, type Job, type JobAction, type NeedPcReason } from './queue';
-import type { IssueResult, RunAction, RunView } from './run';
+import type { RunAction, RunView } from './run';
 import type { Counterparty, VatMode } from './issue';
-import sampleDoc from '../assets/sample/tax-invoice.pdf';
-import { b64, randomBytes } from '../vendor/sax-remote/src/index.ts';
-
-type Readback = Record<(typeof READBACK_KEYS)[number], string>;
 
 export interface ApprovalSettings {
   attest: AttestState;
@@ -26,7 +22,7 @@ interface QueueStore {
   act: (id: string, action: JobAction) => void;
   startAll: () => void;
   noteCmd: (jobId: string, text: string | null) => void;
-  add: (job: Job, note: string, readback?: Readback) => void;
+  add: (job: Job, note: string) => void;
   notes: ChatItem[];
   addCard: (item: ChatItem) => void;
   markSent: (itemId: string) => void;
@@ -67,18 +63,13 @@ export interface IssuePrefill {
   draftId?: string;
 }
 
-export const SAMPLE_DOC = sampleDoc;
-
 const Ctx = createContext<QueueStore | null>(null);
 
-const SIM_SUPPLIER = { supplierBizNo: '123-45-67890', supplierName: '택스오프상회' };
-
 export function QueueProvider({
-  initial = [], last = null, notes: initialNotes = [], approval: approvalProp, sheet = null, simulate = false, focus: initialFocus = null, counterparties: initialCps = [], pick = null, children,
+  initial = [], last = null, notes: initialNotes = [], approval: approvalProp, sheet = null, focus: initialFocus = null, counterparties: initialCps = [], pick = null, children,
 }: {
   initial?: Job[]; last?: DoneJob | null; notes?: ChatItem[]; approval?: ApprovalSettings;
   sheet?: string | null;
-  simulate?: boolean | 'inDoubt';
   focus?: string | null;
   counterparties?: Counterparty[];
   pick?: string | null;
@@ -107,31 +98,8 @@ export function QueueProvider({
   const setRun = (id: string, f: (r: RunView | undefined, j: Job) => RunView, extra: Partial<Job> = {}) => patch(id, (j) => ({ ...j, ...extra, run: f(j.run, j) }));
   const timers = useRef(jobTimers()).current;
   useEffect(() => () => timers.clearAll(), [timers]);
-  const drivePrepare = (id: string, readback: Readback, startedAt: number) => {
-    timers.clear(id);
-    setRun(id, () => ({ kind: 'running', step: 'prepare', startedAt }));
-    timers.at(id, 700, () => setRun(id, () => ({ kind: 'running', step: 'login', startedAt })));
-    timers.at(id, 1400, () => setRun(id, () => ({ kind: 'running', step: 'readback', startedAt })));
-    timers.at(id, 2100, () => {
-      setRun(id, () => ({ kind: 'running', step: 'approve', startedAt }), { state: 'approval', gate: fakeGate({ ...readback, ...SIM_SUPPLIER }) });
-      setSheetId(id);
-    });
-  };
-  const readbacks = useRef(new Map<string, Readback>()).current;
   const note = (id: string, text: string) => setNotes((n) => [...n, { kind: 'note', id: `note-${id}-${Date.now()}`, at: Date.now(), text }]);
   const patch = (id: string, f: (j: Job) => Job) => setJobs((js) => js.map((j) => (j.id === id ? f(j) : j)));
-  const fakeGate = (readback: Readback, first = false): PhoneGate =>
-    buildGate({
-      readback,
-      reserved: [{ key: '$first.bizNo', value: String(first) }, { key: '$first.email', value: 'false' }],
-      packageDigest: 'ab'.repeat(32),
-      authorizes: ['s21'],
-      intentId: '01JD8Z6Q3B9K2M4N5P7R8S9T0V',
-      reqId: '01JD0000000000000000000000',
-      challenge: b64(randomBytes(32)),
-      exp: Date.now() + GATE_TTL_MS,
-    });
-
   const store = useMemo<QueueStore>(
     () => ({
       jobs,
@@ -178,15 +146,11 @@ export function QueueProvider({
         setJobs((js) => applyAction(js, id, action, now));
       },
       startAll: () => setJobs((js) => startAllJobs(js, Date.now())),
-      add: (job, text, readback) => {
+      add: (job, text) => {
         const now = Date.now();
         setJobs((js) => [...js, job.state === 'running' ? { ...job, run: { kind: 'running', step: 'prepare', startedAt: now } } : job]);
         if (job.state === 'running') setNotes((n) => [...n, { kind: 'run', id: `run-${job.id}`, at: now, jobId: job.id }]);
         else note(job.id, text);
-        if (simulate && readback && job.state === 'running') {
-          readbacks.set(job.id, readback);
-          drivePrepare(job.id, readback, now);
-        }
       },
       openSheet: (id) => setSheetId(id),
       closeSheet: () => setSheetId(null),
@@ -205,19 +169,6 @@ export function QueueProvider({
           const startedAt = j?.run?.startedAt ?? Date.now();
           setRun(id, () => ({ kind: 'running', step: 'issue', startedAt }), { state: 'running', gate: undefined });
           if (!j?.run) note(id, `${josa(j?.title ?? '세금계산서', '을', '를')} 승인했어요. PC가 홈택스에서 발급하고 있어요`);
-          if (simulate && j?.gate) {
-            timers.clear(id);
-            const f = Object.fromEntries(j.gate.fields.map((x) => [x.key, x.value]));
-            if (simulate === 'inDoubt') {
-              timers.at(id, 1200, () => setRun(id, () => ({ kind: 'inDoubt', tries: 1, startedAt }), { state: 'verify' }));
-              timers.at(id, 2700, () => setRun(id, () => ({ kind: 'inDoubt', tries: 2, startedAt })));
-              timers.at(id, 4200, () => setRun(id, () => ({ kind: 'inDoubt', tries: 3, startedAt })));
-              timers.at(id, 5700, () => setRun(id, () => ({ kind: 'verify', startedAt })));
-            } else {
-              timers.at(id, 1200, () => setRun(id, () => ({ kind: 'running', step: 'verify', startedAt })));
-              timers.at(id, 2200, () => setRun(id, () => ({ kind: 'done', startedAt, result: sampleResult(f) }), { state: 'done' }));
-            }
-          }
         } else {
           timers.clear(id);
           setJobs((js) => js.filter((x) => x.id !== id));
@@ -267,16 +218,13 @@ export function QueueProvider({
           setRun(id, (r) => (r?.kind === 'stopped' ? { ...r, reserved: true } : { kind: 'stopped', step: 'login', reason: 'unknownScreen', startedAt, reserved: true }));
           note(id, `PC에서 ${josa(j.title, '을', '를')} 먼저 열어 둘게요`);
         } else if (a === 'retryPrepare' || a === 'resendAuth') {
-          const rb = readbacks.get(id);
-          if (simulate && rb) drivePrepare(id, rb, startedAt);
-          else setRun(id, () => ({ kind: 'running', step: a === 'resendAuth' ? 'login' : 'prepare', startedAt }));
+          setRun(id, () => ({ kind: 'running', step: a === 'resendAuth' ? 'login' : 'prepare', startedAt }));
         }
       },
       counterparties: cps,
       addCounterparty: (cp, pcOnline) => {
         setCps((xs) => [...xs, { ...cp, status: pcOnline ? { kind: 'checking' } : { kind: 'waitPc' } }]);
         setPickId(cp.id);
-        if (simulate && pcOnline) timers.at(cp.id, 1800, () => setCps((xs) => xs.map((c) => (c.id === cp.id ? { ...c, status: { kind: 'ok' } } : c))));
       },
       pickId,
       setPick: (id) => setPickId(id),
@@ -291,27 +239,12 @@ export function QueueProvider({
           void sess?.update((d) => ({ ...d, cmds: (d.cmds ?? []).map((c) => (c.cmdId === cmdId ? askRefresh(c) : c)) })).then(() => sess.sync());
           return;
         }
-        if (!simulate) return setSheetId(null);
-        patch(id, (x) => (x.gate ? { ...x, gate: { ...x.gate, challenge: b64(randomBytes(32)), exp: Date.now() + GATE_TTL_MS } } : x));
+        setSheetId(null);
       },
     }),
-    [jobs, last, notes, draftEdits, sheetId, simpleId, used, focusId, cps, pickId, prefill, approval, simulate, sess],
+    [jobs, last, notes, draftEdits, sheetId, simpleId, used, focusId, cps, pickId, prefill, approval, sess],
   );
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
-}
-
-function sampleResult(f: Record<string, string>): IssueResult {
-  const email = f.counterpartEmail || null;
-  const name = f.counterpartName ?? '거래처';
-  return {
-    approvalNo: '20261116-41000000-12345678',
-    counterpart: name,
-    total: Number(f.totalAmount ?? 0),
-    email,
-    emailSent: !!email,
-    issuedAt: Date.now(),
-    doc: { name: `세금계산서_${name.replace(/\s+/g, '')}_${(f.issueDate ?? '').replace(/-/g, '')}.pdf`, issuedOn: f.issueDate ?? '', uri: '' },
-  };
 }
 
 export function useQueue(): QueueStore {

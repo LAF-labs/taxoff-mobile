@@ -29,7 +29,6 @@ import { PushHost } from './src/notify/PushHost';
 import { installWakeTap } from './src/notify/push';
 import { showCard } from './src/cardFocus';
 import { TextSizeHost } from './src/ui/TextSizeHost';
-import { DocScreen } from './src/screens/DocScreen';
 import { BizRegScreen } from './src/screens/BizRegScreen';
 import { MoneyListScreen } from './src/screens/MoneyListScreen';
 import { MarkReceivedScreen } from './src/screens/MarkReceivedScreen';
@@ -166,14 +165,16 @@ export default function App() {
         {route === 'run' && (
           <RunScreen
             onDone={back}
-            onDoc={() => go('doc')}
+            onDoc={() => {
+              setTab('docs');
+              setStack(['tabs']);
+            }}
             onRecords={() => {
               setTab('records');
               setStack(['tabs']);
             }}
           />
         )}
-        {route === 'doc' && <DocScreen onDone={back} />}
         {route === 'recv' && <MoneyListScreen kind="recv" onDone={back} onMark={() => go('mark')} />}
         {route === 'pay' && <MoneyListScreen kind="pay" onDone={back} onMark={() => go('mark')} />}
         {route === 'mark' && <MarkReceivedScreen onDone={back} />}

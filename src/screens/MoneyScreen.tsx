@@ -36,13 +36,6 @@ export function MoneyScreen({ go }: { go: (to: HomeRoute) => void }) {
       </Screen>
     );
   }
-  if (m.status === 'error') {
-    return (
-      <Screen title="돈" shell scroll={false} testID="money">
-        <Empty testID="money-error" title="돈 요약을 받지 못했어요" sub="PC와 연결이 잠깐 끊겼을 수 있어요." action={<Button label="다시 불러오기" onPress={m.reload} testID="money-reload" />} />
-      </Screen>
-    );
-  }
   const cm = s.data.pcCopy?.money;
   if (!m.snap && cm) return <CopyMoney money={cm} />;
   if (!m.snap) {
