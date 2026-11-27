@@ -302,7 +302,7 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
 
   if (phase === 'sas' && sas) {
     return (
-      <Frame sheet={relink} step={2} title={relink ? '다시 연결' : 'PC와 연결'} testID="pair-sas" onBack={onboarding?.onBack ?? onDone} backLabel="취소">
+      <Frame sheet step={2} title={relink ? '다시 연결' : 'PC와 연결'} testID="pair-sas" onBack={onboarding?.onBack ?? onDone}>
         <View style={{ gap: space.s2 }}>
           <T v="strong">PC 화면에 이 숫자를 입력하세요</T>
           <T v="sub" c="ink2">
@@ -390,7 +390,7 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
   }
 
   return (
-    <Frame sheet={relink} step={2} title={relink ? '다시 연결' : 'PC와 연결'} onBack={onboarding?.onBack ?? onDone} backLabel="취소" testID="pair-working">
+    <Frame sheet step={2} title={relink ? '다시 연결' : 'PC와 연결'} onBack={onboarding?.onBack ?? onDone} testID="pair-working">
       <StatusDot busy label="PC와 연결하는 중" />
     </Frame>
   );
@@ -416,7 +416,7 @@ function SheetFrame({ step = 1, title, onBack, footer, testID, children }: Omit<
       inline
       a11yClose="다시 연결 닫기"
       testID={testID}
-      footer={footer ?? (onBack ? <Button kind="secondary" label="취소" onPress={onBack} testID="relink-cancel" /> : undefined)}
+      footer={footer}
     >
       {children}
     </Sheet>
