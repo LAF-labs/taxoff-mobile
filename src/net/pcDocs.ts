@@ -1,10 +1,6 @@
 import { CAP, DocAssembler, DocListCollector, type DocChunkBody, type DocListBody, type DocListItem } from '@sax/remote';
 import { dropAll, hasDoc, itemOf, loadIndex, removeDoc, saveIndex, storeDoc, type DocIndex } from '../docs/box';
 
-/**
- * 문서함 원본 받기(ADR-070). PC가 보낸 목록(doc.list)과 가진 것을 견주어, 목록에 없는 것은 지우고 없는 것만 하나씩 청한다(doc.want).
- * 조각(doc.chunk)은 모아서 크기와 SHA-256을 목록과 맞춘 뒤 봉인해 둔다. 서버에는 아무것도 두지 않는다.
- */
 
 interface Recv<E> {
   recv(timeoutMs: number): Promise<E | null>;
@@ -15,14 +11,12 @@ interface Env {
 }
 
 export interface DocsInbox {
-  /** 다 모인 마지막 목록. 아직 없으면 null. */
   list: DocListItem[] | null;
   chunks: DocChunkBody[];
 }
 
 export const newDocsInbox = (): DocsInbox => ({ list: null, chunks: [] });
 
-/** 어느 단계에서 오든 doc.list와 doc.chunk를 받아 inbox에 넣고, 다른 단계(사본 받기, 발급 명령)에는 보이지 않게 한다. */
 export function catchingDocs<C extends Recv<E>, E extends Env>(ch: C, inbox: DocsInbox): C {
   const pages = new DocListCollector();
   return new Proxy(ch, {
@@ -51,10 +45,8 @@ interface Sender {
   send(type: 'doc.want', body: { docId: string }): unknown;
 }
 
-/** 목록이 올 때까지, 그리고 조각 사이에 기다리는 시간. */
 const LIST_WAIT_MS = 3000;
 const CHUNK_IDLE_MS = 8000;
-/** 한 번 연결에서 문서 받기에 쓰는 시간. 넘으면 다음 연결에서 이어 받는다. */
 const BUDGET_MS = 90_000;
 
 export interface DocsSyncResult {
@@ -64,16 +56,11 @@ export interface DocsSyncResult {
   bad: number;
 }
 
-/** 받기 루프를 돌려 catchingDocs가 inbox를 채우게 한다. 다른 메시지는 이 단계에서 쓰지 않는다. */
 async function pump<E extends Env>(ch: Recv<E>, ms: number, done: () => boolean): Promise<void> {
   const until = Date.now() + ms;
   while (!done() && Date.now() < until) await ch.recv(Math.min(500, Math.max(0, until - Date.now())));
 }
 
-/**
- * 세션 끝에 한 번 돈다. 목록을 기다리고, 가진 것과 견주고, 없는 것을 최신순으로 받는다.
- * 같은 문서가 두 번 틀리게 오면 이번 연결에서는 건너뛴다(다음 연결에서 다시 청한다).
- */
 export async function syncDocs<E extends Env>(o: {
   ch: Recv<E> & Sender;
   peerCaps: readonly string[];

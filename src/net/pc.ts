@@ -281,7 +281,6 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
         if (e) await applyIncoming(e, approves, io);
       }
     });
-    // 문서함 원본(ADR-070): 맡긴 일이 끝난 뒤 받는다(방금 발급한 문서도 이 목록에 있다). 실패해도 다음 연결에서 이어 받는다.
     await syncDocs({ ch, peerCaps: s.peerHello.capabilities, inbox: docsInbox, pairId: pair.pairId, fileKey: d.keys.fileKey, alive: d.alive }).catch(() => undefined);
     if (unlocks) {
       // 풀기를 기다리다 PC가 세션을 닫는 것은 정상 끝이다.

@@ -3,11 +3,6 @@ import { fromUtf8, utf8, xOpen, xSeal, type DocListItem } from '@sax/remote';
 import { currentEpoch, inflight, liveKey, sameEpoch } from '../inflight';
 import { ROOT, deleteQuietly, writeProtected } from '../storage/files';
 
-/**
- * 폰 문서함(ADR-070): PC가 라이브 연결로 보낸 원본을 이 폰이 갖는다. 서버에는 없다.
- * 목록(이름, 종류, 날짜, 크기, SHA-256)과 문서 파일은 앱 파일 열쇠로 봉인해 앱 폴더(백업 제외, 파일 보호)에 둔다.
- * 연결한 PC가 바뀌거나 연결을 끊으면 전부 지운다.
- */
 export interface DocItem {
   docId: string;
   name: string;
@@ -20,7 +15,6 @@ export interface DocItem {
 
 export interface DocIndex {
   v: 2;
-  /** 이 문서들을 보낸 연결. 다르면 버린다. */
   pairId: string;
   items: DocItem[];
 }
@@ -36,7 +30,6 @@ const TEMP = new Directory(Paths.cache, 'docs');
 const SAFE_ID = /^[0-9a-f-]{36}$/;
 
 const listeners = new Set<(d: DocIndex) => void>();
-/** 받은 목록이 바뀌면 열린 문서함 화면이 바로 다시 그린다. */
 export function onIndex(cb: (d: DocIndex) => void): () => void {
   listeners.add(cb);
   return () => listeners.delete(cb);
@@ -109,7 +102,6 @@ export function removeDoc(docId: string): void {
   }
 }
 
-/** 연결이 바뀌거나 끊기면 목록과 문서를 모두 지운다. */
 export function dropAll(): void {
   deleteQuietly(FILE.uri);
   try {

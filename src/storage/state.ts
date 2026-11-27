@@ -100,7 +100,7 @@ async function openFile(f: File, fileKey: Uint8Array): Promise<AppData> {
   const d = JSON.parse(fromUtf8(xOpen(fileKey, box, AD))) as AppData;
   if (d.v !== 1) return emptyData();
   if (d.pcCopy?.ownerDesktopDeviceId && d.pcCopy.ownerDesktopDeviceId !== d.pair?.desktopDeviceId) delete d.pcCopy;
-  // ADR-064 시절 문서함용으로 받아 둔 계정 공유 열쇠. 문서함이 PC 직접 전송(ADR-070)이 되어 쓰지 않으니 지운다.
+  // ADR-070: 예전 문서함용 계정 공유 열쇠는 더 이상 받지 않으니 남은 것을 지운다.
   delete (d as { share?: unknown }).share;
   return { ...emptyData(), ...d };
 }

@@ -49,7 +49,6 @@ let qr: { text: string; exp: number } | null = null;
 const pairs: PairRecord[] = [];
 const received = { receipts: 0, cash: 0, viaQueue: 0 };
 
-/** 문서함 원본(ADR-070) 시험용 PDF. DUMMY_DOCS=0이면 빈 문서함. */
 function fakePdf(title: string, pad: number): Uint8Array {
   const body = `BT /F1 24 Tf 72 700 Td (${title}) Tj ET`;
   const objs = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>', '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>', `<< /Length ${body.length} >>\nstream\n${body}\nendstream`, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];

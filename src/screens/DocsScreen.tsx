@@ -57,10 +57,6 @@ function groups(items: DocItem[]): Array<{ title?: string; items: DocItem[] }> {
   return out;
 }
 
-/**
- * 문서함(2026-11-24 대표 승인 시안, ADR-070): PC가 라이브 연결로 보낸 원본을 이 폰에서 연다. PC가 꺼져 있어도 열린다.
- * 누르면 애플 기본 미리보기로 연다(공유와 파일에 저장은 미리보기 도구 막대). 열리지 않으면 그 문서를 지우고 다음 연결 때 다시 받는다.
- */
 export function DocsScreen({ preview }: { preview?: DocsPreview }) {
   const p = usePalette();
   const s = useSession();
@@ -102,7 +98,6 @@ export function DocsScreen({ preview }: { preview?: DocsPreview }) {
       if (SaxNative?.previewFile) await SaxNative.previewFile(file.uri, shownName(it.name));
       else await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: shownName(it.name) });
     } catch {
-      // 열리지 않는 사본은 지우고 목록에서 뺀다. 다음 연결에서 PC 목록과 견주어 다시 받는다.
       removeDoc(it.docId);
       const cur = await loadIndex(s.keys.fileKey);
       if (cur) await saveIndex(s.keys.fileKey, { ...cur, items: cur.items.filter((x) => x.docId !== it.docId) }).catch(() => undefined);

@@ -1,13 +1,7 @@
 import { b64, concat, fromB64, toHex } from './bytes.ts';
 import { sha256Hash } from './crypto.ts';
 
-/**
- * 문서함 원본을 PC에서 폰으로(ADR-070). 라이브 세션 메시지로만 오가고, 큐와 서버에는 두지 않는다.
- *   doc.list  PC → 폰: 보관함 전부(최신순), 쪽마다 DOC_LIST_PAGE줄
- *   doc.want  폰 → PC: 없는 문서 하나
- *   doc.chunk PC → 폰: 그 문서의 조각
- * PC는 보낸 기록을 적지 않는다. 폰이 목록과 가진 것을 견준다.
- */
+/** ADR-070: 라이브 세션 전용. 큐 봉투로 보내지 않는다. */
 
 export const DOC_CHUNK = 49152;
 export const DOC_MAX_BYTES = 15 * 1024 * 1024;
@@ -54,7 +48,6 @@ export function docChunkBodies(docId: string, bytes: Uint8Array): DocChunkBody[]
   return Array.from({ length: count }, (_, index) => ({ docId, index, count, data: b64(bytes.subarray(index * DOC_CHUNK, (index + 1) * DOC_CHUNK)) }));
 }
 
-/** 같은 asOf의 쪽을 모은다. 다 모이면 전체 목록, 아직이면 null. 다른 asOf가 오면 앞의 것을 버린다. */
 export class DocListCollector {
   #asOf = -1;
   #pages: (DocListItem[] | undefined)[] = [];
@@ -75,7 +68,6 @@ export class DocListCollector {
 
 export type DocAssembleResult = { state: 'more' } | { state: 'done'; bytes: Uint8Array } | { state: 'bad' };
 
-/** 청한 문서 하나의 조각을 모으고, 다 모이면 크기와 SHA-256을 목록 값과 맞춘다. */
 export class DocAssembler {
   readonly item: DocListItem;
   readonly #parts: (Uint8Array | undefined)[];
