@@ -4,7 +4,7 @@ import type { CopyReport } from '@sax/remote';
 import { useSession } from '../session';
 import { space } from '../theme';
 import { Actions, Card, Kv, KvRow } from '../ui/card';
-import { Button, Empty, Group, Row, Screen, Seg, T, won } from '../ui/kit';
+import { Button, Empty, Group, Notice, Row, Screen, Seg, T, won } from '../ui/kit';
 import { BarChart, Legend, MonthStep, RankRows, Tip, type BarCol, type RankItem } from '../ui/report';
 import { Sheet } from '../ui/sheet';
 import { clampMonth, partnerMonths, reportView, reportWait, shiftMonth, spanText, topOf, WINDOWS, type ChartCol, type Line, type Months, type Rank, type RankRow, type ReportWait } from '../report';
@@ -93,6 +93,18 @@ function Report({ copy, onMoney, preview }: { copy: CopyReport; onMoney: () => v
   const year = copy.today.slice(0, 4);
   const label = month.slice(0, 4) === year ? `${monthNo(month)}월` : `${month.slice(0, 4)}년 ${monthNo(month)}월`;
   const span = spanText(month, months);
+  const hasPurchase = [v.purchase.inv, v.purchase.card, v.purchase.cr].some(known) || !!v.purchase.rcpt.amount || v.purchase.pay.amount !== null;
+  const chartPurchase = v.chart.some((c) => !!c.purchase.total.amount);
+  const rankPurchase = !!v.ranks && v.ranks.pp.rows.length > 0;
+  const missing = [!hasPurchase ? '매입' : null, !known(v.sales.card) ? '카드 매출' : null, !v.bank ? '통장' : null].filter((x): x is string => !!x);
+  const count = v.ranks ? v.ranks.ps.rows.reduce((n, x) => n + x.n, 0) + (v.ranks.ps.rest?.n ?? 0) : undefined;
+  const saleParts = knownParts([
+    ['세금계산서', v.sales.inv, count],
+    ['카드 매출', v.sales.card],
+    ['현금영수증', v.sales.cr],
+    ['현금 매출', v.sales.cash],
+  ]);
+  const vatDue = v.vat && v.vat.s !== null && v.vat.p !== null ? v.vat.s - v.vat.p : null;
   const savePdf = async () => {
     setPdf('busy');
     setPdf((await shareReportPdf(copy, v)) === 'shared' ? 'idle' : 'failed');
@@ -114,96 +126,100 @@ function Report({ copy, onMoney, preview }: { copy: CopyReport; onMoney: () => v
       )}
       <Seg options={WINDOWS.map((w) => ({ key: String(w.key) as `${Months}`, label: w.label }))} value={String(months) as `${Months}`} onChange={(k) => setMonths(Number(k) as Months)} fill testID="report-window" />
 
+      {missing.length > 0 && (
+        <Notice icon testID="report-missing">
+          {`${missing.join(', ')}${missing.at(-1) === '통장' ? '은' : '는'} 아직 몰라요`}
+        </Notice>
+      )}
+
       <Card title="매출" testID="report-sales">
         <Kv>
-          <KvRow label="세금계산서" value={amountText(v.sales.inv)} warn={unsure(v.sales.inv)} />
-          <KvRow label="현금영수증" value={amountText(v.sales.cr)} warn={unsure(v.sales.cr)} />
-          <KvRow label="카드 매출" value={amountText(v.sales.card)} warn={unsure(v.sales.card)} />
-          {v.sales.cash.amount !== null && <KvRow label="현금 매출" value={won(v.sales.cash.amount)} />}
-          <KvRow label="합계" value={amountText(v.sales.total)} total warn={unsure(v.sales.total)} testID="report-sales-total" />
+          <KvRow label={span} value={amountText(v.sales.total)} total testID="report-sales-total" />
+          {saleParts.length === 1 && saleParts[0]![2] !== undefined ? (
+            <KvRow label={saleParts[0]![0]} value={`${saleParts[0]![2].toLocaleString('ko-KR')}건`} />
+          ) : (
+            saleParts.map(([label, l, n]) => <KvRow key={label} label={n === undefined ? label : `${label} ${n.toLocaleString('ko-KR')}건`} value={won(l.amount)} />)
+          )}
+          {v.prev && change(v.sales.total, v.prev.sales) && <KvRow label={prevLabel(months)} value={change(v.sales.total, v.prev.sales)!} />}
         </Kv>
       </Card>
-      <Card title="매입" testID="report-purchase">
-        <Kv>
-          <KvRow label="세금계산서" value={amountText(v.purchase.inv)} warn={unsure(v.purchase.inv)} />
-          <KvRow label="사업용 카드" value={amountText(v.purchase.card)} warn={unsure(v.purchase.card)} />
-          <KvRow label="현금영수증" value={amountText(v.purchase.cr)} warn={unsure(v.purchase.cr)} />
-          {!!v.purchase.rcpt.amount && <KvRow label="영수증" value={won(v.purchase.rcpt.amount)} warn={v.purchase.rcpt.partial} />}
-          {v.purchase.pay.amount !== null && <KvRow label="급여" value={won(v.purchase.pay.amount)} />}
-          <KvRow label="합계" value={amountText(v.purchase.total)} total warn={unsure(v.purchase.total)} testID="report-purchase-total" />
-        </Kv>
-      </Card>
-      <Card title="통장" testID="report-bank">
-        {v.bank ? (
+      {hasPurchase && (
+        <Card title="매입" testID="report-purchase">
           <Kv>
-            <KvRow label="들어온 돈" value={won(v.bank.in)} />
-            <KvRow label="나간 돈" value={won(v.bank.out)} />
-            <KvRow label="남은 돈" value={won(v.bank.net)} total />
+            <KvRow label={span} value={amountText(v.purchase.total)} total testID="report-purchase-total" />
+            {knownParts([
+              ['세금계산서', v.purchase.inv],
+              ['사업용 카드', v.purchase.card],
+              ['현금영수증', v.purchase.cr],
+              ['영수증', v.purchase.rcpt],
+              ['급여', v.purchase.pay],
+            ]).map(([label, l]) => (
+              <KvRow key={label} label={label} value={won(l.amount)} />
+            ))}
+            {v.prev && change(v.purchase.total, v.prev.purchase) && <KvRow label={prevLabel(months)} value={change(v.purchase.total, v.prev.purchase)!} />}
           </Kv>
-        ) : (
-          <T v="sub" c="ink2">
-            계좌를 연결하지 않았어요
-          </T>
-        )}
-      </Card>
+        </Card>
+      )}
+      {v.recv && (
+        <Card title="받을 돈" testID="report-receivable">
+          <Kv>
+            <KvRow label="남은 돈" value={won(v.recv.left)} total />
+            <KvRow label="받은 돈" value={won(v.recv.got)} />
+            {v.recv.lateN > 0 && <KvRow label="기한 지남" value={`${v.recv.lateN.toLocaleString('ko-KR')}건 ${won(v.recv.lateA)}`} warn />}
+          </Kv>
+          <Actions>
+            <Button kind="secondary" label="받을 돈 보기" onPress={onMoney} testID="report-receivable-money" />
+          </Actions>
+        </Card>
+      )}
+      {v.vat && (
+        <Card title={`부가세 ${v.vat.h}기`} testID="report-vat">
+          <Kv>
+            <KvRow label="매출 부가세" value={v.vat.s === null ? '확인 못 함' : won(v.vat.s)} warn={v.vat.s === null} />
+            {vatDue === null && <KvRow label={`${monthNo(v.vat.from)}월부터 ${monthNo(v.vat.to)}월`} value={`${v.vat.sn.toLocaleString('ko-KR')}건`} />}
+            {v.vat.p !== null && <KvRow label="매입 세금계산서 부가세" value={won(v.vat.p)} />}
+            {vatDue !== null && <KvRow label="세금계산서 기준 낼 부가세" value={won(vatDue)} total />}
+            <KvRow label="신고 기한" value={`${monthNo(v.vat.dl)}월 ${Number(v.vat.dl.slice(8, 10))}일`} />
+          </Kv>
+        </Card>
+      )}
 
-      <Card title="달마다" testID="report-monthly">
-        <Legend a="매출" b="매입" />
+      <Card title={chartPurchase ? '달마다' : '달마다 매출'} testID="report-monthly">
+        {chartPurchase && <Legend a="매출" b="매입" />}
         <BarChart
-          cols={v.chart.map((c) => barOf(c))}
-          label={`${v.chart[0]!.label}부터 ${v.chart.at(-1)!.label}까지 달마다 매출과 매입`}
+          cols={v.chart.map((c) => barOf(c, chartPurchase))}
+          label={`${v.chart[0]!.label}부터 ${v.chart.at(-1)!.label}까지 달마다 매출${chartPurchase ? '과 매입' : ''}`}
           onPick={(m) => setPicked(m)}
           step={{ prev: v.first ? null : () => setPicked(shiftMonth(month, -1)), next: v.latest ? null : () => setPicked(shiftMonth(month, 1)) }}
           holding={preview?.hold ?? null}
           tip={(m) => {
             const c = v.chart.find((x) => x.month === m)!;
-            return <Tip rows={[{ k: '매출', v: amountText(c.sales.total), warn: unsure(c.sales.total) }, { k: '매입', v: amountText(c.purchase.total), warn: unsure(c.purchase.total) }]} testID="report-tip" />;
+            return <Tip rows={[{ k: '매출', v: amountText(c.sales.total) }, ...(chartPurchase ? [{ k: '매입', v: amountText(c.purchase.total) }] : [])]} testID="report-tip" />;
           }}
         />
       </Card>
 
       {v.ranks && (
         <>
-          <Card title="거래처" testID="report-partners">
-            <Seg options={SIDES} value={partnerSide} onChange={setPartnerSide} fill tint testID="report-partners-side" />
-            <RankCard rank={partnerSide === 'sale' ? v.ranks.ps : v.ranks.pp} kind="partners" empty="이 기간 거래처가 없어요" onRow={(row) => setOpen({ kind: 'partner', side: partnerSide, row })} onAll={() => setOpen({ kind: 'all', what: 'partners', side: partnerSide })} />
+          <Card title={rankPurchase ? '거래처' : '많이 판 거래처'} testID="report-partners">
+            {rankPurchase && <Seg options={SIDES} value={partnerSide} onChange={setPartnerSide} fill tint testID="report-partners-side" />}
+            <RankCard rank={rankPurchase && partnerSide === 'purchase' ? v.ranks.pp : v.ranks.ps} kind="partners" empty="이 기간 거래처가 없어요" onRow={(row) => setOpen({ kind: 'partner', side: partnerSide, row })} onAll={() => setOpen({ kind: 'all', what: 'partners', side: partnerSide })} />
           </Card>
-          <Card title="품목" testID="report-items">
-            <Seg options={SIDES} value={itemSide} onChange={setItemSide} fill tint testID="report-items-side" />
-            <RankCard rank={itemSide === 'sale' ? v.ranks.is : v.ranks.ip} kind="items" empty="이 기간 품목이 없어요" onAll={() => setOpen({ kind: 'all', what: 'items', side: itemSide })} />
+          <Card title={rankPurchase ? '품목' : '많이 판 품목'} testID="report-items">
+            {rankPurchase && <Seg options={SIDES} value={itemSide} onChange={setItemSide} fill tint testID="report-items-side" />}
+            <RankCard rank={rankPurchase && itemSide === 'purchase' ? v.ranks.ip : v.ranks.is} kind="items" empty="이 기간 품목이 없어요" onAll={() => setOpen({ kind: 'all', what: 'items', side: itemSide })} />
           </Card>
         </>
       )}
 
       {v.bank && (
-        <>
-          <Card title="나간 돈" testID="report-out">
-            <Kv>
-              {v.bankOut.map((x) => (
-                <KvRow key={x.key} label={x.label} value={won(x.amount)} />
-              ))}
-              <KvRow label="합계" value={won(v.bank.out)} total />
-            </Kv>
-          </Card>
-          <Card title="들어온 돈" testID="report-in">
-            <Kv>
-              {v.bankIn.map((x) => (
-                <KvRow key={x.key} label={x.label} value={won(x.amount)} />
-              ))}
-              <KvRow label="합계" value={won(v.bank.in)} total />
-            </Kv>
-          </Card>
-          {v.balances.length > 0 && (
-            <Card title="계좌" testID="report-accounts">
-              <Kv>
-                {v.balances.map((b) => (
-                  <KvRow key={b.label} label={b.label} value={b.amount === null ? '확인 못 함' : won(b.amount)} warn={b.amount === null} />
-                ))}
-                <KvRow label="잔액 합계" value={amountText(v.balanceTotal)} total warn={unsure(v.balanceTotal)} />
-              </Kv>
-            </Card>
-          )}
-        </>
+        <Card title="통장" testID="report-bank">
+          <Kv>
+            <KvRow label="들어온 돈" value={won(v.bank.in)} />
+            <KvRow label="나간 돈" value={won(v.bank.out)} />
+            <KvRow label="잔액" value={amountText(v.balanceTotal)} total warn={unsure(v.balanceTotal)} />
+          </Kv>
+        </Card>
       )}
 
       {open?.kind === 'partner' && <PartnerSheet copy={copy} span={span} side={open.side} row={open.row} onClose={() => setOpen(null)} onMoney={() => (setOpen(null), onMoney())} />}
@@ -221,17 +237,27 @@ function Report({ copy, onMoney, preview }: { copy: CopyReport; onMoney: () => v
   );
 }
 
-function barOf(c: ChartCol): BarCol {
+function barOf(c: ChartCol, purchase: boolean): BarCol {
   return {
     key: c.month,
     label: c.label,
     a: c.sales.total.amount,
-    b: c.purchase.total.amount,
+    b: purchase ? c.purchase.total.amount : null,
     on: c.on,
     out: !c.inWindow,
-    a11y: `${monthNo(c.month)}월 매출 ${amountText(c.sales.total)}, 매입 ${amountText(c.purchase.total)}${c.on ? '' : ', 이 달 보기'}`,
+    a11y: `${monthNo(c.month)}월 매출 ${amountText(c.sales.total)}${purchase ? `, 매입 ${amountText(c.purchase.total)}` : ''}${c.on ? '' : ', 이 달 보기'}`,
   };
 }
+
+const known = (l: Line) => l.amount !== null;
+type Part = [label: string, line: Line, count?: number];
+const knownParts = (parts: Part[]): Part[] => parts.filter(([, l], i) => known(l) && (i === 0 || l.amount !== 0));
+const prevLabel = (months: Months) => (months === 1 ? '지난달보다' : months === 12 ? '지난해보다' : `앞 ${months}개월보다`);
+const change = (cur: Line, prev: Line): string | null => {
+  if (cur.amount === null || !prev.amount) return null;
+  const diff = cur.amount - prev.amount;
+  return diff === 0 ? '같아요' : `${won(Math.abs(diff))} ${diff > 0 ? '늘었어요' : '줄었어요'}`;
+};
 
 const itemOf = (x: RankRow, i: number, kind: 'partners' | 'items', onRow?: (row: RankRow) => void): RankItem =>
   kind === 'partners'
@@ -278,6 +304,7 @@ function PartnerSheet({ copy, span, side, row, onClose, onMoney }: { copy: CopyR
       <Kv>
         <KvRow label={`${span} ${what}`} value={won(row.amount)} />
         {row.left !== undefined && <KvRow label={owed} value={won(row.left)} />}
+        {!!row.late && <KvRow label="기한 지남" value={won(row.late)} warn />}
         {row.pm && row.pm.d !== null && <KvRow label={sale ? '받기까지' : '내기까지'} value={`평균 ${row.pm.d}일`} />}
       </Kv>
       {row.pm && (

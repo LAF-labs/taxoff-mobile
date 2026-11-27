@@ -75,8 +75,9 @@ export interface RankRow {
   amount: number;
   /** 0~1 */
   share: number;
-  /** 거래처 줄만: 남은 받을 돈(낼 돈), 사본 report.pm의 칸 */
+  /** 거래처 줄만: 남은 받을 돈(낼 돈), 그 가운데 기한 지난 것, 사본 report.pm의 칸 */
   left?: number;
+  late?: number;
   pm?: { m: number[]; d: number | null };
 }
 export interface Rank {
@@ -103,6 +104,11 @@ export interface ReportView {
   ranks: { ps: Rank; pp: Rank; is: Rank; ip: Rank } | null;
   balances: Array<{ label: string; amount: number | null; day: string | null }>;
   balanceTotal: Line;
+  /** 바로 앞 같은 길이 기간의 합계. 사본에 그 달들이 없으면 null */
+  prev: { sales: Line; purchase: Line } | null;
+  /** 마지막 달만(사본에 있다) */
+  recv: { got: number; left: number; lateN: number; lateA: number } | null;
+  vat: NonNullable<CopyReport['vat']> | null;
 }
 
 export const shiftMonth = (month: string, d: number): string => {
@@ -114,6 +120,7 @@ const monthNo = (m: string) => Number(m.slice(5, 7));
 /** 막대 칸 수: PC 엔진과 같이 max(6, 기간) */
 export const spanOf = (months: Months) => Math.max(6, months);
 
+const lineOf = (l: CopyLine): Line => ({ amount: l.a, partial: l.p });
 const line = (ls: CopyLine[]): Line => {
   const known = ls.filter((l) => l.a !== null);
   return { amount: known.length ? known.reduce((s, l) => s + l.a!, 0) : null, partial: known.length > 0 && (known.length < ls.length || known.some((l) => l.p)) };
@@ -155,6 +162,7 @@ function rankOf(r: CopyRank, pm: CopyReport['pm'], unnamed: string): Rank {
   const rows = r.rows.map((x): RankRow => {
     const row: RankRow = { name: x.name ?? unnamed, n: x.n, amount: x.a, share: x.pct / 100 };
     if (x.left !== undefined) row.left = x.left;
+    if (x.late) row.late = x.late;
     const p = x.i !== undefined ? pm?.[x.i] : undefined;
     if (p) row.pm = p;
     return row;
@@ -190,6 +198,8 @@ export function reportView(copy: CopyReport, month: string, months: Months): Rep
   const latest = month === copy.month;
   const w = latest ? copy.windows.find((x) => x.months === months) : undefined;
   const known = copy.balances.filter((b) => b.a !== null);
+  const before = Array.from({ length: months }, (_, i) => at.get(shiftMonth(month, i - 2 * months + 1)));
+  const prevRows = before.every((m): m is CopyReportMonth => !!m) ? before : null;
   return {
     month, months, latest, first: month <= ok[0]!,
     sales: salesOf(win), purchase: purchaseOf(win), bank: bankOf(win),
@@ -198,6 +208,9 @@ export function reportView(copy: CopyReport, month: string, months: Months): Rep
     ranks: w ? { ps: rankOf(w.ps, copy.pm, '이름 없음'), pp: rankOf(w.pp, copy.pm, '이름 없음'), is: rankOf(w.is, undefined, '품목 없음'), ip: rankOf(w.ip, undefined, '품목 없음') } : null,
     balances: copy.balances.map((b) => ({ label: `${b.bank} ${b.last4}`, amount: b.a, day: b.d ?? null })),
     balanceTotal: { amount: known.length ? known.reduce((s, b) => s + b.a!, 0) : null, partial: known.length < copy.balances.length },
+    prev: prevRows ? { sales: salesOf(prevRows).total, purchase: purchaseOf(prevRows).total } : w?.prev ? { sales: lineOf(w.prev.s), purchase: lineOf(w.prev.p) } : null,
+    recv: w?.recv ?? null,
+    vat: latest ? (copy.vat ?? null) : null,
   };
 }
 
