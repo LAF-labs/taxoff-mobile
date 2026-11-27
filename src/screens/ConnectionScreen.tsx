@@ -63,7 +63,7 @@ export function ConnectionScreen({ onDone, onReset, onRepair }: { onDone: () => 
         </Group>
       )}
       {showLog && s.data.pcLog && (
-        <Group title="연결 기록" note="PC와 잇지 못한 최근 이유예요. 문의할 때 이 화면을 보여 주세요." testID="pc-log-list">
+        <Group title="연결 기록" testID="pc-log-list">
           {[...s.data.pcLog].reverse().map((w) => (
             <Row key={`${w.at}:${w.code}`} label={pcWhyText(w.code) ?? '이유를 알 수 없어요'} sub={`${new Date(w.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}, ${w.code}`} />
           ))}
