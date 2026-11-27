@@ -7,6 +7,7 @@ import { ACTION_LABEL, AUTH_APPS, STEPS, STEP_LABEL, STOP_COPY, actionsOf, chipO
 import { space, usePalette } from '../theme';
 import { Actions, Card, Kv, KvRow, type CardKind } from '../ui/card';
 import { Button, Check, Chevron, StatusDot, T, success, won } from '../ui/kit';
+import { shown } from '../ui/text';
 import { CardApprove } from './CardApprove';
 import { UnlockInline } from './UnlockHost';
 
@@ -59,7 +60,7 @@ export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onAppro
         <CardApprove job={job} gate={job.gate!} onDetail={onApprove!} now={fixedNow} />
       ) : (
         <>
-          {job.amount !== null && (
+          {shown(job.amount) !== null && (
             <Kv>
               <KvRow label="합계" value={won(job.amount)} total />
             </Kv>

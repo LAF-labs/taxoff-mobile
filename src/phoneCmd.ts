@@ -2,6 +2,7 @@ import { amendCmd, checkIssueRequest, issueCmd, type CmdAckBody, type CmdAckStat
 import type { PhoneGate } from './approval';
 import { EXPIRE_MS, type Job, type NeedPcReason } from './queue.ts';
 import { PASS_CARRIERS, STEPS, simpleAppOf, type RunView, type Step } from './run.ts';
+import { joinShown, shown } from './ui/text.ts';
 
 export interface PhoneCmd {
   cmdId: string;
@@ -293,7 +294,7 @@ export function askSimple(c: PhoneCmd, value: string, app?: string): PhoneCmd {
 }
 
 export function jobOf(c: PhoneCmd): Job {
-  const title = c.title ?? `${c.cpName} 세금계산서`;
+  const title = shown(c.title) ?? joinShown([c.cpName, '세금계산서'], ' ');
   const base = { id: `cmd-${c.cmdId}`, title, amount: c.total, createdAt: c.createdAt, pcOnly: true };
   if (needsRedate(c)) return { ...base, state: 'phoneWaiting', wait: 'newDay', waitDay: c.req.day };
   if (busyWaiting(c)) return { ...base, state: 'phoneWaiting', wait: 'pcBusy' };

@@ -3,6 +3,7 @@ import { InputAccessoryView, Keyboard, Platform, Pressable, StyleSheet, TextInpu
 import { MAX_FONT_SCALE, radius, size, space, type, usePalette } from '../theme';
 import { useFocusFace } from './form';
 import { Chevron, OnCard, T } from './kit';
+import { shown } from './text';
 import type { Ink } from '../theme';
 
 /**
@@ -101,6 +102,7 @@ export function Kv({ children, testID }: { children: ReactNode; testID?: string 
  */
 export function KvRow({ label, value, total, onPress, edit, children, quiet, testID }: { label: string; value?: string; total?: boolean; onPress?: () => void; edit?: boolean; children?: ReactNode; quiet?: boolean; testID?: string }) {
   const p = usePalette();
+  if (children == null && shown(value) === null) return null;
   const v = children ?? (
     <T v={total ? 'subFigure' : 'subValue'} c={quiet ? 'ink4' : 'ink'} style={st.kvV} testID={testID}>
       {value}
