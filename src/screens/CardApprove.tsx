@@ -1,24 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
 import { APPROVE_CTX, approveMessage, readGate, sheetState, showValue, type PhoneGate } from '../approval';
 import type { Job } from '../queue';
 import { useQueue } from '../queueStore';
 import { useSession } from '../session';
-import { space, usePalette } from '../theme';
-import { Button, ConfirmSheet, T, success } from '../ui/kit';
+import { Actions, Kv, KvRow } from '../ui/card';
+import { Button, T, success } from '../ui/kit';
+import { ConfirmSheet } from '../ui/sheet';
 import { approvalKeyFor } from './ApprovalHost';
 
 const ROWS: ReadonlyArray<{ key: string; label: string; strong?: boolean }> = [
-  { key: 'counterpartName', label: '받는 곳' },
   { key: 'supplyAmount', label: '공급가액' },
-  { key: 'taxAmount', label: '세액' },
+  { key: 'taxAmount', label: '부가세' },
   { key: 'totalAmount', label: '합계', strong: true },
 ];
 
 export function CardApprove({ job, gate, onDetail, now: fixedNow }: { job: Job; gate: PhoneGate; onDetail: () => void; now?: number }) {
   const q = useQueue();
   const s = useSession();
-  const p = usePalette();
   const [openedAt] = useState(() => fixedNow ?? Date.now());
   const [now, setNow] = useState(() => fixedNow ?? Date.now());
   const [busy, setBusy] = useState(false);
@@ -46,46 +44,35 @@ export function CardApprove({ job, gate, onDetail, now: fixedNow }: { job: Job; 
     }
   };
 
+  // 받는 곳은 카드 제목에 있다(기준판 Phone-Approve). 값 줄과 단추 줄만 그린다.
   return (
-    <View style={st.wrap} testID={`card-approve-${job.id}`}>
-      <View style={[st.rows, { borderColor: p.line }]}>
-        {ROWS.map((x) =>
-          r.values[x.key] !== undefined ? (
-            <View key={x.key} style={st.row}>
-              <T v="sub" c="ink2">
-                {x.label}
-              </T>
-              <T v={x.strong ? 'subStrong' : 'sub'} style={st.value} lines={1}>
-                {showValue(x.key, r.values[x.key]!)}
-              </T>
-            </View>
-          ) : null,
-        )}
-      </View>
+    <>
+      <Kv testID={`card-approve-${job.id}`}>
+        {r.amend && <KvRow label="사유" value={r.amend.label} testID="card-approve-amend" />}
+        {ROWS.map((x) => (r.values[x.key] !== undefined ? <KvRow key={x.key} label={x.label} value={showValue(x.key, r.values[x.key]!)} total={x.strong} /> : null))}
+      </Kv>
       {direct ? (
-        <>
-          <View style={st.buttons}>
-            <Button kind="secondary" small label="거절" onPress={() => setAsking(true)} disabled={busy} style={{ flex: 1 }} testID="card-deny" />
-            <Button
-              kind="approve"
-              small
-              label="승인하고 발급"
-              hint="얼굴이나 지문으로 확인한 뒤 홈택스에서 바로 발급해요"
-              onPress={() => void answer('approve')}
-              busy={busy}
-              disabled={!state.armed}
-              style={{ flex: 2 }}
-              testID="card-approve"
-            />
-          </View>
-        </>
+        <Actions>
+          <Button
+            kind="approve"
+            label="승인하고 발급"
+            hint="얼굴이나 지문으로 확인한 뒤 홈택스에서 바로 발급해요"
+            onPress={() => void answer('approve')}
+            busy={busy}
+            disabled={!state.armed}
+            testID="card-approve"
+          />
+          <Button kind="secondary" label="거절" onPress={() => setAsking(true)} disabled={busy} testID="card-deny" />
+        </Actions>
       ) : (
-        <View style={st.buttons}>
-          <T v="sub" c="ink2" style={{ flex: 1 }}>
+        <>
+          <T v="sub" c="attention">
             {state.kind === 'expired' ? '시간이 지나 승인이 취소됐어요' : state.kind === 'inDoubt' ? '발급됐는지 확인하고 있어요' : '확인할 것이 있어요'}
           </T>
-          <Button kind="secondary" small label="자세히 보기" onPress={onDetail} testID="card-approve-detail" />
-        </View>
+          <Actions>
+            <Button kind="secondary" label="자세히" onPress={onDetail} testID="card-approve-detail" />
+          </Actions>
+        </>
       )}
       {asking && (
         <ConfirmSheet
@@ -100,14 +87,6 @@ export function CardApprove({ job, gate, onDetail, now: fixedNow }: { job: Job; 
           onNo={() => setAsking(false)}
         />
       )}
-    </View>
+    </>
   );
 }
-
-const st = StyleSheet.create({
-  wrap: { gap: space.s3, paddingTop: space.s1 },
-  rows: { gap: space.s1, paddingTop: space.s2, borderTopWidth: StyleSheet.hairlineWidth },
-  row: { flexDirection: 'row', alignItems: 'center', gap: space.s3, minHeight: 28 },
-  value: { flex: 1, textAlign: 'right', fontVariant: ['tabular-nums'] },
-  buttons: { flexDirection: 'row', alignItems: 'center', gap: space.s2 },
-});

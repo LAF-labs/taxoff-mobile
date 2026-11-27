@@ -25,7 +25,7 @@ const { BUSY_GIVE_UP_MS, BUSY_RETRY_MS, REJECT_LINE, applyAck, applyEvent, apply
 const T0 = Date.parse('2026-11-17T01:00:00Z');
 const cmd = (o: Partial<PhoneCmd> = {}): PhoneCmd => ({
   cmdId: '01JDCMD0000000000000000001',
-  req: issueRequest({ ref: 'cp_gana', supply: 1_230_005, item: ' 식자재 ', now: T0 }),
+  req: issueRequest({ target: { counterpartyRef: 'cp_gana' }, supply: 1_230_005, item: ' 식자재 ', now: T0 }),
   cpName: '가나식자재',
   total: 1_353_005,
   createdAt: T0,
@@ -40,7 +40,7 @@ describe('발급 명령 입력', () => {
     assert.equal(kstDay(Date.parse('2026-11-17T15:00:00Z')), '2026-11-18');
   });
   it('hello에 copy.v1과 issue.v1을 알린다', () => {
-    assert.deepEqual([...PHONE_CAPS].sort(), [CAP.copy, CAP.issue, CAP.sync, CAP.issued].sort());
+    assert.deepEqual([...PHONE_CAPS].sort(), [CAP.copy, CAP.issue, CAP.sync, CAP.issued, CAP.book, CAP.amend].sort());
   });
 });
 
@@ -295,7 +295,7 @@ describe('PC가 다른 일 중(pc_busy): 저절로 이어서 한다', () => {
     assert.equal(settled(c, T0 + BUSY_GIVE_UP_MS), true);
   });
   it('밀린 일에서는 기다리는 일, [취소]만 있다', () => {
-    const j = jobOf(applyAck(cmd({ sentAt: T0, createdAt: Date.now(), req: issueRequest({ ref: 'cp_gana', supply: 1_230_005, item: '식자재' }) }), { cmdId: cmd().cmdId, state: 'rejected', reason: 'pc_busy' }));
+    const j = jobOf(applyAck(cmd({ sentAt: T0, createdAt: Date.now(), req: issueRequest({ target: { counterpartyRef: 'cp_gana' }, supply: 1_230_005, item: '식자재' }) }), { cmdId: cmd().cmdId, state: 'rejected', reason: 'pc_busy' }));
     assert.equal(j.state, 'phoneWaiting');
     assert.equal(j.wait, 'pcBusy');
     assert.equal(j.run, undefined);

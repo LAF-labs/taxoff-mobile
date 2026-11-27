@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import {
   APPROVE_CTX, AMOUNT_KEYS, DAILY_LIMIT, FIELD_LABELS, SHEET_GROUPS, approveMessage, mmss, readGate, sheetState, showValue,
   type PhoneGate, type SheetStop,
@@ -9,7 +8,9 @@ import type { ApprovalKey } from '../approvalKey';
 import type { NeedPcReason } from '../queue';
 import type { ApprovalSettings } from '../queueStore';
 import { radius, space, usePalette } from '../theme';
-import { Button, Check, Notice, Pill, T, success, warn } from '../ui/kit';
+import { Actions } from '../ui/card';
+import { Button, Check, Group, Notice, Pill, T, success, warn } from '../ui/kit';
+import { Sheet } from '../ui/sheet';
 
 const STOP_LINE: Record<SheetStop, string> = {
   mismatch: 'PC가 보낸 내용이 맞지 않아 승인할 수 없어요',
@@ -52,8 +53,6 @@ export function ApprovalSheet({
   preview?: { now: number; openedAt: number; acked?: string[] };
 }) {
   const p = usePalette();
-  const inset = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
   const [openedAt] = useState(() => preview?.openedAt ?? Date.now());
   const [now, setNow] = useState(() => preview?.now ?? Date.now());
   const [acked, setAcked] = useState<Set<string>>(() => new Set(preview?.acked ?? []));
@@ -93,7 +92,11 @@ export function ApprovalSheet({
   let notice = null;
   if (state.kind === 'inDoubt') {
     notice = <Notice testID="sheet-in-doubt">발급됐는지 PC가 확인하고 있어요. 다시 발급하지 않아요</Notice>;
-    footer = <Button kind="secondary" label="닫기" onPress={onClose} testID="sheet-close" />;
+    footer = (
+      <Actions>
+        <Button kind="secondary" label="닫기" onPress={onClose} testID="sheet-close" />
+      </Actions>
+    );
   } else if (state.kind === 'stopped') {
     notice = (
       <Notice testID={`sheet-stop-${state.stop}`} sub={STOP_SUB[state.stop]}>
@@ -101,13 +104,11 @@ export function ApprovalSheet({
       </Notice>
     );
     const reason = STOP_REASON[state.stop];
-    footer = reason ? (
-      <>
-        <Button label="밀린 일에 두기" onPress={() => onPark(reason)} testID="sheet-park" />
-        <Button kind="quiet" label="닫기" onPress={onClose} testID="sheet-close" />
-      </>
-    ) : (
-      <Button label="닫기" onPress={onClose} testID="sheet-close" />
+    footer = (
+      <Actions>
+        {reason && <Button label="밀린 일에 두기" onPress={() => onPark(reason)} testID="sheet-park" />}
+        <Button kind={reason ? 'secondary' : 'primary'} label="닫기" onPress={onClose} testID="sheet-close" />
+      </Actions>
     );
   } else if (state.kind === 'expired') {
     notice = (
@@ -116,55 +117,49 @@ export function ApprovalSheet({
       </Notice>
     );
     footer = (
-      <>
+      <Actions>
         <Button label="PC에 다시 요청" onPress={onRerequest} testID="sheet-rerequest" />
-        <Button kind="quiet" label="닫기" onPress={onClose} />
-      </>
+        <Button kind="secondary" label="닫기" onPress={onClose} />
+      </Actions>
     );
   } else {
     footer = (
       <>
-        {settings.attest === 'ios_app_attest' && (
-          <T v="meta" c="ink3" center>
-            이 iPhone은 앱 무결성만 확인돼요
-          </T>
-        )}
         {state.armed && state.needsAck && (
-          <T v="meta" c="ink2" center testID="sheet-ack-hint">
+          <T v="sub" c="ink2" testID="sheet-ack-hint">
             위 경고를 확인하면 승인할 수 있어요
           </T>
         )}
-        <Button
-          kind="approve"
-          label="승인하고 발급"
-          onPress={() => void answer('approve')}
-          disabled={!state.armed || state.needsAck}
-          busy={busy}
-          hint="얼굴이나 지문으로 확인한 뒤 홈택스에서 바로 발급해요"
-          testID="sheet-approve"
-        />
-        <Button kind="quiet" label="거절" onPress={() => void answer('deny')} disabled={busy} testID="sheet-deny" />
+        <Actions>
+          <Button
+            kind="approve"
+            label="승인하고 발급"
+            onPress={() => void answer('approve')}
+            disabled={!state.armed || state.needsAck}
+            busy={busy}
+            hint="얼굴이나 지문으로 확인한 뒤 홈택스에서 바로 발급해요"
+            testID="sheet-approve"
+          />
+          <Button kind="secondary" label="거절" onPress={() => void answer('deny')} disabled={busy} testID="sheet-deny" />
+        </Actions>
       </>
     );
   }
 
   const open = state.kind === 'open';
   return (
-    <View style={StyleSheet.absoluteFill} testID="approval-sheet">
-      <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: p.scrim }]} onPress={onClose} accessibilityLabel="승인 시트 닫기" accessibilityRole="button" />
-      <View style={[st.sheet, { backgroundColor: p.canvas, maxHeight: height * 0.94, paddingBottom: Math.max(inset.bottom, space.s4) }]} accessibilityViewIsModal>
-        <View style={[st.grabber, { backgroundColor: p.sunken }]} />
-        <View style={st.head}>
-          <T v="title" role="header" style={{ flex: 1 }}>
-            세금계산서 발급 승인
-          </T>
-          {open && (
-            <T v={state.urgent ? 'subStrong' : 'meta'} c={state.urgent ? 'attention' : 'ink3'} testID="sheet-left" style={{ fontVariant: ['tabular-nums'] }}>
-              남은 시간 {mmss(state.leftMs)}
-            </T>
-          )}
-        </View>
-        <View style={{ flexShrink: 1 }}>
+    <Sheet
+      title={r.amend ? '수정세금계산서 승인' : '세금계산서 승인'}
+      kind={r.amend ? (r.amend.what === 'deal_cancelled' ? 'cancel' : 'amend') : 'doc'}
+      height="fit"
+      inline
+      preview={!!preview}
+      onClose={onClose}
+      a11yClose="승인 시트 닫기"
+      testID="approval-sheet"
+      footer={footer}
+    >
+      <View style={{ flexShrink: 1 }}>
         <ScrollView
           style={{ flexShrink: 1 }}
           contentContainerStyle={st.body}
@@ -174,8 +169,8 @@ export function ApprovalSheet({
           onScroll={(e) => setBox((b) => ({ ...b, y: e.nativeEvent.contentOffset.y }))}
         >
           {notice}
-          <T v="sub" c="ink2">
-            {open ? 'PC가 홈택스에서 되읽은 값이에요. 승인하면 바로 발급되고 되돌릴 수 없어요.' : 'PC가 홈택스에서 되읽은 값이에요.'}
+          <T v="sub" c={open && state.urgent ? 'attention' : 'ink2'} testID={open ? 'sheet-left' : undefined}>
+            {open ? `승인하면 바로 발급돼요. 남은 시간 ${mmss(state.leftMs)}` : 'PC가 홈택스에서 되읽은 값이에요.'}
           </T>
           {open &&
             r.dups.map((d) => {
@@ -187,7 +182,7 @@ export function ApprovalSheet({
                       {d.line}
                     </T>
                     {d.detail && (
-                      <T v="meta" c="ink2">
+                      <T v="sub" c="ink2">
                         {d.detail}
                       </T>
                     )}
@@ -203,38 +198,35 @@ export function ApprovalSheet({
                 </View>
               );
             })}
+          {r.amend && (
+            <Group title="고치는 계산서">
+              <ValueLine label="사유" value={r.amend.label} kind="text" testID="sheet-amend-what" />
+              <ValueLine label="원래 계산서" value={r.amend.original} kind="text" testID="sheet-amend-original" />
+            </Group>
+          )}
           {SHEET_GROUPS.map((g) => {
             const keys = g.keys.filter((k) => k in r.values && !(k === 'remark' && r.values[k] === ''));
             if (!keys.length) return null;
             return (
-              <View key={g.title} style={{ gap: space.s2 }}>
-                <T v="label" c="ink3" style={{ paddingHorizontal: space.s1 }}>
-                  {g.title}
-                </T>
-                <View style={[st.group, { backgroundColor: p.tint }]}>
-                  {keys.map((k, i) => (
-                    <View key={k}>
-                      {i > 0 && <View style={[st.sep, { backgroundColor: p.line }]} />}
-                      <ValueLine
-                        label={FIELD_LABELS[k]!}
-                        value={showValue(k, r.values[k]!)}
-                        amount={AMOUNT_KEYS.has(k)}
-                        strong={k === 'totalAmount'}
-                        kind={k === 'counterpartEmail' ? 'email' : NOWRAP_KEYS.has(k) ? 'nowrap' : 'text'}
-                        testID={`sheet-${k}`}
-                      />
-                    </View>
-                  ))}
-                </View>
-              </View>
+              <Group key={g.title} title={g.title}>
+                {keys.map((k) => (
+                  <ValueLine
+                    key={k}
+                    label={FIELD_LABELS[k]!}
+                    value={showValue(k, r.values[k]!)}
+                    amount={AMOUNT_KEYS.has(k)}
+                    strong={k === 'totalAmount'}
+                    kind={k === 'counterpartEmail' ? 'email' : NOWRAP_KEYS.has(k) ? 'nowrap' : 'text'}
+                    testID={`sheet-${k}`}
+                  />
+                ))}
+              </Group>
             );
           })}
         </ScrollView>
         {box.y + box.h < box.ch - 4 && <BottomFade />}
-        </View>
-        <View style={[st.footer, { borderTopColor: p.line }]}>{footer}</View>
       </View>
-    </View>
+    </Sheet>
   );
 }
 
@@ -244,7 +236,7 @@ function BottomFade() {
   return (
     <View pointerEvents="none" style={st.fade} testID="sheet-more">
       {FADE.map((o, i) => (
-        <View key={i} style={{ height: 2, backgroundColor: p.canvas, opacity: o }} />
+        <View key={i} style={{ height: 2, backgroundColor: p.overlay, opacity: o }} />
       ))}
     </View>
   );
@@ -294,12 +286,7 @@ function Email({ value }: { value: string }) {
 }
 
 const st = StyleSheet.create({
-  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingTop: space.s2 },
-  grabber: { alignSelf: 'center', width: 36, height: 5, borderRadius: 3, marginBottom: space.s2 },
-  head: { flexDirection: 'row', alignItems: 'center', gap: space.s3, paddingHorizontal: space.s5, minHeight: 44 },
-  body: { paddingHorizontal: space.s5, paddingTop: space.s2, paddingBottom: space.s4, gap: space.s4 },
-  group: { borderRadius: radius.lg, overflow: 'hidden' },
-  sep: { height: StyleSheet.hairlineWidth, marginLeft: space.s4 },
+  body: { paddingBottom: space.s2, gap: space.s4 },
   line: { flexDirection: 'row', alignItems: 'flex-start', gap: space.s3, paddingHorizontal: space.s4, paddingVertical: space.s3, minHeight: 48 },
   label: { width: 96, flexShrink: 0, paddingTop: 2 },
   value: { flex: 1, minWidth: 0, textAlign: 'right', fontVariant: ['tabular-nums'] },
@@ -310,5 +297,4 @@ const st = StyleSheet.create({
   emailGroup: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: '100%' },
   dup: { flexDirection: 'row', alignItems: 'flex-start', gap: space.s3, borderRadius: radius.md, paddingVertical: space.s2, paddingLeft: space.s4, paddingRight: space.s2, minHeight: 52 },
   acked: { flexDirection: 'row', alignItems: 'center', gap: space.s2, paddingHorizontal: space.s3, minHeight: 36 },
-  footer: { paddingHorizontal: space.s5, paddingTop: space.s3, gap: space.s2, borderTopWidth: StyleSheet.hairlineWidth },
 });

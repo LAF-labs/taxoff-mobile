@@ -1,10 +1,13 @@
 import type { Thumb } from '../capture/thumb';
 import type { MoneySnapshot } from '../money';
-import type { PhoneCopyBody } from '@sax/remote';
 import type { PhoneCmd } from '../phoneCmd';
+import type { BookCmd } from '../book';
+import type { CachedPhoneCopy } from '../net/pcCopy';
 import type { PcWhy } from '../net/pcWhy';
 import type { PxState } from '../net/pxLive';
+import type { UxState } from '../net/unlockLive';
 import type { NotifyPrefs } from '../notify/events';
+import type { InboxItem } from '../notify/inbox';
 import type { TextSize } from '../theme';
 import { File } from 'expo-file-system';
 import { fromUtf8, utf8, xOpen, xSeal, type DeviceListJson, type SignedCert } from '@sax/remote';
@@ -59,6 +62,13 @@ export interface SimpleId {
   carrier?: string;
 }
 
+/** 계정 공유 열쇠(PC가 share.key로 준다, ADR-064): 세대마다 K_share(e)와 PC 서명 확인용 Ws 공개키. 연결한 PC가 바뀌면 버린다. */
+export interface ShareState {
+  pairId: string;
+  signPub: string;
+  keys: string[];
+}
+
 export interface AppData {
   v: 1;
   pair: PairState | null;
@@ -71,15 +81,24 @@ export interface AppData {
   queueSeq: number;
   qbundleSeq: number;
   money?: MoneySnapshot | null;
-  pcCopy?: PhoneCopyBody | null;
+  pcCopy?: CachedPhoneCopy | null;
   cmds?: PhoneCmd[];
+  /** 폰에서 넣거나 고친 거래처. PC가 받아 사본에 실을 때까지 둔다(tex ADR-066). */
+  book?: BookCmd[];
   pcLog?: PcWhy[];
   px?: PxState;
+  /** PC 잠금 풀기 키 등록 상태(ADR-061). */
+  ux?: UxState;
+  /** 설정에서 "이 폰으로 PC 열기"를 껐다. */
+  uxOff?: boolean;
   notify?: NotifyPrefs;
   pushHash?: string | null;
   pushAsked?: boolean;
   simpleId?: SimpleId | null;
   textSize?: TextSize;
+  inbox?: InboxItem[];
+  inboxSeenAt?: number;
+  share?: ShareState | null;
 }
 
 export const emptyData = (): AppData => ({ v: 1, pair: null, deviceList: null, seenListVersion: 0, ikTs: 0, lastSeenPc: null, cash: [], recent: [], queueSeq: 0, qbundleSeq: 0 });
@@ -87,7 +106,9 @@ export const emptyData = (): AppData => ({ v: 1, pair: null, deviceList: null, s
 async function openFile(f: File, fileKey: Uint8Array): Promise<AppData> {
   const box = await f.bytes();
   const d = JSON.parse(fromUtf8(xOpen(fileKey, box, AD))) as AppData;
-  return d.v === 1 ? { ...emptyData(), ...d } : emptyData();
+  if (d.v !== 1) return emptyData();
+  if (d.pcCopy?.ownerDesktopDeviceId && d.pcCopy.ownerDesktopDeviceId !== d.pair?.desktopDeviceId) delete d.pcCopy;
+  return { ...emptyData(), ...d };
 }
 
 export async function loadData(fileKey: Uint8Array): Promise<AppData> {

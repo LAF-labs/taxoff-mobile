@@ -13,8 +13,8 @@ import { PDF_LINE, pickPhoto } from '../capture/pick';
 import { validBizNo } from '../capture/parser';
 import { DEV_LOCAL, PHOTO_MAX_EDGE, PHOTO_QUALITY } from '../config';
 import { findByBizNo, type Counterparty } from '../issue';
+import { useCustomers } from '../customers';
 import { useQueue } from '../queueStore';
-import { useSession } from '../session';
 import { deleteQuietly, sweepCaptureTemps } from '../storage/files';
 import { radius, space, usePalette } from '../theme';
 import { glueAddress } from '../ui/address';
@@ -53,8 +53,9 @@ export function BizRegScreen({
 }) {
   const p = usePalette();
   const q = useQueue();
-  const s = useSession();
-  const existing = given ?? q.counterparties;
+  const customers = useCustomers();
+  const existing = given ?? customers.counterparties;
+  const [saveFailed, setSaveFailed] = useState(false);
   const [realPerm, requestPerm] = useCameraPermissions();
   const perm = preview?.denied ? { granted: false, canAskAgain: false } : realPerm;
   const cam = useRef<CameraView>(null);
@@ -174,16 +175,17 @@ export function BizRegScreen({
     const dup = badNo ? null : findByBizNo(existing, v.bizNo);
     const badEmail = v.email !== '' && !EMAIL.test(v.email);
     const ready = !!v.name.trim() && digits.length === 10 && validBizNo(digits) && !badEmail;
-    const save = () => {
+    const save = async () => {
+      // PC 장부에 넣는다(tex ADR-066). 연결 전이면 이 폰에 두었다가 연결하면 보낸다. 주소와 업태는 PC가 국세청 조회로 채운다.
+      const id = await customers.add({ bizNo: v.bizNo, name: v.name, rep: v.ceo, email: v.email, item: v.item });
+      if (!id) return setSaveFailed(true);
       cleanup();
-      const cp: Counterparty = {
-        id: `cp-${Date.now()}`, name: v.name.trim(), bizNo: v.bizNo, issued: 0, ceo: v.ceo.trim() || undefined, address: v.address.trim() || undefined,
-        bizType: v.bizType.trim() || undefined, item: v.item.trim() || undefined, email: v.email || undefined,
-      };
-      q.addCounterparty(cp, s.pc === 'online');
-      onSaved(cp);
+      q.setPick(id);
+      onSaved({ id, name: v.name.trim(), bizNo: v.bizNo, issued: 0 });
     };
-    const notice = dup ? (
+    const notice = saveFailed ? (
+      <Notice testID="bizreg-save-failed">폰에 저장하지 못했어요. 다시 눌러 주세요</Notice>
+    ) : dup ? (
       <Notice testID="bizreg-dup">이미 있는 거래처예요: {dup.name}</Notice>
     ) : poor ? (
       <View style={{ gap: space.s2 }} testID="bizreg-poor">
@@ -212,7 +214,7 @@ export function BizRegScreen({
               <Button kind="quiet" label="다시 찍기" onPress={retake} />
             </>
           ) : (
-            <Button label="거래처로 저장" onPress={save} disabled={!ready} testID="bizreg-save" />
+            <Button label="거래처로 저장" onPress={() => void save()} disabled={!ready} testID="bizreg-save" />
           )
         }
       >
@@ -269,6 +271,7 @@ export function BizRegScreen({
       <View style={st.camTop}>
         <Pressable accessibilityRole="button" accessibilityLabel="닫기" onPress={() => {
             cleanup();
+            q.setPrefill(null);
             onDone();
           }} hitSlop={8} style={st.camSide}>
           <T v="subStrong" c="onCamera">

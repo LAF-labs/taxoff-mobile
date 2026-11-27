@@ -41,6 +41,7 @@ export function cardOf(s: Exclude<PhoneShow, { type: 'screen' }>): ChatCard {
       draft: { id: d.id, counterpartyId: d.counterpartyId, amount: d.amount, vat: d.vat ?? 'separate', item: d.item },
     };
   }
+  if (s.type === 'amend') return { title: s.card.view.title, rows: [], amend: { id: s.id, card: s.card } };
   return {
     title: s.title,
     rows: s.rows.map((r) => ({ label: `${r.date.slice(5).replace('-', '/')} ${r.counterparty}`, value: r.total === null ? '금액 없음' : won(r.total) })),
@@ -66,6 +67,7 @@ export class OfflineChat {
   reactionSink: ((r: ReactionId) => void) | null = null;
   private shown: Promise<Shown[]> | null = null;
   private reacts: Promise<Record<string, string>> | null = null;
+  private readonly kept = new Set<() => void>();
 
   constructor(ports: OfflinePorts) {
     this.ports = ports;
@@ -130,8 +132,10 @@ export class OfflineChat {
     return this.shown;
   }
 
+  /** 보인 항목을 남기거나 바꾼다(실패 줄, 수정 카드의 고친 값, 기록 화면에서 연 수정 카드). 다른 화면도 다시 읽게 알린다. */
   async keep(items: ChatItem[]): Promise<void> {
     await this.remember(items.filter(isShown));
+    for (const f of this.kept) f();
   }
 
   async forget(ids: string[]): Promise<void> {
@@ -153,7 +157,12 @@ export class OfflineChat {
   }
 
   subscribe(f: () => void): () => void {
-    return this.core.subscribe(f);
+    const off = this.core.subscribe(f);
+    this.kept.add(f);
+    return () => {
+      off();
+      this.kept.delete(f);
+    };
   }
 
   entrust(draftId: string): Promise<PhoneDraft | null> {

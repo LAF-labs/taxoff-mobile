@@ -1,11 +1,15 @@
-import type { CmdAckBody, CmdAckState, CmdRejectReason, GateRequestBody, GateResolvedBody, GateResolvedBy, GateResponseBody, PhoneIssueRequest, RunEventBody, RunPhase, RunResult } from '@sax/remote';
+import { amendCmd, checkIssueRequest, issueCmd, type CmdAckBody, type CmdAckState, type CmdRejectReason, type CmdRunBody, type GateRequestBody, type GateResolvedBody, type GateResolvedBy, type GateResponseBody, type PhoneAmendRequest, type PhoneIssueRequest, type RunEventBody, type RunPhase, type RunResult } from '../vendor/sax-remote/src/index.ts';
 import type { PhoneGate } from './approval';
-import type { Job, NeedPcReason } from './queue';
+import { EXPIRE_MS, type Job, type NeedPcReason } from './queue.ts';
 import { PASS_CARRIERS, STEPS, simpleAppOf, type RunView, type Step } from './run.ts';
 
 export interface PhoneCmd {
   cmdId: string;
   req: PhoneIssueRequest;
+  /** 수정세금계산서(ADR-058 결정 8)면 사장님이 카드에서 고른 사유와 고친 값. 있으면 req 대신 이것을 보낸다(req는 거래처와 날짜 기록용). */
+  amend?: PhoneAmendRequest;
+  /** 진행 카드와 기록에 보일 제목(수정이면 "거래처 세금계산서 고치기"). 없으면 "거래처 세금계산서". */
+  title?: string;
   cpName: string;
   total: number;
   createdAt: number;
@@ -14,7 +18,7 @@ export interface PhoneCmd {
   queuedAt?: number;
   ack?: CmdAckState;
   runId?: string;
-  reason?: CmdRejectReason;
+  reason?: CmdRejectReason | 'issue_date_stale';
   pcOld?: boolean;
   phase?: RunPhase;
   at?: number;
@@ -59,7 +63,12 @@ export function busyWaiting(c: PhoneCmd, now = Date.now()): boolean {
   return !c.pcOld && c.ack === 'rejected' && c.reason === 'pc_busy' && now - c.createdAt < BUSY_GIVE_UP_MS;
 }
 
-export const needsRedate = (c: PhoneCmd, now = Date.now()): boolean => busyWaiting(c, now) && c.req.day !== kstDay(now);
+export function offlineNeedsRedate(c: PhoneCmd, now = Date.now()): boolean {
+  return !c.pcOld && !c.runId && c.ack === 'rejected' && c.reason === 'issue_date_stale'
+    && now - c.createdAt < BUSY_GIVE_UP_MS;
+}
+
+export const needsRedate = (c: PhoneCmd, now = Date.now()): boolean => offlineNeedsRedate(c, now) || (busyWaiting(c, now) && c.req.day !== kstDay(now));
 
 export const retryDue = (c: PhoneCmd, now = Date.now()): boolean => busyWaiting(c, now) && !needsRedate(c, now) && (c.retryAt ?? 0) <= now;
 
@@ -68,15 +77,33 @@ export function forRetry(c: PhoneCmd): PhoneCmd {
 }
 
 export function redate(c: PhoneCmd, now = Date.now()): PhoneCmd {
+  if (offlineNeedsRedate(c, now)) return { ...c, req: { ...c.req, day: kstDay(now) }, ack: undefined, reason: undefined, sentAt: undefined, queuedAt: undefined };
+  if (!needsRedate(c, now)) return c;
   return { ...c, req: { ...c.req, day: kstDay(now) }, retryAt: now };
+}
+
+/** 3일 동안 PC에 닿지 못해 취소된 일을 오늘 날짜로 다시 맡긴다. PC가 받은 적 있는 일은 그대로 둔다. */
+export function reentrust(c: PhoneCmd, now = Date.now()): PhoneCmd {
+  if (c.sentAt || c.ack || now - c.createdAt < EXPIRE_MS) return c;
+  return { ...c, req: { ...c.req, day: kstDay(now) }, createdAt: now, queuedAt: undefined };
 }
 
 export function kstDay(now = Date.now()): string {
   return new Date(now + 9 * 3_600_000).toISOString().slice(0, 10);
 }
 
-export function issueRequest(p: { ref: string; supply: number; item: string; now?: number }): PhoneIssueRequest {
-  return { counterpartyRef: p.ref, supply: p.supply, tax: Math.floor(p.supply / 10), item: p.item.trim(), day: kstDay(p.now) };
+const issueTax = (supply: number): number => Math.floor(supply / 10);
+
+/** 거래처는 PC가 아는 ID(counterpartyRef)나, 폰에서 막 넣어 PC가 아직 모르는 등록번호와 상호(newCounterparty) 둘 중 하나. */
+export type IssueTarget = Pick<PhoneIssueRequest, 'counterpartyRef' | 'newCounterparty'>;
+
+export function issueRequest(p: { target: IssueTarget; supply: number; item: string; now?: number }): PhoneIssueRequest {
+  return { ...p.target, supply: p.supply, tax: issueTax(p.supply), item: p.item.trim(), day: kstDay(p.now) };
+}
+
+/** PC에 보낼 cmd.run 본문(발급 또는 수정). */
+export function cmdBody(c: PhoneCmd): CmdRunBody {
+  return c.amend ? amendCmd(c.cmdId, c.amend) : issueCmd(c.cmdId, c.req);
 }
 
 const isReattach = (a: CmdAckBody): boolean => a.state === 'rejected' && a.reason === 'duplicate' && !!a.runId;
@@ -86,7 +113,14 @@ export function applyAck(c: PhoneCmd, a: CmdAckBody, now = Date.now()): PhoneCmd
   if (isReattach(a)) return { ...c, ack: c.ack && c.ack !== 'rejected' ? c.ack : 'pc_only', runId: a.runId, reason: undefined };
   if (a.state === 'rejected' && c.phase) return c;
   if (a.state === 'rejected' && a.reason === 'pc_busy') return { ...c, ack: 'rejected', reason: 'pc_busy', runId: a.runId ?? c.runId, retryAt: now + BUSY_RETRY_MS };
-  return { ...c, ack: a.state, runId: a.runId ?? c.runId, reason: a.state === 'rejected' ? a.reason : undefined };
+  const runId = a.runId ?? c.runId;
+  const reason = a.state === 'rejected' ? a.reason : undefined;
+  const { req } = c;
+  if (reason === 'input_invalid' && !runId && !c.amend && req.day < kstDay(now)
+    && !checkIssueRequest(req) && req.tax === issueTax(req.supply)) {
+    return { ...c, ack: 'rejected', reason: 'issue_date_stale' };
+  }
+  return { ...c, ack: a.state, runId, reason };
 }
 
 export function applyEvent(c: PhoneCmd, e: RunEventBody): PhoneCmd {
@@ -173,7 +207,7 @@ export const deniedByPhone = (c: PhoneCmd): boolean => c.answer?.decision === 'd
 
 export function settled(c: PhoneCmd, now = Date.now()): boolean {
   if (c.pcOld) return true;
-  if (busyWaiting(c, now)) return false;
+  if (busyWaiting(c, now) || offlineNeedsRedate(c, now)) return false;
   if (c.ack === 'rejected') return true;
   if (deniedByPhone(c)) return true;
   if (c.phase === 'done') return !!c.result || c.code !== 'in_doubt';
@@ -185,7 +219,7 @@ export const REJECT_LINE: Record<CmdRejectReason | 'pc_old', string> = {
   playbook_unavailable: 'PC에 발급 절차가 아직 준비되지 않았어요. 아무것도 발급하지 않았어요.',
   input_invalid: 'PC가 이 내용을 받지 않았어요. 금액과 품목을 다시 확인해 주세요.',
   counterparty_unknown: '이 거래처를 찾지 못했어요. 거래처를 다시 골라 주세요.',
-  duplicate: '같은 일을 이미 PC에 맡겼어요. 진행은 지금 할 일에서 볼 수 있어요.',
+  duplicate: '같은 일을 이미 PC에 맡겼어요.',
   pc_busy: 'PC가 다른 일을 하고 있어요. 끝나면 다시 맡겨 주세요.',
   hometax_paused: '홈택스가 잠시 접속을 막아서 PC가 발급을 쉬고 있어요. 아무것도 발급하지 않았어요.',
   pc_old: 'PC 앱이 오래된 버전이라 폰에서 맡길 수 없어요.',
@@ -194,7 +228,7 @@ export const REJECT_LINE: Record<CmdRejectReason | 'pc_old', string> = {
 export function runViewOf(c: PhoneCmd): RunView | null {
   const startedAt = c.sentAt ?? c.createdAt;
   if (c.pcOld) return { kind: 'refused', reason: 'pc_old', startedAt };
-  if (c.ack === 'rejected') return { kind: 'refused', reason: c.reason ?? 'input_invalid', startedAt };
+  if (c.ack === 'rejected') return { kind: 'refused', reason: !c.reason || c.reason === 'issue_date_stale' ? 'input_invalid' : c.reason, startedAt };
   if (!c.ack) return c.sentAt ? { kind: 'running', step: 'prepare', startedAt, pcApproval: true } : null;
   if (c.turn && (c.resumeAt !== undefined || c.simpleOut !== undefined)) return { kind: 'running', step: 'login', startedAt, pcApproval: true };
   if (c.turn && c.code?.startsWith('login.simple_sent')) {
@@ -221,7 +255,7 @@ export function runViewOf(c: PhoneCmd): RunView | null {
           email: null,
           ...(c.result.emailSent === undefined ? {} : { emailSent: c.result.emailSent }),
           issuedAt: c.at ?? Date.now(),
-          doc: { name: `세금계산서_${c.cpName.replace(/\s+/g, '')}_${c.req.day.replace(/-/g, '')}.pdf`, issuedOn: c.req.day, uri: '' },
+          doc: { name: `${c.amend ? '수정세금계산서' : '세금계산서'}_${c.cpName.replace(/\s+/g, '')}_${c.req.day.replace(/-/g, '')}.pdf`, issuedOn: c.req.day, uri: '' },
         },
       };
     case 'stopped':
@@ -259,7 +293,7 @@ export function askSimple(c: PhoneCmd, value: string, app?: string): PhoneCmd {
 }
 
 export function jobOf(c: PhoneCmd): Job {
-  const title = `${c.cpName} 세금계산서`;
+  const title = c.title ?? `${c.cpName} 세금계산서`;
   const base = { id: `cmd-${c.cmdId}`, title, amount: c.total, createdAt: c.createdAt, pcOnly: true };
   if (needsRedate(c)) return { ...base, state: 'phoneWaiting', wait: 'newDay', waitDay: c.req.day };
   if (busyWaiting(c)) return { ...base, state: 'phoneWaiting', wait: 'pcBusy' };
@@ -275,5 +309,6 @@ export function jobOf(c: PhoneCmd): Job {
 
 /** PC가 꺼져 있을 때 큐에 맡길 발급: 아직 PC에 닿지 않았고 큐에도 넣지 않은 것. 큐가 24시간 뒤 지우면 다시 넣는다. */
 export function cmdsToQueue(cmds: readonly PhoneCmd[], ttlMs: number, now = Date.now()): PhoneCmd[] {
-  return cmds.filter((c) => !c.sentAt && !c.ack && (!c.queuedAt || now - c.queuedAt >= ttlMs) && !settled(c, now));
+  // 3일이 지나 큐 화면에서 "취소된 일"이 된 일은 다시 올리지 않는다([다시 맡기기]가 reentrust로 살린다).
+  return cmds.filter((c) => !c.sentAt && !c.ack && now - c.createdAt < EXPIRE_MS && (!c.queuedAt || now - c.queuedAt >= ttlMs) && !settled(c, now));
 }

@@ -2,7 +2,7 @@ interface Recv<E> {
   recv(timeoutMs: number): Promise<E | null>;
 }
 
-const CMD_TYPES: ReadonlySet<string> = new Set(['cmd.ack', 'run.event', 'gate.request']);
+const CMD_TYPES: ReadonlySet<string> = new Set(['cmd.ack', 'run.event', 'human.request', 'gate.request', 'gate.resolved']);
 
 export function tapping<C extends Recv<E>, E extends { type: string }>(ch: C, held: E[], keep: ReadonlySet<string> = CMD_TYPES): C {
   return new Proxy(ch, {

@@ -11,12 +11,50 @@
 - 단추 줄은 가장 중요한 단추가 맨 앞이다. 간격 8. 바닥 단추와 카드의 주 단추 줄은 줄을 꽉 채운다. 하나면 가득, 둘이면 반씩, 셋이면 한 줄에 하나씩 세 줄로 두고 주 단추가 맨 위다. 폭이 덜 찬 단추를 두지 않는다. 시트에서 그 밖의 동작은 시트 안 목록 줄로 둔다(대표 2026-11-24, TDS `BottomCTA` Single과 Double 실측). 카드나 목록 항목에 딸린 작은 단추(40)는 PC와 같이 오른쪽에 붙인다(대표 2026-11-24 캔버스 댓글 "이것들도 다 오른쪽으로").
 - 시트는 하나다. 바닥에서 올라오는 `overlay` 면, 위 모서리 22, 손잡이, 머리 줄 오른쪽 닫기 단추. 닫기 단추, 바깥 누르기, 아래로 끌기로 닫힌다. 바닥 단추는 하나나 둘이고 한 줄이다. 그 밖의 동작은 시트 안 목록 줄로 둔다. 확인도 같은 시트로 묻고 단추 둘을 반씩 나란히 둔다. 주 단추 자리는 아래 "단추 자리" 절.
 - 금액 고치기는 항목마다 두 줄이다. 윗줄에 이름과 기존 금액, 아랫줄에 카드 폭을 다 쓰는 고칠 금액 칸. 공급가액, 부가세, 합계는 서로 따라 바뀐다. 누른 입력 칸은 어디서나 같다. 파란 테두리를 쓰지 않고 옅은 회색 선과 뒤 그림자, 커서로 알린다.
-- 아래 탭바는 떠 있는 탭바다. 평소에는 아이콘 아래 작은 글자를 두고, 줄어들면 아이콘만 남긴다(대표 2026-11-24). 스크롤하면 폭은 그대로 높이만 줄고 입력창과 맨 아래로 단추가 함께 내려간다(#68).
+- 아래 탭바와 "지금 할 일" 줄은 없다(대표 2026-11-24, 화면을 넓게 쓰려고). 맨 위 화면(대화, 돈, 발급 기록, 알림함, 설정)은 왼쪽 위 더보기(새 알림이면 파란 점), 가운데 제목, 오른쪽 위 PC 상태를 띄우고 본문이 그 밑으로 지나간다. 두 단추는 뒤 글이 비치는 투명한 유리 단추다(iOS 26은 애플 기본 맑은 유리 clear, 그 전은 가장 얇은 흐림). 값은 ChatGPT iOS 캡처 실측: 위 단추 44, 화면 끝에서 16, 상태 막대 바로 아래.
+- 더보기는 왼쪽에서 밀려 나오는 서랍(폭 320, 뒤 화면이 64 이상 보이게)이다. 대화, 돈, 발급 기록, 거래처, 틈, 알림함(새 알림 수), 맨 아래 설정. 뒤 화면은 오른쪽으로 밀리고 딤이 덮는다. 바깥 누르기, 왼쪽으로 끌기, 뒤로(안드로이드), Esc(웹)로 닫힌다. 새 맨 위 화면은 서랍에 줄을 더한다. 부품은 `src/ui/float.tsx`, `src/ui/drawer.tsx`.
+- 대화 입력창은 떠 있는 캡슐이다. 양옆 38, 높이 46, 홈 인디케이터 위 4, 안에 [+], 글 칸, 보내기(32). 맨 아래로 단추는 34 동그라미이고 입력창 위 14에 뜬다.
 - 화면(`src/screens/`)에서 `Modal`, 딤, 테두리, 색 값, 글자 크기, 모서리 값을 직접 쓰지 않는다. `src/ui/` 부품과 `src/theme.ts` 토큰만 쓴다. 부품에 없는 모양이 필요하면 부품을 먼저 더한다.
 
-검사는 `node test/design-check.ts`(시험 `test/design-rules.spec.ts`, `pnpm check`에 들어 있다)다. 지금 남은 어긋남은 `test/design-baseline.json`에 파일별 개수로 적혀 있고(2026-11-24 기준 150곳), 개수가 늘면 시험이 실패한다. 고쳐서 줄이면 `--update`로 기준선을 낮춘다. 기준선을 올리지 않는다. `--list`를 붙이면 어긋난 곳을 줄 번호와 함께 찍는다.
+검사는 `node test/design-check.ts`(시험 `test/design-rules.spec.ts`, `pnpm check`에 들어 있다)다. 지금 남은 어긋남은 `test/design-baseline.json`에 파일별 개수로 적혀 있고, 개수가 늘면 시험이 실패한다. 고쳐서 줄이면 `--update`로 기준선을 낮춘다. 기준선을 올리지 않는다. `--list`를 붙이면 어긋난 곳을 줄 번호와 함께 찍는다.
 
-아직 코드에 없는 부품(승인 뒤 만든다): `Card`(종류 아이콘), `Actions`, 공용 `Sheet`. 지금은 확인, 알림 허용, 승인, 발급, 간편인증, 다시 연결 시트가 화면마다 따로 있다.
+### 부품은 하나씩이다(2026-11-25, 대표 "구버전 화면이 다시 나타나지 않도록")
+
+기준판 `kit.css`의 값을 그대로 옮긴 부품이다. 화면은 이것만 써서 짓고, 같은 모양을 화면 파일에서 다시 만들지 않는다.
+
+| 부품 | 파일 | 기준판 | 값 |
+|---|---|---|---|
+| `Card`, `CardIcon` | `src/ui/card.tsx` | `sx-card`, `sx-card-hd` | tint 면, 모서리 16, 안쪽 16, 사이 12. 제목 17/600 앞에 18 아이콘 |
+| `Kv`, `KvRow` | `src/ui/card.tsx` | `sx-kv ph-sub` | 15/22, 줄 사이 6. 라벨 ink3, 값 ink, 합계 600. 고르는 값은 꺾쇠, 그 자리에서 고치는 값은 `edit` |
+| `AmountEdit`, `CardInput` | `src/ui/card.tsx` | `sx-amt`, `sx-amt-in` | 윗줄 이름과 기존 금액(ink3), 아랫줄 44 칸, 모서리 12, 바탕색 면, 오른쪽 600. 숫자 자판 위 [완료](`KeyboardDone`) |
+| `Actions` | `src/ui/card.tsx` | `sx-actions is-fill` | 하나면 가득, 둘이면 반씩, 셋이면 한 줄에 하나씩. `fit`은 목록 카드의 오른쪽 단추 |
+| `ListCard` | `src/ui/card.tsx` | `ph-item` | 밀린 일 같은 목록의 카드. 윗줄 이름과 금액, 상태 한 줄, 단추 |
+| `CardChoice` | `src/ui/card.tsx` | | 카드 안에서 여럿 중 하나 고르기(어느 계산서인지) |
+| `Button` | `src/ui/kit.tsx` | `sx-btn` | 카드 안(`Card`, `ListCard`)이면 저절로 40, 15, 보조 면은 바탕색. 밖이면 52 |
+| `Sheet` | `src/ui/sheet.tsx` | `ph-sheet` | overlay 면, 모서리 22, 손잡이, 머리 줄(이전, 아이콘, 제목과 단계, 닫기 32). `height="fit"`은 내용 높이, 숫자면 고정 |
+| `ConfirmSheet` | `src/ui/sheet.tsx` | Phone-Confirm | 시트 머리에 묻는 말, 설명 한 줄(ink2), 큰 단추 반씩(주 단추 앞). 가운데 큰 아이콘 없음 |
+| `PickRows`, `ChoiceGrid` | `src/ui/sheet.tsx` | Phone-Reason | 시트 안 하나 고르기. 줄 52 체크, 또는 세 칸 격자(테두리와 체크) |
+| `Seg` | `src/ui/kit.tsx` | `.ph .sx-seg` | 알약, 칸 32, 15. 내용 폭만큼 왼쪽. `fill`이면 줄 폭 |
+| `Empty` | `src/ui/kit.tsx` | `ph-empty`, `ph-blank` | 단추가 있으면 굵은 한 줄과 꽉 찬 단추, 없으면 아이콘과 보통 한 줄 |
+
+지운 옛 부품: kit `ConfirmSheet`(가운데 아이콘), kit `SearchField`(form과 둘), card.tsx의 두 번째 `Sheet`, `actionFlex`, `PcGlyph`, `FlapText`. 승인 시트, 간편인증 시트, 발급 시트, 다시 연결 시트, 알림 허용 시트, 기록 시트는 모두 `Sheet` 하나로 옮겼다.
+
+design-check가 막는 것(위 규칙에 더해):
+
+- `card-adhoc`: 화면 파일에서 모서리 16, 22 면을 짓는 것(카드, 묶음, 시트를 따로 만듦)
+- `button-adhoc`: 화면 파일에서 `<Button style=…>`로 폭, 면, 높이를 덧입히는 것, `actionFlex`
+- `gray-note`: `Group note` 회색 설명 줄
+- `part-dup`: 같은 이름의 공용 부품이 `src/ui` 두 파일에 있는 것
+- `sheet-adhoc`: `src/ui/sheet.tsx`와 서랍(`drawer.tsx`) 밖에서 Modal이나 딤을 그리는 것
+
+거래처 화면(2026-11-24 대표 승인 캔버스 "폰 거래처 화면 시안")에서 더한 부품:
+
+- `SearchField`(`src/ui/form.tsx`): 찾기 칸(기준판 문서함과 같은 부품). 높이 44, 모서리 12, 돋보기, 글이 있으면 지우기 단추. 누르면 누른 입력 칸 모양.
+- `FormField`: 고치기 화면의 칸. 라벨 위, 테두리 없는 채움 칸(높이 52, 모서리 12). 바꿀 수 없는 칸은 흐린 글과 자물쇠.
+- `BigInput`: 시트에서 한 단계씩 묻는 칸. 묻는 말 22/700, 밑줄 하나에 값 22/600, 틀리면 황토 밑줄과 한 줄.
+- `Screen cta`: 바닥에 뜬 주 단추 줄(선 없이 위 24가 바탕색으로 흐려진다). `Screen backText`: 글이 붙은 뒤로(‹ 거래처), `TextButton`: 머리 줄 오른쪽 글 단추(수정).
+- 글자: `heading` 24/700(자세히 화면 맨 위 이름), `ask`와 `askValue` 22(시트의 묻는 말과 답). 큰 글씨는 이 셋과 페어링 6자리뿐이다.
+- 그림: 거래처 건물(더보기 메뉴), 돋보기, 더하기, 카메라, 자물쇠, 복사, 닫기.
 
 ## 크기
 
@@ -47,11 +85,11 @@
 | `Button` | primary(ink 채움 알약) 한 화면에 하나, secondary(tint), quiet(글자). 주요 단추는 누를 때 가벼운 진동 |
 | `Group` / `Row` | 묶음과 줄. 왼쪽 라벨, 오른쪽 값, 누를 수 있으면 꺾쇠 |
 | `Field` | 확인 화면의 값 칸: 평소에는 글자, 누르면 그 자리에서 칸. 빈 칸은 `line-strong` 테두리가 늘 보인다. 오류는 칸 아래에 남고, 한 번에 고치는 제안(예: 합계 맞추기)을 붙일 수 있다 |
-| `Seg` | 둘 중 하나(매입·매출, 영수·청구) |
+| `Seg` | 둘이나 셋 중 하나. 알약 틀(안쪽 3), 칸 높이 32, 고른 칸은 바탕 면과 굵은 글(기준판 sx-seg). 카드 안에서는 글 폭만큼, `fill`이면 가로 전체 |
 | `Replies` | 전폭 답 후보(Muse 확인 UI). tint 채움 면, 테두리 없음(PC와 같게 점선 안 씀). 고르면 ink 실선 + 체크로 굳는다 |
 | `StatusDot` | 점 + 글자. 진행 중이면 2.4초 주기로 숨 쉰다(동작 줄이기면 멈춤) |
 | `Notice` | 사라지지 않는 안내 한 줄(한 화면에 하나까지) |
-| `Empty` | 빈 화면: 무엇이 비었는지 · 왜 · 다음 할 일 하나 |
+| `Empty` | 빈 화면. 할 일이 없으면 아이콘과 보통 글 한 줄(기준판 ph-empty), 할 일이 있으면 굵은 한 줄과 전체 폭 단추 하나(ph-blank) |
 | `Pill` | 묶음 줄 안의 작은 동작(바탕색 알약 36, 누름 영역 44). 밀린 일 [취소] [다시 맡기기] 등 |
 
 ## 돈 탭(기획 v2 PR 8, 11-cash-flow §3.7)
@@ -113,8 +151,8 @@
 
 ## 앱 틀과 대화 홈(기획 v2)
 
-- 아래 탭 셋(홈 · 돈 · 기록), 글자만. 고른 탭은 ink 600 + 밑 막대. 키보드가 올라오면 탭 줄을 숨기고 입력 줄이 키보드 위에 붙는다.
-- 홈 맨 위: PC 한 줄(켜짐 파랑 점 · 꺼짐 "마지막 접속 n시간 전" · 오래 꺼짐 황토 · 연결 안 됨), 그 밑 "지금 할 일" tint 한 줄.
+- 아래 탭과 "지금 할 일" 줄은 2026-11-24에 없앴다. 위 "확정 기준 v3.0"의 더보기 서랍과 떠 있는 입력창을 따른다. 키보드가 올라오면 입력창이 키보드 위에 붙는다.
+- 홈 맨 위: 오른쪽 위 PC 상태 알약(켜짐 파랑 점, 꺼짐 "n시간 전", 다시 연결 필요 황토, 연결 전). 누르면 PC 연결 화면.
 - 연결 전 홈: PC 한 줄은 "PC 연결 안 됨" 점만, 가운데 tint 면에 안내 두 줄 + [PC와 연결](ink 채움, 주 단추 하나) → QR 찍기.
 - 대화: PC 답은 바탕 위 글자, 카드 답은 tint 면(라벨·값 두 칸, 합계는 600), 내 말은 오른쪽 tint 말풍선. 폰에서 나눈 구간은 가운데 tint 알약 머리("폰에서 나눈 대화 · 오전 8:10~9:40").
 - 바닥: 빠른 일 tint 알약(44) + 입력 칸 + [보내기](ink 알약, 이 화면의 주요 단추).
@@ -157,7 +195,7 @@
 
 ## 점검
 
-`pnpm gallery`로 화면 갤러리를 웹으로 묶는다(가짜 세션, 네트워크·키·카메라 없음). `?s=home-chat-online`, `home-chat-offline`, `home-chat-merged`, `home-unpaired`, `home-chat-empty`, `home-phone-empty`, `home-phone-typing`, `home-phone-reply`, `home-phone-failed`, `home-phone-limit`, `home`, `home-stale`, `money-empty`, `money-copy`, `money-copy-unsure`, `money-copy-no-account`, `issue-picker-copy`, `issue-copy-filled`, `issue-copy-online`, `run-pc-prepare`, `run-pc-readback`, `run-pc-approve`, `run-pc-in-doubt`, `run-pc-stopped`, `run-pc-turn-simple`, `run-pc-turn-other`, `home-chat-pc-turn`, `queue-pc-turn`, `run-pc-turn-choice`, `run-pc-turn-choice-failed`, `run-pc-simple-wait`, `run-pc-simple-timeout`, `simple-sheet-app`, `simple-sheet-carrier`, `simple-sheet-name`, `simple-sheet-phone`, `simple-sheet-confirm`, `simple-sheet-failed`, `run-pc-done`, `run-pc-refused`, `run-pc-busy`, `run-pc-old`, `home-chat-pc-run`, `lock-faceid`, `lock-touchid`, `lock-android`, `lock-failed`, `lock-passcode-fallback`, `lock-no-biometric-passcode`, `lock-no-passcode`, `onboarding-easy`, `onboarding-what`, `onboarding-safe`, `onboarding-pair`, `onboarding-paired`, `lock-first-run`, `lock-first-run-no-bio`, `lock-first-run-no-passcode`, `lock-cover`, `records-empty`, `settings`, `settings-unpaired`, `settings-text-small`, `settings-text-large`, `settings-notify`, `settings-notify-ask`, `settings-notify-off`, `notify-banner`, `notify-banner-turn`, `push-ask`, `queue-refused`, `home-chat-entrusted`, `queue-mixed`, `queue-empty`, `issue-picker`, `issue-picker-empty`, `issue-filled-online`, `issue-filled-offline`, `issue-stale`, `issue-first-counterparty`, `issue-duplicate`, `issue-limit`, `issue-inexact`, `approval-default`, `approval-arming`, `approval-urgent`, `approval-expired`, `approval-dup`, `approval-dup-acked`, `approval-unknown`, `approval-first`, `approval-limit`, `approval-no-key`, `approval-ios-allowed`, `approval-ios-policy-blocked`, `approval-mismatch`, `approval-in-doubt`, `approval-long`, `run-prepare`·`run-login`·`run-readback`·`run-issue`·`run-verify-step`, `run-simple-auth`, `run-simple-auth-unknown`, `run-cert`, `run-stop-blocked`, `run-stop-blocked-reserved`, `run-stop-unknown-screen`, `run-stop-date`, `run-stop-input`, `run-in-doubt`, `run-verify-needed`, `result-email`, `result-no-email`, `result-long`, `home-chat-run`, `home-chat-result`, `queue-with-done`, `doc-loading`, `doc-receiving`, `doc-pc-off`, `doc-pc-off-asked`, `doc-backup`, `doc-error`, `doc-ready`, `doc-long`, `demo`, `demo-in-doubt`, `bizreg-camera`, `bizreg-confirm`, `bizreg-email-empty`, `bizreg-low-conf`, `bizreg-checksum`, `bizreg-blurry`, `bizreg-existing`, `bizreg-long`, `issue-new-checking`, `issue-new-pc-off`, `issue-new-closed`, `bizreg-camera-denied`, `bizreg-album`, `bizreg-pdf`, `camera`(앨범 단추), `money-ok`, `money-late`, `money-shortfall`, `money-unsure`, `money-last`, `money-no-account`, `money-loading`, `money-error`, `money-empty`, `money-unpaired`, `money-recv`, `money-recv-marked`, `money-recv-late`, `money-pay`, `money-mark`, `money-mark-offline`, `cash`, `connection`, `devices`, `devices-full`, `devices-suspended`, `devices-error`, `devices-stopped`, `devices-unpaired`, `devices-loading`, `invoice-confirm`, `invoice-issues`, `receipt-confirm`, `saved`, `camera`를 라이트·다크로 본다. `&fs=1.6`을 붙이면 글자 크기 1.6배를, `&w=375&h=667`이면 작은 폰(SE)을 흉내 낸다. 웹 번들에만 들어가고 앱 번들에는 들어가지 않는다(`metro.config.cjs`).
+`pnpm gallery`로 화면 갤러리를 웹으로 묶는다(가짜 세션, 네트워크·키·카메라 없음). `?s=home-chat-online`, `home-chat-offline`, `home-chat-merged`, `home-unpaired`, `home-chat-empty`, `home-phone-empty`, `home-phone-typing`, `home-phone-reply`, `home-phone-failed`, `home-phone-limit`, `home`, `home-stale`, `money-empty`, `money-copy`, `money-copy-unsure`, `money-copy-no-account`, `run-pc-prepare`, `run-pc-readback`, `run-pc-approve`, `run-pc-in-doubt`, `run-pc-stopped`, `run-pc-turn-simple`, `run-pc-turn-other`, `home-chat-pc-turn`, `queue-pc-turn`, `run-pc-turn-choice`, `run-pc-turn-choice-failed`, `run-pc-simple-wait`, `run-pc-simple-timeout`, `simple-sheet-app`, `simple-sheet-carrier`, `simple-sheet-name`, `simple-sheet-phone`, `simple-sheet-confirm`, `simple-sheet-failed`, `run-pc-done`, `run-pc-refused`, `run-pc-busy`, `run-pc-old`, `home-chat-pc-run`, `lock-faceid`, `lock-touchid`, `lock-android`, `lock-failed`, `lock-passcode-fallback`, `lock-no-biometric-passcode`, `lock-no-passcode`, `onboarding-easy`, `onboarding-what`, `onboarding-safe`, `onboarding-pair`, `onboarding-paired`, `lock-first-run`, `lock-first-run-no-bio`, `lock-first-run-no-passcode`, `lock-cover`, `records-empty`, `settings`, `settings-unpaired`, `settings-text-small`, `settings-text-large`, `settings-notify`, `settings-notify-ask`, `settings-notify-off`, `notify-banner`, `notify-banner-turn`, `push-ask`, `queue-refused`, `home-chat-entrusted`, `queue-mixed`, `queue-empty`, `approval-default`, `approval-arming`, `approval-urgent`, `approval-expired`, `approval-dup`, `approval-dup-acked`, `approval-unknown`, `approval-first`, `approval-limit`, `approval-no-key`, `approval-ios-allowed`, `approval-ios-policy-blocked`, `approval-mismatch`, `approval-in-doubt`, `approval-long`, `run-prepare`·`run-login`·`run-readback`·`run-issue`·`run-verify-step`, `run-simple-auth`, `run-simple-auth-unknown`, `run-cert`, `run-stop-blocked`, `run-stop-blocked-reserved`, `run-stop-unknown-screen`, `run-stop-date`, `run-stop-input`, `run-in-doubt`, `run-verify-needed`, `result-email`, `result-no-email`, `result-long`, `home-chat-run`, `home-chat-result`, `queue-with-done`, `doc-loading`, `doc-receiving`, `doc-pc-off`, `doc-pc-off-asked`, `doc-backup`, `doc-error`, `doc-ready`, `doc-long`, `demo`, `demo-in-doubt`, `bizreg-camera`, `bizreg-confirm`, `bizreg-email-empty`, `bizreg-low-conf`, `bizreg-checksum`, `bizreg-blurry`, `bizreg-existing`, `bizreg-long`, `bizreg-camera-denied`, `bizreg-album`, `bizreg-pdf`, `camera`(앨범 단추), `money-ok`, `money-late`, `money-shortfall`, `money-unsure`, `money-last`, `money-no-account`, `money-loading`, `money-error`, `money-empty`, `money-unpaired`, `money-recv`, `money-recv-marked`, `money-recv-late`, `money-pay`, `money-mark`, `money-mark-offline`, `cash`, `connection`, `devices`, `devices-full`, `devices-suspended`, `devices-error`, `devices-stopped`, `devices-unpaired`, `devices-loading`, `invoice-confirm`, `invoice-issues`, `receipt-confirm`, `saved`, `camera`, `customers-list`, `customers-search`, `customers-search-none`, `customer-detail`, `customer-detail-closed`, `customer-edit`, `customer-add-number`, `customer-add-wrong`, `customer-add-same`, `customer-add-name`, `customers-empty`, `customers-unpaired`, `customers-menu`를 라이트·다크로 본다. `&fs=1.6`을 붙이면 글자 크기 1.6배를, `&w=375&h=667`이면 작은 폰(SE)을 흉내 낸다. 웹 번들에만 들어가고 앱 번들에는 들어가지 않는다(`metro.config.cjs`).
 
 ## 단추 자리(2026-11-23)
 

@@ -26,12 +26,16 @@ import {
   type Vat,
 } from './tables.ts';
 import { estimateTokens } from './tokens.ts';
+import { draftDate } from './draft-extra.ts';
+import { amendCurrent } from './amend.ts';
+import { amendCardNew, amendSaidDelta, type AmendCard, type AmendSaid, type AmendSource } from './amend-card.ts';
+import { splitVat } from './fill.ts';
 import { ACK_REPLY_HINT, REACTIONS, TurnRecorder, capStreak, isReaction, reactedLine, routeAck, type ReactionId, type RouteAck, type TurnEvent } from './turn.ts';
 
-/** 한 번 부를 때의 입력 상한(추정 토큰, 머리말·도구 정의 포함). 하루 한도(체험 50원·구독 300원) 안에서 대화 횟수를 지키는 값이다. */
+/** 한 번 부를 때의 입력 상한(추정 토큰, 머리말·도구 정의 포함). 주간 한도(한 주 1,000원, ADR-067) 안에서 대화 횟수를 지키는 값이다. */
 export const PHONE_CONTEXT_MAX_TOKENS = 8000;
 /** chat_phone 머리말 + 도구 정의 + 출력 스키마의 추정 토큰(넉넉하게). 시험이 실제 머리말의 추정값이 이보다 작은지 본다. */
-export const PHONE_PREFIX_EST_TOKENS = 5400;
+export const PHONE_PREFIX_EST_TOKENS = 5800;
 /** [앞 대화]에 두는 사용자 턴 수 상한. 넘으면 오래된 절반을 한꺼번에 요약으로 접는다. */
 export const PHONE_TURNS_MAX = 20;
 /** [사실]에 미리 조회해 넣는 거래처 수 상한 */
@@ -76,7 +80,7 @@ export const PHONE_ERROR_TEXT: Record<PhoneChatErrorCode, { text: string; retry:
   'chat.bad_response': { text: PHONE_UNAVAILABLE_TEXT, retry: true },
   'chat.budget_exceeded': { text: '대화가 길어졌어요. 잠시 뒤에 다시 말해 주세요.', retry: true },
   'chat.quota_exceeded': { text: '이번 달 대화를 다 썼어요.', retry: false },
-  'chat.daily_limit': { text: '오늘 쓸 수 있는 대화를 다 썼어요. 새벽 4시에 다시 채워져요.', retry: false },
+  'chat.weekly_limit': { text: '이번 주 대화를 다 썼어요. 월요일에 다시 채워져요. 세금계산서 발급과 승인은 그대로 할 수 있어요.', retry: false },
   'chat.subscription_required': { text: '무료 체험이 끝났어요. 구독하면 대화를 다시 쓸 수 있어요.', retry: false },
   'chat.rate_limited': { text: '요청이 잠깐 몰렸어요. 조금 뒤에 다시 보내 주세요.', retry: true },
   'chat.device_suspended': { text: '이 폰의 연결이 정지되어 있어요. 설정의 연결된 기기에서 확인해 주세요.', retry: false },
@@ -102,6 +106,14 @@ export interface CopyRow {
   date: string;
   total: number | null;
   approvalNo?: string | null;
+  /** 수정세금계산서(ADR-058)에 쓰는 값. PC가 amend.v1 사본으로 넘길 때만 있다. date는 발급한 날, issueDate는 작성일자. */
+  supply?: number | null;
+  tax?: number | null;
+  item?: string | null;
+  issueDate?: string | null;
+  /** 수정분이면 당초분 승인번호 */
+  amendOf?: string | null;
+  amend?: { cancelled: boolean; replaced: boolean; adjusted: { supply: number; tax: number } } | null;
 }
 
 export interface PhoneCopy {
@@ -111,6 +123,24 @@ export interface PhoneCopy {
   issued: CopyRow[] | null;
   receivables: CopyRow[] | null;
   sales?: CopyRow[] | null;
+}
+
+/**
+ * 사본의 발급 줄을 수정 카드의 원본으로 바꾼다(대화의 invoice_amend와 기록 화면의 [고치기], [취소]가 같이 쓴다).
+ * 수정분 줄, 금액을 모르는 줄, 거래처를 모르는 줄은 뺀다. rows가 표 결과 줄이면 승인번호로 사본의 줄을 다시 찾는다.
+ */
+export function amendSourcesOf(copy: PhoneCopy, rows: readonly CopyRow[]): AmendSource[] {
+  const byNo = new Map((copy.issued ?? []).filter((x) => x.approvalNo).map((x) => [x.approvalNo!, x]));
+  return rows.flatMap((r): AmendSource[] => {
+    const x = r.approvalNo ? (byNo.get(r.approvalNo) ?? r) : null;
+    const c = x?.counterpartyId ? copy.counterparties.find((b) => b.id === x.counterpartyId) : undefined;
+    if (!x || !c || x.amendOf || typeof x.supply !== 'number' || typeof x.tax !== 'number' || x.supply <= 0) return [];
+    const a = x.amend ?? null;
+    return [{
+      approvalNo: x.approvalNo!, issueDate: x.issueDate ?? x.date, issuedOn: x.date, counterpartyId: c.id, counterpartName: c.name, counterpartBizNo: (c.bizNo ?? '').replace(/\D/g, ''),
+      item: x.item ?? c.item ?? '', supply: x.supply, tax: x.tax, adjusted: a?.adjusted ?? null, cancelled: a?.cancelled ?? false, replaced: a?.replaced ?? false,
+    }];
+  });
 }
 
 export interface PhoneDraft {
@@ -142,7 +172,7 @@ export interface PhoneTableRow {
   total: number | null;
   approvalNo: string | null;
 }
-export type PhoneShow = { type: 'card'; draft: PhoneDraft; counterparty: string } | { type: 'screen'; screen: PhoneScreen } | { type: 'table'; table: 'sales' | 'history' | 'receivables'; title: string; rows: PhoneTableRow[]; copy: PhoneCopyState };
+export type PhoneShow = { type: 'card'; draft: PhoneDraft; counterparty: string } | { type: 'amend'; id: string; card: AmendCard } | { type: 'screen'; screen: PhoneScreen } | { type: 'table'; table: 'sales' | 'history' | 'receivables'; title: string; rows: PhoneTableRow[]; copy: PhoneCopyState };
 
 export type PhoneTurnResult =
   | {
@@ -197,7 +227,8 @@ type DomainCall =
   | { tool: 'invoice_draft'; counterpartyId: string; amount: DraftAmount; vat: Vat | null; item: string | null }
   | { tool: 'draft_edit'; draft: string; amount: DraftAmount; vat: Vat | null; item: string | null }
   | { tool: 'draft_discard'; draft: string }
-  | { tool: 'open_screen'; screen: PhoneScreen };
+  | { tool: 'open_screen'; screen: PhoneScreen }
+  | { tool: 'invoice_amend'; invoice: string | null; counterpartyId: string | null; amount: DraftAmount; vat: Vat | null; item: string | null; date: { monthOffset: number | null; day: string | null } | null };
 
 interface Turn {
   user: RedactedText;
@@ -205,6 +236,9 @@ interface Turn {
   done: Map<string, ToolOutput>;
   made: string[];
   created: string[];
+  amends: Array<{ id: string; card: AmendCard }>;
+  /** 사장님이 쓴 말 그대로(가리기 전). 깎아 줌, 반품 같은 말을 읽는 데만 쓴다. */
+  text: string;
   frameRefs: Set<string>;
   unknownName?: string;
   intent: IssueIntent;
@@ -460,7 +494,7 @@ export class PhoneChat {
       }
     } else rec.emit({ type: 'route', act: null, domain: null, mode: 'answer', band: 'lt80', unsure: true, failed: true });
     rec.emit({ type: 'path', path: 'tools', tools: [] });
-    const turn: Turn = { user, replay: [], done: new Map(), made: [], created: [], frameRefs: new Set(cards.map((c) => c.ref)), intent: issueIntent(user), screens: [], reaction, ackReply: !!ack?.capped, replied };
+    const turn: Turn = { user, replay: [], done: new Map(), made: [], created: [], amends: [], text, frameRefs: new Set(cards.map((c) => c.ref)), intent: issueIntent(user), screens: [], reaction, ackReply: !!ack?.capped, replied };
     const facts = this.facts(st, s, copy, now, user);
     const message = this.compose(st, s, copy, now, turn, facts, cards);
     s.turns++;
@@ -673,6 +707,16 @@ export class PhoneChat {
         return d ? { tool: 'draft_discard', draft: d } : out('no_such_draft');
       },
       open_screen: () => ({ tool: 'open_screen', screen: a.screen as PhoneScreen }),
+      invoice_amend: () => {
+        const ref = a.invoice === null || a.invoice === undefined ? null : String(a.invoice).trim();
+        if (ref !== null && !/^r[1-9]\d{0,5}$/.test(ref)) throw bad();
+        const id = a.counterparty === null || a.counterparty === undefined ? null : cp(a.counterparty);
+        if (a.counterparty !== null && a.counterparty !== undefined && !id) return unknown(a.counterparty);
+        const mo = a.date_month_offset;
+        const day = a.date_day;
+        const date = (mo === null || mo === undefined) && (day === null || day === undefined) ? null : { monthOffset: typeof mo === 'number' ? mo : null, day: day === null || day === undefined ? null : String(day).trim() };
+        return { tool: 'invoice_amend', invoice: ref && this.results.has(ref) ? ref : null, counterpartyId: id, amount: amount(a.amount ?? null), vat: vat(a.vat), item: item(a.item ?? null), date };
+      },
     };
     if (!Object.hasOwn(parse, c.name)) throw bad();
     return parse[c.name]();
@@ -736,6 +780,8 @@ export class PhoneChat {
         turn.created.push(d.ref);
         return out('card_shown', d.ref);
       }
+      case 'invoice_amend':
+        return this.amend(copy, now, call, turn);
       case 'draft_edit':
       case 'draft_discard': {
         const d = st.drafts.find((x) => x.ref === call.draft && x.state !== 'discarded');
@@ -765,6 +811,41 @@ export class PhoneChat {
         return out('card_updated', d.ref);
       }
     }
+  }
+
+  /**
+   * 수정세금계산서 카드(ADR-058 결정 3, 8). 사본의 발급 기록에서 당초분 후보를 찾는다(승인번호와 금액이 있는 것, 수정분과 이미 취소하거나 다시 발급한 것은 뺀다).
+   * 사유는 비워 둔다. 사장님이 카드에서 고른다.
+   */
+  private amend(copy: PhoneCopy | null, now: number, call: Extract<DomainCall, { tool: 'invoice_amend' }>, turn: Turn): ToolOutput {
+    if (!copy?.issued) return out('not_on_phone');
+    const cp = call.counterpartyId === null ? null : copy.counterparties.find((c) => c.id === call.counterpartyId);
+    if (cp === undefined) return out('unknown_counterparty');
+    const res = call.invoice ? this.results.get(call.invoice) : undefined;
+    if (!res && !cp) return out('needs_input', null, ['counterparty']);
+    if (res && res.kind === 'receivables') return out('not_amendable');
+    const pool = newestFirst(res ? res.rows : copy.issued);
+    const rows = cp ? pool.filter((x) => x.counterpartyId === cp.id || (x.counterpartyId === null && x.counterparty === cp.name)) : pool;
+    if (!rows.length) return out('empty');
+    const sources = amendSourcesOf(copy, rows);
+    const open = sources.filter((x) => !x.cancelled && !x.replaced);
+    if (!open.length) return out('not_amendable');
+    if (open.length === 1 && amendCurrent(open[0]!).total <= 0) return out('nothing_left');
+    const said: AmendSaid = {};
+    const today = kstDate(now);
+    const d = call.date ? draftDate(today, call.date.monthOffset, call.date.day) : null;
+    if (d && d !== 'bad') said.issueDate = d;
+    const amt = this.amount(call.amount);
+    if (amt) {
+      const v = splitVat(amt.value, call.vat ?? amt.vat ?? 'separate');
+      said.supply = v.supply;
+      said.tax = v.tax;
+      if (amendSaidDelta(turn.text)) said.delta = true;
+    }
+    const item = call.item === null ? null : cleanItem(call.item);
+    if (item) said.item = item;
+    turn.amends.push({ id: this.ports.newId(), card: amendCardNew(open, said, today) });
+    return out('amend_card_shown');
   }
 
   private amount(a: DraftAmount): { value: number; vat: Vat | null } | null {
@@ -864,6 +945,7 @@ export class PhoneChat {
       else card(ref);
     }
     for (const ref of turn.created) card(ref);
+    for (const a of turn.amends) show.push({ type: 'amend', id: a.id, card: a.card });
     for (const screen of turn.screens) show.push({ type: 'screen', screen });
     const name = reply.filtered ? undefined : turn.unknownName?.trim();
     const unknown = name && !copy?.counterparties.some((c) => c.name === name) ? { name, text: `${name}${finalOf(name) ? fixJosa(name, '은 폰에 받아 둔 거래처 목록에 없어요.') : '은(는) 폰에 받아 둔 거래처 목록에 없어요.'}` } : undefined;

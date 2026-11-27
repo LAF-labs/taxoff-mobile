@@ -10,6 +10,7 @@ import { clearDeviceToken } from './src/net/devauth';
 import { closeOfflineChat } from './src/offline/device';
 import { ensureFreshInstall, forget, markOnboarded, type DeviceKeys } from './src/keyring';
 import { sweepCaptureTemps } from './src/storage/files';
+import { sweepTemps as sweepDocTemps } from './src/docs/box';
 import { CaptureScreen } from './src/screens/CaptureScreen';
 import { CashScreen } from './src/screens/CashScreen';
 import { ConnectionScreen } from './src/screens/ConnectionScreen';
@@ -18,11 +19,11 @@ import { LockScreen } from './src/screens/LockScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { MainScreen, type MainRoute, type Tab } from './src/screens/MainScreen';
 import { PairScreen } from './src/screens/PairScreen';
-import { SettingsScreen } from './src/screens/SettingsScreen';
 import { QueueScreen } from './src/screens/QueueScreen';
 import { QueueProvider } from './src/queueStore';
 import { ApprovalHost } from './src/screens/ApprovalHost';
 import { SimpleAuthHost } from './src/screens/SimpleAuthHost';
+import { UnlockHost } from './src/screens/UnlockHost';
 import { NotifyHost } from './src/notify/NotifyHost';
 import { PushHost } from './src/notify/PushHost';
 import { installWakeTap } from './src/notify/push';
@@ -61,6 +62,7 @@ export default function App() {
 
   useEffect(() => {
     sweepCaptureTemps();
+    sweepDocTemps();
     ensureFreshInstall().then(setBoot, () => setBootErr(true));
   }, []);
 
@@ -160,7 +162,6 @@ export default function App() {
         )}
         {route === 'capture' && <CaptureScreen onDone={back} />}
         {route === 'cash' && <CashScreen onDone={back} />}
-        {route === 'settings' && <SettingsScreen onDone={back} onConnection={() => go('connection')} onPair={() => go('pair')} onDevices={() => go('devices')} />}
         {route === 'queue' && <QueueScreen onDone={back} onConnection={() => go('connection')} onOpen={(j) => (j.run ? go('run') : home())} />}
         {route === 'run' && (
           <RunScreen
@@ -208,6 +209,7 @@ export default function App() {
           }}
         />
         <SimpleAuthHost />
+        <UnlockHost />
         <NotifyHost
           onRunScreen={route === 'run'}
           onOpen={() => setStack((x) => (x[x.length - 1] === 'run' ? x : [...x, 'run']))}

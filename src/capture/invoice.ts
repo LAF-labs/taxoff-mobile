@@ -159,10 +159,10 @@ function validDay(y: number, m: number, d: number, today: Date): string | null {
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
-const tidyName = (s: string): string | null => {
+const tidyPartyValue = (s: string): string | null => {
   const t = nfkc(s).replace(/\p{Cc}/gu, '').replace(/^[\s:：|]+|[\s:：|]+$/g, '').replace(/\s+/g, ' ').trim();
   if (t.length < 1 || /^\d+$/.test(t) || ANY_LABEL.test(key(t))) return null;
-  return t.slice(0, 60);
+  return t;
 };
 
 const LABEL_HEAD = /^(사업자등록번호|등록번호|사업자번호|상호법인명|상호|법인명|성명대표자|대표자성명|성명|대표자|사업장주소|사업장|주소|업태|종목)/;
@@ -208,9 +208,9 @@ function readParty(rows: Row[], side: Side, headerEnd: number): { party: Party; 
             conf.bizNo = 0.95;
           }
         } else {
-          const t = tidyName(v);
+          const t = tidyPartyValue(v);
           if (t) {
-            party[field] = field === 'address' ? t.slice(0, 120) : t;
+            party[field] = t.slice(0, field === 'address' ? 120 : 60);
             conf[field] = 0.8;
           }
         }

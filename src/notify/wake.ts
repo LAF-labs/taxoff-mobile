@@ -3,10 +3,12 @@ import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
 import type { Job } from '../queue';
 import type { Permission } from './local';
 
-export type WakeKind = 'approve' | 'update';
+export type WakeKind = 'approve' | 'update' | 'unlock';
 export type PushPlatform = 'apns' | 'apns_dev';
 
-const WAKE_KEYS: Record<WakeKind, string> = { approve: 'SAX_WAKE_APPROVE', update: 'SAX_WAKE_UPDATE' };
+const WAKE_KEYS: Record<WakeKind, string> = { approve: 'SAX_WAKE_APPROVE', update: 'SAX_WAKE_UPDATE', unlock: 'SAX_WAKE_UNLOCK' };
+/** 한꺼번에 눌렸을 때 무엇을 먼저 여는지. 풀기 요청은 60초뿐이라 맨 앞이다. */
+export const WAKE_RANK: Record<WakeKind, number> = { update: 0, approve: 1, unlock: 2 };
 
 export function pushPlatform(isDev: boolean, override?: string): PushPlatform {
   if (override === 'development') return 'apns_dev';
@@ -43,8 +45,9 @@ export function wakeKindOf(n: { request?: { trigger?: unknown; content?: { data?
   const key = aps && typeof aps.alert === 'object' && aps.alert ? (aps.alert as Record<string, unknown>)['loc-key'] : undefined;
   if (key === WAKE_KEYS.approve) return 'approve';
   if (key === WAKE_KEYS.update) return 'update';
+  if (key === WAKE_KEYS.unlock) return 'unlock';
   const data = (trig.remoteMessage?.data ?? n?.request?.content?.data) as { t?: unknown; k?: unknown } | undefined;
-  if (data?.t === 'wake') return data.k === 'approve' ? 'approve' : 'update';
+  if (data?.t === 'wake') return data.k === 'approve' || data.k === 'unlock' ? data.k : 'update';
   return null;
 }
 

@@ -9,23 +9,26 @@ import { bubbleGroup, chatFromData, clockRange, stampBefore, stateOf, type ChatC
 import { useOfflineChat, type OfflineChatView, type ReplyTo } from '../offline/useOfflineChat';
 import type { PhoneScreen, ReactionId } from '@sax/chat-core';
 import { BRAND } from '../config';
-import { queueCounts } from '../queue';
 import { useQueue, type DraftEdit } from '../queueStore';
 import { RunCard } from './RunCard';
+import { Actions, AmountEdit, Card as ShownCard, CardInput, Kv, KvRow } from '../ui/card';
+import { useCustomers } from '../customers';
 import { useIssueSubmit, type IssueSubmit } from '../issueSubmit';
+import { useEntrustAmend } from '../entrust';
+import { AmendCard, type AmendIssue } from './AmendCard';
+import type { AmendCard as AmendState } from '@sax/chat-core';
 import { onShowCard, shownCard } from '../cardFocus';
-import { counterpartiesOf } from '../net/pcCopy';
 import { splitAmount, type Counterparty, type VatMode } from '../issue';
 import { masked } from '../ui/field';
-import { FlapText } from '../ui/FlapText';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { jpegUri } from '../capture/thumb';
 import { useSession } from '../session';
 import type { PcStatus } from '../net/pc';
 import { MAX_FONT_SCALE, TextSizeContext, radius, size, space, textScale, type, usePalette, useReducedMotion } from '../theme';
-import { Button, Check, Chevron, Pill, Seg, T, TabDrop, TabInset, TabScroll, ago, success, tap, won, type Tone } from '../ui/kit';
+import { Button, Check, Chevron, Pill, Seg, T, ago, success, tap, won, type Tone } from '../ui/kit';
+import { CAPSULE_SIDE, Capsule, DOWN_GAP, DownButton, FloatPill, ShellTop, TOP_SPACE, useKeyboardShown } from '../ui/float';
 
-export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'devices' | 'issue' | 'queue' | 'run' | 'doc' | 'bizreg' | 'recv' | 'pay' | 'mark';
+export type HomeRoute = 'pair' | 'capture' | 'cash' | 'connection' | 'settings' | 'devices' | 'issue' | 'queue' | 'inbox' | 'run' | 'doc' | 'bizreg' | 'recv' | 'pay' | 'mark';
 
 export function pcLine(pc: PcStatus, lastSeen: number | null): { tone: Tone; label: string; sub?: string; busy?: boolean } {
   switch (pc) {
@@ -43,19 +46,13 @@ export function pcLine(pc: PcStatus, lastSeen: number | null): { tone: Tone; lab
   }
 }
 
-/** 머리 오른쪽의 PC 상태 알약. 누르면 PC 연결 화면. */
-function PcPill({ pc, lastSeen, onPress }: { pc: PcStatus; lastSeen: number | null; onPress: () => void }) {
+/** 오른쪽 위에 떠 있는 PC 상태 알약. 누르면 PC 연결 화면. */
+export function PcPill({ pc, lastSeen, onPress }: { pc: PcStatus; lastSeen: number | null; onPress: () => void }) {
   const p = usePalette();
   const l = pcLine(pc, lastSeen);
   const warn = l.tone === 'attention';
   return (
-    <Pressable
-      testID="pc-status"
-      accessibilityRole="button"
-      accessibilityLabel={`${l.label}${l.sub ? `, ${l.sub}` : ''}. 연결 상태 보기`}
-      onPress={onPress}
-      style={({ pressed }) => [st.pcPill, { backgroundColor: warn ? p.attentionSoft : p.tint }, pressed && { opacity: 0.6 }]}
-    >
+    <FloatPill testID="pc-status" label={`${l.label}${l.sub ? `, ${l.sub}` : ''}. 연결 상태 보기`} warn={warn} onPress={onPress}>
       <View style={[st.pcDot, l.tone === 'accent' ? { backgroundColor: p.accent } : warn ? { backgroundColor: p.attention } : { borderWidth: 1.5, borderColor: p.ink3 }]} />
       <T v="subStrong" c={warn ? 'attention' : 'ink'}>
         {l.label}
@@ -65,43 +62,44 @@ function PcPill({ pc, lastSeen, onPress }: { pc: PcStatus; lastSeen: number | nu
           {l.sub}
         </T>
       )}
-    </Pressable>
+    </FloatPill>
   );
 }
 
 /** 이 폰의 연결이 풀렸을 때 대화 끝에 한 번 보이는 카드. */
 function RelinkCard({ onRelink }: { onRelink: () => void }) {
-  const p = usePalette();
   return (
-    <View style={[st.relink, { backgroundColor: p.tint, borderColor: p.attention }]} testID="relink-card">
-      <T v="strong">PC와 연결이 풀렸어요</T>
-      <T v="sub" c="ink2">
-        부탁은 이 폰에 두었어요. 다시 연결하면 바로 보낼게요.
-      </T>
-      <Button testID="relink" small label="다시 연결" onPress={onRelink} />
+    <View style={st.relink}>
+      <ShownCard kind="check" tone="attention" title="PC와 연결이 풀렸어요" testID="relink-card">
+        <T v="sub" c="ink2">
+          부탁은 이 폰에 두었어요. 다시 연결하면 바로 보낼게요.
+        </T>
+        <Actions>
+          <Button testID="relink" label="다시 연결" onPress={onRelink} />
+        </Actions>
+      </ShownCard>
     </View>
   );
-}
-
-export interface Todo {
-  approvals: number;
-  backlog: number;
 }
 
 const FOLLOW_PX = 80;
 const KEEP_POSITION = { minIndexForVisible: 0, autoscrollToTopThreshold: FOLLOW_PX } as const;
 const SHOW_END_PX = 160;
 
-export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen = false, focusAfter, onIssue }: { go: (to: HomeRoute) => void; onIssue?: () => void; chat?: ChatItem[]; todo?: Todo; draft?: string; phone?: OfflineChatView; menu?: boolean; focusAfter?: number }) {
+export function HomeScreen({ go, chat, draft = '', phone, menu: menuOpen = false, focusAfter, onIssue }: { go: (to: HomeRoute) => void; onIssue?: () => void; chat?: ChatItem[]; draft?: string; phone?: OfflineChatView; menu?: boolean; focusAfter?: number }) {
   const s = useSession();
   const p = usePalette();
   useContext(TextSizeContext);
   const paired = !!s.data.pair;
   const q = useQueue();
-  const qc = queueCounts(q.jobs, Date.now());
-  const t = todo ?? { approvals: qc.approvals, backlog: qc.backlog + s.pending.receipts + s.pending.cash };
+  const inset = useSafeAreaInsets();
+  const kb = useKeyboardShown();
+  /** 떠 있는 더보기와 PC 상태 밑으로 대화 맨 위 글이 숨지 않게 둔 여백. */
+  const topPad = inset.top + TOP_SPACE;
   const [mine, setMine] = useState<ChatItem[]>([]);
   const [text, setText] = useState(draft);
+  /** iOS 여러 줄 입력칸은 값을 비워도 높이가 줄지 않는다. 보낼 때 새로 만들어 한 줄로 돌린다. */
+  const [inputKey, setInputKey] = useState(0);
   const [menu, setMenu] = useState(menuOpen);
   const [held, setHeld] = useState<Held | null>(null);
   const [replying, setReplying] = useState<ReplyTo | null>(null);
@@ -114,9 +112,10 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
     go(to);
   };
   const submitIssue = useIssueSubmit();
-  const cpOf = (id: string): Counterparty | null => (id ? [...(s.data.pcCopy ? counterpartiesOf(s.data.pcCopy) : []), ...q.counterparties].find((c) => c.id === id) ?? null : null);
+  const customers = useCustomers();
+  const cpOf = (id: string): Counterparty | null => (id ? (customers.counterparties.find((c) => c.id === id) ?? null) : null);
   const issueFrom = async (d: Draft, itemId: string): Promise<IssueSubmit> => {
-    const cp = cpOf(d.counterpartyId);
+    const cp = cpOf(d.counterpartyId) ?? (d.phone?.bizNo ? { id: '', name: d.phone.name, bizNo: d.phone.bizNo, issued: 0 } : null);
     if (!d.phone && !cp) {
       q.setPrefill({ amount: d.amount, vat: d.vat, item: d.item, draftId: d.id });
       go('issue');
@@ -128,11 +127,17 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
     if (sent === 'sent' && d.phone) q.markSent(itemId);
     return sent;
   };
+  const entrustAmend = useEntrustAmend();
+  const amendFrom = (it: Extract<ChatItem, { kind: 'msg' }>) => ({
+    change: (c: AmendState) => void offline.update?.({ ...it, card: { ...it.card!, amend: { id: it.card!.amend!.id, card: c } } }),
+    issue: async (c: AmendState): Promise<AmendIssue> => {
+      if (!(await entrustAmend(c))) return 'save_failed';
+      await offline.update?.({ ...it, card: { ...it.card!, amend: { id: it.card!.amend!.id, card: c }, sent: true } });
+      return 'sent';
+    },
+  });
   const list = useRef<FlatList<ChatItem>>(null);
   const [barH, setBarH] = useState(0);
-  const tabInset = useContext(TabInset);
-  const tabScroll = useContext(TabScroll);
-  const tabDrop = useContext(TabDrop);
   const y = useRef(0);
   const [endBtn, setEndBtn] = useState<null | 'end' | 'new'>(null);
   const endRef = useRef<null | 'end' | 'new'>(null);
@@ -143,7 +148,6 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
   };
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     y.current = Math.max(0, e.nativeEvent.contentOffset.y);
-    tabScroll(y.current);
     if (y.current <= FOLLOW_PX) setEnd(null);
     else if (y.current > SHOW_END_PX && endRef.current === null) setEnd('end');
   };
@@ -229,6 +233,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
     const v = text.trim();
     if (!v || offline.busy) return;
     setText('');
+    setInputKey((k) => k + 1);
     if (canSend) {
       void offline.send(v, replying);
       setReplying(null);
@@ -243,37 +248,12 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
   };
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={[st.fill, { backgroundColor: p.canvas }]} testID="home">
+    <SafeAreaView edges={['left', 'right']} style={[st.fill, { backgroundColor: p.canvas }]} testID="home">
       {}
       <KeyboardAvoidingView style={st.fill} behavior="translate-with-padding">
-        {}
-        <View style={st.top}>
-          {paired ? (
-            <TodoLine todo={t} onPress={() => go('queue')} />
-          ) : (
-            <View style={{ flex: 1, paddingLeft: space.s1 }}>
-              <T v="title" role="header">
-                {BRAND}
-              </T>
-            </View>
-          )}
-          {paired && <PcPill pc={s.pc} lastSeen={s.data.lastSeenPc} onPress={() => go('connection')} />}
-          <Pressable
-            testID="go-settings"
-            accessibilityRole="button"
-            accessibilityLabel="설정"
-            hitSlop={4}
-            onPress={() => go('settings')}
-            style={({ pressed }) => [st.topBtn, pressed && { backgroundColor: p.tint }]}
-          >
-            <Kebab color={p.ink2} />
-          </Pressable>
-        </View>
-        {}
-
         <View style={st.fill}>
         {!paired || items.length === 0 ? (
-          <ScrollView style={st.fill} contentContainerStyle={[st.chat, !paired ? { justifyContent: 'center' } : { paddingBottom: space.s4 + barH }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" testID="chat">
+          <ScrollView style={st.fill} contentContainerStyle={[st.chat, { paddingTop: topPad }, !paired ? { justifyContent: 'center' } : { paddingBottom: space.s4 + barH }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" testID="chat">
             {!paired ? <Intro onPair={() => go('pair')} /> : relink ? <RelinkCard onRelink={() => go('pair')} /> : <Starter phoneAnswers={phoneAnswers} onPick={pick} />}
           </ScrollView>
         ) : (
@@ -285,7 +265,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
             onScrollToIndexFailed={(e) => list.current?.scrollToOffset({ offset: e.averageItemLength * e.index, animated: true })}
             maintainVisibleContentPosition={KEEP_POSITION}
             style={st.fill}
-            contentContainerStyle={[st.list, { paddingTop: space.s4 + barH }]}
+            contentContainerStyle={[st.list, { paddingTop: space.s4 + barH, paddingBottom: topPad }]}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             onScroll={onScroll}
@@ -324,23 +304,18 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
                   {it.kind === 'run' ? (
                     <RunItem jobId={it.jobId} go={go} />
                   ) : (
-                    <Item it={it} group={bubbleGroup(items, i)} onRetry={(id) => void offline.retry(id)} retryOff={offline.busy} openDrafts={offline.openDrafts} onIssue={issueFrom} cpOf={cpOf} stale={s.pc === 'stale'} onHold={setHeld} onReply={canSend ? startReply : undefined} />
+                    <Item it={it} group={bubbleGroup(items, i)} onRetry={(id) => void offline.retry(id)} retryOff={offline.busy} openDrafts={offline.openDrafts} onIssue={issueFrom} onAmend={offline.update ? amendFrom : undefined} cpOf={cpOf} stale={s.pc === 'stale'} onHold={setHeld} onReply={canSend ? startReply : undefined} />
                   )}
                 </View>
               );
             }}
           />
         )}
-        <TopFade />
-        {endBtn && (
-          // 탭바·입력창이 내려앉으면 같이 내려간다. 단추 자체의 나타나기는 네이티브 드라이버라 바깥 틀에서 옮긴다.
-          <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { transform: [{ translateY: tabDrop }] }]}>
-            <NewReply fresh={endBtn === 'new'} onPress={toEnd} lift={barH} />
-          </Animated.View>
-        )}
+        <ShellTop />
+        {endBtn && <NewReply fresh={endBtn === 'new'} onPress={toEnd} lift={barH - space.s4 + DOWN_GAP} />}
 
         {paired && (
-          <Animated.View style={[st.bottom, { paddingBottom: space.s2 + tabInset, transform: [{ translateY: tabDrop }] }]} onLayout={(e) => setBarH(e.nativeEvent.layout.height)}>
+          <View style={[st.bottom, { paddingBottom: kb ? space.s2 : inset.bottom + space.s1 }]} onLayout={(e) => setBarH(e.nativeEvent.layout.height)}>
             <BottomFade />
             {menu && (
               <View style={[st.menu, { backgroundColor: p.tint }]} testID="quick-menu">
@@ -373,7 +348,7 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
                 </Pressable>
               </View>
             )}
-            <View style={st.inputRow}>
+            <Capsule testID="chat-composer">
               <Pressable
                 testID="chat-plus"
                 accessibilityRole="button"
@@ -384,40 +359,41 @@ export function HomeScreen({ go, chat, todo, draft = '', phone, menu: menuOpen =
                   tap();
                   setMenu((m) => !m);
                 }}
-                style={({ pressed }) => [st.round, { backgroundColor: pressed || menu ? p.sunken : p.tint, borderColor: p.line }]}
+                style={({ pressed }) => [st.plus, (pressed || menu) && { backgroundColor: p.tint }]}
               >
-                <Plus color={p.ink2} open={menu} />
+                <Plus color={p.ink} open={menu} />
               </Pressable>
-              <View style={[st.field, { backgroundColor: p.tint, borderColor: p.line }]}>
-                <TextInput
-                  ref={input}
-                  testID="chat-input"
-                  value={text}
-                  onChangeText={(v) => {
-                    setText(v);
-                    if (endRef.current) toEnd();
-                  }}
-                  onFocus={() => {
-                    setMenu(false);
-                    toEnd();
-                  }}
-                  placeholder="궁금한 것이나 시킬 일"
-                  placeholderTextColor={p.ink3}
-                  accessibilityLabel="궁금한 것이나 시킬 일 적기"
-                  maxFontSizeMultiplier={MAX_FONT_SCALE}
-                  multiline
-                  onSubmitEditing={send}
-                  style={[
-                    type.body,
-                    textScale.web !== 1 && { fontSize: type.body.fontSize * textScale.web, lineHeight: type.body.lineHeight * textScale.web },
-                    st.input,
-                    { color: p.ink },
-                  ]}
-                />
-                <SendButton onPress={send} disabled={!text.trim() || offline.busy} />
-              </View>
-            </View>
-          </Animated.View>
+              <TextInput
+                key={inputKey}
+                autoFocus={inputKey > 0 && kb}
+                ref={input}
+                testID="chat-input"
+                value={text}
+                onChangeText={(v) => {
+                  setText(v);
+                  if (endRef.current) toEnd();
+                }}
+                onFocus={() => {
+                  setMenu(false);
+                  toEnd();
+                }}
+                placeholder="궁금한 것이나 시킬 일"
+                placeholderTextColor={p.ink3}
+                accessibilityLabel="궁금한 것이나 시킬 일 적기"
+                maxFontSizeMultiplier={MAX_FONT_SCALE}
+                multiline
+                rows={Platform.OS === 'web' ? 1 : undefined}
+                onSubmitEditing={send}
+                style={[
+                  type.body,
+                  textScale.web !== 1 && { fontSize: type.body.fontSize * textScale.web, lineHeight: type.body.lineHeight * textScale.web },
+                  st.input,
+                  { color: p.ink },
+                ]}
+              />
+              <SendButton onPress={send} disabled={!text.trim() || offline.busy} />
+            </Capsule>
+          </View>
         )}
         </View>
       </KeyboardAvoidingView>
@@ -537,17 +513,6 @@ function BottomFade() {
   );
 }
 
-function TopFade() {
-  const p = usePalette();
-  return (
-    <View pointerEvents="none" style={st.fade}>
-      {FADE.map((o, i) => (
-        <View key={i} style={{ height: 2, backgroundColor: p.canvas, opacity: o }} />
-      ))}
-    </View>
-  );
-}
-
 function NewReply({ fresh, onPress, lift }: { fresh: boolean; onPress: () => void; lift: number }) {
   const p = usePalette();
   const still = useReducedMotion();
@@ -557,22 +522,21 @@ function NewReply({ fresh, onPress, lift }: { fresh: boolean; onPress: () => voi
     Animated.timing(a, { toValue: 1, duration: 160, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
   }, [a, still]);
   return (
-    <Animated.View pointerEvents="box-none" style={[st.newReplyWrap, { bottom: space.s3 + lift, opacity: a, transform: [{ translateY: a.interpolate({ inputRange: [0, 1], outputRange: [6, 0] }) }] }]}>
-      <Pressable
+    <Animated.View pointerEvents="box-none" style={[st.newReplyWrap, { bottom: lift, opacity: a, transform: [{ translateY: a.interpolate({ inputRange: [0, 1], outputRange: [6, 0] }) }] }]}>
+      <DownButton
         testID="chat-new-reply"
-        accessibilityRole="button"
-        accessibilityLabel={fresh ? '새 답 보기' : '맨 아래로'}
+        label={fresh ? '새 답 보기' : '맨 아래로'}
+        wide={fresh}
         onPress={() => {
           tap();
           onPress();
         }}
-        style={({ pressed }) => [st.newReply, !fresh && st.endOnly, { backgroundColor: pressed ? p.sunken : p.tint, shadowColor: p.ink }]}
       >
-        <View style={{ marginTop: -4 }}>
-          <Chevron color={p.ink2} dir="down" sizePx={7} />
+        <View style={{ marginTop: -3 }}>
+          <Chevron color={p.ink} dir="down" sizePx={7} />
         </View>
         {fresh && <T v="label">새 답</T>}
-      </Pressable>
+      </DownButton>
     </Animated.View>
   );
 }
@@ -581,59 +545,21 @@ const SCREEN_LABEL: Record<PhoneScreen, string> = { capture: '증빙 찍기', ca
 
 const CANT_SEND_TEXT = '이 폰에서는 아직 대화를 보낼 수 없어요. 앱을 다시 열거나 설정에서 PC 연결을 확인해 주세요.';
 
-function Kebab({ color }: { color: string }) {
-  return (
-    <View style={{ gap: 3, alignItems: 'center' }}>
-      {[0, 1, 2].map((i) => (
-        <View key={i} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: color }} />
-      ))}
-    </View>
-  );
-}
-
 const at = (it: ChatItem) => (it.kind === 'merged' ? it.from : it.at);
 
-function TodoLine({ todo, onPress }: { todo: Todo; onPress: () => void }) {
-  const p = usePalette();
-  const parts = [todo.approvals > 0 && `승인\u00A0대기\u00A0${todo.approvals}건`, todo.backlog > 0 && `밀린\u00A0일\u00A0${todo.backlog}건`].filter(Boolean).join(', ');
-  const body = (
-    <>
-      <T v="subStrong" style={{ flexShrink: 0 }}>
-        지금 할 일
-      </T>
-      <T v="sub" c={parts ? 'ink' : 'ink3'} style={{ flexShrink: 1 }} lines={1} testID="todo-counts">
-        {parts || '없음'}
-      </T>
-      {parts ? <Chevron color={p.ink4} /> : null}
-    </>
-  );
-  if (!parts) return <View style={st.todo} testID="todo">{body}</View>;
-  return (
-    <Pressable
-      testID="todo"
-      accessibilityRole="button"
-      accessibilityLabel={`지금 할 일: ${parts.replace(/\u00A0/g, ' ')}`}
-      onPress={onPress}
-      style={({ pressed }) => [st.todo, pressed && { opacity: 0.6 }]}
-    >
-      {body}
-    </Pressable>
-  );
-}
-
 function Intro({ onPair }: { onPair: () => void }) {
-  const p = usePalette();
   return (
-    <View style={[st.card, { backgroundColor: p.tint }]} testID="unpaired">
-      <T v="strong">먼저 PC와 연결해 주세요</T>
+    <ShownCard title="먼저 PC와 연결해 주세요" testID="unpaired">
       <T v="sub" c="ink2">
         PC의 {BRAND} → 설정 → 기기{'\u00A0'}연결에서 [폰{'\u00A0'}연결]을 누르면 뜨는 QR을 이 폰으로 찍으면 돼요. 한 번만 하면 돼요.
       </T>
       <T v="sub" c="ink2">
         연결하면 여기서 PC에 일을 시키고, 종이 증빙을 찍고, 현금 매출을 적을 수 있어요.
       </T>
-      <Button testID="go-pair" label="PC와 연결" onPress={onPair} style={{ marginTop: space.s2 }} />
-    </View>
+      <Actions>
+        <Button testID="go-pair" label="PC와 연결" onPress={onPair} />
+      </Actions>
+    </ShownCard>
   );
 }
 
@@ -651,14 +577,12 @@ function RunItem({ jobId, go }: { jobId: string; go: (to: HomeRoute) => void }) 
       compact
       onOpen={() => open('run')}
       onAction={(a) => q.runAction(job.id, a)}
-      onDoc={() => open('doc')}
-      onShare={() => open('doc')}
       onApprove={() => q.openSheet(job.id)}
     />
   );
 }
 
-function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, cpOf, stale, onHold, onReply }: { it: Exclude<ChatItem, { kind: 'run' }>; group: { first: boolean; last: boolean }; onRetry: (noteId: string) => void; retryOff?: boolean; openDrafts?: ReadonlySet<string>; onIssue: OnIssue; cpOf: (id: string) => Counterparty | null; stale: boolean; onHold: (h: Held) => void; onReply?: (r: ReplyTo) => void }) {
+function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, onAmend, cpOf, stale, onHold, onReply }: { it: Exclude<ChatItem, { kind: 'run' }>; group: { first: boolean; last: boolean }; onRetry: (noteId: string) => void; retryOff?: boolean; openDrafts?: ReadonlySet<string>; onIssue: OnIssue; onAmend?: OnAmend; cpOf: (id: string) => Counterparty | null; stale: boolean; onHold: (h: Held) => void; onReply?: (r: ReplyTo) => void }) {
   const p = usePalette();
   const q = useQueue();
   const bubble = useRef<ComponentRef<typeof Pressable>>(null);
@@ -736,14 +660,20 @@ function Item({ it, group, onRetry, retryOff, openDrafts, onIssue, cpOf, stale, 
         </SwipeReply>
       )}
       {it.card && (
-        <Card
-          card={it.card}
-          onIssue={(it.card.draft?.phone ? !it.card.sent : it.card.draft && (!openDrafts || openDrafts.has(it.card.draft.id))) ? (d) => onIssue(d, it.id) : undefined}
-          cp={it.card.draft ? cpOf(it.card.draft.counterpartyId) : null}
-          stale={stale}
-          edited={q.draftEdits.get(it.id)}
-          onEdit={(e) => q.editDraft(it.id, e)}
-        />
+        <View style={st.cardSlot}>
+          {it.card.amend ? (
+            <AmendCard card={it.card.amend.card} sent={it.card.sent} stale={stale} onChange={onAmend?.(it).change ?? (() => undefined)} onIssue={onAmend && !it.card.sent ? onAmend(it).issue : undefined} />
+          ) : (
+            <Card
+              card={it.card}
+              onIssue={(it.card.draft?.phone ? !it.card.sent : it.card.draft && (!openDrafts || openDrafts.has(it.card.draft.id))) ? (d) => onIssue(d, it.id) : undefined}
+              cp={it.card.draft ? cpOf(it.card.draft.counterpartyId) : null}
+              stale={stale}
+              edited={q.draftEdits.get(it.id)}
+              onEdit={(e) => q.editDraft(it.id, e)}
+            />
+          )}
+        </View>
       )}
       {state !== '' && (
         <T v="meta" c="ink3" style={{ textAlign: 'right' }} testID="chat-state">
@@ -880,27 +810,26 @@ function Starter({ phoneAnswers, onPick }: { phoneAnswers: boolean; onPick: (tex
 type Draft = NonNullable<ChatCard['draft']>;
 const ISSUE_FAILED: Record<Exclude<IssueSubmit, 'sent'>, string> = {
   save_failed: '폰에 저장하지 못해 맡기지 않았어요. 다시 눌러 주세요',
-  new_counterparty: '새 거래처는 아직 폰에서 발급할 수 없어요',
+  no_counterparty: '거래처를 찾지 못해 맡기지 않았어요',
 };
 type OnIssue = (d: Draft, itemId: string) => Promise<IssueSubmit>;
 type OnCardIssue = (d: Draft) => Promise<IssueSubmit>;
+type OnAmend = (it: Extract<ChatItem, { kind: 'msg' }>) => { change: (c: AmendState) => void; issue: (c: AmendState) => Promise<AmendIssue> };
 
 function Card({ card, onIssue, cp, stale, edited, onEdit }: { card: ChatCard; onIssue?: OnCardIssue; cp: Counterparty | null; stale: boolean; edited?: DraftEdit; onEdit: (e: DraftEdit) => void }) {
-  const p = usePalette();
   if (card.draft) return <DraftCard card={card} draft={card.draft} onIssue={onIssue} cp={cp} stale={stale} edited={edited} onEdit={onEdit} />;
   return (
-    <View style={[st.card, { backgroundColor: p.tint }]} testID="chat-card">
-      <T v="subStrong">{card.title}</T>
+    <ShownCard kind={card.kind ?? 'doc'} title={card.title} testID="chat-card">
       {card.photo && <CardPhoto photo={card.photo} label={`${card.title} 사진`} />}
-      {card.rows.map((r, i) => (
-        <CardRow key={i} label={r.label} value={r.value} strong={r.strong} />
-      ))}
-      {card.note && (
-        <T v="meta" c="ink3">
-          {card.note}
-        </T>
+      {card.rows.length > 0 && (
+        <Kv>
+          {card.rows.map((r, i) => (
+            <KvRow key={i} label={r.label} value={r.value} total={r.strong} />
+          ))}
+        </Kv>
       )}
-    </View>
+      {card.note && <T v="sub" c="ink2">{card.note}</T>}
+    </ShownCard>
   );
 }
 
@@ -911,40 +840,12 @@ function CardPhoto({ photo, label }: { photo: NonNullable<ChatCard['photo']>; la
   return <PhotoSlot thumb={photo.thumb} load={load} label={label} />;
 }
 
-function CardValue({ text, strong, quiet }: { text: string; strong?: boolean; quiet?: boolean }) {
-  return (
-    <T v={strong ? 'figure' : 'value'} c={quiet ? 'ink4' : 'ink'} style={{ flexShrink: 1, textAlign: 'right' }}>
-      {text}
-    </T>
-  );
-}
-
-function CardRow({ label, value, strong, children, fixed, flap }: { label: string; value?: string; strong?: boolean; children?: React.ReactNode; fixed?: boolean; flap?: boolean }) {
-  return (
-    <View style={[st.cardRow, fixed && st.cardRowFixed]}>
-      {flap ? (
-        <FlapText text={label} />
-      ) : (
-        <T v="sub" c="ink2" style={{ flexShrink: 1 }}>
-          {label}
-        </T>
-      )}
-      {children ?? (
-        <T v={strong ? 'figure' : 'value'} style={{ flexShrink: 0, textAlign: 'right' }}>
-          {value}
-        </T>
-      )}
-    </View>
-  );
-}
-
 const VAT_OPTIONS = [
   { key: 'excl' as const, label: '별도' },
   { key: 'incl' as const, label: '포함' },
 ];
 
 function DraftCard({ card, draft, onIssue, cp, stale, edited, onEdit }: { card: ChatCard; draft: Draft; onIssue?: OnCardIssue; cp: Counterparty | null; stale: boolean; edited?: DraftEdit; onEdit: (e: DraftEdit) => void }) {
-  const p = usePalette();
   const val: DraftEdit = edited ?? { amount: draft.amount, vat: draft.vat === 'included' ? 'incl' : 'excl', item: draft.item ?? '' };
   const openEdit = !!onIssue && !!draft.phone?.edit && !edited;
   const [edit, setEdit] = useState<null | { amount: string; vat: VatMode; item: string }>(openEdit ? { amount: draft.amount > 0 ? masked('won', String(draft.amount)) : '', vat: val.vat, item: val.item } : null);
@@ -967,89 +868,67 @@ function DraftCard({ card, draft, onIssue, cp, stale, edited, onEdit }: { card: 
     setBusy(false);
     if (sent !== 'sent') setFailed(sent);
   };
-  const dark = p.overlay === p.tint;
-  const inputStyle = [st.cardInput, { backgroundColor: p.canvas, color: p.ink, borderColor: p.line }];
   return (
-    <View style={[st.card, st.cardDraft, { backgroundColor: p.tint }]} testID="chat-card">
-      <T v="subStrong" style={{ paddingBottom: space.s1 }}>{card.title}</T>
-      {}
-      <CardRow label={edit?.vat === 'incl' ? '합계 금액' : '공급가액'} fixed flap>
-        {edit ? (
-          <TextInput
-            testID="card-amount"
-            value={edit.amount}
-            onChangeText={(v) => setEdit({ ...edit, amount: masked('won', v) })}
-            keyboardType="number-pad"
-            accessibilityLabel="금액"
-            autoFocus={openEdit}
-            placeholder="0"
-            placeholderTextColor={p.ink4}
-            maxFontSizeMultiplier={MAX_FONT_SCALE}
-            style={[type.value, ...inputStyle, { textAlign: 'right' }]}
-          />
-        ) : (
-          <CardValue text={won(a.supply)} />
-        )}
-      </CardRow>
-      <CardRow label={edit ? '부가세' : `부가세 ${shown.vat === 'incl' ? '포함' : '별도'}`} fixed flap>
-        {edit ? (
-          <Seg testID="card-vat" options={VAT_OPTIONS} value={edit.vat} onChange={(v) => setEdit({ ...edit, vat: v })} style={[st.cardSeg, { backgroundColor: dark ? p.canvas : p.sunken }]} />
-        ) : (
-          <CardValue text={won(a.tax)} />
-        )}
-      </CardRow>
-      <CardRow label="품목" fixed>
-        {edit ? (
-          <TextInput
-            testID="card-item"
-            value={edit.item}
-            onChangeText={(v) => setEdit({ ...edit, item: v })}
-            placeholder="없음"
-            placeholderTextColor={p.ink4}
-            accessibilityLabel="품목"
-            maxFontSizeMultiplier={MAX_FONT_SCALE}
-            style={[type.value, ...inputStyle, { textAlign: 'right' }]}
-          />
-        ) : (
-          <CardValue text={shown.item || '없음'} quiet={!shown.item} />
-        )}
-      </CardRow>
-      <CardRow label="합계" fixed>
-        <CardValue text={won(a.total)} strong />
-      </CardRow>
+    <ShownCard kind="doc" title={card.title} testID="chat-card">
+      {edit ? (
+        <>
+          <AmountEdit label={edit.vat === 'incl' ? '합계 금액' : '공급가액'}>
+            <CardInput
+              testID="card-amount"
+              label="금액"
+              value={edit.amount}
+              suffix="원"
+              onChange={(v) => setEdit({ ...edit, amount: masked('won', v) })}
+              keyboardType="number-pad"
+              autoFocus={openEdit}
+              placeholder="0"
+            />
+          </AmountEdit>
+          <Kv>
+            <KvRow label="부가세">
+              <Seg testID="card-vat" options={VAT_OPTIONS} value={edit.vat} onChange={(v) => setEdit({ ...edit, vat: v })} />
+            </KvRow>
+          </Kv>
+          <AmountEdit label="품목">
+            <CardInput testID="card-item" label="품목" plain value={edit.item} onChange={(v) => setEdit({ ...edit, item: v })} placeholder="없음" />
+          </AmountEdit>
+          <Kv>
+            <KvRow label="공급가액" value={won(a.supply)} />
+            <KvRow label="부가세" value={won(a.tax)} />
+            <KvRow label="합계" value={won(a.total)} total />
+          </Kv>
+        </>
+      ) : (
+        <Kv>
+          <KvRow label="공급가액" value={won(a.supply)} />
+          <KvRow label="부가세" value={won(a.tax)} />
+          <KvRow label="품목" value={shown.item || '없음'} quiet={!shown.item} />
+          <KvRow label="합계" value={won(a.total)} total />
+        </Kv>
+      )}
       {onIssue && !edit && (closed || stale) && (
-        <T v="meta" c="attention" testID={closed ? 'card-closed' : 'card-stale'}>
+        <T v="sub" c="attention" testID={closed ? 'card-closed' : 'card-stale'}>
           {closed ? `${closed.on}에 ${closed.what}한 곳으로 조회돼요` : 'PC를 켜면 맡길 수 있어요'}
         </T>
       )}
       {failed && (
-        <T v="meta" c="attention" testID="card-failed">
+        <T v="sub" c="attention" testID="card-failed">
           {ISSUE_FAILED[failed]}
         </T>
       )}
-      {onIssue && (
-        <View style={st.cardButtons}>
-          {edit ? (
-            <>
-              <Button testID="card-cancel" kind="secondary" label="취소" onPress={() => setEdit(null)} style={[st.cardBtn, { backgroundColor: p.canvas }]} />
-              <Button testID="card-done" label="완료" onPress={done} disabled={splitAmount(Number(edit.amount.replace(/\D/g, '')), edit.vat).supply <= 0} style={st.cardBtn} />
-            </>
-          ) : (
-            <>
-              <Button
-                testID="card-issue"
-                label={closed ? '그래도 발급' : '발급하기'}
-                onPress={() => void issue()}
-                busy={busy}
-                disabled={busy || stale || a.supply <= 0}
-                style={st.cardBtn}
-              />
-              <Button testID="card-edit" kind="secondary" label="수정" onPress={startEdit} disabled={busy} style={[st.cardBtn, { backgroundColor: p.canvas }]} />
-            </>
-          )}
-        </View>
-      )}
-    </View>
+      {onIssue &&
+        (edit ? (
+          <Actions>
+            <Button testID="card-done" label="완료" onPress={done} disabled={splitAmount(Number(edit.amount.replace(/\D/g, '')), edit.vat).supply <= 0} />
+            <Button testID="card-cancel" kind="secondary" label="취소" onPress={() => setEdit(null)} />
+          </Actions>
+        ) : (
+          <Actions>
+            <Button testID="card-issue" label={closed ? '그래도 발급' : '발급하기'} onPress={() => void issue()} busy={busy} disabled={busy || stale || a.supply <= 0} />
+            <Button testID="card-edit" kind="secondary" label="수정" onPress={startEdit} disabled={busy} />
+          </Actions>
+        ))}
+    </ShownCard>
   );
 }
 
@@ -1132,40 +1011,27 @@ function Chip({ label, onPress, testID }: { label: string; onPress: () => void; 
 
 const st = StyleSheet.create({
   fill: { flex: 1 },
-  top: { minHeight: size.header, flexDirection: 'row', alignItems: 'center', gap: space.s2, paddingLeft: space.s4, paddingRight: space.s2, paddingTop: space.s1 },
-  pcPill: { minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: space.s2, paddingHorizontal: space.s3, borderRadius: radius.full },
   pcDot: { width: 8, height: 8, borderRadius: radius.full },
-  relink: { gap: space.s3, padding: space.s4, borderRadius: radius.lg, borderWidth: 1, marginHorizontal: space.s5, marginBottom: space.s3 },
-  topBtn: { minWidth: size.hit, minHeight: size.hit, paddingHorizontal: space.s3, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  relink: { marginHorizontal: space.s5, marginBottom: space.s3 },
   lines: { paddingHorizontal: space.s5, gap: space.s2, paddingBottom: space.s2 },
   pcLine: { minHeight: size.hit, flexDirection: 'row', alignItems: 'center', gap: space.s3, marginHorizontal: -space.s2, paddingHorizontal: space.s2, borderRadius: radius.md },
-  todo: { flex: 1, minHeight: size.hit, flexDirection: 'row', alignItems: 'center', gap: space.s2, paddingLeft: space.s1 },
-  fade: { position: 'absolute', top: 0, left: 0, right: 0 },
   newReplyWrap: { position: 'absolute', left: 0, right: 0, bottom: space.s3, alignItems: 'center' },
-  endOnly: { paddingLeft: 0, paddingRight: 0, width: 36, justifyContent: 'center' },
   list: { paddingHorizontal: space.s5, paddingTop: space.s4, paddingBottom: space.s3 },
   row: { gap: space.s4, paddingTop: space.s4 },
   listEnd: { gap: space.s4, paddingTop: space.s4 },
-  newReply: { flexDirection: 'row', alignItems: 'center', gap: space.s1, minHeight: 36, paddingLeft: space.s3, paddingRight: space.s4, borderRadius: radius.full, shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
   chat: { paddingHorizontal: space.s5, paddingTop: space.s3, paddingBottom: space.s4, gap: space.s4, flexGrow: 1, justifyContent: 'flex-end' },
   msg: { gap: space.s1, alignSelf: 'stretch' },
   follow: { marginTop: -(space.s4 - space.s1) },
   mine: { alignItems: 'flex-end' },
   theirs: { alignItems: 'flex-start' },
+  /** 대화 카드 자리: 말풍선은 글 폭만큼 왼쪽, 오른쪽에 붙지만 카드는 종류와 상관없이 언제나 대화 폭을 다 쓴다(대표 11-24). */
+  cardSlot: { alignSelf: 'stretch' },
   typing: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 44, paddingHorizontal: 15, borderRadius: 22 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   reacted: { marginBottom: 12 },
   reaction: { position: 'absolute', right: 4, bottom: -20, height: 28, minWidth: 38, paddingHorizontal: 8.5, borderRadius: 14, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   reactionGlyph: { fontSize: 16, lineHeight: 18 },
   bubble: { borderRadius: 22, minHeight: 44, maxWidth: '90%', paddingHorizontal: 15, paddingVertical: 11, justifyContent: 'center' },
-  card: { alignSelf: 'stretch', borderRadius: radius.lg, padding: space.s4, gap: space.s2 },
-  cardDraft: { gap: 0 },
-  cardInput: { width: 180, flexShrink: 1, height: 40, paddingHorizontal: space.s3, paddingVertical: 0, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth },
-  cardSeg: { width: 180, flexShrink: 1 },
-  cardButtons: { flexDirection: 'row', gap: space.s2, marginTop: space.s2 },
-  cardBtn: { flex: 1 },
-  cardRowFixed: { minHeight: 44, alignItems: 'center' },
-  cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: space.s3 },
   note: { flexDirection: 'row', gap: space.s2, alignItems: 'flex-start' },
   failed: { borderRadius: radius.lg, paddingHorizontal: space.s4, paddingVertical: space.s3, gap: space.s2 },
   replies: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s2 },
@@ -1173,14 +1039,12 @@ const st = StyleSheet.create({
   examples: { alignItems: 'flex-start', gap: space.s2 },
   mergedWrap: { alignItems: 'center', paddingVertical: space.s1 },
   merged: { borderRadius: radius.full, paddingHorizontal: space.s3, paddingVertical: space.s1 },
-  bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: space.s3, paddingTop: space.s2, paddingBottom: space.s2, gap: space.s2 },
+  bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: CAPSULE_SIDE, paddingTop: space.s4, gap: space.s2 },
   menu: { borderRadius: radius.lg, paddingVertical: space.s1, overflow: 'hidden' },
   menuRow: { minHeight: size.row, flexDirection: 'row', alignItems: 'center', gap: space.s3, paddingHorizontal: space.s4, paddingVertical: space.s2 },
-  round: { width: 44, height: 44, borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
-  field: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, paddingRight: 4, paddingBottom: 4, minHeight: size.hit },
-  send: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  plus: { width: 38, height: 38, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  send: { width: 32, height: 32, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center', marginBottom: 3 },
   chip: { minHeight: size.hit, paddingHorizontal: space.s4, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
-  inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: space.s2 },
   replyBar: { flexDirection: 'row', alignItems: 'center', gap: space.s2, borderRadius: radius.lg, paddingLeft: space.s4, paddingRight: space.s1, paddingVertical: space.s2 },
   replyX: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   replyCtx: { borderRadius: 22, maxWidth: '90%', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24, marginBottom: -20 },
@@ -1191,5 +1055,5 @@ const st = StyleSheet.create({
   holdMenu: { position: 'absolute', minWidth: 200, borderRadius: radius.lg, paddingVertical: space.s1, overflow: 'hidden' },
   holdIcon: { width: 22, alignItems: 'center' },
   holdRow: { height: ROW_H, flexDirection: 'row', alignItems: 'center', gap: space.s3, paddingHorizontal: space.s4 },
-  input: { flex: 1, minHeight: size.hit, maxHeight: 132, paddingLeft: space.s4, paddingRight: space.s2, paddingTop: 10, paddingBottom: 10 },
+  input: { flex: 1, minHeight: 38, maxHeight: 132, paddingLeft: space.s1, paddingRight: space.s2, paddingTop: 7, paddingBottom: 7 },
 });

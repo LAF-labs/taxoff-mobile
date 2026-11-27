@@ -4,9 +4,11 @@ import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { REJECT_LINE } from '../phoneCmd';
 import type { Job } from '../queue';
 import { ACTION_LABEL, AUTH_APPS, STEPS, STEP_LABEL, STOP_COPY, actionsOf, chipOf, elapsed, groupApprovalNo, mmss, pcTurnOf, stepOf, type IssueResult, type RunAction, type RunView } from '../run';
-import { radius, space, usePalette } from '../theme';
-import { Check, Chevron, Pill, StatusDot, T, success, won } from '../ui/kit';
+import { space, usePalette } from '../theme';
+import { Actions, Card, Kv, KvRow, type CardKind } from '../ui/card';
+import { Button, Check, Chevron, StatusDot, T, success, won } from '../ui/kit';
 import { CardApprove } from './CardApprove';
+import { UnlockInline } from './UnlockHost';
 
 
 const pcTurn = (r: RunView) => r.kind === 'myTurn' && (r.auth.method === 'pc' || (r.auth.method === 'simple' && !!r.auth.pc));
@@ -32,72 +34,56 @@ export function useNow(fixed?: number, on = true): number {
   return fixed ?? now;
 }
 
-export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onDoc, onShare, onApprove }: {
+/** 대화와 진행 화면의 발급 카드. 겉모양은 공용 Card(src/ui/card.tsx)이고, 상태는 제목 앞 아이콘으로만 나눈다. */
+export function RunCard({ job, now: fixedNow, compact, onOpen, onAction, onApprove }: {
   job: Job;
   now?: number;
   compact?: boolean;
   onOpen?: () => void;
   onAction?: (a: RunAction) => void;
-  onDoc?: () => void;
-  onShare?: () => void;
   onApprove?: () => void;
 }) {
-  const p = usePalette();
   const r = job.run;
   const ticking = !!r && (r.kind === 'running' || r.kind === 'myTurn' || r.kind === 'inDoubt');
   const now = useNow(fixedNow, ticking);
   if (!r) return null;
   const chip = chipOf(r);
-  const body = (
-    <View style={[st.card, { backgroundColor: p.tint }]} testID={`run-${job.id}`}>
-      <View style={st.head}>
-        <T v="subStrong" style={{ flex: 1 }}>
-          {job.title}
-        </T>
-        {job.amount !== null && (
-          <T v="figure" lines={1} style={st.nowrap}>
-            {won(job.amount)}
-          </T>
-        )}
-      </View>
-      <View style={st.chipLine}>
-        {r.kind === 'done' ? (
-          <View style={st.doneChip} accessible accessibilityLabel="발급됨">
-            <Check color={p.ink} />
-            <T v="label">발급됨</T>
-          </View>
-        ) : (
-          <StatusDot tone={chip.tone} label={chip.label} busy={chip.busy} v="label" />
-        )}
-        {ticking &&
-          (r.kind === 'myTurn' && r.auth.method === 'simple' && r.auth.deadline !== undefined ? (
-            r.auth.deadline > now ? (
-              <T v="meta" c="attention" testID="run-left" style={{ fontVariant: ['tabular-nums'] }}>
-                {mmss(r.auth.deadline - now)} 남았어요
-              </T>
-            ) : (
-              <T v="meta" c="attention" testID="run-left">
-                시간이 지났어요
-              </T>
-            )
-          ) : compact ? null : (
-            <T v="meta" c="ink3" testID="run-elapsed">
-              {elapsed(now - r.startedAt)}
-            </T>
-          ))}
-      </View>
-      {r.kind !== 'done' && r.kind !== 'refused' && !(r.kind === 'stopped' && (r.reason === 'pcStopped' || r.reason === 'appOld')) && (compact ? <FoldSteps id={job.id} r={r} /> : <StepBar r={r} />)}
-      <StateLines r={r} />
-      {onApprove && job.gate && job.state === 'approval' && <CardApprove job={job} gate={job.gate} onDetail={onApprove} now={fixedNow} />}
-      {r.kind === 'done' && <ResultRows result={r.result} />}
-      {compact && (!job.pcOnly || pcTurn(r)) && <CardActions r={r} now={now} onAction={onAction} onDoc={onDoc} onShare={onShare} />}
-    </View>
-  );
-  if (!compact || !onOpen) return body;
+  const approving = !!onApprove && !!job.gate && job.state === 'approval';
+  const kind: CardKind = r.kind === 'done' ? 'done' : r.kind === 'refused' || r.kind === 'stopped' ? 'failed' : chip.tone === 'attention' ? 'check' : 'doc';
+  const tone = approving ? 'wait' : chip.tone === 'attention' ? 'attention' : 'quiet';
   return (
-    <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={`${job.title} ${chip.label}. 자세히 보기`} style={({ pressed }) => pressed && { opacity: 0.85 }}>
-      {body}
-    </Pressable>
+    <Card kind={kind} tone={tone} title={job.title} testID={`run-${job.id}`}>
+      {r.kind === 'done' ? (
+        <ResultRows result={r.result} full={!compact} />
+      ) : approving ? (
+        <CardApprove job={job} gate={job.gate!} onDetail={onApprove!} now={fixedNow} />
+      ) : (
+        <>
+          {job.amount !== null && (
+            <Kv>
+              <KvRow label="합계" value={won(job.amount)} total />
+            </Kv>
+          )}
+          <View style={st.chipLine}>
+            <StatusDot tone={chip.tone} label={chip.label} busy={chip.busy} v="sub" />
+            {ticking &&
+              (r.kind === 'myTurn' && r.auth.method === 'simple' && r.auth.deadline !== undefined ? (
+                <T v="sub" c="attention" testID="run-left" style={{ fontVariant: ['tabular-nums'] }}>
+                  {r.auth.deadline > now ? `${mmss(r.auth.deadline - now)} 남았어요` : '시간이 지났어요'}
+                </T>
+              ) : compact ? null : (
+                <T v="sub" c="ink3" testID="run-elapsed">
+                  {elapsed(now - r.startedAt)}
+                </T>
+              ))}
+          </View>
+          {r.kind !== 'refused' && !(r.kind === 'stopped' && (r.reason === 'pcStopped' || r.reason === 'appOld')) && (compact ? <FoldSteps id={job.id} r={r} /> : <StepBar r={r} />)}
+          <StateLines r={r} />
+          <UnlockInline job={job} />
+        </>
+      )}
+      {compact && (!job.pcOnly || pcTurn(r) || r.kind === 'done') && <CardActions r={r} now={now} onAction={onAction} onOpen={onOpen} />}
+    </Card>
   );
 }
 
@@ -230,8 +216,7 @@ function StateLines({ r }: { r: RunView }) {
   }
 }
 
-function ResultRows({ result }: { result: IssueResult }) {
-  const p = usePalette();
+function ResultRows({ result, full }: { result: IssueResult; full: boolean }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     await Clipboard.setStringAsync(result.approvalNo).catch(() => {});
@@ -239,49 +224,27 @@ function ResultRows({ result }: { result: IssueResult }) {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+  const d = new Date(result.issuedAt);
   return (
-    <View style={[st.rows, { borderTopColor: p.line }]}>
-      <Pressable onLongPress={() => void copy()} accessibilityRole="button" accessibilityLabel={`승인번호 ${result.approvalNo}`} accessibilityHint="길게 누르면 복사해요" style={st.stack} testID="result-approval-no">
-        <View style={st.stackHead}>
-          <T v="sub" c="ink2">
-            승인번호
-          </T>
-          <T v="meta" c="ink3">
-            {copied ? '복사했어요' : ''}
-          </T>
-        </View>
-        <T v="value" style={st.mono}>
-          {groupApprovalNo(result.approvalNo)}
-        </T>
-      </Pressable>
-      <View style={st.row}>
-        <T v="sub" c="ink2" style={st.label}>
-          거래처
-        </T>
-        <T style={st.value}>{result.counterpart}</T>
-      </View>
-      <View style={st.row}>
-        <T v="sub" c="ink2" style={st.label}>
-          합계
-        </T>
-        <T v="figure" lines={1} style={[st.value, st.nowrap]}>
-          {won(result.total)}
-        </T>
-      </View>
-      {result.emailSent !== undefined && (
-        <View style={st.row} testID="result-email">
-          <T v="sub" c="ink2" style={st.label}>
-            받는 이메일
-          </T>
-          <View style={{ flex: 1, alignItems: 'flex-end', gap: 2 }}>
-            <T v="sub" c={result.emailSent ? 'ink' : 'ink3'}>
-              {result.emailSent ? '보냈어요' : '보내지 않았어요'}
+    <Kv>
+      <KvRow label="작성일" value={`${d.getMonth() + 1}월 ${d.getDate()}일`} />
+      {full && (
+        <KvRow label="승인번호">
+          <Pressable style={{ flexShrink: 1 }} onLongPress={() => void copy()} accessibilityRole="button" accessibilityLabel={`승인번호 ${result.approvalNo}`} accessibilityHint="길게 누르면 복사해요" testID="result-approval-no">
+            <T v="subValue" style={{ textAlign: 'right' }}>
+              {copied ? '복사했어요' : groupApprovalNo(result.approvalNo)}
             </T>
-            {result.email && <EmailText value={result.email} />}
-          </View>
-        </View>
+          </Pressable>
+        </KvRow>
       )}
-    </View>
+      {full && <KvRow label="거래처" value={result.counterpart} />}
+      {result.emailSent !== undefined && (
+        <KvRow label="받는 이메일" testID="result-email">
+          {full && result.email ? <EmailText value={result.email} /> : <T v="subValue" c={result.emailSent ? 'ink' : 'ink3'}>{result.emailSent ? '보냈어요' : '보내지 않았어요'}</T>}
+        </KvRow>
+      )}
+      <KvRow label="합계" value={won(result.total)} total />
+    </Kv>
   );
 }
 
@@ -306,42 +269,31 @@ function EmailText({ value }: { value: string }) {
   );
 }
 
-function CardActions({ r, now, onAction, onDoc, onShare }: { r: RunView; now: number; onAction?: (a: RunAction) => void; onDoc?: () => void; onShare?: () => void }) {
+function CardActions({ r, now, onAction, onOpen }: { r: RunView; now: number; onAction?: (a: RunAction) => void; onOpen?: () => void }) {
   if (r.kind === 'done') {
-    return (
-      <View style={st.actions}>
-        <Pill label="서류 보기" onPress={() => onDoc?.()} testID="result-doc" />
-        <Pill quiet label="공유" onPress={() => onShare?.()} testID="result-share" />
-      </View>
-    );
+    return onOpen ? (
+      <Actions>
+        <Button kind="secondary" label="자세히" onPress={onOpen} testID="result-detail" />
+      </Actions>
+    ) : null;
   }
   const acts = actionsOf(r, now).filter((a) => a !== 'close');
   if (!acts.length) return null;
   return (
-    <View style={st.actions}>
+    <Actions>
       {acts.map((a, i) => (
-        <Pill key={a} quiet={i > 0} label={actionLabel(a, r)} onPress={() => (a === 'openApp' ? openAuthApp(r) : onAction?.(a))} testID={`run-action-${a}`} />
+        <Button key={a} kind={i === 0 ? 'primary' : 'secondary'} label={actionLabel(a, r)} onPress={() => (a === 'openApp' ? openAuthApp(r) : onAction?.(a))} testID={`run-action-${a}`} />
       ))}
-    </View>
+    </Actions>
   );
 }
 
 const st = StyleSheet.create({
-  approve: { flexDirection: 'row', alignItems: 'center', gap: space.s3 },
-  card: { borderRadius: radius.lg, padding: space.s4, gap: space.s2 },
-  head: { flexDirection: 'row', alignItems: 'baseline', gap: space.s3 },
-  chipLine: { flexDirection: 'row', alignItems: 'center', gap: space.s3, flexWrap: 'wrap' },
   doneChip: { flexDirection: 'row', alignItems: 'center', gap: space.s2 },
+  chipLine: { flexDirection: 'row', alignItems: 'center', gap: space.s3, flexWrap: 'wrap' },
   bar: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: space.s1 },
   seg: { flex: 1, height: 4, borderRadius: 2 },
   segCur: { height: 6, borderRadius: 3 },
-  rows: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: space.s1, paddingTop: space.s1 },
-  row: { flexDirection: 'row', alignItems: 'flex-start', gap: space.s3, paddingVertical: space.s2, minHeight: 44 },
-  label: { width: 84, flexShrink: 0, paddingTop: 2 },
-  value: { flex: 1, minWidth: 0, textAlign: 'right' },
-  stack: { paddingVertical: space.s2, gap: space.s1, minHeight: 44 },
-  stackHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: space.s3 },
-  mono: { textAlign: 'right', fontVariant: ['tabular-nums'], ...({ whiteSpace: 'nowrap' } as object) },
   nowrap: { flexShrink: 0, ...({ whiteSpace: 'nowrap', wordBreak: 'normal', overflowWrap: 'normal' } as object) },
   email: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: '100%' },
   emailGroup: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: '100%' },
@@ -349,5 +301,4 @@ const st = StyleSheet.create({
   stepList: { gap: space.s2, paddingLeft: 2 },
   stepItem: { flexDirection: 'row', alignItems: 'center', gap: space.s2 },
   stepDot: { width: 6, height: 6, borderRadius: 3 },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.s2, marginTop: space.s1 },
 });

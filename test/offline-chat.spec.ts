@@ -38,7 +38,7 @@ function fakeGateway(outputs: Array<Array<Record<string, unknown>>>, status = 20
     let out: unknown;
     if (status !== 200) out = { error };
     else if (url.endsWith('/v1/run-tokens')) out = { runToken: `rt_${'x'.repeat(30)}` };
-    else if (url.endsWith('/v1/usage')) out = { usedKrw: 3, limitKrw: 50, resetAt: 1, tier: 'trial' };
+    else if (url.endsWith('/v1/usage')) out = { percent: 42, resetAt: 1 };
     else if (url.endsWith('/v1/decide')) out = { answers: [] };
     else out = { status: 'completed', output: (outputs.shift() ?? []).map((item) => ({ item, tag: tag() })) };
     return { status, text: async () => JSON.stringify(out) };
@@ -131,17 +131,17 @@ describe('폰 대화(PC 꺼짐): 고정 사본 → 가짜 게이트웨이', () =
     assert.equal((await chat.items()).filter((x) => x.kind === 'msg' && x.text !== undefined).length, 2);
   });
 
-  it('하루 한도에 닿으면 모델을 더 부르지 않고 이유 한 줄을 준다', async () => {
-    const { chat } = make([], 429, 'gateway.daily_limit');
+  it('주간 한도에 닿으면 모델을 더 부르지 않고 이유 한 줄을 준다', async () => {
+    const { chat } = make([], 429, 'gateway.weekly_limit');
     const r = await chat.send('안녕');
-    assert.equal(r.unavailable?.code, 'chat.daily_limit');
+    assert.equal(r.unavailable?.code, 'chat.weekly_limit');
     assert.ok(r.unavailable.text.length > 0);
     assert.equal((await chat.items()).length, 0, '막힌 턴은 기록하지 않는다(화면이 내 말을 따로 남긴다)');
   });
 
-  it('한도·사용량은 PC와 같이 센 값을 그대로 받는다', async () => {
+  it('사용량은 PC와 같이 센 퍼센트와 다시 채워지는 때를 받는다', async () => {
     const { chat } = make([]);
-    assert.deepEqual(await chat.usage(), { usedKrw: 3, limitKrw: 50, resetAt: 1, tier: 'trial' });
+    assert.deepEqual(await chat.usage(), { percent: 42, resetAt: 1 });
   });
 
   it('표 결과의 카드 모양(사본이 오래됐으면 한 줄 덧붙임)', () => {

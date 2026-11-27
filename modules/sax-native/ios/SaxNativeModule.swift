@@ -6,8 +6,12 @@ import Vision
 import UIKit
 import Security
 import LocalAuthentication
+import QuickLook
 
 public class SaxNativeModule: Module {
+  // 지금 띄운 미리보기. 닫힐 때까지 데이터 소스를 붙잡아 둔다(QLPreviewController는 약하게 잡는다).
+  private var preview: PdfPreview?
+
   public func definition() -> ModuleDefinition {
     Name("SaxNative")
 
@@ -135,23 +139,7 @@ public class SaxNativeModule: Module {
 
     // 키가 없으면 만든다. 있으면 그 키의 공개키. 생체를 묻지 않는다(등록된 생체가 없으면 px_unavailable).
     AsyncFunction("pxCreate") { (tag: String) -> String in
-      if let key = pxKey(tag, nil) { return try pxPub(key) }
-      var err: Unmanaged<CFError>?
-      guard let ac = SecAccessControlCreateWithFlags(nil, kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly, [.privateKeyUsage, .biometryCurrentSet], &err) else {
-        throw VaultException("px_unavailable")
-      }
-      let attrs: [String: Any] = [
-        kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
-        kSecAttrKeySizeInBits as String: 256,
-        kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
-        kSecPrivateKeyAttrs as String: [
-          kSecAttrIsPermanent as String: true,
-          kSecAttrApplicationTag as String: Data(tag.utf8),
-          kSecAttrAccessControl as String: ac,
-        ] as [String: Any],
-      ]
-      guard let key = SecKeyCreateRandomKey(attrs as CFDictionary, &err) else { throw VaultException("px_unavailable") }
-      return try pxPub(key)
+      try seCreate(tag, "px_unavailable")
     }
 
     // 생체 확인 → ECDSA-P256-SHA256(data). 서명은 X9.62 DER(base64). 사용자가 취소하면 nil.
@@ -175,9 +163,73 @@ public class SaxNativeModule: Module {
     }
 
     AsyncFunction("pxDelete") { (tag: String) in
-      let q: [String: Any] = [kSecClass as String: kSecClassKey, kSecAttrApplicationTag as String: Data(tag.utf8), kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom]
-      SecItemDelete(q as CFDictionary)
+      seDelete(tag)
     }
+
+    // ---- 풀기 키(Ux, ADR-061 결정 3): Px와 따로 만드는 Secure Enclave P-256 키. 키 합의(ECDH)에만 쓰고, 쓸 때마다 생체를 확인한다 ----
+    // 접근 제어는 Px와 같다(폰 암호 대체 없음, 생체를 다시 등록하면 키가 죽는다). 풀린 값(Z)은 JS로 올리지 않고 여기서 봉인한다.
+    // 오류 message: ux_unavailable · ux_missing · ux_bad_input · biometry_lockout · ux_failed:<코드>
+
+    AsyncFunction("uxPublic") { (tag: String) -> String? in
+      guard let key = pxKey(tag, nil) else { return nil }
+      return try pxPub(key)
+    }
+
+    AsyncFunction("uxCreate") { (tag: String) -> String in
+      try seCreate(tag, "ux_unavailable")
+    }
+
+    AsyncFunction("uxDelete") { (tag: String) in
+      seDelete(tag)
+    }
+
+    // 생체 확인 → Z = ECDH(Ux, E)의 x좌표(32B) → PC가 준 한 번용 X25519 키(txPub)로 HPKE 봉인(info SAX-unlock-grant-v1, aad는 JS가 계산한 32B).
+    // 돌려주는 것은 봉인문 {enc, ct}뿐이다. 사용자가 취소하면 nil.
+    AsyncFunction("uxGrant") { (tag: String, eB64: String, txPubB64: String, aadB64: String, prompt: String) -> [String: String]? in
+      guard let e = Data(base64Encoded: eB64), e.count == 65, e.first == 0x04,
+            let tx = Data(base64Encoded: txPubB64), tx.count == 32,
+            let aad = Data(base64Encoded: aadB64), aad.count == 32 else { throw VaultException("ux_bad_input") }
+      let pubAttrs: [String: Any] = [kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom, kSecAttrKeyClass as String: kSecAttrKeyClassPublic, kSecAttrKeySizeInBits as String: 256]
+      var err: Unmanaged<CFError>?
+      guard let peer = SecKeyCreateWithData(e as CFData, pubAttrs as CFDictionary, &err) else { throw VaultException("ux_bad_input") }
+      let ctx = LAContext()
+      ctx.localizedReason = prompt
+      ctx.localizedFallbackTitle = ""
+      guard let key = pxKey(tag, ctx) else { throw VaultException("ux_missing") }
+      guard var z = SecKeyCopyKeyExchangeResult(key, .ecdhKeyExchangeStandard, peer, [String: Any]() as CFDictionary, &err) as Data? else {
+        let code = err.map { CFErrorGetCode($0.takeRetainedValue()) } ?? 0
+        if code == -2 || code == -4 || code == -9 || code == -3 || code == Int(errSecUserCanceled) { return nil }
+        if code == -8 { throw VaultException("biometry_lockout") }
+        throw VaultException("ux_failed:\(code)")
+      }
+      defer { z.resetBytes(in: 0..<z.count) }
+      guard z.count == 32 else { throw VaultException("ux_failed:len") }
+      let sealed = try UnlockHpke.seal(pkR: tx, info: Data("SAX-unlock-grant-v1".utf8), aad: aad, pt: z)
+      return ["enc": sealed.enc.base64EncodedString(), "ct": sealed.ct.base64EncodedString()]
+    }
+
+    // 문서함(ADR-064): 받은 PDF를 애플 기본 미리보기(QLPreviewController)로 띄운다. 공유와 파일에 저장은 미리보기 도구 막대가 맡는다.
+    // 닫히면(완료, 아래로 끌기) 끝난다. 파일 내용과 이름은 로그에 남기지 않는다.
+    AsyncFunction("previewFile") { (uri: String, title: String, promise: Promise) in
+      guard let url = URL(string: uri), url.isFileURL, FileManager.default.fileExists(atPath: url.path) else {
+        promise.reject(SaxError.badUri)
+        return
+      }
+      guard self.preview == nil, let top = self.appContext?.utilities?.currentViewController() else {
+        promise.reject(SaxError.noView)
+        return
+      }
+      let p = PdfPreview(url: url, title: title)
+      p.onDone = { [weak self] in
+        self?.preview = nil
+        promise.resolve(nil)
+      }
+      self.preview = p
+      let qc = QLPreviewController()
+      qc.dataSource = p
+      qc.delegate = p
+      top.present(qc, animated: true)
+    }.runOnQueue(.main)
 
     // SP-1 진단: 항목 정책 이름만(값 없음)
     Function("vaultPolicy") { () -> [String: String] in
@@ -207,6 +259,32 @@ private func pxKey(_ tag: String, _ ctx: LAContext?) -> SecKey? {
   return (ref as! SecKey)
 }
 
+// Secure Enclave P-256 키를 만든다(있으면 그 키). 접근 제어: WhenPasscodeSetThisDeviceOnly + privateKeyUsage + biometryCurrentSet.
+private func seCreate(_ tag: String, _ unavailable: String) throws -> String {
+  if let key = pxKey(tag, nil) { return try pxPub(key) }
+  var err: Unmanaged<CFError>?
+  guard let ac = SecAccessControlCreateWithFlags(nil, kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly, [.privateKeyUsage, .biometryCurrentSet], &err) else {
+    throw VaultException(unavailable)
+  }
+  let attrs: [String: Any] = [
+    kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+    kSecAttrKeySizeInBits as String: 256,
+    kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
+    kSecPrivateKeyAttrs as String: [
+      kSecAttrIsPermanent as String: true,
+      kSecAttrApplicationTag as String: Data(tag.utf8),
+      kSecAttrAccessControl as String: ac,
+    ] as [String: Any],
+  ]
+  guard let key = SecKeyCreateRandomKey(attrs as CFDictionary, &err) else { throw VaultException(unavailable) }
+  return try pxPub(key)
+}
+
+private func seDelete(_ tag: String) {
+  let q: [String: Any] = [kSecClass as String: kSecClassKey, kSecAttrApplicationTag as String: Data(tag.utf8), kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom]
+  SecItemDelete(q as CFDictionary)
+}
+
 private func pxPub(_ key: SecKey) throws -> String {
   guard let pub = SecKeyCopyPublicKey(key), let raw = SecKeyCopyExternalRepresentation(pub, nil) as Data?, raw.count == 65 else {
     throw VaultException("px_unavailable")
@@ -216,6 +294,30 @@ private func pxPub(_ key: SecKey) throws -> String {
 
 enum SaxError: Error {
   case badUri
+  case noView
+}
+
+final class PreviewItem: NSObject, QLPreviewItem {
+  let previewItemURL: URL?
+  let previewItemTitle: String?
+  init(url: URL, title: String) {
+    previewItemURL = url
+    previewItemTitle = title
+  }
+}
+
+final class PdfPreview: NSObject, QLPreviewControllerDataSource, QLPreviewControllerDelegate {
+  let item: PreviewItem
+  var onDone: (() -> Void)?
+  init(url: URL, title: String) {
+    item = PreviewItem(url: url, title: title)
+  }
+  func numberOfPreviewItems(in controller: QLPreviewController) -> Int { 1 }
+  func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem { item }
+  func previewControllerDidDismiss(_ controller: QLPreviewController) {
+    onDone?()
+    onDone = nil
+  }
 }
 
 private func inspect(_ url: URL) throws -> [String: Any] {

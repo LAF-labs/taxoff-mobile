@@ -1,19 +1,25 @@
 import {
-  CAP, QUEUE, flushOutbox, fromB64, issueCmd, monotonicClock, openMobileSession, queueCmd, queueLeave, queueOutbox, relayOrigin, relayQueue, softNoiseStatic, softSigner, verifyQBundle,
-  wsRelayClient, VM_PURPOSES, type FlushResult, type Link, type PhoneCopyBody, type QueueSendResult, type WebSocketLike,
+  CAP, QUEUE, flushOutbox, fromB64, monotonicClock, openMobileSession, queueCmd, queueLeave, queueOutbox, queuedFrame, relayOrigin, relayQueue, softNoiseStatic, softSigner, verifyQBundle,
+  wsRelayClient, VM_PURPOSES, type Channel, type FlushResult, type Link, type PhoneCopyBody, type QueueSendResult, type WebSocketLike,
 } from '@sax/remote';
-import { APP_VERSION, DEV_RELAY_HOST, DEV_STACK, PUBLIC_ORIGIN } from '../config';
+import { APP_VERSION, DEV_RELAY_HOST, DEV_STACK, PUBLIC_ORIGIN, RECONNECT_MS } from '../config';
 import { deviceAuthFor, fetchJson, type Htm } from './devauth';
 import type { DeviceKeys } from '../keyring';
 import type { FileOutbox } from '../storage/outbox';
 import type { AppData } from '../storage/state';
 import { PHONE_CAPS, newerCopy, receiveCopy } from './pcCopy';
-import { driveCmds, trimCmds } from './issueLive';
-import { cmdsToQueue } from '../phoneCmd';
+import { applyIncoming, driveCmds, trimCmds } from './issueLive';
+import { peerSession } from './peerSession';
+import { cmdBody, cmdsToQueue, type PhoneCmd } from '../phoneCmd';
+import { bookRun, bookToQueue, trimBook } from '../book';
 import { enrollPx } from './pxLive';
 import type { PxDevice } from '../approvalKey';
+import { unlockCaps, unlockDesk, type UxDevice } from '../unlock';
+import { enrollUx, holdForUnlock, unlockAware } from './unlockLive';
 import { replaying, tapping } from './hold';
 import { causeOf, needsRelink, pushWhy, whyCode } from './pcWhy';
+import { catchingShareKey, withShareKey } from './shareKey';
+import { retryDelay } from './reconnect';
 
 export type PcStatus = 'unpaired' | 'connecting' | 'online' | 'queued' | 'stale' | 'relink' | 'offline';
 
@@ -25,6 +31,7 @@ interface SyncDeps {
   onLive?: () => void;
   alive?: () => boolean;
   px?: PxDevice | null;
+  ux?: UxDevice | null;
 }
 
 interface SyncResult {
@@ -39,11 +46,13 @@ const PEER_WAIT_MS = 3000;
 type RnWebSocket = new (url: string, protocols?: string | string[], options?: { headers: Record<string, string> }) => WebSocketLike;
 const RnWs = WebSocket as unknown as RnWebSocket;
 
-export function relayFor(host: string, deviceAuth?: (htm: Htm, htu: string) => Promise<Record<string, string>>) {
+const openRelaySocket = (url: string, headers?: Record<string, string>) => new RnWs(url, undefined, headers ? { headers } : undefined);
+
+export function relayFor(host: string, deviceAuth?: (htm: Htm, htu: string) => Promise<Record<string, string>>, open = openRelaySocket) {
   return wsRelayClient({
     host,
     insecureLocal: DEV_STACK && host === DEV_RELAY_HOST,
-    open: (url, headers) => new RnWs(url, undefined, headers ? { headers } : undefined),
+    open,
     deviceAuth,
   });
 }
@@ -79,10 +88,16 @@ export async function syncWithPc(d: SyncDeps): Promise<SyncResult> {
 type Pair = NonNullable<AppData['pair']>;
 
 let liveLink: Link | null = null;
+let stopMonitor: (() => void) | null = null;
+
+function joinMailbox(relay: ReturnType<typeof relayFor>, pair: Pair): Promise<Link> {
+  return relay.joinMailbox(fromB64(pair.mbxId), { read: fromB64(pair.tokRead), write: fromB64(pair.tokWrite) }, 'mobile');
+}
 
 /** PC가 우편함에 들어오고 나가는 것. 'lost'는 붙잡아 둔 연결 자체가 끊긴 것이다. */
 export type Presence = 'up' | 'down' | 'lost';
 let held: Link | null = null;
+let heldDown = false;
 let presence: ((p: Presence) => void) | null = null;
 
 /** 앱을 연 동안 우편함 연결을 붙잡아 두고, PC가 켜지고 꺼지는 것을 바로 알린다. */
@@ -90,17 +105,16 @@ export function onPresence(cb: ((p: Presence) => void) | null): void {
   presence = cb;
 }
 
-let heldDown = false;
-
 /** 붙잡아 둔 연결이 열려 있고 그 너머에 PC가 없다. */
 export function pcAway(): boolean {
   return !!held && !held.closed && heldDown;
 }
 
-function hold(link: Link, peerNow: boolean): void {
+function hold(link: Link, afterSync: boolean): boolean {
   dropHeld();
   held = link;
-  heldDown = !peerNow;
+  heldDown = true;
+  let joining = afterSync;
   link.onPeerGone?.(() => {
     if (held !== link || heldDown) return;
     heldDown = true;
@@ -109,13 +123,15 @@ function hold(link: Link, peerNow: boolean): void {
   link.onPeer(() => {
     if (held !== link || !heldDown) return;
     heldDown = false;
-    presence?.('up');
+    if (!joining) presence?.('up');
   });
+  joining = false;
   link.onClose(() => {
     if (held !== link) return;
     held = null;
     presence?.('lost');
   });
+  return !heldDown;
 }
 
 function dropHeld(): void {
@@ -124,20 +140,68 @@ function dropHeld(): void {
   h?.close();
 }
 
-export function closeLive(): void {
-  liveLink?.close();
+function stopPresence(): void {
+  const stop = stopMonitor;
+  stopMonitor = null;
+  stop?.();
   dropHeld();
+}
+
+function watchPresence(pair: Pair, auth: ReturnType<typeof deviceAuthFor>, alive: SyncDeps['alive']): void {
+  let pending: WebSocketLike | null = null;
+  let timer: ReturnType<typeof setTimeout>;
+  const stop = () => {
+    clearTimeout(timer);
+    pending?.close(1000);
+  };
+  stopMonitor = stop;
+  const current = () => stopMonitor === stop && (!alive || alive());
+  const relay = relayFor(pair.relayHost, auth, (url, headers) => {
+    if (!current()) throw new Error('relay: monitoring cancelled');
+    return (pending = openRelaySocket(url, headers));
+  });
+  async function connect(attempt: number): Promise<void> {
+    if (!current()) return;
+    let link: Link;
+    try {
+      link = await joinMailbox(relay, pair);
+    } catch {
+      if (current()) timer = setTimeout(() => void connect(attempt + 1), retryDelay(attempt, RECONNECT_MS));
+      return;
+    } finally {
+      pending = null;
+    }
+    if (!current()) {
+      link.close();
+      return;
+    }
+    if (!hold(link, true)) presence?.('down');
+  }
+  timer = setTimeout(() => void connect(1), 0);
+}
+
+export function closeLive(): void {
+  const active = liveLink;
+  liveLink = null;
+  active?.close();
+  stopPresence();
 }
 
 async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: string }> {
   let link: Link | null = null;
+  let sessionLink: Link | null = null;
+  let channel: Channel | null = null;
   const noise = softNoiseStatic(d.keys.sm);
   let stage: 'join' | 'session' | 'live' = 'join';
   try {
-    const relay = relayFor(pair.relayHost, deviceAuthFor(pair.pairId, pair.cert, d.keys.vm));
-    dropHeld();
-    link = await relay.joinMailbox(fromB64(pair.mbxId), { read: fromB64(pair.tokRead), write: fromB64(pair.tokWrite) }, 'mobile');
+    const auth = deviceAuthFor(pair.pairId, pair.cert, d.keys.vm);
+    stopPresence();
+    let socket!: WebSocketLike;
+    link = await joinMailbox(relayFor(pair.relayHost, auth, (url, headers) => (socket = openRelaySocket(url, headers))), pair);
+    if (d.alive && !d.alive()) return { status: 'offline' };
     liveLink = link;
+    const { session, drained } = peerSession(link, socket);
+    sessionLink = session;
     if (!(await waitPeer(link, PEER_WAIT_MS))) {
       const why = whyCode('peer', link.closed ? 'closed' : 'timeout');
       if (!link.closed && (!d.alive || d.alive())) {
@@ -149,26 +213,43 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
     stage = 'session';
     const clock = monotonicClock(d.data().ikTs);
     let used = 0;
-    const s = await openMobileSession(link, {
+    const s = await openMobileSession(sessionLink, {
       pairId: pair.pairId,
       noise,
       desktopStatic: fromB64(pair.desktopStatic),
-      hello: { appVersion: APP_VERSION, deviceListVersion: d.data().seenListVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash, ...PHONE_CAPS, ...(d.px ? [CAP.approve] : [])] },
+      hello: { appVersion: APP_VERSION, deviceListVersion: d.data().seenListVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash, CAP.share, ...PHONE_CAPS, ...(d.px ? [CAP.approve] : []), ...unlockCaps(d.ux, d.data().uxOff)] },
       nextTimestamp: () => (used = clock()),
       responseTimeoutMs: 8000,
     });
     if (used) await d.update((x) => ({ ...x, ikTs: Math.max(x.ikTs, used) }));
-    if (!s) return { why: whyCode('session', link.closed ? 'closed' : 'no_answer') };
+    if (!s) return { why: whyCode('session', sessionLink.closed ? 'closed' : 'no_answer') };
+    channel = s.channel;
+    const finish = () => {
+      if (s.channel.closed) throw new Error('relay: closed');
+      s.channel.close();
+      channel = null;
+    };
     stage = 'live';
     await d.update((x) => ({ ...x, lastSeenPc: Date.now() }));
     d.onLive?.();
     const held: Parameters<typeof s.channel.sendRaw>[0][] = [];
-    const early = tapping(s.channel, held);
+    const shared = catchingShareKey(s.channel, (body) => void d.update((x) => withShareKey(x, body).next).catch(() => undefined));
+    // PC 잠금 풀기: 둘 다 unlock.v1이면 세션 내내 풀기 요청을 받고 답을 보낸다(ADR-061 결정 5).
+    const unlocks = !!d.ux && !d.data().uxOff && s.peerHello.capabilities.includes(CAP.unlock);
+    const ch = unlocks ? unlockAware(shared, { desk: unlockDesk, pcDeviceId: pair.desktopDeviceId, phoneDeviceId: d.keys.deviceId, pcName: pair.desktopName ?? 'PC' }) : shared;
+    const early = tapping(ch, held);
     const copy = await receiveCopy(early, s.peerHello.capabilities).catch(() => null);
-    if (copy) await d.update((x) => ({ ...x, pcCopy: newerCopy(x.pcCopy, copy) }));
-    const onCopy = (c: PhoneCopyBody) => d.update((x) => ({ ...x, pcCopy: newerCopy(x.pcCopy, c) }));
+    const onCopy = (c: PhoneCopyBody) =>
+      d.update((x) => {
+        if (x.pair?.pairId !== pair.pairId) return x;
+        const pcCopy = newerCopy(x.pcCopy, { ...c, ownerDesktopDeviceId: pair.desktopDeviceId });
+        return { ...x, pcCopy, book: trimBook(x.book ?? [], pcCopy) };
+      });
+    if (copy) await onCopy(copy);
     const px = await enrollPx(early, s.peerHello.capabilities, { pairId: pair.pairId, deviceId: d.keys.deviceId, vm: d.keys.vm, px: d.px ?? null, onCopy }).catch(() => null);
     if (px) await d.update((x) => ({ ...x, px }));
+    const ux = unlocks ? await enrollUx(early, s.peerHello.capabilities, { pairId: pair.pairId, deviceId: d.keys.deviceId, vm: d.keys.vm, ux: d.ux ?? null, onCopy }).catch(() => null) : null;
+    if (ux) await d.update((x) => ({ ...x, ux }));
     const flushed = await flushOutbox(early, d.outbox);
     if (flushed.sent.length) {
       const sent = new Set(flushed.sent);
@@ -178,22 +259,40 @@ async function viaLive(d: SyncDeps, pair: Pair): Promise<SyncResult | { why: str
         recent: x.recent.map((r) => (sent.has(r.msgId) ? { ...r, state: 'sent' as const } : r)),
       }));
     }
-    await driveCmds(replaying(s.channel, held), s.peerHello.capabilities, {
+    const io: Parameters<typeof driveCmds>[2] = {
       cmds: () => d.data().cmds ?? [],
-      save: (f) => d.update((x) => ({ ...x, cmds: trimCmds(f(x.cmds ?? [])) })),
+      save: (f: (cmds: PhoneCmd[]) => PhoneCmd[]) => d.update((x) => ({ ...x, cmds: trimCmds(f(x.cmds ?? [])) })),
       onCopy,
+      book: { list: () => d.data().book ?? [], save: (f) => d.update((x) => ({ ...x, book: f(x.book ?? []) })) },
       alive: d.alive,
+    };
+    await driveCmds(replaying(ch, held), s.peerHello.capabilities, io).finally(async () => {
+      if (!session.closed) return;
+      await drained;
+      const approves = s.peerHello.capabilities.includes(CAP.approve);
+      for (const e of held) await applyIncoming(e, approves, io);
+      for (let frame = queuedFrame(session); frame; frame = queuedFrame(session)) {
+        const e = s.channel.accept(frame);
+        if (e) await applyIncoming(e, approves, io);
+      }
     });
-    s.channel.close();
-    if (!link.closed && (!d.alive || d.alive())) {
-      hold(link, true);
-      link = null;
-    }
+    if (unlocks) {
+      // 풀기를 기다리다 PC가 세션을 닫는 것은 정상 끝이다.
+      await holdForUnlock(replaying(ch, held), unlockDesk, d.alive);
+      s.channel.close();
+      channel = null;
+    } else finish();
+    if (liveLink === link && (!d.alive || d.alive())) watchPresence(pair, auth, d.alive);
     return { status: 'online', flushed };
   } catch (e) {
     return { why: whyCode(stage, causeOf(e)) };
   } finally {
+    channel?.close();
     noise.destroy();
+    if (link && sessionLink?.closed && !link.closed && (!d.alive || d.alive())) {
+      hold(link, false);
+      link = null;
+    }
     if (link) {
       link.close();
       if (liveLink === link) liveLink = null;
@@ -250,14 +349,22 @@ async function viaQueue(d: SyncDeps, pair: Pair): Promise<SyncResult> {
     if (bundle.seq > d.data().qbundleSeq) await d.update((x) => ({ ...x, qbundleSeq: Math.max(x.qbundleSeq, bundle.seq) }));
     const items = await d.outbox.list();
     const cmds = cmdsToQueue(d.data().cmds ?? [], QUEUE.ttlMs);
-    const need = cmds.length + items.reduce((n, it) => n + (it.kind === 'cash' ? 1 : 1 + Math.ceil(it.offer.bytes / QUEUE.chunk)), 0);
+    const books = bookToQueue(d.data().book ?? [], QUEUE.ttlMs);
+    const need = books.length + cmds.length + items.reduce((n, it) => n + (it.kind === 'cash' ? 1 : 1 + Math.ceil(it.offer.bytes / QUEUE.chunk)), 0);
     if (need === 0) return { status: 'offline' };
     const start = d.data().queueSeq;
     await d.update((x) => ({ ...x, queueSeq: Math.max(x.queueSeq, start) + need }));
     let next = start;
     const send = { queue: q, pairId: pair.pairId, vm, bundle, mbxEpoch: pair.mbxEpoch, nextSeq: () => ++next };
+    // 거래처 저장을 발급보다 먼저 넣는다. PC는 큐를 넣은 순서대로 받는다.
+    const booksQueued = new Set<string>();
+    for (const b of books) if ((await queueCmd(bookRun(b), send).catch(() => 'failed' as const)) === 'ok') booksQueued.add(b.cmdId);
+    if (booksQueued.size) {
+      const at = Date.now();
+      await d.update((x) => ({ ...x, book: (x.book ?? []).map((b) => (booksQueued.has(b.cmdId) ? { ...b, queuedAt: at } : b)) }));
+    }
     const cmdsQueued: string[] = [];
-    for (const c of cmds) if ((await queueCmd(issueCmd(c.cmdId, c.req), send).catch(() => 'failed' as const)) === 'ok') cmdsQueued.push(c.cmdId);
+    for (const c of cmds) if ((await queueCmd(cmdBody(c), send).catch(() => 'failed' as const)) === 'ok') cmdsQueued.push(c.cmdId);
     if (cmdsQueued.length) {
       const at = Date.now();
       const done = new Set(cmdsQueued);
@@ -272,11 +379,10 @@ async function viaQueue(d: SyncDeps, pair: Pair): Promise<SyncResult> {
         recent: x.recent.map((r) => (done.has(r.msgId) && r.state === 'pending' ? { ...r, state: 'queued' as const } : r)),
       }));
     }
-    return { status: cmdsQueued.length || queued.queued.length || !queued.waiting.length ? 'queued' : 'offline', queued };
+    return { status: booksQueued.size || cmdsQueued.length || queued.queued.length || !queued.waiting.length ? 'queued' : 'offline', queued };
   } catch (e) {
     return { status: 'offline', why: whyCode('queue', causeOf(e)) };
   } finally {
     vm.destroy();
   }
 }
-

@@ -7,7 +7,7 @@ export type PhoneChatErrorCode =
   | 'chat.bad_response'
   | 'chat.budget_exceeded'
   | 'chat.quota_exceeded'
-  | 'chat.daily_limit'
+  | 'chat.weekly_limit'
   | 'chat.subscription_required'
   | 'chat.device_suspended'
   | 'chat.rate_limited'
@@ -49,11 +49,10 @@ export type PhoneRespondResult =
   | { status: 'refusal' }
   | { status: 'error'; code: PhoneChatErrorCode; tokenInvalid?: boolean };
 
+/** 이번 주 대화 사용량: 퍼센트(0~100)와 다음 초기화 시각(ms, 한국 시간 월요일 0시) */
 export interface PhoneUsage {
-  usedKrw: number;
-  limitKrw: number;
+  percent: number;
   resetAt: number;
-  tier: 'trial' | 'paid';
 }
 
 /** PhoneChat이 쓰는 모델 포트. 시험은 가짜로 바꾼다. */
@@ -83,8 +82,8 @@ export function phoneErrorOf(code: string | undefined): { code: PhoneChatErrorCo
       return { code: 'chat.unavailable', tokenInvalid: true };
     case 'gateway.quota_exceeded':
       return { code: 'chat.quota_exceeded' };
-    case 'gateway.daily_limit':
-      return { code: 'chat.daily_limit' };
+    case 'gateway.weekly_limit':
+      return { code: 'chat.weekly_limit' };
     case 'account.scope_denied':
     case 'account.subscription_required':
       return { code: 'chat.subscription_required' };
@@ -117,6 +116,7 @@ export const PHONE_TOOL_ARGS: { [K in ChatPhoneToolName]: (a: Record<string, unk
   draft_edit: (a) => keysAre(a, ['draft', 'amount', 'vat', 'item', ...EXTRA_KEYS]) && typeof a.draft === 'string' && nullableString(a.amount) && vat(a.vat) && nullableString(a.item) && extraOk(a),
   draft_discard: (a) => keysAre(a, ['draft']) && typeof a.draft === 'string',
   open_screen: (a) => keysAre(a, ['screen']) && (PHONE_SCREENS as readonly unknown[]).includes(a.screen),
+  invoice_amend: (a) => keysAre(a, ['invoice', 'amount', 'vat', 'item', 'date_month_offset', 'date_day', 'counterparty']) && nullableString(a.invoice) && nullableString(a.amount) && vat(a.vat) && nullableString(a.item) && monthOffset(a.date_month_offset) && nullableString(a.date_day) && nullableString(a.counterparty),
 };
 const TOOL_NAMES: ReadonlySet<string> = new Set(CHAT_PHONE_TOOLS.map((t) => t.name));
 
@@ -226,8 +226,8 @@ export class PhoneGateway implements PhoneModel {
   async usage(): Promise<PhoneUsage | null> {
     const r = await this.call('GET', '/v1/usage');
     if (!r.ok || !isObj(r.value)) return null;
-    const { usedKrw, limitKrw, resetAt, tier } = r.value;
-    if (typeof usedKrw !== 'number' || typeof limitKrw !== 'number' || typeof resetAt !== 'number' || (tier !== 'trial' && tier !== 'paid')) return null;
-    return { usedKrw, limitKrw, resetAt, tier };
+    const { percent, resetAt } = r.value;
+    if (typeof percent !== 'number' || !Number.isFinite(percent) || typeof resetAt !== 'number') return null;
+    return { percent: Math.min(100, Math.max(0, Math.floor(percent))), resetAt };
   }
 }
