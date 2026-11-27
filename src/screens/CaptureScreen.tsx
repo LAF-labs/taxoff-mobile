@@ -350,7 +350,7 @@ export function CaptureScreen({ onDone, preview }: { onDone: () => void; preview
         {isInv ? (
           <InvoiceFields inv={inv} setI={setI} unsure={unsure} issueFor={issueFor} sumFix={sumIssue && sumIssue.code === 'sum_mismatch' ? sumIssue.expected : null} />
         ) : (
-          <Group note="폰이 읽은 값은 참고용이에요. PC가 사진을 다시 읽어 세무사 꾸러미에 넣어요.">
+          <Group>
               <Field testID="field-amount" label="금액" mask="won" unit="원" value={f.amount} onChange={(v) => setF({ ...f, amount: v })} placeholder="15,000" />
               <Field testID="field-issuedOn" label="날짜" mask="day" value={f.issuedOn} onChange={(v) => setF({ ...f, issuedOn: v })} placeholder="2026-11-05" />
               <Field testID="field-merchant" label="상호" value={f.merchant} onChange={(v) => setF({ ...f, merchant: v })} placeholder="가게 이름" />
@@ -541,7 +541,7 @@ function InvoiceFields({
       </Group>
 
       {inv.items.length > 0 && (
-        <Group title={`품목 ${inv.items.length}개`} note="품목은 읽은 그대로 보내요. 틀린 칸은 보낸 뒤에 고칠 수 있어요.">
+        <Group title={`품목 ${inv.items.length}개`}>
           {inv.items.map((it, i) => (
             <Row
               key={i}

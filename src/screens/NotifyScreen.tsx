@@ -44,7 +44,6 @@ export function NotifyScreen({ onDone, permPreview }: { onDone: () => void; perm
     <Screen title="알림" onBack={onDone} testID="notify-settings">
       <Group
         title="이 폰"
-        note={off ? '폰 설정에서 꺼 두셨어요. 누르면 설정을 열어요.' : perm === 'undetermined' ? '허용하면 앱을 닫아 둬도 알려 드려요.' : undefined}
       >
         <Row
           testID="notify-permission"
@@ -60,7 +59,6 @@ export function NotifyScreen({ onDone, permPreview }: { onDone: () => void; perm
 
       <Group
         title="받을 알림"
-        note="앱을 닫아 둬도 오는 알림 글은 “승인을 기다리는 발급이 있어요”와 “맡긴 일에 새 소식이 있어요” 둘뿐이에요. 잠금 화면에는 거래처와 금액을 보이지 않아요."
       >
         <Row label="승인할 일과 맡긴 일 소식" sub="앱을 닫아 둬도 알려요" accessory={sw('wake')} />
         <Row label="발급 진행" sub="앱을 쓰는 중에 내 차례가 오거나 발급이 끝나면" accessory={sw('run')} />

@@ -123,7 +123,6 @@ export function QueueScreen({ onDone, onConnection, onOpen, now = Date.now() }: 
             <Section
               testID="queue-closed"
               title={`발급 안 된 일 ${done.length}건`}
-              note="아무것도 발급하지 않았어요. 옆으로 밀면 치워져요."
               right={
                 <Pressable
                   testID="queue-dismiss-all"
@@ -150,7 +149,7 @@ export function QueueScreen({ onDone, onConnection, onOpen, now = Date.now() }: 
             </Section>
           )}
           {pending > 0 && (
-            <Group title="아직 PC로 못 보낸 것" note="PC가 켜지면 저절로 보내요.">
+            <Group title="아직 PC로 못 보낸 것">
               {s.pending.receipts > 0 && <Row label="사진" value={`${s.pending.receipts}장`} />}
               {s.pending.cash > 0 && <Row label="현금 매출" value={`${s.pending.cash}건`} />}
               <Row label="연결 상태 보기" onPress={onConnection} />

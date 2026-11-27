@@ -1,11 +1,9 @@
 {
   "border": {
-    "src/notify/NotifyHost.tsx": 1,
     "src/screens/BizRegScreen.tsx": 5,
     "src/screens/CaptureScreen.tsx": 5,
     "src/screens/CashScreen.tsx": 1,
     "src/screens/HomeScreen.tsx": 5,
-    "src/screens/LockScreen.tsx": 1,
     "src/screens/OnboardingScreen.tsx": 10,
     "src/screens/PairScreen.tsx": 7
   },
@@ -23,14 +21,7 @@
     "src/screens/PairScreen.tsx": 3
   },
   "gray-note": {
-    "src/screens/BizRegScreen.tsx": 2,
-    "src/screens/CaptureScreen.tsx": 2,
-    "src/screens/ConnectionScreen.tsx": 1,
-    "src/screens/DevicesScreen.tsx": 2,
-    "src/screens/MoneyListScreen.tsx": 1,
-    "src/screens/NotifyScreen.tsx": 2,
-    "src/screens/PairScreen.tsx": 1,
-    "src/screens/QueueScreen.tsx": 2
+    "src/screens/DevicesScreen.tsx": 2
   },
   "overlay-adhoc": {
     "src/screens/BizRegScreen.tsx": 1,
