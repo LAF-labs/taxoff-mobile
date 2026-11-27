@@ -109,7 +109,6 @@
       [
         "expo-notifications",
         {
-          "mode": "development",
           "enableBackgroundRemoteNotifications": false
         }
       ],

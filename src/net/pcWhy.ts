@@ -41,8 +41,9 @@ export function pushWhy(log: readonly PcWhy[] | undefined, w: PcWhy): PcWhy[] {
 export function pcWhyText(code: string | null | undefined): string | null {
   if (!code) return null;
   const [stage = '', cause = ''] = code.split(':');
-  if (/^(join|queue)$/.test(stage) && /^account\.(device_not_found|device_suspended)/.test(cause)) return '이 폰의 연결이 해제됐어요. 설정에서 PC와 다시 연결해 주세요.';
-  if (/^(join|queue)$/.test(stage) && cause.startsWith('account.')) return '폰 확인이 거절됐어요. 잠시 뒤 다시 하고, 계속되면 설정에서 PC와 다시 연결해 주세요.';
+  if (/^(join|queue)$/.test(stage) && /^account\.(device_not_found|device_suspended)/.test(cause)) return '이 폰의 연결이 해제됐어요. PC와 다시 연결해 주세요.';
+  if (/^(join|queue)$/.test(stage) && /^account\.unauthorized/.test(cause)) return '이 폰을 계정에서 알아보지 못했어요. PC와 다시 연결해 주세요.';
+  if (/^(join|queue)$/.test(stage) && cause.startsWith('account.')) return '폰 확인이 거절됐어요. 잠시 뒤 다시 해 볼게요.';
   if (stage === 'join' && cause.startsWith('net.')) return '인터넷에 연결되지 않았어요. 연결을 확인해 주세요.';
   if (stage === 'join') return 'PC와 잇는 길이 지금 열리지 않았어요. 잠시 뒤 다시 해 볼게요.';
   if (stage === 'peer') return 'PC가 응답하지 않았어요. PC 앱이 꺼져 있거나 로그아웃됐을 수 있어요.';
@@ -59,11 +60,11 @@ export function statusWhileSyncing<T extends string>(prev: T): T | 'connecting' 
   return prev === 'unpaired' ? 'connecting' : prev;
 }
 
-/** 이 폰의 연결이 서버에서 풀렸다: PC를 켜도 다시 연결하기 전에는 이어지지 않는다. */
+/** 이 폰의 연결이 서버에서 풀렸거나 서버가 이 폰을 못 알아본다(401): PC를 켜도 다시 연결하기 전에는 이어지지 않는다. 'PC 꺼짐'으로 보이면 사장님은 PC만 켜고 기다린다. */
 export function needsRelink(code: string | null | undefined): boolean {
   if (!code) return false;
   const [stage = '', cause = ''] = code.split(':');
-  return /^(join|queue)$/.test(stage) && /^account\.(device_not_found|device_suspended)/.test(cause);
+  return /^(join|queue)$/.test(stage) && /^account\.(device_not_found|device_suspended|unauthorized)/.test(cause);
 }
 
 /** 맡긴 발급의 한 줄. 연결이 풀린 것과 PC가 꺼진 것은 다르다: 꺼져 있으면 켜지는 대로 발급하고, 풀렸으면 다시 연결해야 간다. */

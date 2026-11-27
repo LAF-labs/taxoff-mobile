@@ -1,10 +1,12 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import APNS_ENV from './apns-env.json';
 import { WAKE_RANK, apnsToken, pushPlatform, tapKindOf, wakeKindOf, type PushPlatform, type WakeKind } from './wake';
 
 const ios = Platform.OS === 'ios';
 
-export const PLATFORM: PushPlatform = pushPlatform(__DEV__, process.env.EXPO_PUBLIC_TEX_APNS_ENV);
+// 빌드의 aps-environment와 같은 값으로 밝힌다. __DEV__로 고르면 Release 빌드가 샌드박스 토큰을 'apns'로 올려 서버가 보내지 않는다(11-24부터 PC 잠금 풀기 깨우기 not_sent).
+export const PLATFORM: PushPlatform = pushPlatform(__DEV__, process.env.EXPO_PUBLIC_TEX_APNS_ENV ?? APNS_ENV.mode);
 
 export async function deviceToken(): Promise<string | null> {
   if (!ios) return null;

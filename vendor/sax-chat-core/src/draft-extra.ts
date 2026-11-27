@@ -5,6 +5,14 @@ export const LINE_SUPPLY_MAX = 1e15;
 const pad = (n: number) => String(n).padStart(2, '0');
 const daysIn = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate();
 
+/** 'YYYY-MM-DD' 꼴이고 달력에 있는 날인가(2월 30일, 13월은 아니다). */
+export function isIsoDay(d: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
+  if (!m) return false;
+  const [y, mo, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  return mo >= 1 && mo <= 12 && day >= 1 && day <= daysIn(y, mo);
+}
+
 /** 작성일자 인자 → 날짜. 둘 다 null이면 null(오늘). 없는 날·모양이 틀리면 'bad'. */
 export function draftDate(today: string, monthOffset: unknown, day: unknown): string | null | 'bad' {
   if ((monthOffset === null || monthOffset === undefined) && (day === null || day === undefined)) return null;

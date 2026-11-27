@@ -1,4 +1,4 @@
-import { issueDateRule } from './draft-extra.ts';
+import { isIsoDay, issueDateRule } from './draft-extra.ts';
 import { splitVat } from './fill.ts';
 
 /**
@@ -226,7 +226,7 @@ export function amendPlan(o: AmendOriginal, what: AmendWhat, v: AmendValues, tod
   if (!intOk(v.supply, 0) || !intOk(v.tax, 0)) add('bad_amount');
 
   const date = AMEND_DATE[what] === 'original' ? o.issueDate : v.issueDate;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) add('date_future');
+  if (!isIsoDay(date)) add('date_future');
   if (AMEND_DATE[what] === 'event') {
     if (date < o.issueDate) add('date_before_original');
     if (date > today) add('date_future');
@@ -268,7 +268,7 @@ export function amendPlan(o: AmendOriginal, what: AmendWhat, v: AmendValues, tod
       sheets = [];
       break;
   }
-  if (AMEND_DATE[what] === 'event' && /^\d{4}-\d{2}-\d{2}$/.test(date) && today > nextMonth10(date)) notes.push('deadline');
+  if (AMEND_DATE[what] === 'event' && isIsoDay(date) && today > nextMonth10(date)) notes.push('deadline');
   const vatFiled = AMEND_DATE[what] !== 'event' && issueDateRule(o.issueDate, today) === 'past_period';
   const main = sheets.find((s) => s.kind !== 'cancel') ?? sheets[0] ?? { kind: 'cancel' as const, issueDate: date, supply: 0, tax: 0, total: 0 };
   return { what, before, after, sheets, main, blocks, notes, vatFiled, ready: blocks.length === 0 };
