@@ -6,8 +6,8 @@ import { devAcctClaim } from './test-account-key.ts';
 import {
   AIK_PURPOSES, CAP, DesktopPairing, DeviceTokenCache, ReceiveQueue, VD_PURPOSES, acceptDesktopSession, b64url, certNotAfter, deviceAuthHeaders,
   drainQueue, ed25519Keygen, hpkeOpen, initialDeviceList, issueCert, makeQBundle, qbundleWindow, relayQueue, requestDeviceToken, sha256Hash,
-  softNoiseStatic, softSigner, toHex, uuid4, wsRelayClient, x25519Keygen,
-  type DesktopKeys, type DeviceListJson, type HttpJson, type Link, type PairRecord, type WebSocketLike,
+  softNoiseStatic, softSigner, toHex, uuid4, wsRelayClient, x25519Keygen, docChunkBodies, docListPages,
+  type DesktopKeys, type DeviceListJson, type DocListItem, type DocWantBody, type HttpJson, type Link, type PairRecord, type WebSocketLike,
 } from '../vendor/sax-remote/src/index.ts';
 import { DevAuth } from './dev-auth.ts';
 import { DevRelay } from './relay-server.ts';
@@ -48,6 +48,36 @@ let pairing: DesktopPairing | null = null;
 let qr: { text: string; exp: number } | null = null;
 const pairs: PairRecord[] = [];
 const received = { receipts: 0, cash: 0, viaQueue: 0 };
+
+/** 문서함 원본(ADR-070) 시험용 PDF. DUMMY_DOCS=0이면 빈 문서함. */
+function fakePdf(title: string, pad: number): Uint8Array {
+  const body = `BT /F1 24 Tf 72 700 Td (${title}) Tj ET`;
+  const objs = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>', '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>', `<< /Length ${body.length} >>\nstream\n${body}\nendstream`, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];
+  let out = '%PDF-1.4\n';
+  const offs: number[] = [];
+  objs.forEach((o, i) => { offs.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  const x = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${offs.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${x}\n%%EOF\n%${'0'.repeat(pad)}\n`;
+  return new TextEncoder().encode(out);
+}
+const today = new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10);
+const docs = new Map<string, { item: DocListItem; bytes: Uint8Array }>();
+const DOC_NAMES: Array<[string, string, string]> = [['가나식자재 세금계산서', 'tax_invoice', 'Invoice 1'], ['사업자등록증명', 'biz_registration_cert', 'Biz cert'], ['납세증명서', 'national_tax_cert', 'Tax cert'], ['대한테크 세금계산서', 'tax_invoice', 'Invoice 2']];
+for (const [i, [name, docType, title]] of DOC_NAMES.slice(0, Number(process.env.DUMMY_DOCS ?? DOC_NAMES.length)).entries()) {
+  const bytes = fakePdf(title, i === 0 ? 120_000 : 10);
+  const docId = uuid4();
+  docs.set(docId, { item: { docId, name, docType, issuedOn: today, bytes: bytes.length, sha256: toHex(sha256Hash(bytes)) }, bytes });
+}
+async function sendDoc(ch: { closed: boolean; send(t: 'doc.chunk', b: object): unknown }, want: DocWantBody) {
+  const d = docs.get(want.docId);
+  if (!d) return;
+  for (const c of docChunkBodies(want.docId, d.bytes)) {
+    if (ch.closed) return;
+    ch.send('doc.chunk', c);
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  log(`doc sent ${d.item.name}`);
+}
 
 async function startPairing(): Promise<string> {
   if (pairing && qr && pairing.state === 'waiting_phone' && !pairing.expired) return qr.text;
@@ -102,14 +132,16 @@ async function serveMailbox(rec: PairRecord, mbxId: Uint8Array, tok: { read: Uin
     }
     while (!link.closed) {
       const sess = await acceptDesktopSession(link, {
-        noise: keys.noise, pair: rec, hello: { appVersion: 'dummy-pc', deviceListVersion: deviceList.listVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash] },
+        noise: keys.noise, pair: rec, hello: { appVersion: 'dummy-pc', deviceListVersion: deviceList.listVersion, capabilities: [CAP.receipt, CAP.receiptV2, CAP.cash, CAP.docs] },
         persistTs: async () => {},
       });
       if (!sess) continue;
       log('session open', sess.deviceListMismatch ? '(device list mismatch)' : '');
+      if (sess.peerHello.capabilities.includes(CAP.docs)) for (const page of docListPages([...docs.values()].map((d) => d.item).reverse(), Date.now())) sess.channel.send('doc.list', page);
       while (!sess.channel.closed) {
         const env = await sess.channel.recv(30_000);
-        if (env) await q.handle(sess.channel, env);
+        if (env?.type === 'doc.want') void sendDoc(sess.channel, env.body as DocWantBody);
+        else if (env) await q.handle(sess.channel, env);
       }
       log('session closed');
     }

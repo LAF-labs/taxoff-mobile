@@ -62,13 +62,6 @@ export interface SimpleId {
   carrier?: string;
 }
 
-/** 계정 공유 열쇠(PC가 share.key로 준다, ADR-064): 세대마다 K_share(e)와 PC 서명 확인용 Ws 공개키. 연결한 PC가 바뀌면 버린다. */
-export interface ShareState {
-  pairId: string;
-  signPub: string;
-  keys: string[];
-}
-
 export interface AppData {
   v: 1;
   pair: PairState | null;
@@ -98,7 +91,6 @@ export interface AppData {
   textSize?: TextSize;
   inbox?: InboxItem[];
   inboxSeenAt?: number;
-  share?: ShareState | null;
 }
 
 export const emptyData = (): AppData => ({ v: 1, pair: null, deviceList: null, seenListVersion: 0, ikTs: 0, lastSeenPc: null, cash: [], recent: [], queueSeq: 0, qbundleSeq: 0 });
@@ -108,6 +100,8 @@ async function openFile(f: File, fileKey: Uint8Array): Promise<AppData> {
   const d = JSON.parse(fromUtf8(xOpen(fileKey, box, AD))) as AppData;
   if (d.v !== 1) return emptyData();
   if (d.pcCopy?.ownerDesktopDeviceId && d.pcCopy.ownerDesktopDeviceId !== d.pair?.desktopDeviceId) delete d.pcCopy;
+  // ADR-064 시절 문서함용으로 받아 둔 계정 공유 열쇠. 문서함이 PC 직접 전송(ADR-070)이 되어 쓰지 않으니 지운다.
+  delete (d as { share?: unknown }).share;
   return { ...emptyData(), ...d };
 }
 

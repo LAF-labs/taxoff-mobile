@@ -1,12 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import type { File } from 'expo-file-system';
 import SaxNative from '../../modules/sax-native/src/SaxNativeModule';
-import { deviceAuthFor } from '../net/devauth';
-import { DocsError } from '../net/docs';
-import { shareSetOf } from '../net/shareKey';
-import { dropTemp, fetchDoc, kindOf, loadIndex, saveIndex, syncIndex, writeTemp, type DocIndex, type DocItem, type DocKind } from '../docs/box';
+import { dropTemp, kindOf, loadIndex, onIndex, readDoc, removeDoc, saveIndex, writeTemp, type DocIndex, type DocItem, type DocKind } from '../docs/box';
 import { fullDay, md } from '../money';
 import { useSession } from '../session';
 import { space, usePalette } from '../theme';
@@ -61,23 +58,20 @@ function groups(items: DocItem[]): Array<{ title?: string; items: DocItem[] }> {
 }
 
 /**
- * 문서함(ADR-064, 2026-11-24 대표 승인 시안): PC 문서함과 같은 문서를 계정 사본에서 받아 보여 준다.
- * 누르면 그 줄에서 받고, 애플 기본 미리보기로 연다(공유와 파일에 저장은 미리보기 도구 막대). 못 받으면 시트 하나.
+ * 문서함(2026-11-24 대표 승인 시안, ADR-070): PC가 라이브 연결로 보낸 원본을 이 폰에서 연다. PC가 꺼져 있어도 열린다.
+ * 누르면 애플 기본 미리보기로 연다(공유와 파일에 저장은 미리보기 도구 막대). 열리지 않으면 그 문서를 지우고 다음 연결 때 다시 받는다.
  */
 export function DocsScreen({ preview }: { preview?: DocsPreview }) {
   const p = usePalette();
   const s = useSession();
-  const pair = s.data.pair;
-  const set = useMemo(() => (pair ? shareSetOf(s.data.share, pair.pairId) : null), [pair?.pairId, s.data.share]);
-  const auth = useMemo(() => (pair ? deviceAuthFor(pair.pairId, pair.cert, s.keys.vm) : null), [pair?.pairId, pair?.cert, s.keys.vm]);
-  const [index, setIndex] = useState<DocIndex | null>(preview ? { v: 1, pairId: '', signPub: '', cursor: 0, items: preview.items } : null);
+  const pairId = s.data.pair?.pairId ?? null;
+  const [index, setIndex] = useState<DocIndex | null>(preview ? { v: 2, pairId: '', items: preview.items } : null);
   const [loading, setLoading] = useState(!preview);
   const [busy, setBusy] = useState<string | null>(preview?.busy ?? null);
   const [failed, setFailed] = useState<DocItem | null>(preview?.failed ? (preview.items[0] ?? null) : null);
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const alive = useRef(true);
-  const syncing = useRef<Promise<void> | null>(null);
   useEffect(
     () => () => {
       alive.current = false;
@@ -85,52 +79,36 @@ export function DocsScreen({ preview }: { preview?: DocsPreview }) {
     [],
   );
 
-  const refresh = useCallback((): Promise<void> => {
-    if (preview || !pair || !auth || !set) {
-      setLoading(false);
-      return Promise.resolve();
-    }
-    if (syncing.current) return syncing.current;
-    const signPub = s.data.share!.signPub;
-    const run = (async () => {
-      const have = await loadIndex(s.keys.fileKey);
-      if (have && alive.current) setIndex(have);
-      try {
-        const r = await syncIndex({ auth, set, pairId: pair.pairId, signPub, have });
-        await saveIndex(s.keys.fileKey, r.index).catch(() => undefined);
-        if (alive.current) setIndex(r.index);
-      } catch {
-        // 받지 못하면 가진 목록을 그대로 보인다. 다음에 화면을 열 때 다시 받는다.
-      } finally {
-        if (alive.current) setLoading(false);
-        syncing.current = null;
-      }
-    })();
-    syncing.current = run;
-    return run;
-  }, [preview, pair?.pairId, auth, set]);
-
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    if (preview) return;
+    const mine = (d: DocIndex | null) => (d && d.pairId === pairId ? d : null);
+    void loadIndex(s.keys.fileKey).then((d) => {
+      if (!alive.current) return;
+      setIndex(mine(d));
+      setLoading(false);
+    });
+    return onIndex((d) => alive.current && setIndex(mine(d)));
+  }, [preview, pairId, s.keys.fileKey]);
 
   const open = async (it: DocItem) => {
-    if (busy || preview || !auth) return;
+    if (busy || preview) return;
     setBusy(it.docId);
     let file: File | null = null;
     try {
-      const bytes = await fetchDoc(auth, it);
+      const bytes = await readDoc(s.keys.fileKey, it.docId);
       file = await writeTemp(it, bytes);
       if (!alive.current) return;
       setBusy(null);
       if (SaxNative?.previewFile) await SaxNative.previewFile(file.uri, shownName(it.name));
       else await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: shownName(it.name) });
-    } catch (e) {
+    } catch {
+      // 열리지 않는 사본은 지우고 목록에서 뺀다. 다음 연결에서 PC 목록과 견주어 다시 받는다.
+      removeDoc(it.docId);
+      const cur = await loadIndex(s.keys.fileKey);
+      if (cur) await saveIndex(s.keys.fileKey, { ...cur, items: cur.items.filter((x) => x.docId !== it.docId) }).catch(() => undefined);
       if (!alive.current) return;
       setBusy(null);
       setFailed(it);
-      // 이미 지운 문서면 목록을 다시 받아 줄을 뺀다.
-      if (e instanceof DocsError && e.code === 'account.doc_not_found') void refresh();
     } finally {
       dropTemp(file);
     }
@@ -191,15 +169,10 @@ export function DocsScreen({ preview }: { preview?: DocsPreview }) {
       {failed && (
         <ConfirmSheet
           title="문서를 열지 못했어요"
-          body="인터넷에 연결되면 다시 열어 주세요."
-          yes="다시 열기"
-          no="닫기"
-          onYes={() => {
-            const it = failed;
-            setFailed(null);
-            void open(it);
-          }}
-          onNo={() => setFailed(null)}
+          body="다음 연결 때 다시 받아 둘게요."
+          yes="확인"
+          onYes={() => setFailed(null)}
+          onClose={() => setFailed(null)}
         />
       )}
     </Screen>

@@ -199,10 +199,10 @@ function LongChat() {
 }
 
 
-/** 문서함 보기용 가짜 문서(이름과 날짜만, 열쇠는 0). 기준판 폰 문서함과 같은 줄. */
+/** 문서함 보기용 가짜 문서(이름과 날짜만). 기준판 폰 문서함과 같은 줄. */
 const docDay = (d: number) => iso(new Date(now - d * DAY));
 const doc = (n: number, name: string, docType: string, issued: number, expires?: number): DocItem => ({
-  docId: `gallery-doc-${String(n).padStart(10, '0')}`, rev: 1, name, docType, issuedOn: docDay(issued), expiresOn: expires === undefined ? null : docDay(expires), bytes: 1, sha256: '', dek: '', chunks: 1,
+  docId: `gallery-doc-${String(n).padStart(10, '0')}`, name, docType, issuedOn: docDay(issued), expiresOn: expires === undefined ? null : docDay(expires), bytes: 1, sha256: '',
 });
 const DOCS: DocItem[] = [
   doc(1, '가나식자재 세금계산서', 'tax_invoice', 0),
