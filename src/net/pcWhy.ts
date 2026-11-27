@@ -60,7 +60,7 @@ export function statusWhileSyncing<T extends string>(prev: T): T | 'connecting' 
   return prev === 'unpaired' ? 'connecting' : prev;
 }
 
-/** 이 폰의 연결이 서버에서 풀렸거나 서버가 이 폰을 못 알아본다(401): PC를 켜도 다시 연결하기 전에는 이어지지 않는다. 'PC 꺼짐'으로 보이면 사장님은 PC만 켜고 기다린다. */
+/** 서버가 이 폰을 풀었거나 못 알아본다: 다시 연결하기 전에는 PC를 켜도 이어지지 않는다. */
 export function needsRelink(code: string | null | undefined): boolean {
   if (!code) return false;
   const [stage = '', cause = ''] = code.split(':');

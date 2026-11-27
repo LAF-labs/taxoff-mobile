@@ -46,7 +46,6 @@ export function MoneyScreen({ go }: { go: (to: HomeRoute) => void }) {
   const cm = s.data.pcCopy?.money;
   if (!m.snap && cm) return <CopyMoney money={cm} />;
   if (!m.snap && s.pc === 'online' && !s.data.pcCopy) {
-    // PC가 켜져 있는데 'PC가 켜지면'이라고 하지 않는다(11-27 점검). 사본은 연결될 때마다 온다.
     return (
       <Screen title="돈" shell scroll={false} testID="money">
         <Empty testID="money-waiting" title="PC에서 돈 요약을 받는 중이에요" sub="한 번 받으면 PC가 꺼져 있어도 마지막 값을 보여 드려요." />
