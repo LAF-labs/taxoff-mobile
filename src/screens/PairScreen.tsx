@@ -282,7 +282,7 @@ export function PairScreen({ onDone, onboarding, previewPhase }: { onDone: () =>
         }
       >
         <T v="strong">내 계정과 내 PC가 맞나요?</T>
-        <Group note="내 계정이 아니면 중단하세요. 연결한 뒤에도 [PC 연결]에서 늘 볼 수 있어요.">
+        <Group>
           <View style={st.kv}>
             <T v="label" c="ink3">계정</T>
             <T v="strong" testID="confirm-account">

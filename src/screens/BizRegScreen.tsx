@@ -227,7 +227,7 @@ export function BizRegScreen({
           </View>
         </Pressable>
         {notice}
-        <Group title="거래처" note="폰이 읽은 값이에요. 사진과 맞는지 봐 주세요.">
+        <Group title="거래처">
           <Field testID="bz-name" label="상호" value={v.name} onChange={set('name')} placeholder="상호" unsure={unsure('name')} multiline={v.name.length > 14} />
           <Field
             testID="bz-bizNo"
@@ -244,7 +244,7 @@ export function BizRegScreen({
           <Field testID="bz-bizType" label="업태" value={v.bizType} onChange={set('bizType')} placeholder="업태" unsure={unsure('bizType')} />
           <Field testID="bz-item" label="종목" value={v.item} onChange={set('item')} placeholder="종목" unsure={unsure('item')} />
         </Group>
-        <Group title="세금계산서 받을 곳" note={v.email ? undefined : '등록증에는 없어요. 적어 두면 발급할 때 바로 보내요.'}>
+        <Group title="세금계산서 받을 곳">
           <Field testID="bz-email" label="이메일" mask="email" value={v.email} onChange={set('email')} placeholder="tax@example.com" multiline={v.email.length > 24} error={badEmail ? '이메일 모양이 아니에요' : null} />
         </Group>
         <T v="meta" c="ink3" style={{ paddingHorizontal: space.s1 }} testID="bizreg-privacy">
