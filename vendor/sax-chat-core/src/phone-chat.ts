@@ -55,22 +55,22 @@ const RESULTS_MAX = 40;
 const PHONE_LOG_MAX = 600;
 const NAME_MAX = 40;
 
-export const PHONE_FALLBACK_TEXT = '네, 말씀해 주세요. 필요한 일을 편하게 말씀해 주시면 바로 해 드릴게요.';
-export const PHONE_NUMBER_TEXT = '결과를 아래에 보여 드렸어요. 금액과 날짜는 표와 카드에 있어요.';
+export const PHONE_FALLBACK_TEXT = '제가 잘 못 알아들었어요. 조금만 다르게 말씀해 주실래요?';
+export const PHONE_NUMBER_TEXT = '찾아서 아래에 정리해 뒀어요.';
 /**
  * 폰이 직접 되묻는 고정 문장(되묻기 칸별). 모델이 되묻는 문장에 숫자를 섞었거나 틀린 슬롯을 썼을 때 쓴다(PC의 CHAT_AGENT_ASK_TEXT와 같은 쓰임).
  * 화면은 이 문장 아래 그 칸의 선택지를 붙인다.
  */
 export const PHONE_ASK_TEXT: Record<AgentAsk, string> = {
-  amount: '금액을 알려 주세요. 부가세 포함이면 같이 말씀해 주세요.',
-  item: '품목을 알려 주세요. 디자인 용역처럼 적어 주시면 돼요.',
-  counterparty: '어느 거래처예요? 거래처 목록에 있는 이름으로 골라 주세요.',
+  amount: '얼마로 할까요? 부가세 포함이면 같이 알려 주세요.',
+  item: '품목은 뭐라고 적을까요? 디자인 용역처럼 짧게 주시면 돼요.',
+  counterparty: '어느 거래처로 할까요? 아래에서 골라 주셔도 돼요.',
   vat: '부가세는 별도예요, 포함이에요?',
-  which_card: '어느 카드를 말씀하시는지 골라 주세요.',
-  date: '작성일자를 정하는 카드는 폰에서 만들 수 없어요. PC를 켜면 이어서 할게요.',
+  which_card: '어느 건 말씀이세요? 아래에서 골라 주세요.',
+  date: '작성일을 따로 정하는 건 폰에서 아직 못 해요. 오늘 날짜로 괜찮으면 그렇게 만들게요.',
 };
 export const PHONE_SLOT_MISSING_TEXT = '정확한 값은 아래 표에 있어요.';
-export const PHONE_UNAVAILABLE_TEXT = '답을 받지 못했어요. 잠시 뒤 [다시 시도]를 눌러 주세요.';
+export const PHONE_UNAVAILABLE_TEXT = '답을 받지 못했어요. 잠시 뒤 다시 보내 주세요.';
 /** 카드에서 [발급하기]를 누른 기록. PC가 받을지는 아직 모르므로 맡긴 사실만 적는다. */
 export const PHONE_ENTRUST_TEXT = (name: string): string => `${name} 세금계산서 발급을 PC에 맡겼어요.`;
 

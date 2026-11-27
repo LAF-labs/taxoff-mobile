@@ -1,10 +1,11 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import APNS_ENV from './apns-env.json';
 import { WAKE_RANK, apnsToken, pushPlatform, tapKindOf, wakeKindOf, type PushPlatform, type WakeKind } from './wake';
 
 const ios = Platform.OS === 'ios';
 
-export const PLATFORM: PushPlatform = pushPlatform(__DEV__, process.env.EXPO_PUBLIC_TEX_APNS_ENV);
+export const PLATFORM: PushPlatform = pushPlatform(__DEV__, process.env.EXPO_PUBLIC_TEX_APNS_ENV ?? APNS_ENV.mode);
 
 export async function deviceToken(): Promise<string | null> {
   if (!ios) return null;

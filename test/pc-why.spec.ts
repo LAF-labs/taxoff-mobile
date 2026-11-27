@@ -63,11 +63,12 @@ describe('다시 동기화하는 동안', () => {
 });
 
 describe('다시 연결 필요', () => {
-  it('서버가 이 폰을 풀었을 때만 다시 연결 필요다', () => {
+  it('서버가 이 폰을 풀었거나 못 알아볼 때만 다시 연결 필요다', () => {
     assert.equal(needsRelink('join:account.device_not_found.404'), true);
     assert.equal(needsRelink('queue:account.device_suspended.403'), true);
     assert.equal(needsRelink('peer:timeout'), false);
     assert.equal(needsRelink('join:net.unreachable'), false);
+    assert.equal(needsRelink('join:account.unauthorized.401'), true);
     assert.equal(needsRelink(null), false);
   });
 });

@@ -38,6 +38,13 @@ export function MoneyScreen({ go }: { go: (to: HomeRoute) => void }) {
   }
   const cm = s.data.pcCopy?.money;
   if (!m.snap && cm) return <CopyMoney money={cm} />;
+  if (!m.snap && s.pc === 'online' && !s.data.pcCopy) {
+    return (
+      <Screen title="돈" shell scroll={false} testID="money">
+        <Empty testID="money-waiting" title="PC에서 돈 요약을 받는 중이에요" sub="한 번 받으면 PC가 꺼져 있어도 마지막 값을 보여 드려요." />
+      </Screen>
+    );
+  }
   if (!m.snap) {
     return (
       <Screen title="돈" shell scroll={false} testID="money">
