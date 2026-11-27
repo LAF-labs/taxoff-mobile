@@ -121,11 +121,18 @@ export function fitPhoneCopy(body: PhoneCopyBody, ctx: EnvelopeCtx): { body: Pho
   const all = body.counterparties.slice(0, 100);
   const full = { ...body, counterparties: all };
   if (fits(full)) return { body: full, dropped: body.counterparties.length - all.length };
-  const { issued, ...rest } = full;
+  const { issued, report, ...rest } = full;
+  // 넘치면 지난 발급 줄, 그다음 월 리포트, 마지막에 거래처 순으로 덜어낸다(v1.16)
+  const withReport = report ? { ...rest, report } : rest;
+  if (issued?.length && fits({ ...withReport, counterparties: all, issued: [] })) {
+    const keep = longest(issued.length, (k) => fits({ ...withReport, issued: issued.slice(0, k) }));
+    return { body: { ...withReport, issued: issued.slice(0, keep) }, dropped: body.counterparties.length - all.length };
+  }
   if (issued?.length && fits({ ...rest, counterparties: all, issued: [] })) {
     const keep = longest(issued.length, (k) => fits({ ...rest, issued: issued.slice(0, k) }));
     return { body: { ...rest, issued: issued.slice(0, keep) }, dropped: body.counterparties.length - all.length };
   }
+  if (report && fits(rest)) return { body: rest, dropped: body.counterparties.length - all.length };
   if (!fits({ ...rest, counterparties: [] })) return null;
   const keep = longest(all.length, (k) => fits({ ...rest, counterparties: all.slice(0, k) }));
   return { body: { ...rest, counterparties: all.slice(0, keep) }, dropped: body.counterparties.length - keep };

@@ -69,7 +69,8 @@ export type Palette = typeof light;
 export type Ink = 'ink' | 'ink2' | 'ink3' | 'ink4' | 'onInk' | 'accent' | 'attention' | 'onCamera';
 
 export const space = { s0: 2, s1: 4, s2: 8, s3: 12, s4: 16, s5: 20, s6: 28, s7: 40 } as const;
-export const radius = { xs: 3, sm: 8, md: 12, lg: 16, xl: 22, full: 9999 } as const;
+/** tip = 말풍선(기준판 sx-tip, 리포트 막대를 누르고 있을 때) */
+export const radius = { xs: 3, sm: 8, md: 12, tip: 14, lg: 16, xl: 22, full: 9999 } as const;
 export const size = { hit: 44, row: 52, button: 52, buttonSm: 40, header: 48 } as const;
 
 const tnum = ['tabular-nums' as const];
@@ -89,8 +90,10 @@ export const type = {
   button: { fontSize: 17, lineHeight: 22, fontWeight: '600' as const },
   /** 카드 안 작은 단추(40)의 주 단추 글. 보조 단추는 subStrong. */
   buttonSm: { fontSize: 15, lineHeight: 22, fontWeight: '600' as const },
-  /** 자세히 화면 맨 위 이름(거래처 이름 등). 큰 글씨는 이것과 시트의 묻는 말, 페어링 6자리뿐이다. */
+  /** 자세히 화면 맨 위 이름(거래처 이름 등). 큰 글씨는 이것과 리포트의 달, 시트의 묻는 말, 페어링 6자리뿐이다. */
   heading: { fontSize: 24, lineHeight: 32, fontWeight: '700' as const },
+  /** 리포트 맨 위 달(‹ 11월 ›, 기준판 .ph .rp-month > .t). */
+  month: { fontSize: 20, lineHeight: 28, fontWeight: '700' as const, fontVariant: tnum },
   /** 시트에서 한 단계씩 묻는 말과 그 답(밑줄 칸). */
   ask: { fontSize: 22, lineHeight: 30, fontWeight: '700' as const },
   askValue: { fontSize: 22, lineHeight: 30, fontWeight: '600' as const, fontVariant: tnum },

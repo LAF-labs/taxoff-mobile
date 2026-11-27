@@ -20,6 +20,8 @@ declare class SaxNativeModule extends NativeModule<Record<string, never>> {
   pxDelete?(tag: string): Promise<void>;
   /** 문서함: PDF를 애플 기본 미리보기로 띄우고 닫힐 때 끝난다(iOS만). */
   previewFile?(uri: string, title: string): Promise<void>;
+  /** 월 리포트: HTML을 A4 쪽으로 나눈 PDF로 uri에 쓴다(iOS만). */
+  htmlToPdf?(html: string, uri: string): Promise<void>;
   uxPublic?(tag: string): Promise<string | null>;
   uxCreate?(tag: string): Promise<string>;
   uxDelete?(tag: string): Promise<void>;

@@ -24,6 +24,7 @@ export * from './qbundle.ts';
 export * from './qr.ts';
 export * from './queue.ts';
 export * from './relay.ts';
+export * from './report-doc.ts';
 export * from './ws-link.ts';
 export * from './session.ts';
 export * from './share.ts';

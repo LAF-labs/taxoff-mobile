@@ -7,10 +7,13 @@ import UIKit
 import Security
 import LocalAuthentication
 import QuickLook
+import WebKit
 
 public class SaxNativeModule: Module {
   // 지금 띄운 미리보기. 닫힐 때까지 데이터 소스를 붙잡아 둔다(QLPreviewController는 약하게 잡는다).
   private var preview: PdfPreview?
+  // 지금 만드는 리포트 PDF. 끝날 때까지 웹 보기를 붙잡아 둔다.
+  private var pdf: HtmlPdf?
 
   public func definition() -> ModuleDefinition {
     Name("SaxNative")
@@ -231,6 +234,25 @@ public class SaxNativeModule: Module {
       top.present(qc, animated: true)
     }.runOnQueue(.main)
 
+    // 월 리포트 PDF(tex ADR-068 결정 11): 공용 reportDocHtml이 만든 HTML을 WKWebView로 그려 A4 쪽으로 나눈 PDF로 쓴다.
+    // HTML에는 스크립트가 없고, 이 웹 보기는 스크립트와 저장소를 끈 채 네트워크 없이 그린다. 내용은 로그에 남기지 않는다.
+    AsyncFunction("htmlToPdf") { (html: String, uri: String, promise: Promise) in
+      guard let url = URL(string: uri), url.isFileURL else {
+        promise.reject(SaxError.badUri)
+        return
+      }
+      guard self.pdf == nil else {
+        promise.reject(SaxError.busy)
+        return
+      }
+      let job = HtmlPdf(html: html, out: url)
+      self.pdf = job
+      job.run { [weak self] err in
+        self?.pdf = nil
+        if let err { promise.reject(err) } else { promise.resolve(nil) }
+      }
+    }.runOnQueue(.main)
+
     // SP-1 진단: 항목 정책 이름만(값 없음)
     Function("vaultPolicy") { () -> [String: String] in
       ["accessible": "WHEN_PASSCODE_SET_THIS_DEVICE_ONLY", "auth": "userPresence"]
@@ -295,6 +317,71 @@ private func pxPub(_ key: SecKey) throws -> String {
 enum SaxError: Error {
   case badUri
   case noView
+  case busy
+}
+
+// A4(595.2 x 841.8pt) 쪽. 위아래 14mm는 PC PDF의 @page 여백과 같다(둘째 쪽부터 위아래 여백). 좌우 여백은 HTML(.page 안쪽)이 정한다.
+final class A4Renderer: UIPrintPageRenderer {
+  static let paper = CGRect(x: 0, y: 0, width: 595.2, height: 841.8)
+  override var paperRect: CGRect { A4Renderer.paper }
+  override var printableRect: CGRect { A4Renderer.paper.insetBy(dx: 0, dy: 14 * 72 / 25.4) }
+}
+
+final class HtmlPdf: NSObject, WKNavigationDelegate {
+  private let web: WKWebView
+  private let html: String
+  private let out: URL
+  private var done: ((Error?) -> Void)?
+
+  init(html: String, out: URL) {
+    let cfg = WKWebViewConfiguration()
+    cfg.websiteDataStore = .nonPersistent()
+    cfg.defaultWebpagePreferences.allowsContentJavaScript = false
+    web = WKWebView(frame: A4Renderer.paper, configuration: cfg)
+    self.html = html
+    self.out = out
+    super.init()
+  }
+
+  func run(_ cb: @escaping (Error?) -> Void) {
+    done = cb
+    web.navigationDelegate = self
+    web.loadHTMLString(html, baseURL: nil)
+  }
+
+  private func finish(_ err: Error?) {
+    web.navigationDelegate = nil
+    done?(err)
+    done = nil
+  }
+
+  // 데이터 주소(글꼴) 말고는 아무 데도 나가지 않는다
+  func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+    let s = action.request.url?.scheme
+    decisionHandler(s == nil || s == "about" || s == "data" ? .allow : .cancel)
+  }
+
+  func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    let r = A4Renderer()
+    r.addPrintFormatter(webView.viewPrintFormatter(), startingAtPageAt: 0)
+    let data = NSMutableData()
+    UIGraphicsBeginPDFContextToData(data, A4Renderer.paper, nil)
+    r.prepare(forDrawingPages: NSRange(location: 0, length: r.numberOfPages))
+    for i in 0..<r.numberOfPages {
+      UIGraphicsBeginPDFPage()
+      r.drawPage(at: i, in: UIGraphicsGetPDFContextBounds())
+    }
+    UIGraphicsEndPDFContext()
+    do {
+      try data.write(to: out, options: [.atomic, .completeFileProtection])
+      finish(nil)
+    } catch {
+      finish(error)
+    }
+  }
+
+  func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { finish(error) }
+  func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { finish(error) }
 }
 
 final class PreviewItem: NSObject, QLPreviewItem {

@@ -9,6 +9,7 @@ import { SessionContext, useSession, type Session } from '../src/session';
 import { MainScreen, type Tab } from '../src/screens/MainScreen';
 import type { CustomersPreview } from '../src/screens/CustomersScreen';
 import type { DocsPreview } from '../src/screens/DocsScreen';
+import type { ReportPreview } from '../src/screens/ReportScreen';
 import type { DocItem } from '../src/docs/box';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
 import { UnlockHost } from '../src/screens/UnlockHost';
@@ -50,7 +51,7 @@ import { CaptureScreen, formFrom, type CapturePreview } from '../src/screens/Cap
 import { MAX_FONT_SCALE, textScale, usePalette } from '../src/theme';
 import { emptyData, type AppData } from '../src/storage/state';
 import type { PcStatus } from '../src/net/pc';
-import { DEVICES_FULL, DEVICES_NORMAL, DEVICES_SUSPENDED, DEVICE_SELF, SAMPLE_INVOICE, SAMPLE_SHOT, phoneChat } from './samples';
+import { DEVICES_FULL, DEVICES_NORMAL, DEVICES_SUSPENDED, DEVICE_SELF, SAMPLE_INVOICE, SAMPLE_REPORT, SAMPLE_SHOT, phoneChat } from './samples';
 import type { OfflineChatView } from '../src/offline/useOfflineChat';
 import { DevicesScreen, type DevicesPreview } from '../src/screens/DevicesScreen';
 import { parsePaperInvoice } from '../src/capture/invoice';
@@ -213,9 +214,9 @@ const DOCS: DocItem[] = [
   doc(7, '사무실 임대차계약서', 'other', 54),
 ];
 
-function Main({ start = 'home', chat, phone, menu, focusAfter, issue, drawer, customers, docs }: { start?: Tab; chat?: ChatItem[]; phone?: OfflineChatView; menu?: boolean; focusAfter?: number; issue?: IssueSheetPreview; drawer?: boolean; customers?: CustomersPreview; docs?: DocsPreview }) {
+function Main({ start = 'home', chat, phone, menu, focusAfter, issue, drawer, customers, docs, report }: { start?: Tab; chat?: ChatItem[]; phone?: OfflineChatView; menu?: boolean; focusAfter?: number; issue?: IssueSheetPreview; drawer?: boolean; customers?: CustomersPreview; docs?: DocsPreview; report?: ReportPreview }) {
   const [tab, setTab] = useState<Tab>(start);
-  return <MainScreen tab={tab} onTab={setTab} go={noop} chat={chat} phone={phone} menu={menu} focusAfter={focusAfter} issue={issue} drawer={drawer} customers={customers} docs={docs} />;
+  return <MainScreen tab={tab} onTab={setTab} go={noop} chat={chat} phone={phone} menu={menu} focusAfter={focusAfter} issue={issue} drawer={drawer} customers={customers} docs={docs} report={report} />;
 }
 
 /** 거래처 100곳(캔버스 "1 거래처 목록 (100곳)"). 이름과 번호는 지어낸 값이다. */
@@ -826,7 +827,21 @@ const SCREENS: Record<
   'customers-empty': () => cust({}, { asOf: COPY_AT, counterparties: [] }),
   'customers-unpaired': () => ({ session: fake(emptyData(), 'online'), node: <Main start="customers" /> }),
   'customers-menu': () => ({ session: fake(copyData(COPY_100), 'online'), node: <Main start="customers" drawer /> }),
+  // 월 리포트(기준판 Phone-Report, -1y, -Press, -Partner, Phone-Menu)
+  report: () => rep({}),
+  'report-1y': () => rep({ months: 12 }, 'offline'),
+  'report-press': () => rep({ hold: '2026-10' }),
+  'report-partner': () => rep({ partner: 0 }),
+  'report-all': () => rep({ all: 'partners' }),
+  'report-past': () => rep({ month: '2026-10' }),
+  'report-menu': () => ({ session: fake(copyData({ ...COPY, report: SAMPLE_REPORT }), 'online'), node: <Main start="report" drawer /> }),
+  'report-none': () => ({ session: fake(copyData(COPY), 'offline'), node: <Main start="report" /> }),
+  'report-pc-old': () => ({ session: fake(copyData({ ...COPY, reportCap: false } as PhoneCopyBody), 'online'), node: <Main start="report" /> }),
+  'report-not-made': () => ({ session: fake(copyData({ ...COPY, reportCap: true } as PhoneCopyBody), 'online'), node: <Main start="report" /> }),
 };
+function rep(report: ReportPreview, pc: PcStatus = 'online') {
+  return { session: fake({ ...copyData({ ...COPY, report: SAMPLE_REPORT }), ...(pc === 'offline' ? { lastSeenPc: now - 15 * H } : {}) }, pc), node: <Main start="report" report={report} /> };
+}
 
 export default function Gallery() {
   const p = usePalette();

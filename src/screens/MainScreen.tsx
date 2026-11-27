@@ -5,6 +5,7 @@ import { usePalette } from '../theme';
 import type { OfflineChatView } from '../offline/useOfflineChat';
 import { HomeScreen, PcPill, type HomeRoute } from './HomeScreen';
 import { MoneyScreen } from './MoneyScreen';
+import { ReportScreen, type ReportPreview } from './ReportScreen';
 import { RecordsScreen } from './RecordsScreen';
 import { CustomersScreen, type CustomersPreview } from './CustomersScreen';
 import { DocsScreen, type DocsPreview } from './DocsScreen';
@@ -22,22 +23,24 @@ import { Drawer, NavGap, NavPush, NavRow } from '../ui/drawer';
 import { Glyph, type GlyphKind } from '../ui/glyph';
 
 /** 더보기 메뉴로 오가는 맨 위 화면. 아래 탭바는 없다(2026-11-24 대표). */
-export type Tab = 'home' | 'money' | 'records' | 'customers' | 'docs' | 'inbox' | 'settings';
+export type Tab = 'home' | 'money' | 'report' | 'records' | 'customers' | 'docs' | 'inbox' | 'settings';
 export type MainRoute = HomeRoute;
 
 const NAV: Array<{ key: Tab; label: string; icon: GlyphKind }> = [
   { key: 'home', label: '대화', icon: 'chat' },
   { key: 'money', label: '돈', icon: 'money' },
+  // 월 리포트(tex ADR-068 결정 1): 돈 아래. 받을 돈과 낼 돈은 할 일, 리포트는 보는 것
+  { key: 'report', label: '리포트', icon: 'chart' },
   { key: 'records', label: '발급 기록', icon: 'doc' },
   { key: 'customers', label: '거래처', icon: 'building' },
   { key: 'docs', label: '문서함', icon: 'folder' },
 ];
 
 export function MainScreen({
-  tab, onTab, go, chat, draft, phone, menu, focusAfter, issue: issuePreview, issueCps, drawer: drawerOpen = false, customers: customersPreview, docs,
+  tab, onTab, go, chat, draft, phone, menu, focusAfter, issue: issuePreview, issueCps, drawer: drawerOpen = false, customers: customersPreview, docs, report,
 }: {
   tab: Tab; onTab: (t: Tab) => void; go: (to: MainRoute) => void; chat?: ChatItem[]; draft?: string; phone?: OfflineChatView; menu?: boolean; focusAfter?: number;
-  issue?: IssueSheetPreview; issueCps?: Counterparty[]; drawer?: boolean; customers?: CustomersPreview; docs?: DocsPreview;
+  issue?: IssueSheetPreview; issueCps?: Counterparty[]; drawer?: boolean; customers?: CustomersPreview; docs?: DocsPreview; report?: ReportPreview;
 }) {
   const p = usePalette();
   const q = useQueue();
@@ -75,6 +78,8 @@ export function MainScreen({
       <HomeScreen go={goMain} chat={chat} draft={draft} phone={phone} menu={menu} focusAfter={focusAfter} onIssue={() => setIssueOpen(true)} />
     ) : tab === 'money' ? (
       <MoneyScreen go={goMain} />
+    ) : tab === 'report' ? (
+      <ReportScreen go={goMain} onMoney={() => onTab('money')} preview={report} />
     ) : tab === 'records' ? (
       <RecordsScreen go={goMain} onHome={() => onTab('home')} phone={phone} />
     ) : tab === 'customers' ? (
