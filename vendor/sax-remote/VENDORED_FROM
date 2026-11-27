@@ -1,5 +1,5 @@
 repo: LAF-labs/tex
-commit: daf7122220dfb24ea46d8a41262c035fb3dbfa73
+commit: 2d297d00796e13053317cbc3653e9eb0d5e683f4
 paths: poc/packages/remote/src, sovereign-ax/design/schemas/remote-envelope.schema.json, sovereign-ax/design/schemas/intent-envelope.schema.json
 
 이 폴더는 tex 정본의 사본이다. 여기서 고치지 말고 tex에서 고친 뒤 pnpm sync:remote <tex 경로> remote로 다시 맞춘다.
