@@ -1,5 +1,5 @@
 /**
- * 월 리포트 PDF 한 벌(ADR-068 결정 11). 화면을 찍지 않고 리포트 값으로 직접 그린다.
+ * 월 리포트 PDF 한 벌(ADR-068 결정 11). 화면을 찍지 않고 리포트 값으로 직접 그린다. 모양은 PC 리포트 화면의 카드 그대로다(밝은 색).
  * PC(Electron printToPDF)와 폰(WKWebView createPDF)이 같은 함수를 쓴다. 그래서 두 PDF는 같은 모양이다.
  * 계좌는 은행과 끝 4자리만, 입금자 이름과 통장 표시 원문은 받지도 그리지도 않는다.
  * 순수 함수다(DOM, 네트워크 없음). 스크립트를 넣지 않는다.
@@ -12,6 +12,10 @@ export interface ReportDocLine {
   label: string;
   amount: DocAmount;
   partial?: boolean;
+  /** 구성 카드에 붙는 건수 */
+  count?: number;
+  /** 값이 없을 때 대신 쓰는 글("12월 16일쯤 들어와요") */
+  note?: string;
 }
 
 export interface ReportDocRank {
@@ -53,6 +57,27 @@ export interface ReportDoc {
   bankIn: Array<{ label: string; amount: number }>;
   balances: Array<{ label: string; amount: number | null }>;
   balanceDay: string | null;
+  /** 화면과 같은 글: "지난달보다 3% 늘었어요". 없으면 쓰지 않는다 */
+  salesTrend?: string | null;
+  purchaseTrend?: string | null;
+  /** 요약 카드 아래 줄(앞 기간 합계, 평균). 화면과 같은 이름과 값 */
+  salesRows?: ReportDocLine[];
+  purchaseRows?: ReportDocLine[];
+  vat?: ReportDocVat | null;
+  receivable?: { received: number; waiting: number; late: number; lateCount: number } | null;
+  /** 계좌를 하나라도 이었나. false면 통장 카드에 연결 안내만 쓴다 */
+  bankLinked?: boolean;
+  /** 자료 카드 줄 */
+  sources?: Array<{ state: 'ok' | 'wait' | 'none'; text: string }>;
+}
+
+export interface ReportDocVat {
+  /** "부가세 2기" */
+  title: string;
+  /** "1월 25일까지" */
+  deadline: string;
+  sale: DocAmount;
+  purchase: DocAmount;
 }
 
 export interface ReportDocFonts {
@@ -63,81 +88,242 @@ export interface ReportDocFonts {
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const num = (n: number) => Math.round(n).toLocaleString('en-US').replace(/^-/, '−');
-const won = (n: DocAmount) => (n === null ? '확인 못 함' : `${num(n)}원`);
-const pct = (s: number | undefined) => (s === undefined ? '' : `${Math.round(s * 100)}%`);
+const WON_UNITS: Array<[number, string]> = [[1e12, '조'], [1e8, '억'], [1e4, '만']];
+/** 화면과 같은 큰 금액 표기: 886억 5,627만 3,113원 */
+export function bigWon(n: number): string {
+  let rest = Math.abs(Math.round(n));
+  const parts: string[] = [];
+  for (const [u, name] of WON_UNITS) {
+    const q = Math.floor(rest / u);
+    if (q) parts.push(`${q.toLocaleString('en-US')}${name}`);
+    rest -= q * u;
+  }
+  if (rest || !parts.length) parts.push(rest.toLocaleString('en-US'));
+  return `${n < 0 ? '−' : ''}${parts.join(' ')}원`;
+}
+const won = (n: DocAmount) => (n === null ? '확인 못 함' : bigWon(n));
+const pct = (s: number) => `${Math.round(s * 100)}%`;
+const shortWon = (v: number) => {
+  const a = Math.abs(v);
+  const [u, name] = a >= 1e12 ? [1e12, '조'] : a >= 1e8 ? [1e8, '억'] : [1e4, '만'];
+  const n = v / (u as number);
+  return `${(Math.abs(n) >= 100 || name === '만' ? Math.round(n) : Math.round(n * 10) / 10).toLocaleString('en-US')}${name}원`;
+};
 
-const STYLE = `@page{size:A4;margin:14mm 0 14mm}
+/** PC 화면 밝은 색 토큰(sovereign-ax/design-system/tokens.json light) */
+const C = {
+  canvas: '#FCFCFC', card: '#F3F4F5', sunken: '#E9EAEB', ink: '#111112', ink2: '#4B4D4F', ink3: '#686A6E', attention: '#8A5A0B',
+  sale: ['#0064D4', '#8DB8EC', '#B8D3F3'], buy: ['#E5484D', '#F3A3A5', '#F8C8C9'],
+};
+type Tone = 'sale' | 'buy';
+const tone = (t: Tone, i: number) => C[t][Math.min(i, 2)]!;
+
+const STYLE = `@page{size:A4;margin:12mm 0 12mm}
 @page:first{margin-top:0}
 *{box-sizing:border-box}
-html,body{margin:0;background:#fff;color:#111112;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-body{font-family:"SAX Report",-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;font-size:11px;line-height:16px}
-.page{width:210mm;padding:40px 52px 0;display:flex;flex-direction:column;gap:14px}
+html,body{margin:0;background:${C.canvas};color:${C.ink};-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-family:"SAX Report",-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;font-size:11px;line-height:16px;font-variant-numeric:tabular-nums;word-break:keep-all}
+.page{width:210mm;padding:36px 28px 0;display:flex;flex-direction:column;gap:12px}
 h1{margin:0;font-size:20px;line-height:28px;font-weight:700}
-h2{margin:0 0 6px;font-size:12px;line-height:18px;font-weight:700;break-after:avoid}
-.top{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:12px;border-bottom:1px solid #111112}
-.top .p{font-size:14px;line-height:20px;font-weight:600}
-.meta div{display:flex;gap:12px;justify-content:flex-end}
-.meta .k{color:#686A6E}
-.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
-.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
-section{break-inside:avoid}
-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
-td,th{padding:2px 0;text-align:right;font-weight:400}
-th{color:#686A6E;border-bottom:1px solid #D5D7DA}
-td:first-child,th:first-child{text-align:left}
-td.l,th.l{text-align:left;padding-left:16px}
-tr.t td{font-weight:700;border-top:1px solid #D5D7DA}
-tr.on td{font-weight:700}
-tr.out td{color:#686A6E}
-td.u{color:#8A5A0B}
-.bars{width:150px;text-align:left;padding-left:12px}
-.bars span{display:block;line-height:8px}
-.bar{display:inline-block;height:6px;border-radius:1px;background:#4B4D4F;vertical-align:middle}
-.bar.b{background:#A1A4A8}
-/* 바닥 줄은 내용 끝에 한 번. 두 쪽이 넘으면 둘째 쪽부터 위아래 여백(@page)이 붙는다 */
-.foot{margin-top:8px;break-inside:avoid;display:flex;justify-content:space-between;color:#686A6E;border-top:1px solid #D5D7DA;padding-top:8px}`;
+.top{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:4px}
+.top .p{font-size:13px;line-height:20px;font-weight:700;color:${C.ink2}}
+.meta{color:${C.ink3};text-align:right}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.card{background:${C.card};border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;break-inside:avoid}
+.hd{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.hd h2{margin:0;font-size:12px;line-height:18px;font-weight:700}
+.hd .side{color:${C.ink2}}
+.strong{font-size:14px;line-height:20px;font-weight:700}
+.nw{white-space:nowrap}
+.sub{color:${C.ink2}}
+.total .sub,.total .strong{white-space:nowrap}
+.total{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.total>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.meter{height:6px;border-radius:3px;background:${C.sunken};overflow:hidden}
+.meter>i{display:block;height:100%;border-radius:3px}
+dl{margin:0;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;row-gap:6px}
+dt{color:${C.ink3};display:flex;align-items:center;gap:6px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+dd{margin:0;text-align:right;font-weight:600;white-space:nowrap}
+dd.u{color:${C.attention};font-weight:400}
+dd.later{color:${C.ink2};font-weight:400}
+dt.t,dd.t{color:${C.ink};font-weight:700}
+.dot{width:8px;height:8px;border-radius:2px;flex:none}
+.legend{display:flex;gap:12px;color:${C.ink2}}
+.legend span{display:flex;align-items:center;gap:6px}
+.mix{display:grid;grid-template-columns:96px 1fr;gap:16px;align-items:center}
+.ranks{display:flex;flex-direction:column;gap:8px}
+.rank{display:grid;grid-template-columns:minmax(0,1fr) auto 34px;column-gap:8px;row-gap:4px;align-items:center}
+.rank .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rank .v{font-weight:600;white-space:nowrap}
+.rank .p{color:${C.ink3};text-align:right}
+.rank .meter{grid-column:1/-1}
+.stack{display:flex;height:10px;border-radius:5px;overflow:hidden;background:${C.sunken}}
+.stack>i{display:block;height:100%}
+.bank{display:flex;flex-direction:column;gap:8px}
+.brow{display:grid;grid-template-columns:52px 1fr auto;gap:8px;align-items:center}
+.brow .v{font-weight:600;white-space:nowrap}
+.src{display:flex;flex-direction:column;gap:6px}
+.src span{display:flex;align-items:center;gap:6px}
+.src .wait{color:${C.attention}}
+.src .none{color:${C.ink3}}
+.foot{margin-top:4px;break-inside:avoid;display:flex;justify-content:space-between;color:${C.ink3};padding-top:4px}`;
 
-const amountCell = (a: DocAmount, partial?: boolean) => `<td${a === null || partial ? ' class="u"' : ''}>${won(a)}</td>`;
-const lines = (title: string, rows: ReportDocLine[], total: ReportDocLine) =>
-  `<section><h2>${esc(title)}</h2><table>${rows.map((r) => `<tr><td>${esc(r.label)}</td>${amountCell(r.amount, r.partial)}</tr>`).join('')}<tr class="t"><td>${esc(total.label)}</td>${amountCell(total.amount, total.partial)}</tr></table></section>`;
+const card = (title: string, body: string, side = '') => `<section class="card"><div class="hd"><h2>${esc(title)}</h2>${side}</div>${body}</section>`;
+const dot = (color: string) => `<i class="dot" style="background:${color}"></i>`;
+const meter = (share: number, color: string) => `<div class="meter"><i style="width:${Math.max(0, Math.min(100, Math.round(share * 100)))}%;background:${color}"></i></div>`;
 
-function rankTable(title: string, r: ReportDocPartners | null): string {
+function spark(values: DocAmount[], t: Tone): string {
+  const vs = values.map((v) => v ?? 0);
+  if (vs.length < 2) return '';
+  const max = Math.max(1, ...vs);
+  const pts = vs.map((v, i) => [3 + (i * 50) / (vs.length - 1), 26 - (v / max) * 22] as const);
+  const [lx, ly] = pts.at(-1)!;
+  return `<svg width="56" height="30" viewBox="0 0 56 30" aria-hidden="true"><polyline points="${pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')}" fill="none" stroke="${tone(t, 0)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="3" fill="${tone(t, 0)}"/></svg>`;
+}
+
+function totalCard(title: string, t: Tone, total: ReportDocLine, trend: string | null | undefined, series: DocAmount[], rows: ReportDocLine[] = []): string {
+  const kv = rows.length ? `<dl>${rows.map((r) => `<dt>${esc(r.label)}</dt><dd${r.amount === null ? ' class="u"' : ''}>${r.amount === null && r.note ? esc(r.note) : won(r.amount)}</dd>`).join('')}</dl>` : '';
+  return card(title, `<div class="total"><div><span class="strong">${won(total.amount)}</span>${trend ? `<span class="sub">${esc(trend)}</span>` : ''}</div></div>${kv}`, spark(series, t));
+}
+
+function vatCard(v: ReportDocVat): string {
+  const due = v.sale !== null && v.purchase !== null ? v.sale - v.purchase : null;
+  const head = due !== null ? `<span class="nw">${bigWon(due)}</span> 낼 것 같아요` : v.sale !== null ? `매출 부가세 <span class="nw">${bigWon(v.sale)}</span>` : '확인 못 함';
+  const fill = v.sale && due !== null ? Math.max(0, due) / v.sale : 0;
+  const row = (k: string, a: DocAmount) => `<dt>${k}</dt><dd${a === null ? ' class="u"' : ''}>${won(a)}</dd>`;
+  return card(v.title, `<span class="strong">${head}</span>${meter(fill, tone('sale', 0))}<dl>${row('매출 부가세', v.sale)}${row('매입 부가세', v.purchase)}</dl>`, `<span class="side">${esc(v.deadline)}</span>`);
+}
+
+function niceStep(max: number): number {
+  const raw = max / 5;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const n = raw / mag;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag;
+}
+
+function chart(d: ReportDoc): string {
+  const ms = d.months;
+  const most = Math.max(1, ...ms.flatMap((m) => [m.sales ?? 0, m.purchase ?? 0]));
+  const step = niceStep(most);
+  const topV = step * Math.ceil(most / step);
+  const W = 738 - 32;
+  const AX = 46;
+  const H = 168;
+  const top = 18;
+  const base = top + H;
+  const col = (W - AX) / Math.max(1, ms.length);
+  const bw = ms.length > 8 ? 12 : 20;
+  const y = (v: number) => base - (v / topV) * H;
+  const h = (v: DocAmount) => (v ? Math.max(2, (v / topV) * H) : 0);
+  const cur = ms.length - 1;
+  const ticks = Array.from({ length: Math.round(topV / step) + 1 }, (_, i) => i * step);
+  const grid = ticks
+    .map((v) => `<line x1="${AX}" x2="${W}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="${C.sunken}" stroke-width="1"/><text x="${AX - 8}" y="${(y(v) + 3.5).toFixed(1)}" text-anchor="end" font-size="9" fill="${C.ink3}">${v ? esc(shortWon(v).replace(/원$/, '')) : '0'}</text>`)
+    .join('');
+  const bars = ms
+    .map((m, i) => {
+      const on = i === cur;
+      const cx = AX + col * i + col / 2;
+      const op = m.on ? '' : ' opacity="0.45"';
+      const hs = h(m.sales);
+      const hb = h(m.purchase);
+      return `<g><g${op}><rect x="${(cx - bw - 2).toFixed(1)}" y="${(base - hs).toFixed(1)}" width="${bw}" height="${hs.toFixed(1)}" rx="3" fill="${tone('sale', 0)}"/><rect x="${(cx + 2).toFixed(1)}" y="${(base - hb).toFixed(1)}" width="${bw}" height="${hb.toFixed(1)}" rx="3" fill="${tone('buy', 0)}"/></g>`
+        + `<text x="${cx.toFixed(1)}" y="${base + 16}" text-anchor="middle" font-size="10" fill="${on ? C.ink : m.on ? C.ink2 : C.ink3}"${on ? ' font-weight="700"' : ''}>${esc(m.label)}</text>`
+        + (m.sales ? `<text x="${cx.toFixed(1)}" y="${(base - Math.max(hs, hb) - 5).toFixed(1)}" text-anchor="middle" font-size="9"${on ? ' font-weight="700"' : ''} fill="${on ? C.ink : m.on ? C.ink2 : C.ink3}">${esc(shortWon(m.sales))}</text>` : '')
+        + '</g>';
+    })
+    .join('');
+  const legend = `<span class="legend"><span>${dot(tone('sale', 0))}매출</span><span>${dot(tone('buy', 0))}매입</span></span>`;
+  return card('달마다', `<svg width="100%" viewBox="0 0 ${W} ${base + 24}" role="img" aria-label="달마다 매출과 매입">${grid}${bars}</svg>`, legend);
+}
+
+function ring(parts: DocAmount[], t: Tone): string {
+  const total = parts.reduce<number>((a, v) => a + Math.max(0, v ?? 0), 0);
+  const R = 36;
+  const L = 2 * Math.PI * R;
+  let at = 0;
+  const arcs = total
+    ? parts
+        .map((v, i) => {
+          const len = (Math.max(0, v ?? 0) / total) * L;
+          const el = `<circle cx="48" cy="48" r="${R}" fill="none" stroke="${tone(t, i)}" stroke-width="14" stroke-dasharray="${len.toFixed(1)} ${L.toFixed(1)}" stroke-dashoffset="${(-at).toFixed(1)}" transform="rotate(-90 48 48)"/>`;
+          at += len;
+          return el;
+        })
+        .join('')
+    : '';
+  return `<svg width="96" height="96" viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="48" r="${R}" fill="none" stroke="${C.sunken}" stroke-width="14"/>${arcs}</svg>`;
+}
+
+function mixCard(title: string, t: Tone, rows: ReportDocLine[]): string {
+  const shown = rows.filter((l) => l.amount !== 0);
+  const kv = shown
+    .map((l, i) => `<dt>${dot(tone(t, i))}${esc(l.count ? `${l.label} ${num(l.count)}건` : l.label)}</dt><dd${l.amount === null ? (l.note ? ' class="later"' : ' class="u"') : l.partial ? ' class="u"' : ''}>${l.amount === null ? esc(l.note ?? '확인 못 함') : won(l.amount)}</dd>`)
+    .join('');
+  return card(title, `<div class="mix">${ring(shown.map((l) => l.amount), t)}<dl>${kv}</dl></div>`);
+}
+
+function rankCard(title: string, t: Tone, r: ReportDocPartners | ReportDocRank[] | null, empty: string, label: (x: ReportDocRank) => string): string {
   if (!r) return '';
-  if (!r.rows.length) return `<section><h2>${esc(title)}</h2><table><tr><td>없음</td></tr></table></section>`;
-  const row = (x: ReportDocRank) => `<tr><td>${esc(x.name)}</td><td>${num(x.count)}건</td><td>${won(x.amount)}</td><td>${pct(x.share)}</td></tr>`;
-  return `<section><h2>${esc(title)}</h2><table><tr><th>거래처</th><th>건수</th><th>금액</th><th>비율</th></tr>${r.rows.map(row).join('')}${r.rest ? row(r.rest) : ''}<tr class="t"><td>합계</td><td>${num(r.count)}건</td><td>${won(r.total)}</td><td></td></tr></table></section>`;
+  const list = Array.isArray(r) ? r : r.rows;
+  const total = Array.isArray(r) ? r.reduce((a, x) => a + x.amount, 0) : r.total;
+  const share = (x: ReportDocRank) => x.share ?? (total ? x.amount / total : 0);
+  const row = (x: ReportDocRank) => `<div class="rank"><span class="n">${esc(label(x))}</span><span class="v">${bigWon(x.amount)}</span><span class="p">${pct(share(x))}</span>${meter(share(x), tone(t, 0))}</div>`;
+  const rest = !Array.isArray(r) && r.rest ? `<div class="rank"><span class="n">${esc(r.rest.name)}</span><span class="v">${bigWon(r.rest.amount)}</span><span class="p">${pct(share(r.rest))}</span>${meter(share(r.rest), tone(t, 1))}</div>` : '';
+  return card(title, list.length ? `<div class="ranks">${list.slice(0, 5).map(row).join('')}${rest}</div>` : `<span class="sub">${esc(empty)}</span>`);
+}
+
+function receivableCard(r: NonNullable<ReportDoc['receivable']>): string {
+  const all = r.received + r.waiting + r.late;
+  const w = (v: number) => (all ? Math.round((v / all) * 100) : 0);
+  const stack = `<div class="stack"><i style="width:${w(r.received)}%;background:${tone('sale', 0)}"></i><i style="width:${w(r.waiting)}%;background:${tone('sale', 1)}"></i><i style="width:${w(r.late)}%;background:${C.attention}"></i></div>`;
+  const late = r.lateCount ? `<dt>${dot(C.attention)}기한 지남 ${num(r.lateCount)}건</dt><dd class="u">${bigWon(r.late)}</dd>` : '';
+  return card('받을 돈', `${stack}<dl><dt>${dot(tone('sale', 0))}받은 돈</dt><dd>${bigWon(r.received)}</dd><dt>${dot(tone('sale', 1))}기다리는 돈</dt><dd>${bigWon(r.waiting)}</dd>${late}</dl>`);
+}
+
+function bankCard(d: ReportDoc): string {
+  if (d.bankLinked === false) return card('통장', '<span class="sub">계좌를 연결하면 들어온 돈과 나간 돈이 보여요</span>');
+  const most = Math.max(1, d.bank.in, d.bank.out);
+  const bar = (label: string, list: Array<{ label: string; amount: number }>, total: number, t: Tone) => {
+    const segs = list.map((x, i) => `<i style="width:${total ? Math.round((x.amount / total) * 100) : 0}%;background:${tone(t, i)}"></i>`).join('');
+    return `<div class="brow"><span>${label}</span><div><div class="stack" style="width:${Math.round((total / most) * 100)}%">${segs}</div></div><span class="v">${bigWon(total)}</span></div>`;
+  };
+  const legend = (list: Array<{ label: string; amount: number }>, t: Tone) => list.map((x, i) => `<dt>${dot(tone(t, i))}${esc(x.label)}</dt><dd>${bigWon(x.amount)}</dd>`).join('');
+  const balTotal = d.balances.length && d.balances.every((b) => b.amount !== null) ? d.balances.reduce((s, b) => s + (b.amount ?? 0), 0) : null;
+  const bal = d.balances.length ? `<dt>계좌 잔액 ${num(d.balances.length)}곳${d.balanceDay ? ` ${esc(d.balanceDay)}` : ''}</dt><dd${balTotal === null ? ' class="u"' : ''}>${won(balTotal)}</dd>` : '';
+  return card(
+    '통장',
+    `<div class="bank">${bar('들어온 돈', d.bankIn, d.bank.in, 'sale')}${bar('나간 돈', d.bankOut, d.bank.out, 'buy')}</div><dl>${legend(d.bankIn, 'sale')}${legend(d.bankOut, 'buy')}<dt class="t">남은 돈</dt><dd class="t">${bigWon(d.bank.net)}</dd>${bal}</dl>`,
+  );
+}
+
+function sourceCard(rows: NonNullable<ReportDoc['sources']>): string {
+  const mark = { ok: '✓', wait: '◷', none: '–' };
+  return card('자료', `<div class="src">${rows.map((r) => `<span class="${r.state}">${mark[r.state]} ${esc(r.text)}</span>`).join('')}</div>`);
 }
 
 export function reportDocHtml(d: ReportDoc, opts: { fonts?: ReportDocFonts } = {}): string {
   const faces = opts.fonts
     ? `@font-face{font-family:"SAX Report";font-weight:400;src:url(data:font/woff2;base64,${opts.fonts.regular}) format("woff2")}@font-face{font-family:"SAX Report";font-weight:700;src:url(data:font/woff2;base64,${opts.fonts.bold}) format("woff2")}`
     : '';
-  const max = Math.max(1, ...d.months.flatMap((m) => [m.sales ?? 0, m.purchase ?? 0]));
-  const w = (v: DocAmount) => Math.round(((v ?? 0) / max) * 140);
-  const meta = [
-    d.bizNo ? ['사업자등록번호', d.bizNo] : null,
-    ['만든 날', d.made],
-    d.bankTo ? ['계좌', d.bankTo] : null,
-    d.hometaxTo ? ['홈택스 자료', d.hometaxTo] : null,
-  ].filter((x): x is string[] => !!x);
-  const months = d.months
-    .map((m) => `<tr class="${m.on ? 'on' : 'out'}"><td>${esc(m.label)}</td><td>${won(m.sales)}</td><td>${won(m.purchase)}</td><td>${won(m.in)}</td><td>${won(m.out)}</td><td class="bars"><span><i class="bar" style="width:${w(m.sales)}px"></i></span><span><i class="bar b" style="width:${w(m.purchase)}px"></i></span></td></tr>`)
-    .join('');
-  const pair = Math.max(d.bankOut.length, d.bankIn.length);
-  const bankRows = Array.from({ length: pair }, (_, i) => {
-    const o = d.bankOut[i];
-    const n = d.bankIn[i];
-    return `<tr><td>${o ? esc(o.label) : ''}</td><td>${o ? won(o.amount) : ''}</td><td class="l">${n ? esc(n.label) : ''}</td><td>${n ? won(n.amount) : ''}</td></tr>`;
-  }).join('');
-  const balTotal = d.balances.every((b) => b.amount !== null) ? d.balances.reduce((s, b) => s + (b.amount ?? 0), 0) : null;
+  const meta = [d.bizNo ? `사업자등록번호 ${d.bizNo}` : null, `${d.made} 만듦`, !d.sources && d.bankTo ? `계좌 ${d.bankTo}` : null, !d.sources && d.hometaxTo ? `홈택스 자료 ${d.hometaxTo}` : null].filter((x): x is string => !!x);
+  const third = d.vat
+    ? vatCard(d.vat)
+    : card('통장', `<dl><dt>들어온 돈</dt><dd>${bigWon(d.bank.in)}</dd><dt>나간 돈</dt><dd>${bigWon(d.bank.out)}</dd><dt class="t">남은 돈</dt><dd class="t">${bigWon(d.bank.net)}</dd></dl>`);
+  const pairs = [
+    d.partnersSale || d.partnersPurchase
+      ? `<div class="g2">${rankCard('많이 판 거래처', 'sale', d.partnersSale, '이 기간 거래처가 없어요', (x) => x.name)}${rankCard('많이 산 거래처', 'buy', d.partnersPurchase, '이 기간 거래처가 없어요', (x) => x.name)}</div>`
+      : '',
+    `<div class="g2">${rankCard('많이 판 품목', 'sale', d.itemsSale, '이 기간 품목이 없어요', (x) => `${x.name} ${num(x.count)}건`)}${d.receivable ? receivableCard(d.receivable) : ''}</div>`,
+    `<div class="g2">${bankCard(d)}${d.sources ? sourceCard(d.sources) : ''}</div>`,
+  ];
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${esc(`${d.bizName} 리포트 ${d.period}`)}</title><style>${faces}${STYLE}</style></head><body><div class="page">
-<div class="top"><div><h1>${esc(d.bizName)} 리포트</h1><div class="p">${esc(d.period)}</div></div><div class="meta">${meta.map(([k, v]) => `<div><span class="k">${esc(k!)}</span><span>${esc(v!)}</span></div>`).join('')}</div></div>
-<div class="g3">${lines('매출', d.sales, d.salesTotal)}${lines('매입', d.purchase, d.purchaseTotal)}<section><h2>통장</h2><table><tr><td>들어온 돈</td><td>${won(d.bank.in)}</td></tr><tr><td>나간 돈</td><td>${won(d.bank.out)}</td></tr><tr class="t"><td>남은 돈</td><td>${won(d.bank.net)}</td></tr></table></section></div>
-<section><h2>달마다</h2><table><tr><th>달</th><th>매출</th><th>매입</th><th>들어온 돈</th><th>나간 돈</th><th class="l">매출과 매입</th></tr>${months}</table></section>
-${d.partnersSale || d.partnersPurchase ? `<div class="g2">${rankTable('매출 거래처', d.partnersSale)}${rankTable('매입 거래처', d.partnersPurchase)}</div>` : ''}
-<div class="g2">${d.itemsSale ? `<section><h2>매출 품목</h2><table><tr><th>품목</th><th>건수</th><th>금액</th></tr>${d.itemsSale.map((x) => `<tr><td>${esc(x.name)}</td><td>${num(x.count)}건</td><td>${won(x.amount)}</td></tr>`).join('') || '<tr><td>없음</td></tr>'}</table></section>` : ''}
-<section><h2>계좌</h2><table><tr><th>나간 돈</th><th></th><th class="l">들어온 돈</th><th></th></tr>${bankRows}<tr class="t"><td>합계</td><td>${won(d.bank.out)}</td><td class="l">합계</td><td>${won(d.bank.in)}</td></tr></table>
-${d.balances.length ? `<table style="margin-top:10px"><tr><th>잔액</th><th>${d.balanceDay ? esc(d.balanceDay) : ''}</th></tr>${d.balances.map((b) => `<tr><td>${esc(b.label)}</td>${amountCell(b.amount)}</tr>`).join('')}<tr class="t"><td>합계</td>${amountCell(balTotal)}</tr></table>` : ''}</section></div>
-<div class="foot"><span>택스오프</span></div>
+<div class="top"><div><h1>${esc(d.bizName)} 리포트</h1><div class="p">${esc(d.period)}</div></div><div class="meta">${meta.map((x) => `<div>${esc(x)}</div>`).join('')}</div></div>
+<div class="g3">${totalCard('매출', 'sale', d.salesTotal, d.salesTrend, d.months.map((m) => m.sales), d.salesRows)}${totalCard('매입', 'buy', d.purchaseTotal, d.purchaseTrend, d.months.map((m) => m.purchase), d.purchaseRows)}${third}</div>
+${chart(d)}
+<div class="g2">${mixCard('매출은 어디서', 'sale', d.sales)}${mixCard('매입은 어디로', 'buy', d.purchase)}</div>
+${pairs.join('\n')}
+<div class="foot"><span>택스오프</span><span>${esc(d.period)}</span></div>
 </div></body></html>`;
 }

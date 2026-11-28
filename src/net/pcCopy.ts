@@ -7,7 +7,7 @@ import { customersOf, type BookCmd, type Customer } from '../book.ts';
 /** reportCap: 이 사본을 보낸 PC가 report.v1을 알렸는지(리포트가 없을 때 옛 PC인지, PC가 만들지 못했는지 가른다) */
 export type CachedPhoneCopy = PhoneCopyBody & { ownerDesktopDeviceId?: string; reportCap?: boolean };
 
-export const PHONE_CAPS: readonly string[] = [CAP.copy, CAP.issue, CAP.sync, CAP.issued, CAP.book, CAP.amend, CAP.report, CAP.docs, CAP.reportV2];
+export const PHONE_CAPS: readonly string[] = [CAP.copy, CAP.issue, CAP.sync, CAP.issued, CAP.book, CAP.amend, CAP.report, CAP.docs, CAP.reportV2, CAP.cpTel];
 
 const COPY_WAIT_MS = 2000;
 const DAY = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;

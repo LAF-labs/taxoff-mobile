@@ -63,7 +63,7 @@ const dayAgo = (n: number) => new Date(Date.now() + 9 * 3_600_000 - n * 86_400_0
 const today = new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10);
 const DUMMY_CPS = [
   ['가나식자재', '100-79-19315', '김가나', 3], ['한결물산', '107-81-45678', '이한결', 5], ['대한테크', '103-95-96553', '박대한', 9], ['우림상사', '130-09-33810', '최우림', 20], ['바른인테리어', '157-81-09704', '정바른', 30], ['강남인테리어', '101-58-38625', '강남', 60], ['다온푸드', '120-87-12345', '이다온', 0],
-].map(([name, bizNo, rep, ago], i) => ({ ref: `00000000-0000-4000-8000-00000000000${i}`, name, bizNo, rep, phoneApprovable: true, ...(ago ? { last: { supply: 1_000_000, vatMode: 'excl', item: '용역', day: dayAgo(ago as number) } } : {}) }));
+].map(([name, bizNo, rep, ago], i) => ({ ref: `00000000-0000-4000-8000-00000000000${i}`, name, bizNo, rep, tel: `010-${String(5500 + i).padStart(4, '0')}-${String(1000 + i * 7)}`, phoneApprovable: true, ...(ago ? { last: { supply: 1_000_000, vatMode: 'excl', item: '용역', day: dayAgo(ago as number) } } : {}) }));
 const docs = new Map<string, { item: DocListItem; bytes: Uint8Array }>();
 const DOC_NAMES: Array<[string, string, string, number | null]> = [['가나식자재 세금계산서', 'tax_invoice', 'Invoice 1', null], ['사업자등록증명', 'biz_registration_cert', 'Biz cert', null], ['납세증명서', 'national_tax_cert', 'Tax cert', 3], ['대한테크 세금계산서', 'tax_invoice', 'Invoice 2', null], ['지방세 납세증명서', 'local_tax_cert', 'Local tax cert', 25], ['사무실 임대차계약서', 'other', 'Lease', null]];
 const dayAfter = (n: number) => new Date(Date.now() + 9 * 3_600_000 + n * 86_400_000).toISOString().slice(0, 10);
