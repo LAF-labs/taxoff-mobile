@@ -5,7 +5,7 @@ import { useSession } from '../session';
 import { radius, space, usePalette } from '../theme';
 import { Kv, KvRow, Section } from '../ui/card';
 import { bigWon, Button, Empty, Group, Notice, Row, Screen, Seg, T, TextButton } from '../ui/kit';
-import { BarChart, Donut, InfoMark, Legend, midColor, MonthStep, RankRows, Spark, Stack, Tip, type BarCol, type RankItem } from '../ui/report';
+import { BarChart, Donut, InfoMark, Legend, midColor, MonthStep, RankRows, Stack, Tip, type BarCol, type RankItem } from '../ui/report';
 import { Sheet } from '../ui/sheet';
 import { averageOf, clampMonth, ddayText, headlineText, partnerMonths, periodText, prevName, shortWon, trendText, whyOf, reportView, reportWait, shiftMonth, spanText, topOf, WINDOWS, type ChartCol, type Line, type Months, type Rank, type RankRow, type ReportWait } from '../report';
 import { canReportPdf, shareReportPdf } from '../reportPdf';
@@ -140,8 +140,8 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
         </Notice>
       )}
 
-      <TotalCard title="매출" testID="report-sales" total={v.sales.total} prev={v.prev?.sales} comparable={v.prev?.comparable.sales} months={months} days={v.days} gone={v.gone} values={v.chart.map((c) => c.sales.total.amount)} color={p.dataSale} />
-      <TotalCard title="매입" testID="report-purchase" total={v.purchase.total} prev={v.prev?.purchase} comparable={v.prev?.comparable.purchase} months={months} days={v.days} gone={v.gone} values={v.chart.map((c) => c.purchase.total.amount)} color={p.dataBuy} />
+      <TotalCard title="매출" testID="report-sales" total={v.sales.total} prev={v.prev?.sales} comparable={v.prev?.comparable.sales} months={months} days={v.days} gone={v.gone} />
+      <TotalCard title="매입" testID="report-purchase" total={v.purchase.total} prev={v.prev?.purchase} comparable={v.prev?.comparable.purchase} months={months} days={v.days} gone={v.gone} />
       {v.vat && (
         <Section
           title={`부가세 ${v.vat.h}기`}
@@ -259,14 +259,14 @@ function barOf(c: ChartCol, purchase: boolean): BarCol {
 
 const known = (l: Line) => l.amount !== null;
 
-/** 요약 카드(PC totalCard): 합계, 비교 글, 앞 기간 합계와 평균. 꺾은선은 제목 줄 */
-function TotalCard({ title, total, prev, comparable, months, days, gone, values, color, testID }: {
-  title: string; total: Line; prev: Line | undefined; comparable: boolean | undefined; months: Months; days: number; gone: number; values: Array<number | null>; color: string; testID: string;
+/** 요약 카드(PC totalCard): 합계, 비교 글, 앞 기간 합계와 평균 */
+function TotalCard({ title, total, prev, comparable, months, days, gone, testID }: {
+  title: string; total: Line; prev: Line | undefined; comparable: boolean | undefined; months: Months; days: number; gone: number; testID: string;
 }) {
   const t = trendText(total, prev, months, comparable);
   const avg = averageOf(total, months, days, gone);
   return (
-    <Section title={title} testID={testID} side={<Spark values={values} color={color} />}>
+    <Section title={title} testID={testID}>
       <View style={{ gap: 2 }}>
         <T v="figure" testID={`${testID}-total`}>{amountText(total)}</T>
         {t && <T v="sub" c="ink2">{t}</T>}

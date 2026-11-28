@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, View, type PanResponderGestureState } from 'react-native';
-import Svg, { Circle, Path, Polyline } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { radius, size, space, usePalette, useReducedMotion } from '../theme';
 import { Glyph } from './glyph';
 import { Chevron, T, tap } from './kit';
@@ -337,22 +337,6 @@ export function Stack({ parts, width = 1 }: { parts: Array<{ share: number; colo
       {parts.filter((x) => x.share > 0).map((x, i) => (
         <View key={i} style={{ flex: x.share, backgroundColor: x.color }} />
       ))}
-    </View>
-  );
-}
-
-/** 요약 카드 제목 줄의 꺾은선(PC rp-spark): 달마다 금액, 끝 점 */
-export function Spark({ values, color }: { values: Array<number | null>; color: string }) {
-  const vs = values.map((v) => v ?? 0);
-  const max = Math.max(1, ...vs);
-  const pts = vs.map((v, i) => [3 + (i * 66) / Math.max(1, vs.length - 1), 24 - (v / max) * 20] as const);
-  const [lx, ly] = pts.at(-1) ?? [0, 0];
-  return (
-    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      <Svg width={72} height={28} viewBox="0 0 72 28">
-        <Polyline points={pts.map(([px, py]) => `${px.toFixed(1)},${py.toFixed(1)}`).join(' ')} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-        <Circle cx={lx} cy={ly} r={3} fill={color} />
-      </Svg>
     </View>
   );
 }

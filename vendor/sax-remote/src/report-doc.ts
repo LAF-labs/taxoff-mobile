@@ -191,18 +191,9 @@ const card = (title: string, body: string, side = '') => `<section class="card">
 const dot = (color: string) => `<i class="dot" style="background:${color}"></i>`;
 const meter = (share: number, color: string) => `<div class="meter"><i style="width:${Math.max(0, Math.min(100, Math.round(share * 100)))}%;background:${color}"></i></div>`;
 
-function spark(values: DocAmount[], t: Tone): string {
-  const vs = values.map((v) => v ?? 0);
-  if (vs.length < 2) return '';
-  const max = Math.max(1, ...vs);
-  const pts = vs.map((v, i) => [3 + (i * 50) / (vs.length - 1), 26 - (v / max) * 22] as const);
-  const [lx, ly] = pts.at(-1)!;
-  return `<svg width="56" height="30" viewBox="0 0 56 30" aria-hidden="true"><polyline points="${pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')}" fill="none" stroke="${tone(t, 0)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="3" fill="${tone(t, 0)}"/></svg>`;
-}
-
-function totalCard(title: string, t: Tone, total: ReportDocLine, trend: string | null | undefined, series: DocAmount[], rows: ReportDocLine[] = []): string {
+function totalCard(title: string, total: ReportDocLine, trend: string | null | undefined, rows: ReportDocLine[] = []): string {
   const kv = rows.length ? `<dl>${rows.map((r) => `<dt>${esc(r.label)}</dt><dd${r.amount === null ? ' class="u"' : ''}>${r.amount === null && r.note ? esc(r.note) : won(r.amount)}</dd>`).join('')}</dl>` : '';
-  return card(title, `<div class="total"><div><span class="strong">${won(total.amount)}</span>${trend ? `<span class="sub">${esc(trend)}</span>` : ''}</div></div>${kv}`, spark(series, t));
+  return card(title, `<div class="total"><div><span class="strong">${won(total.amount)}</span>${trend ? `<span class="sub">${esc(trend)}</span>` : ''}</div></div>${kv}`);
 }
 
 function vatCard(v: ReportDocVat): string {
@@ -352,7 +343,7 @@ export function reportDocHtml(d: ReportDoc, opts: { fonts?: ReportDocFonts } = {
   ];
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${esc(`${d.bizName} 리포트 ${d.period}`)}</title><style>${faces}${STYLE}</style></head><body><div class="page">
 <div class="top"><div><h1>${esc(d.bizName)} 리포트</h1><div class="p">${esc(d.period)}</div></div><div class="meta">${meta.map((x) => `<div>${esc(x)}</div>`).join('')}</div></div>
-<div class="g3">${totalCard('매출', 'sale', d.salesTotal, d.salesTrend, d.months.map((m) => m.sales), d.salesRows)}${totalCard('매입', 'buy', d.purchaseTotal, d.purchaseTrend, d.months.map((m) => m.purchase), d.purchaseRows)}${third}</div>
+<div class="g3">${totalCard('매출', d.salesTotal, d.salesTrend, d.salesRows)}${totalCard('매입', d.purchaseTotal, d.purchaseTrend, d.purchaseRows)}${third}</div>
 ${chart(d)}
 ${d.why ? card(d.why.title, `<div class="why">${d.why.rows.map((x) => `<div><span class="k">${esc(x.label)}</span><span class="v">${x.delta > 0 ? '+' : '−'}${esc(shortWon(Math.abs(x.delta)))}</span></div>`).join('')}</div>`) : ''}
 <div class="g2">${whereCard('매출은 어디서', 'sale', d.partnersSale, d.sales, '카드와 현금 손님')}${whereCard('매입은 어디로', 'buy', d.partnersPurchase, d.purchase, '카드, 영수증, 급여')}</div>
