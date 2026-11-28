@@ -133,7 +133,7 @@ function niceStep(max: number): number {
   const raw = max / 4;
   const mag = 10 ** Math.floor(Math.log10(raw));
   const n = raw / mag;
-  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag;
+  return Math.max(10_000, (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag);
 }
 /** 말풍선 아래 끝과 막대 위 끝 사이 */
 const TIP_GAP = 6;
