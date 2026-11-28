@@ -102,9 +102,9 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
   const chartPurchase = v.chart.some((c) => !!c.purchase.total.amount);
   const rankPurchase = !!v.ranks && v.ranks.pp.rows.length > 0;
   const missing = [!hasPurchase ? '매입' : null, !known(v.sales.card) ? '카드 매출' : null, !v.bank ? '통장' : null].filter((x): x is string => !!x);
-  // 매출은 어디서, 매입은 어디로: 거래처별(2026-11-28 대표: 계산서인지 카드인지보다 어디인지가 궁금하다). 계산서가 없는 매출·매입은 한 조각
-  const saleSlices = slicesOf(v.ranks?.ps, [v.sales.card, v.sales.cr, v.sales.cash], '카드·현금 손님', [p.dataSale, midColor(p.dataSale, p.dataSaleMuted), p.dataSaleMuted], [p.ink4, p.ink3], (row) => setOpen({ kind: 'partner', side: 'sale', row }));
-  const buySlices = slicesOf(v.ranks?.pp, [v.purchase.card, v.purchase.cr, v.purchase.rcpt, v.purchase.pay], '카드·영수증·급여', [p.dataBuy, midColor(p.dataBuy, p.dataBuyMuted), p.dataBuyMuted], [p.ink4, p.ink3], (row) => setOpen({ kind: 'partner', side: 'purchase', row }));
+  // 매출은 어디서, 매입은 어디로: 거래처별(2026-11-28 대표: 계산서인지 카드인지보다 어디인지가 궁금하다). 계산서가 없는 매출과 매입은 한 조각
+  const saleSlices = slicesOf(v.ranks?.ps, [v.sales.card, v.sales.cr, v.sales.cash], '카드와 현금 손님', [p.dataSale, midColor(p.dataSale, p.dataSaleMuted), p.dataSaleMuted], [p.ink4, p.ink3], (row) => setOpen({ kind: 'partner', side: 'sale', row }));
+  const buySlices = slicesOf(v.ranks?.pp, [v.purchase.card, v.purchase.cr, v.purchase.rcpt, v.purchase.pay], '카드, 영수증, 급여', [p.dataBuy, midColor(p.dataBuy, p.dataBuyMuted), p.dataBuyMuted], [p.ink4, p.ink3], (row) => setOpen({ kind: 'partner', side: 'purchase', row }));
   const vatDue = v.vat && v.vat.s !== null && v.vat.p !== null ? v.vat.s - v.vat.p : null;
   const headline = headlineText(v, v.chart.some((c) => !!c.lastYear?.amount));
   const why = whyOf(v);
@@ -289,7 +289,7 @@ const ddayLeft = (today: string, day: string) => Math.round((Date.parse(day) - D
 
 type Slice = { label: string; amount: number; color: string; onPress?: () => void };
 
-/** 거래처 위 셋, 그 밖에, 계산서 없는 몫(카드·현금 등). 거래처 순위가 없으면 계산서 합계 한 조각 */
+/** 거래처 위 셋, 그 밖에, 계산서 없는 몫(카드와 현금 등). 거래처 순위가 없으면 계산서 합계 한 조각 */
 function slicesOf(rank: Rank | undefined, other: Line[], otherLabel: string, colors: string[], grey: [string, string], onRow: (row: RankRow) => void): Slice[] {
   const out: Slice[] = [];
   if (rank) {

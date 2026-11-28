@@ -355,7 +355,7 @@ export function reportDocHtml(d: ReportDoc, opts: { fonts?: ReportDocFonts } = {
 <div class="g3">${totalCard('매출', 'sale', d.salesTotal, d.salesTrend, d.months.map((m) => m.sales), d.salesRows)}${totalCard('매입', 'buy', d.purchaseTotal, d.purchaseTrend, d.months.map((m) => m.purchase), d.purchaseRows)}${third}</div>
 ${chart(d)}
 ${d.why ? card(d.why.title, `<div class="why">${d.why.rows.map((x) => `<div><span class="k">${esc(x.label)}</span><span class="v">${x.delta > 0 ? '+' : '−'}${esc(shortWon(Math.abs(x.delta)))}</span></div>`).join('')}</div>`) : ''}
-<div class="g2">${whereCard('매출은 어디서', 'sale', d.partnersSale, d.sales, '카드·현금 손님')}${whereCard('매입은 어디로', 'buy', d.partnersPurchase, d.purchase, '카드·영수증·급여')}</div>
+<div class="g2">${whereCard('매출은 어디서', 'sale', d.partnersSale, d.sales, '카드와 현금 손님')}${whereCard('매입은 어디로', 'buy', d.partnersPurchase, d.purchase, '카드, 영수증, 급여')}</div>
 ${pairs.join('\n')}
 <div class="foot"><span>택스오프</span><span>${esc(d.period)}</span></div>
 </div></body></html>`;
