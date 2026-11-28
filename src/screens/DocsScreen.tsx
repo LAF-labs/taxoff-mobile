@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Image, View } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import type { File } from 'expo-file-system';
 import SaxNative from '../../modules/sax-native/src/SaxNativeModule';
 import { dropTemp, kindOf, loadIndex, onIndex, readDoc, removeDoc, saveIndex, writeTemp, type DocIndex, type DocItem, type DocKind } from '../docs/box';
 import { fullDay, md } from '../money';
 import { useSession } from '../session';
-import { space, usePalette } from '../theme';
-import { Empty, Group, Ring, Row, Screen, Seg } from '../ui/kit';
+import { radius, space, usePalette } from '../theme';
+import { Button, Empty, Group, Ring, Row, Screen, Seg, T } from '../ui/kit';
+import { Actions, Card } from '../ui/card';
+import hometaxLogo from '../../assets/issuer-hometax.png';
+import wetaxLogo from '../../assets/issuer-wetax.png';
 import { SearchField } from '../ui/form';
 import { ConfirmSheet } from '../ui/sheet';
-import { Glyph, type GlyphKind } from '../ui/glyph';
+import { Glyph } from '../ui/glyph';
 
 /** 갤러리와 시험 화면이 실제 계정 없이 그리는 상태. */
 export interface DocsPreview {
@@ -19,28 +22,66 @@ export interface DocsPreview {
   failed?: boolean;
 }
 
-type Filter = 'all' | 'invoice' | 'cert';
+type Filter = 'all' | DocKind;
 const FILTERS: Array<{ key: Filter; label: string }> = [
   { key: 'all', label: '전체' },
-  { key: 'invoice', label: '세금계산서' },
   { key: 'cert', label: '증명서' },
+  { key: 'invoice', label: '세금계산서' },
+  { key: 'other', label: '직접 올린 서류' },
 ];
-const GLYPH: Record<DocKind, GlyphKind> = { invoice: 'doc', cert: 'cert', other: 'paper' };
+const KIND_GROUP: Array<{ kind: DocKind; title: string }> = [
+  { kind: 'cert', title: '증명서' },
+  { kind: 'other', title: '직접 올린 서류' },
+  { kind: 'invoice', title: '세금계산서' },
+];
+const LOGO: Record<string, number> = { 홈택스: hometaxLogo, 위택스: wetaxLogo };
+const SOON_DAYS = 7;
+
+/** 증명서를 낸 곳. 지방세는 위택스, 나머지 앱이 떼는 증명서는 홈택스다. */
+const issuerOf = (it: DocItem): string => (/지방세/.test(it.name) ? '위택스' : '홈택스');
+
+function Mark({ it }: { it: DocItem }) {
+  const p = usePalette();
+  const kind = kindOf(it.docType);
+  const tile = { width: 34, height: 34, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' } as const;
+  if (kind !== 'cert') return <View style={[tile, { backgroundColor: p.sunken }]}><Glyph kind={kind === 'invoice' ? 'doc' : 'paper'} size={20} color={p.ink} /></View>;
+  return (
+    <View style={[tile, { backgroundColor: p.overlay }]}>
+      <Image source={LOGO[issuerOf(it)]} style={{ width: 22, height: 22 }} accessibilityIgnoresInvertColors />
+    </View>
+  );
+}
+
+const daysLeft = (until: string, today: string) => Math.round((Date.parse(until) - Date.parse(today)) / 86_400_000);
 
 const kstToday = () => new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10);
 const shownName = (name: string) => name.replace(/\.pdf$/i, '');
+const josaGa = (s: string) => {
+  const c = s.charCodeAt(s.length - 1) - 0xac00;
+  return c >= 0 && c < 11172 && c % 28 ? '이' : '가';
+};
+const syncedText = (iso: string) => {
+  const d = new Date(iso);
+  const today = new Date().toDateString() === d.toDateString();
+  return new Intl.DateTimeFormat('ko-KR', today ? { hour: 'numeric', minute: '2-digit' } : { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(d);
+};
 
-/** 줄 아래 글: 발급일, 기한이 있으면 기한(지났으면 지났다고). */
+/** 줄 아래 글: 낸 곳, 발급일, 기한(이레 안이면 남은 날, 지났으면 지났다고). */
 function lineOf(it: DocItem, today: string): { text?: string; late: boolean } {
-  const day = it.issuedOn ? fullDay(it.issuedOn) : null;
-  if (!it.expiresOn) return { text: day ?? undefined, late: false };
-  const late = it.expiresOn < today;
-  const due = late ? '기한이 지났어요' : `${md(it.expiresOn)}까지`;
-  return { text: day ? `${day}, ${due}` : due, late };
+  const parts = [kindOf(it.docType) === 'other' ? '직접 올림' : issuerOf(it), it.issuedOn ? fullDay(it.issuedOn) : null];
+  if (!it.expiresOn) return { text: parts.filter(Boolean).join(', '), late: false };
+  const n = daysLeft(it.expiresOn, today);
+  const late = n <= SOON_DAYS;
+  parts.push(n < 0 ? '기한이 지났어요' : n === 0 ? '오늘까지' : late ? `${n}일 남음` : `${md(it.expiresOn)}까지`);
+  return { text: parts.filter(Boolean).join(', '), late };
 }
 
 /** 발급일의 달로 묶는다. 올해가 아니면 해를 붙인다. 날짜가 없는 문서는 맨 아래 제목 없는 묶음. */
-function groups(items: DocItem[]): Array<{ title?: string; items: DocItem[] }> {
+function groups(items: DocItem[], filter: Filter): Array<{ title?: string; items: DocItem[] }> {
+  if (filter === 'all') {
+    const byDay = (a: DocItem, b: DocItem) => (b.issuedOn ?? '').localeCompare(a.issuedOn ?? '') || a.name.localeCompare(b.name, 'ko');
+    return KIND_GROUP.map((g) => ({ title: g.title, items: items.filter((it) => kindOf(it.docType) === g.kind).sort(byDay) })).filter((g) => g.items.length > 0);
+  }
   const year = String(new Date().getFullYear());
   const sorted = [...items].sort((a, b) => (b.issuedOn ?? '').localeCompare(a.issuedOn ?? '') || a.name.localeCompare(b.name, 'ko'));
   const out: Array<{ key: string; title?: string; items: DocItem[] }> = [];
@@ -57,7 +98,7 @@ function groups(items: DocItem[]): Array<{ title?: string; items: DocItem[] }> {
   return out;
 }
 
-export function DocsScreen({ preview }: { preview?: DocsPreview }) {
+export function DocsScreen({ preview, onAsk }: { preview?: DocsPreview; onAsk: (text: string) => void }) {
   const p = usePalette();
   const s = useSession();
   const pairId = s.data.pair?.pairId ?? null;
@@ -112,6 +153,10 @@ export function DocsScreen({ preview }: { preview?: DocsPreview }) {
   const today = kstToday();
   const all = index?.items ?? [];
   const q = query.trim().toLowerCase();
+  const soon = all
+    .filter((it) => kindOf(it.docType) === 'cert' && it.expiresOn && daysLeft(it.expiresOn, today) >= 0 && daysLeft(it.expiresOn, today) <= SOON_DAYS)
+    .sort((a, b) => (a.expiresOn ?? '').localeCompare(b.expiresOn ?? ''))[0];
+  const soonLeft = soon?.expiresOn ? daysLeft(soon.expiresOn, today) : 0;
   const shown = all.filter((it) => (filter === 'all' || kindOf(it.docType) === filter) && (!q || it.name.toLowerCase().includes(q)));
 
   if (!all.length) {
@@ -134,8 +179,20 @@ export function DocsScreen({ preview }: { preview?: DocsPreview }) {
         <SearchField value={query} onChange={setQuery} placeholder="문서 찾기" label="문서 찾기" testID="docs-search" />
         <Seg options={FILTERS} value={filter} onChange={setFilter} testID="docs-filter" />
       </View>
+      {soon && (
+        <Card kind="check" tone="attention" title={`${shownName(soon.name)}${josaGa(shownName(soon.name))} ${soonLeft === 0 ? '오늘' : `${soonLeft}일 뒤`} 끝나요`} testID="docs-soon">
+          <Actions>
+            <Button label="다시 떼기" onPress={() => onAsk(`${shownName(soon.name)} 떼 줘`)} testID="docs-soon-again" />
+          </Actions>
+        </Card>
+      )}
+      {index?.syncedAt && (
+        <T v="label" c="ink3" style={{ alignSelf: 'flex-end', paddingHorizontal: space.s1 }} testID="docs-synced">
+          {syncedText(index.syncedAt)}에 받음
+        </T>
+      )}
       {shown.length ? (
-        groups(shown).map((g) => (
+        groups(shown, filter).map((g) => (
           <Group key={g.title ?? 'none'} title={g.title} testID="docs-group">
             {g.items.map((it) => {
               const line = lineOf(it, today);
@@ -144,7 +201,7 @@ export function DocsScreen({ preview }: { preview?: DocsPreview }) {
                 <Row
                   key={it.docId}
                   testID={`doc-${it.docId}`}
-                  icon={<Glyph kind={GLYPH[kindOf(it.docType)]} size={22} color={p.ink2} />}
+                  icon={<Mark it={it} />}
                   label={shownName(it.name)}
                   lines={2}
                   sub={line.text}

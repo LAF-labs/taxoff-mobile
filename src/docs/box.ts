@@ -17,6 +17,8 @@ export interface DocIndex {
   v: 2;
   pairId: string;
   items: DocItem[];
+  /** PC 목록을 다 받아 맞춘 때(ISO). 화면의 "받음" 시각. */
+  syncedAt?: string;
 }
 
 export type DocKind = 'invoice' | 'cert' | 'other';

@@ -130,7 +130,7 @@ export function searchCustomers(list: readonly Customer[], q: string): Customer[
   const t = q.trim().toLowerCase();
   if (!t) return [];
   const d = digits(t);
-  return byName(list.filter((c) => c.name.toLowerCase().includes(t) || (d.length >= 3 && digits(c.bizNo).includes(d))));
+  return byName(list.filter((c) => c.name.toLowerCase().includes(t) || !!c.rep?.toLowerCase().includes(t) || (d.length >= 3 && digits(c.bizNo).includes(d))));
 }
 
 export const findCustomer = (list: readonly Customer[], bizNo: string): Customer | null => list.find((c) => sameBiz(c.bizNo, bizNo)) ?? null;
