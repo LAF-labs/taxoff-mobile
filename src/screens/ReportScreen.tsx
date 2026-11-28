@@ -114,7 +114,7 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
   };
 
   return (
-    <Screen title="리포트" shell gap={space.s7} testID="report">
+    <Screen title="리포트" shell gap={space.s4} testID="report">
       <MonthStep
         label={label}
         prev={{ a11y: v.first ? `앞 ${unit} 없음` : `${periodText(back, months)} 보기`, onPress: v.first ? null : () => setPicked(back) }}
@@ -259,7 +259,7 @@ function barOf(c: ChartCol, purchase: boolean): BarCol {
 
 const known = (l: Line) => l.amount !== null;
 /** 리포트 섹션은 면 없이 제목과 여백으로 나눈다(2026-11-28 대표: 카드로 가두면 어둡다, 토스처럼) */
-const roomy = { backgroundColor: 'transparent', paddingHorizontal: 0, paddingVertical: 0, gap: space.s4 };
+const roomy = { backgroundColor: 'transparent', paddingHorizontal: 0, paddingTop: space.s5, paddingBottom: 0, gap: space.s4 };
 
 /** 요약 카드(PC totalCard): 합계, 비교 글, 앞 기간 합계와 평균. 꺾은선은 제목 줄 */
 function TotalCard({ title, total, prev, comparable, months, days, gone, values, color, testID }: {
