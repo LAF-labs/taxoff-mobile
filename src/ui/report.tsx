@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, View, type PanResponderGestureState } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle, Line as SvgLine, Path, Polyline } from 'react-native-svg';
 import { radius, size, space, usePalette, useReducedMotion } from '../theme';
 import { Glyph } from './glyph';
 import { Chevron, T, tap } from './kit';
@@ -342,6 +342,56 @@ export function Stack({ parts, width = 1 }: { parts: Array<{ share: number; colo
 }
 
 /** 구성 원형(PC rp-ring): 몫마다 한 조각, 바탕은 sunken */
+/**
+ * 요약 카드의 달마다 흐름(2026-11-28 대표: 의미 있게). 0부터가 아니라 가장 낮은 달과 높은 달 사이로 그려 오르내림이 보이고,
+ * 점선은 이 달들의 평균, 끝 점은 고른 달. 아래에 첫 달과 끝 달 이름. 모르는 달은 선을 끊는다.
+ */
+export function Trend({ values, labels, color, testID }: { values: Array<number | null>; labels: [string, string]; color: string; testID?: string }) {
+  const p = usePalette();
+  const [w, setW] = useState(0);
+  const known = values.filter((v): v is number => v !== null);
+  if (known.length < 2) return null;
+  const lo = Math.min(...known);
+  const hi = Math.max(...known);
+  const pad = (hi - lo) * 0.15 || Math.max(1, hi * 0.1);
+  const y = (v: number) => TREND_H - 6 - ((v - (lo - pad)) / (hi - lo + 2 * pad)) * (TREND_H - 12);
+  const x = (i: number) => 4 + (i * (w - 8)) / Math.max(1, values.length - 1);
+  const avg = known.reduce((a, v) => a + v, 0) / known.length;
+  const last = values.reduce<number>((at, v, i) => (v === null ? at : i), -1);
+  const runs: Array<Array<[number, number]>> = [];
+  values.forEach((v, i) => {
+    if (v === null) return;
+    const prev = runs.at(-1);
+    if (prev && values[i - 1] !== null && i > 0) prev.push([x(i), y(v)]);
+    else runs.push([[x(i), y(v)]]);
+  });
+  return (
+    <View testID={testID} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ gap: space.s1 }}>
+      <View onLayout={(e) => setW(e.nativeEvent.layout.width)} style={{ height: TREND_H }}>
+        {w > 0 && (
+          <Svg width={w} height={TREND_H}>
+            <SvgLine x1={0} x2={w} y1={y(avg)} y2={y(avg)} stroke={p.ink4} strokeWidth={1} strokeDasharray="3 4" />
+            {runs.map((r, k) => (
+              <Polyline key={k} points={r.map(([a, b]) => `${a.toFixed(1)},${b.toFixed(1)}`).join(' ')} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+            ))}
+            <Circle cx={x(last)} cy={y(values[last]!)} r={4.5} fill={color} />
+          </Svg>
+        )}
+        {w > 0 && (
+          <T v="meta" c="ink3" style={{ position: 'absolute', left: 0, top: y(avg) > TREND_H / 2 ? y(avg) - 20 : y(avg) + 2 }}>
+            평균
+          </T>
+        )}
+      </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <T v="meta" c="ink3">{labels[0]}</T>
+        <T v="meta" c="ink3">{labels[1]}</T>
+      </View>
+    </View>
+  );
+}
+const TREND_H = 56;
+
 export function Donut({ parts, track, sizePx = 88 }: { parts: Array<{ share: number; color: string }>; track: string; sizePx?: number }) {
   const R = 34;
   const L = 2 * Math.PI * R;

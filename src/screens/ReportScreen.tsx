@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import type { CopyReport } from '@sax/remote';
 import { useSession } from '../session';
 import { radius, space, usePalette } from '../theme';
 import { Kv, KvRow, Section } from '../ui/card';
 import { bigWon, Button, Empty, Group, Notice, Row, Screen, Seg, T, TextButton } from '../ui/kit';
-import { BarChart, Donut, InfoMark, Legend, midColor, MonthStep, RankRows, Stack, Tip, type BarCol, type RankItem } from '../ui/report';
+import { BarChart, Donut, InfoMark, Legend, midColor, MonthStep, RankRows, Stack, Tip, Trend, type BarCol, type RankItem } from '../ui/report';
 import { Sheet } from '../ui/sheet';
 import { averageOf, clampMonth, ddayText, headlineText, partnerMonths, periodText, prevName, shortWon, trendText, whyOf, reportView, reportWait, shiftMonth, spanText, topOf, WINDOWS, type ChartCol, type Line, type Months, type Rank, type RankRow, type ReportWait } from '../report';
 import { canReportPdf, shareReportPdf } from '../reportPdf';
@@ -140,8 +140,8 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
         </Notice>
       )}
 
-      <TotalCard title="매출" testID="report-sales" total={v.sales.total} prev={v.prev?.sales} comparable={v.prev?.comparable.sales} months={months} days={v.days} gone={v.gone} />
-      <TotalCard title="매입" testID="report-purchase" total={v.purchase.total} prev={v.prev?.purchase} comparable={v.prev?.comparable.purchase} months={months} days={v.days} gone={v.gone} />
+      <TotalCard title="매출" testID="report-sales" total={v.sales.total} prev={v.prev?.sales} comparable={v.prev?.comparable.sales} months={months} days={v.days} gone={v.gone} trend={<Trend values={v.chart.map((c) => (c.future ? null : c.sales.total.amount))} labels={[v.chart[0]!.label, v.chart.at(-1)!.label]} color={p.dataSale} testID="report-sales-trend" />} />
+      <TotalCard title="매입" testID="report-purchase" total={v.purchase.total} prev={v.prev?.purchase} comparable={v.prev?.comparable.purchase} months={months} days={v.days} gone={v.gone} trend={<Trend values={v.chart.map((c) => (c.future ? null : c.purchase.total.amount))} labels={[v.chart[0]!.label, v.chart.at(-1)!.label]} color={p.dataBuy} testID="report-purchase-trend" />} />
       {v.vat && (
         <Section
           title={`부가세 ${v.vat.h}기`}
@@ -260,8 +260,8 @@ function barOf(c: ChartCol, purchase: boolean): BarCol {
 const known = (l: Line) => l.amount !== null;
 
 /** 요약 카드(PC totalCard): 합계, 비교 글, 앞 기간 합계와 평균 */
-function TotalCard({ title, total, prev, comparable, months, days, gone, testID }: {
-  title: string; total: Line; prev: Line | undefined; comparable: boolean | undefined; months: Months; days: number; gone: number; testID: string;
+function TotalCard({ title, total, prev, comparable, months, days, gone, trend, testID }: {
+  title: string; total: Line; prev: Line | undefined; comparable: boolean | undefined; months: Months; days: number; gone: number; trend?: ReactNode; testID: string;
 }) {
   const t = trendText(total, prev, months, comparable);
   const avg = averageOf(total, months, days, gone);
@@ -271,6 +271,7 @@ function TotalCard({ title, total, prev, comparable, months, days, gone, testID 
         <T v="figure" testID={`${testID}-total`}>{amountText(total)}</T>
         {t && <T v="sub" c="ink2">{t}</T>}
       </View>
+      {trend}
       <Kv>
         {prev && <KvRow label={prevName(months)} value={comparable === false ? '일부만 받았어요' : amountText(prev)} warn={comparable === false || prev.amount === null} />}
         <KvRow label={avg.label} value={avg.amount === null ? '확인 못 함' : won(avg.amount)} warn={avg.amount === null} />
