@@ -323,6 +323,8 @@ export interface CopyReportMonth {
   purchase: { inv: CopyLine; card: CopyLine; cr: CopyLine; rcpt: CopyLine; pay: CopyLine };
   /** 계좌를 잇지 않았으면 없다. done = 모든 계좌가 그달 전체를 덮음 */
   bank?: { in: number; out: number; done: boolean; bin: CopyBankCats; bout: CopyBankCats };
+  /** v1.20 report.v3 폰에만: 작년 같은 달 매출(s), 매입(p) 합계 */
+  ly?: { s: CopyLine; p: CopyLine };
 }
 export interface CopyRank {
   /** i = 거래처 줄만, report.pm의 몇째 칸인가(v1.17) */
@@ -350,6 +352,8 @@ export interface CopyReport {
     prev?: { s: CopyLine; p: CopyLine };
     /** v1.19 이 기간 매출 세금계산서의 받은 돈, 남은 돈, 기한 지난 건수와 금액 */
     recv?: { got: number; left: number; lateN: number; lateA: number };
+    /** v1.20 report.v3 폰에만: 앞 기간보다 매출이 많이 바뀐 거래처(k p)와 품목(k i), 차이 d가 큰 것부터 */
+    why?: { k: 'p' | 'i'; name: string | null; d: number }[];
   }[];
   /** v1.19 month가 든 부가세 과세기간(h 1기, 2기)의 from부터 to까지. s 매출 부가세, sn 건수, p 매입 세금계산서 부가세(null = 모름), dl 신고 기한 */
   vat?: { h: 1 | 2; from: string; to: string; s: number | null; sn: number; p: number | null; dl: string };

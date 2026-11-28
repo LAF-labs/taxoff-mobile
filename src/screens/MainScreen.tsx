@@ -48,7 +48,11 @@ export function MainScreen({
   const customers = useCustomers();
   const [drawer, setDrawer] = useState(drawerOpen);
   const [issueOpen, setIssueOpen] = useState(!!issuePreview);
+  // 리포트 "대화에서 더 묻기": 대화 칸에 질문을 채워 둔다(보내기는 사장님이)
   const [ask, setAsk] = useState<string | null>(null);
+  useEffect(() => {
+    if (tab !== 'home') setAsk(null);
+  }, [tab]);
   const unread = unreadCount(s.data.inbox, s.data.inboxSeenAt);
   const goMain = (to: MainRoute) => {
     if (to === 'settings' || to === 'inbox') return onTab(to);
@@ -80,7 +84,7 @@ export function MainScreen({
     ) : tab === 'money' ? (
       <MoneyScreen go={goMain} />
     ) : tab === 'report' ? (
-      <ReportScreen go={goMain} onMoney={() => onTab('money')} preview={report} />
+      <ReportScreen go={goMain} onMoney={() => onTab('money')} onAsk={(t) => (setAsk(t), onTab('home'))} preview={report} />
     ) : tab === 'records' ? (
       <RecordsScreen go={goMain} onHome={() => onTab('home')} onDocs={() => onTab('docs')} phone={phone} />
     ) : tab === 'customers' ? (

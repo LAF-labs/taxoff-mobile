@@ -27,7 +27,8 @@ export interface ReportDocRank {
 
 export interface ReportDocPartners {
   rows: ReportDocRank[];
-  rest: ReportDocRank | null;
+  /** n = 묶인 거래처 수 */
+  rest: (ReportDocRank & { n: number }) | null;
   total: number;
   count: number;
 }
@@ -65,6 +66,10 @@ export interface ReportDoc {
   purchaseRows?: ReportDocLine[];
   vat?: ReportDocVat | null;
   receivable?: { received: number; waiting: number; late: number; lateCount: number } | null;
+  /** 달마다 카드 제목 아래 한 줄("11월 매출은 563만원, 지난달보다 10% 많아요") */
+  headline?: string | null;
+  /** 왜 늘었을까(줄었을까): 앞 기간보다 많이 바뀐 거래처와 품목 */
+  why?: { title: string; rows: Array<{ label: string; delta: number }> } | null;
   /** 계좌를 하나라도 이었나. false면 통장 카드에 연결 안내만 쓴다 */
   bankLinked?: boolean;
   /** 자료 카드 줄 */
@@ -112,11 +117,13 @@ const shortWon = (v: number) => {
 
 /** PC 화면 밝은 색 토큰(sovereign-ax/design-system/tokens.json light) */
 const C = {
-  canvas: '#FCFCFC', card: '#F3F4F5', sunken: '#E9EAEB', ink: '#111112', ink2: '#4B4D4F', ink3: '#686A6E', attention: '#8A5A0B',
+  canvas: '#FCFCFC', card: '#F3F4F5', sunken: '#E9EAEB', ink: '#111112', ink2: '#4B4D4F', ink3: '#686A6E', ink4: '#A1A4A8', attention: '#8A5A0B',
   sale: ['#0064D4', '#8DB8EC', '#B8D3F3'], buy: ['#E5484D', '#F3A3A5', '#F8C8C9'],
 };
 type Tone = 'sale' | 'buy';
 const tone = (t: Tone, i: number) => C[t][Math.min(i, 2)]!;
+/** 구성 도넛(화면과 같은 순서): 위 세 거래처는 진한 색, 가운데(color-mix 50%), 흐린 색. 그 밖에 거래처와 계산서 없는 몫은 회색 */
+const WHERE: Record<Tone, string[]> = { sale: ['#0064D4', '#468EE0', '#8DB8EC', C.ink4, C.ink3], buy: ['#E5484D', '#EC7679', '#F3A3A5', C.ink4, C.ink3] };
 
 const STYLE = `@page{size:A4;margin:12mm 0 12mm}
 @page:first{margin-top:0}
@@ -167,24 +174,26 @@ dt.t,dd.t{color:${C.ink};font-weight:700}
 .src span{display:flex;align-items:center;gap:6px}
 .src .wait{color:${C.attention}}
 .src .none{color:${C.ink3}}
+.hl{display:flex;flex-direction:column;gap:2px}
+.hl b{font-size:12px;line-height:18px}
+.tbl{display:grid;column-gap:4px}
+.trow{display:contents}
+.trow>span{padding:4px 0;border-top:1px solid ${C.sunken};text-align:center;font-size:9px;line-height:14px;color:${C.ink2};white-space:nowrap}
+.trow>span.on{color:${C.ink};font-weight:700}
+.trow>.k{display:flex;align-items:center;gap:4px;text-align:left}
+.why{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.why>div{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:10px;background:${C.canvas}}
+.why .k{color:${C.ink2};overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.why .v{font-weight:700}
 .foot{margin-top:4px;break-inside:avoid;display:flex;justify-content:space-between;color:${C.ink3};padding-top:4px}`;
 
-const card = (title: string, body: string, side = '') => `<section class="card"><div class="hd"><h2>${esc(title)}</h2>${side}</div>${body}</section>`;
+const card = (title: string, body: string, side = '') => `<section class="card"><div class="hd"><h2>${title.startsWith('<') ? title : esc(title)}</h2>${side}</div>${body}</section>`;
 const dot = (color: string) => `<i class="dot" style="background:${color}"></i>`;
 const meter = (share: number, color: string) => `<div class="meter"><i style="width:${Math.max(0, Math.min(100, Math.round(share * 100)))}%;background:${color}"></i></div>`;
 
-function spark(values: DocAmount[], t: Tone): string {
-  const vs = values.map((v) => v ?? 0);
-  if (vs.length < 2) return '';
-  const max = Math.max(1, ...vs);
-  const pts = vs.map((v, i) => [3 + (i * 50) / (vs.length - 1), 26 - (v / max) * 22] as const);
-  const [lx, ly] = pts.at(-1)!;
-  return `<svg width="56" height="30" viewBox="0 0 56 30" aria-hidden="true"><polyline points="${pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')}" fill="none" stroke="${tone(t, 0)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="3" fill="${tone(t, 0)}"/></svg>`;
-}
-
-function totalCard(title: string, t: Tone, total: ReportDocLine, trend: string | null | undefined, series: DocAmount[], rows: ReportDocLine[] = []): string {
+function totalCard(title: string, total: ReportDocLine, trend: string | null | undefined, rows: ReportDocLine[] = []): string {
   const kv = rows.length ? `<dl>${rows.map((r) => `<dt>${esc(r.label)}</dt><dd${r.amount === null ? ' class="u"' : ''}>${r.amount === null && r.note ? esc(r.note) : won(r.amount)}</dd>`).join('')}</dl>` : '';
-  return card(title, `<div class="total"><div><span class="strong">${won(total.amount)}</span>${trend ? `<span class="sub">${esc(trend)}</span>` : ''}</div></div>${kv}`, spark(series, t));
+  return card(title, `<div class="total"><div><span class="strong">${won(total.amount)}</span>${trend ? `<span class="sub">${esc(trend)}</span>` : ''}</div></div>${kv}`);
 }
 
 function vatCard(v: ReportDocVat): string {
@@ -216,7 +225,9 @@ function chart(d: ReportDoc): string {
   const bw = ms.length > 8 ? 12 : 20;
   const y = (v: number) => base - (v / topV) * H;
   const h = (v: DocAmount) => (v ? Math.max(2, (v / topV) * H) : 0);
-  const cur = ms.length - 1;
+  // 이번 기간의 남은 달(값 없음) 앞, 마지막으로 값이 있는 달을 굵게
+  const known = ms.map((m) => m.sales !== null || m.purchase !== null);
+  const cur = known.lastIndexOf(true) >= 0 ? known.lastIndexOf(true) : ms.length - 1;
   const ticks = Array.from({ length: Math.round(topV / step) + 1 }, (_, i) => i * step);
   const grid = ticks
     .map((v) => `<line x1="${AX}" x2="${W}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="${C.sunken}" stroke-width="1"/><text x="${AX - 8}" y="${(y(v) + 3.5).toFixed(1)}" text-anchor="end" font-size="9" fill="${C.ink3}">${v ? esc(shortWon(v).replace(/원$/, '')) : '0'}</text>`)
@@ -235,10 +246,15 @@ function chart(d: ReportDoc): string {
     })
     .join('');
   const legend = `<span class="legend"><span>${dot(tone('sale', 0))}매출</span><span>${dot(tone('buy', 0))}매입</span></span>`;
-  return card('달마다', `<svg width="100%" viewBox="0 0 ${W} ${base + 24}" role="img" aria-label="달마다 매출과 매입">${grid}${bars}</svg>`, legend);
+  const cell = (v: DocAmount) => (v === null ? '-' : esc(shortWon(v).replace(/원$/, '')));
+  const trow = (sw: string, label: string, vals: DocAmount[]) =>
+    `<div class="trow"><span class="k">${sw}${label}</span>${vals.map((v, i) => `<span${i === cur ? ' class="on"' : ''}>${cell(v)}</span>`).join('')}</div>`;
+  const table = `<div class="tbl" style="grid-template-columns:${AX - 6}px repeat(${ms.length},minmax(0,1fr))">${trow(dot(tone('sale', 0)), '매출', ms.map((m) => m.sales))}${trow(dot(tone('buy', 0)), '매입', ms.map((m) => m.purchase))}</div>`;
+  const title = d.headline ? `<span class="hl"><span>달마다</span><b>${esc(d.headline)}</b></span>` : '달마다';
+  return card(title, `<svg width="100%" viewBox="0 0 ${W} ${base + 24}" role="img" aria-label="달마다 매출과 매입">${grid}${bars}</svg>${table}`, legend);
 }
 
-function ring(parts: DocAmount[], t: Tone): string {
+function ring(parts: DocAmount[], t: Tone, color: (i: number) => string = (i) => tone(t, i)): string {
   const total = parts.reduce<number>((a, v) => a + Math.max(0, v ?? 0), 0);
   const R = 36;
   const L = 2 * Math.PI * R;
@@ -247,7 +263,7 @@ function ring(parts: DocAmount[], t: Tone): string {
     ? parts
         .map((v, i) => {
           const len = (Math.max(0, v ?? 0) / total) * L;
-          const el = `<circle cx="48" cy="48" r="${R}" fill="none" stroke="${tone(t, i)}" stroke-width="14" stroke-dasharray="${len.toFixed(1)} ${L.toFixed(1)}" stroke-dashoffset="${(-at).toFixed(1)}" transform="rotate(-90 48 48)"/>`;
+          const el = `<circle cx="48" cy="48" r="${R}" fill="none" stroke="${color(i)}" stroke-width="14" stroke-dasharray="${len.toFixed(1)} ${L.toFixed(1)}" stroke-dashoffset="${(-at).toFixed(1)}" transform="rotate(-90 48 48)"/>`;
           at += len;
           return el;
         })
@@ -256,12 +272,22 @@ function ring(parts: DocAmount[], t: Tone): string {
   return `<svg width="96" height="96" viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="48" r="${R}" fill="none" stroke="${C.sunken}" stroke-width="14"/>${arcs}</svg>`;
 }
 
-function mixCard(title: string, t: Tone, rows: ReportDocLine[]): string {
-  const shown = rows.filter((l) => l.amount !== 0);
-  const kv = shown
-    .map((l, i) => `<dt>${dot(tone(t, i))}${esc(l.count ? `${l.label} ${num(l.count)}건` : l.label)}</dt><dd${l.amount === null ? (l.note ? ' class="later"' : ' class="u"') : l.partial ? ' class="u"' : ''}>${l.amount === null ? esc(l.note ?? '확인 못 함') : won(l.amount)}</dd>`)
-    .join('');
-  return card(title, `<div class="mix">${ring(shown.map((l) => l.amount), t)}<dl>${kv}</dl></div>`);
+/** 매출은 어디서, 매입은 어디로: 거래처 위 셋, 그 밖에, 계산서가 없는 몫(2026-11-28 대표: 어디인지가 궁금하다) */
+function whereCard(title: string, t: Tone, partners: ReportDocPartners | null, rows: ReportDocLine[], otherLabel: string): string {
+  const top = partners?.rows.slice(0, 3) ?? [];
+  const folded = partners?.rows.slice(3) ?? [];
+  const restN = folded.length + (partners?.rest?.n ?? 0);
+  const restAmount = folded.reduce((a, x) => a + x.amount, 0) + (partners?.rest?.amount ?? 0);
+  const other = rows.filter((l) => l.label !== '세금계산서').reduce((a, l) => a + Math.max(0, l.amount ?? 0), 0);
+  const parts: Array<[string, number, number]> = [
+    ...top.map((x, i): [string, number, number] => [x.name, x.amount, i]),
+    ...(restAmount > 0 ? [[`그 밖에 ${num(restN)}곳`, restAmount, 3] as [string, number, number]] : []),
+    ...(other > 0 ? [[otherLabel, other, 4] as [string, number, number]] : []),
+  ].filter(([, v]) => v > 0);
+  if (!parts.length) return '';
+  const sum = parts.reduce((a, [, v]) => a + v, 0);
+  const kv = parts.map(([label, v, c]) => `<dt>${dot(WHERE[t][c]!)}${esc(`${label} ${pct(v / sum)}`)}</dt><dd>${bigWon(v)}</dd>`).join('');
+  return card(title, `<div class="mix">${ring(parts.map(([, v]) => v), t, (i) => WHERE[t][parts[i]![2]]!)}<dl>${kv}</dl></div>`);
 }
 
 function rankCard(title: string, t: Tone, r: ReportDocPartners | ReportDocRank[] | null, empty: string, label: (x: ReportDocRank) => string): string {
@@ -312,17 +338,15 @@ export function reportDocHtml(d: ReportDoc, opts: { fonts?: ReportDocFonts } = {
     ? vatCard(d.vat)
     : card('통장', `<dl><dt>들어온 돈</dt><dd>${bigWon(d.bank.in)}</dd><dt>나간 돈</dt><dd>${bigWon(d.bank.out)}</dd><dt class="t">남은 돈</dt><dd class="t">${bigWon(d.bank.net)}</dd></dl>`);
   const pairs = [
-    d.partnersSale || d.partnersPurchase
-      ? `<div class="g2">${rankCard('많이 판 거래처', 'sale', d.partnersSale, '이 기간 거래처가 없어요', (x) => x.name)}${rankCard('많이 산 거래처', 'buy', d.partnersPurchase, '이 기간 거래처가 없어요', (x) => x.name)}</div>`
-      : '',
     `<div class="g2">${rankCard('많이 판 품목', 'sale', d.itemsSale, '이 기간 품목이 없어요', (x) => `${x.name} ${num(x.count)}건`)}${d.receivable ? receivableCard(d.receivable) : ''}</div>`,
     `<div class="g2">${bankCard(d)}${d.sources ? sourceCard(d.sources) : ''}</div>`,
   ];
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${esc(`${d.bizName} 리포트 ${d.period}`)}</title><style>${faces}${STYLE}</style></head><body><div class="page">
 <div class="top"><div><h1>${esc(d.bizName)} 리포트</h1><div class="p">${esc(d.period)}</div></div><div class="meta">${meta.map((x) => `<div>${esc(x)}</div>`).join('')}</div></div>
-<div class="g3">${totalCard('매출', 'sale', d.salesTotal, d.salesTrend, d.months.map((m) => m.sales), d.salesRows)}${totalCard('매입', 'buy', d.purchaseTotal, d.purchaseTrend, d.months.map((m) => m.purchase), d.purchaseRows)}${third}</div>
+<div class="g3">${totalCard('매출', d.salesTotal, d.salesTrend, d.salesRows)}${totalCard('매입', d.purchaseTotal, d.purchaseTrend, d.purchaseRows)}${third}</div>
 ${chart(d)}
-<div class="g2">${mixCard('매출은 어디서', 'sale', d.sales)}${mixCard('매입은 어디로', 'buy', d.purchase)}</div>
+${d.why ? card(d.why.title, `<div class="why">${d.why.rows.map((x) => `<div><span class="k">${esc(x.label)}</span><span class="v">${x.delta > 0 ? '+' : '−'}${esc(shortWon(Math.abs(x.delta)))}</span></div>`).join('')}</div>`) : ''}
+<div class="g2">${whereCard('매출은 어디서', 'sale', d.partnersSale, d.sales, '카드와 현금 손님')}${whereCard('매입은 어디로', 'buy', d.partnersPurchase, d.purchase, '카드, 영수증, 급여')}</div>
 ${pairs.join('\n')}
 <div class="foot"><span>택스오프</span><span>${esc(d.period)}</span></div>
 </div></body></html>`;

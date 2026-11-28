@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, View, type PanResponderGestureState } from 'react-native';
-import Svg, { Circle, Polyline } from 'react-native-svg';
+import Svg, { Circle, Line as SvgLine, Path, Polyline } from 'react-native-svg';
 import { radius, size, space, usePalette, useReducedMotion } from '../theme';
 import { Glyph } from './glyph';
 import { Chevron, T, tap } from './kit';
@@ -90,10 +90,11 @@ export interface TipRow {
 }
 
 /** 막대 말풍선(sx-tip): overlay 면, 작은 글씨로 매출, 매입 합계만(2026-11-26 대표: 총금액만 작게). */
-export function Tip({ rows, testID }: { rows: TipRow[]; testID?: string }) {
+export function Tip({ title, rows, testID }: { title?: string; rows: TipRow[]; testID?: string }) {
   const p = usePalette();
   return (
     <View style={[st.tip, { backgroundColor: p.overlay, shadowColor: p.ink }]} testID={testID} accessibilityRole="summary" pointerEvents="none">
+      {title && <T v="label">{title}</T>}
       {rows.map((r) => (
         <View key={r.k} style={st.tipRow}>
           <T v="meta" c="ink3">
@@ -108,6 +109,12 @@ export function Tip({ rows, testID }: { rows: TipRow[]; testID?: string }) {
   );
 }
 
+/** 두 #RRGGBB 색의 가운데(PC color-mix 50%와 같은 값). 구성 도넛의 두 번째 조각 */
+export function midColor(a: string, b: string): string {
+  const ch = (c: string, i: number) => parseInt(c.slice(1 + i * 2, 3 + i * 2), 16);
+  return `#${[0, 1, 2].map((i) => Math.round((ch(a, i) + ch(b, i)) / 2).toString(16).padStart(2, '0')).join('')}`;
+}
+
 export interface BarCol {
   key: string;
   label: string;
@@ -116,25 +123,14 @@ export interface BarCol {
   b: number | null;
   /** 고른 달(굵은 라벨) */
   on?: boolean;
-  /** 고른 기간 밖(흐린 막대) */
-  out?: boolean;
-  /** 막대 위에 붙는 짧은 금액(887억원) */
-  value?: string;
+  /** 아직 다 안 들어온 쪽(막대 끝을 점선으로) */
+  busy?: { a?: boolean; b?: boolean };
   a11y: string;
 }
 
 const BARS_H = 132;
-/** 막대 위 금액 글 자리 */
-const LABEL_H = 18;
-/** 막대 바닥에서 칸 아래 끝까지(달 글자 줄과 간격): col gap 8 + 달 글자 18 */
-const TICK_BASE = 26;
-/** 눈금 간격: 1, 2, 2.5, 5, 10 x 10^n 가운데 네 칸 안에 드는 가장 작은 것 */
-function niceStep(max: number): number {
-  const raw = max / 4;
-  const mag = 10 ** Math.floor(Math.log10(raw));
-  const n = raw / mag;
-  return Math.max(10_000, (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag);
-}
+/** 맨 위 막대 위 여유(덜 들어온 달의 점선 끝 10이 들어갈 자리) */
+const LABEL_H = 12;
 /** 말풍선 아래 끝과 막대 위 끝 사이 */
 const TIP_GAP = 6;
 /** 이만큼 밀고 떼면 달이 넘어간다 */
@@ -143,17 +139,15 @@ const SWIPE = 48;
 type Box = { x: number; y: number; w: number };
 
 /**
- * 달마다 막대(rp-chart): 6칸이면 막대 12, 12칸이면 7. 누르면 그 달로(onPick), 누르고 있으면 그 달 말풍선(tip), 떼면 닫힌다.
+ * 달마다 막대(rp-chart): 6칸이면 막대 12, 12칸이면 7. 축 숫자와 막대 위 숫자 없이, 누르면 그 달로(onPick) 가고 그 칸 말풍선(tip)이 뜬다.
  * 말풍선은 누른 칸의 막대 바로 위 가운데에 뜨고, 막대 영역 밖으로 나가지 않는다.
  * 좌우로 밀면 앞 달, 다음 달로 넘긴다(step, 2026-11-26 대표: x축에 달이 다 보이지 않으니 밀어서 넘기게).
  */
-export function BarChart({ cols, onPick, tip, label, step, tick, testID = 'report-chart', holding = null }: {
+export function BarChart({ cols, onPick, tip, label, step, testID = 'report-chart', holding = null }: {
   cols: BarCol[]; onPick?: (key: string) => void; tip: (key: string) => ReactNode; label: string; testID?: string;
-  /** 눈금 글(500억) */
-  tick: (v: number) => string;
   /** 오른쪽으로 밀면 prev, 왼쪽으로 밀면 next. null이면 그쪽은 끝 */
   step?: { prev: (() => void) | null; next: (() => void) | null };
-  /** 갤러리: 처음부터 누르고 있는 칸 */
+  /** 처음부터 말풍선을 띄울 칸(없으면 고른 달) */
   holding?: string | null;
 }) {
   const p = usePalette();
@@ -165,10 +159,7 @@ export function BarChart({ cols, onPick, tip, label, step, tick, testID = 'repor
   const [tipSize, setTipSize] = useState<{ key: string; w: number; h: number } | null>(null);
   const dense = cols.length > 6;
   const most = Math.max(1, ...cols.flatMap((c) => [c.a ?? 0, c.b ?? 0]));
-  const stepV = niceStep(most);
-  const max = stepV * Math.ceil(most / stepV);
-  const ticks = Array.from({ length: Math.round(max / stepV) + 1 }, (_, i) => i * stepV);
-  const h = (v: number | null) => Math.max(v ? 2 : 0, Math.round(((v && v > 0 ? v : 0) / max) * BARS_H));
+  const h = (v: number | null) => Math.max(v ? 2 : 0, Math.round(((v && v > 0 ? v : 0) / most) * BARS_H));
 
   const x = useRef(new Animated.Value(0)).current;
   const steps = useRef(step);
@@ -180,7 +171,6 @@ export function BarChart({ cols, onPick, tip, label, step, tick, testID = 'repor
       onMoveShouldSetPanResponder: (_, g) => horizontal(g),
       onMoveShouldSetPanResponderCapture: (_, g) => horizontal(g),
       onPanResponderTerminationRequest: () => false,
-      onPanResponderGrant: () => setHeld(null),
       onPanResponderMove: (_, g) => {
         if (still) return;
         // 끝 쪽으로는 조금만 따라온다
@@ -199,10 +189,12 @@ export function BarChart({ cols, onPick, tip, label, step, tick, testID = 'repor
     }),
   ).current;
 
-  const box = held ? boxes[held] : undefined;
-  const col = held ? cols.find((c) => c.key === held) : undefined;
+  // 누른 칸, 없으면 고른 달에 말풍선이 늘 떠 있다(2026-11-28 대표: 축과 막대 위 숫자 대신 누르면 값)
+  const shown = (held && cols.some((c) => c.key === held) ? held : cols.find((c) => c.on)?.key) ?? null;
+  const box = shown ? boxes[shown] : undefined;
+  const col = shown ? cols.find((c) => c.key === shown) : undefined;
   const tipAt =
-    box && col && tipSize?.key === held && width
+    box && col && tipSize?.key === shown && width
       ? {
           // 오른쪽 끝에 닿으면 오른쪽에 붙인다(왼쪽 여백으로 밀면 남은 폭에서 줄이 바뀐다)
           left: box.x + box.w / 2 + tipSize.w / 2 >= width ? null : Math.max(0, box.x + box.w / 2 - tipSize.w / 2),
@@ -212,19 +204,7 @@ export function BarChart({ cols, onPick, tip, label, step, tick, testID = 'repor
 
   return (
     <View testID={testID} accessibilityLabel={label} style={st.plot} {...pan.panHandlers}>
-      <View style={st.axis} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        {ticks.map((v) => (
-          <T key={v} v="meta" c="ink3" lines={1} style={[st.tick, { bottom: TICK_BASE + h(v) - 8 }]}>
-            {v ? tick(v) : '0'}
-          </T>
-        ))}
-      </View>
       <View style={st.plotBody}>
-      <View style={st.grid} pointerEvents="none">
-        {ticks.map((v) => (
-          <View key={v} style={[st.gridLine, { bottom: TICK_BASE + h(v), backgroundColor: p.line }]} />
-        ))}
-      </View>
       <Animated.View
         style={[st.chart, dense && { gap: space.s1 }, { transform: [{ translateX: x }] }]}
         onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
@@ -236,51 +216,46 @@ export function BarChart({ cols, onPick, tip, label, step, tick, testID = 'repor
             accessibilityRole="button"
             accessibilityLabel={c.a11y}
             accessibilityState={{ selected: !!c.on }}
-            delayLongPress={250}
             onLayout={(e) => {
               const { x: bx, y, width: w } = e.nativeEvent.layout;
               setBoxes((o) => (o[c.key]?.x === bx && o[c.key]?.y === y && o[c.key]?.w === w ? o : { ...o, [c.key]: { x: bx, y, w } }));
             }}
-            onLongPress={() => {
+            onPress={() => {
               tap();
               setHeld(c.key);
-            }}
-            onPressOut={() => setHeld(null)}
-            onPress={() => {
-              // 누르고 있다 뗀 것(말풍선)은 onPress가 오지 않는다
-              if (c.on || !onPick) return;
-              tap();
-              onPick(c.key);
+              if (!c.on) onPick?.(c.key);
             }}
             style={st.col}
           >
             <View style={[st.bars, dense && { gap: 2 }]}>
-              {c.value !== undefined && (
-                <T v="meta" c={c.on ? 'ink' : 'ink2'} lines={1} style={[st.value, c.on && st.colOn, { bottom: Math.max(h(c.a), h(c.b)) + 4 }]}>
-                  {c.value}
-                </T>
-              )}
-              <View style={[st.bar, dense && st.barDense, { height: h(c.a), backgroundColor: p.dataSale }, c.out && held !== c.key && st.dim]} />
-              <View style={[st.bar, dense && st.barDense, { height: h(c.b), backgroundColor: p.dataBuy }, c.out && held !== c.key && st.dim]} />
+              <View style={[st.bar, dense && st.barDense, { height: h(c.a), backgroundColor: p.dataSale }, !c.busy?.a && st.barTop]}>
+                {c.busy?.a && <View style={[st.cap, { borderColor: p.dataSale }]} />}
+              </View>
+              <View style={[st.bar, dense && st.barDense, { height: h(c.b), backgroundColor: p.dataBuy }, !c.busy?.b && st.barTop]}>
+                {c.busy?.b && <View style={[st.cap, { borderColor: p.dataBuy }]} />}
+              </View>
             </View>
-            <T v={c.on ? 'label' : 'meta'} c={c.on || held === c.key ? 'ink' : 'ink3'} style={c.on && st.colOn} lines={1}>
-              {c.label}
-            </T>
+            <View style={st.colLabel}>
+              <T v={c.on ? 'label' : 'meta'} c={c.on || shown === c.key ? 'ink' : 'ink2'} style={c.on && st.colOn} lines={1}>
+                {c.label}
+              </T>
+              {(c.busy?.a || c.busy?.b) && <ClockMark color={p.ink2} />}
+            </View>
           </Pressable>
         ))}
       </Animated.View>
       </View>
-      {held && (
+      {shown && (
         // 줄은 막대 영역 폭 전부, 말풍선은 그 안에서 왼쪽 여백으로 옮긴다(오른쪽 끝 칸에서도 줄바꿈 없이 제 폭)
         <View style={[st.tipAt, tipAt ? { top: tipAt.top } : st.tipMeasure]} pointerEvents="none">
           <View
             style={[st.tipBox, tipAt && (tipAt.left === null ? st.tipEnd : { marginLeft: tipAt.left })]}
             onLayout={(e) => {
               const { width: w, height: th } = e.nativeEvent.layout;
-              if (tipSize?.key !== held || tipSize.w !== w || tipSize.h !== th) setTipSize({ key: held, w, h: th });
+              if (tipSize?.key !== shown || tipSize.w !== w || tipSize.h !== th) setTipSize({ key: shown, w, h: th });
             }}
           >
-            {tip(held)}
+            {tip(shown)}
           </View>
         </View>
       )}
@@ -366,23 +341,57 @@ export function Stack({ parts, width = 1 }: { parts: Array<{ share: number; colo
   );
 }
 
-/** 요약 카드 제목 줄의 꺾은선(PC rp-spark): 달마다 금액, 끝 점 */
-export function Spark({ values, color }: { values: Array<number | null>; color: string }) {
-  const vs = values.map((v) => v ?? 0);
-  const max = Math.max(1, ...vs);
-  const pts = vs.map((v, i) => [3 + (i * 66) / Math.max(1, vs.length - 1), 24 - (v / max) * 20] as const);
-  const [lx, ly] = pts.at(-1) ?? [0, 0];
+/** 구성 원형(PC rp-ring): 몫마다 한 조각, 바탕은 sunken */
+/**
+ * 요약 카드의 달마다 흐름(2026-11-28 대표: 의미 있게). 0부터가 아니라 가장 낮은 달과 높은 달 사이로 그려 오르내림이 보이고,
+ * 점선은 이 달들의 평균, 끝 점은 고른 달. 아래에 첫 달과 끝 달 이름. 모르는 달은 선을 끊는다.
+ */
+export function Trend({ values, labels, color, testID }: { values: Array<number | null>; labels: [string, string]; color: string; testID?: string }) {
+  const p = usePalette();
+  const [w, setW] = useState(0);
+  const known = values.filter((v): v is number => v !== null);
+  if (known.length < 2) return null;
+  const lo = Math.min(...known);
+  const hi = Math.max(...known);
+  const pad = (hi - lo) * 0.15 || Math.max(1, hi * 0.1);
+  const y = (v: number) => TREND_H - 6 - ((v - (lo - pad)) / (hi - lo + 2 * pad)) * (TREND_H - 12);
+  const x = (i: number) => 4 + (i * (w - 8)) / Math.max(1, values.length - 1);
+  const avg = known.reduce((a, v) => a + v, 0) / known.length;
+  const last = values.reduce<number>((at, v, i) => (v === null ? at : i), -1);
+  const runs: Array<Array<[number, number]>> = [];
+  values.forEach((v, i) => {
+    if (v === null) return;
+    const prev = runs.at(-1);
+    if (prev && values[i - 1] !== null && i > 0) prev.push([x(i), y(v)]);
+    else runs.push([[x(i), y(v)]]);
+  });
   return (
-    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      <Svg width={72} height={28} viewBox="0 0 72 28">
-        <Polyline points={pts.map(([px, py]) => `${px.toFixed(1)},${py.toFixed(1)}`).join(' ')} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-        <Circle cx={lx} cy={ly} r={3} fill={color} />
-      </Svg>
+    <View testID={testID} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ gap: space.s1 }}>
+      <View onLayout={(e) => setW(e.nativeEvent.layout.width)} style={{ height: TREND_H }}>
+        {w > 0 && (
+          <Svg width={w} height={TREND_H}>
+            <SvgLine x1={0} x2={w} y1={y(avg)} y2={y(avg)} stroke={p.ink4} strokeWidth={1} strokeDasharray="3 4" />
+            {runs.map((r, k) => (
+              <Polyline key={k} points={r.map(([a, b]) => `${a.toFixed(1)},${b.toFixed(1)}`).join(' ')} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+            ))}
+            <Circle cx={x(last)} cy={y(values[last]!)} r={4.5} fill={color} />
+          </Svg>
+        )}
+        {w > 0 && (
+          <T v="meta" c="ink3" style={{ position: 'absolute', left: 0, top: y(avg) > TREND_H / 2 ? y(avg) - 20 : y(avg) + 2 }}>
+            평균
+          </T>
+        )}
+      </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <T v="meta" c="ink3">{labels[0]}</T>
+        <T v="meta" c="ink3">{labels[1]}</T>
+      </View>
     </View>
   );
 }
+const TREND_H = 56;
 
-/** 구성 원형(PC rp-ring): 몫마다 한 조각, 바탕은 sunken */
 export function Donut({ parts, track, sizePx = 88 }: { parts: Array<{ share: number; color: string }>; track: string; sizePx?: number }) {
   const R = 34;
   const L = 2 * Math.PI * R;
@@ -404,6 +413,26 @@ export function Donut({ parts, track, sizePx = 88 }: { parts: Array<{ share: num
   );
 }
 
+/** 아직 다 안 들어온 달(달 이름 옆) */
+function ClockMark({ color }: { color: string }) {
+  return (
+    <Svg width={12} height={12} viewBox="0 0 24 24" accessibilityLabel="아직 다 안 들어왔어요" accessibilityRole="image">
+      <Circle cx={12} cy={12} r={9} fill="none" stroke={color} strokeWidth={2} />
+      <Path d="M12 7.5v5l3 2" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** 용어 옆 ⓘ */
+export function InfoMark({ color, size = 16 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <Circle cx={12} cy={12} r={9} fill="none" stroke={color} strokeWidth={1.8} />
+      <Path d="M12 11v5M12 8v.2" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 const st = StyleSheet.create({
   monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   month: { flexDirection: 'row', alignItems: 'center', gap: space.s1 },
@@ -419,19 +448,16 @@ const st = StyleSheet.create({
   tipEnd: { alignSelf: 'flex-end' },
   tip: { gap: 2, paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.sm, shadowOpacity: 0.16, shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
   tipRow: { flexDirection: 'row', justifyContent: 'space-between', gap: space.s3 },
-  plot: { flexDirection: 'row', gap: space.s2 },
-  axis: { width: 56, height: LABEL_H + BARS_H + TICK_BASE },
-  tick: { position: 'absolute', left: 0, right: 0, textAlign: 'right' },
+  plot: { flexDirection: 'row' },
   plotBody: { flex: 1, minWidth: 0 },
-  grid: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  gridLine: { position: 'absolute', left: 0, right: 0, height: StyleSheet.hairlineWidth },
   chart: { flexDirection: 'row', alignItems: 'flex-end', gap: space.s2 },
-  value: { position: 'absolute', left: -12, right: -12, textAlign: 'center' },
-  dim: { opacity: 0.45 },
+  cap: { position: 'absolute', left: 0, right: 0, bottom: '100%', height: 10, borderWidth: 1.5, borderBottomWidth: 0, borderStyle: 'dashed', borderTopLeftRadius: radius.xs, borderTopRightRadius: radius.xs },
   col: { flex: 1, minWidth: 0, alignItems: 'center', gap: space.s2 },
   colOn: { fontWeight: '600' },
+  colLabel: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   bars: { height: LABEL_H + BARS_H, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: space.s1 },
-  bar: { width: 12, borderTopLeftRadius: radius.xs + 1, borderTopRightRadius: radius.xs + 1 },
+  bar: { width: 12 },
+  barTop: { borderTopLeftRadius: radius.xs + 1, borderTopRightRadius: radius.xs + 1 },
   barDense: { width: 7 },
   rank: { gap: space.s3 },
   rankRow: { gap: 6 },

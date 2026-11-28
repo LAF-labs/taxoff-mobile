@@ -1,4 +1,4 @@
-import type { CopyBankCats, CopyLine, CopyRank, CopyReport, CopyReportMonth, ReportDoc, ReportDocPartners, ReportDocRank } from '@sax/remote';
+import { bigWon, type CopyBankCats, type CopyLine, type CopyRank, type CopyReport, type CopyReportMonth, type ReportDoc, type ReportDocPartners, type ReportDocRank } from '@sax/remote';
 import type { PcStatus } from './net/pc';
 import type { CachedPhoneCopy } from './net/pcCopy';
 
@@ -64,9 +64,13 @@ export interface ChartCol {
   on: boolean;
   /** 고른 기간 안 */
   inWindow: boolean;
+  /** 이번 기간의 아직 오지 않은 달 */
+  future: boolean;
   sales: ReportSales;
   purchase: ReportPurchase;
   bank: ReportBank | null;
+  /** 작년 같은 달 매출(report.v3 사본에만, 없으면 null) */
+  lastYear: Line | null;
 }
 export interface RankRow {
   name: string;
@@ -108,9 +112,13 @@ export interface ReportView {
   prev: { sales: Line; purchase: Line; comparable: { sales: boolean; purchase: boolean } } | null;
   /** 고른 기간의 날 수(오늘까지). 1개월 하루 평균 */
   days: number;
+  /** 고른 기간에서 지난 달 수(한 달 평균) */
+  gone: number;
   /** 마지막 달만(사본에 있다) */
   recv: { got: number; left: number; lateN: number; lateA: number } | null;
   vat: NonNullable<CopyReport['vat']> | null;
+  /** 앞 기간보다 매출이 많이 바뀐 거래처와 품목(마지막 달만, report.v3) */
+  why: Array<{ kind: 'partner' | 'item'; name: string | null; delta: number }>;
 }
 
 export const shiftMonth = (month: string, d: number): string => {
@@ -187,10 +195,20 @@ function daysIn(months: string[], today: string): number {
   }, 0);
 }
 
-/** 고를 수 있는 달: 사본 12달 안에서 고른 기간의 막대 칸을 다 채울 수 있는 달 */
+/** 달력 기간의 끝 달(PC 엔진 periodEnd와 같다): 1개월은 그 달, 3개월은 분기, 6개월은 반기, 12개월은 그해 12월 */
+export const periodEnd = (month: string, months: Months): string =>
+  months === 1 ? month : `${month.slice(0, 4)}-${String(Math.ceil(monthNo(month) / months) * months).padStart(2, '0')}`;
+const colsOf = (anchor: string, months: Months) => {
+  const span = spanOf(months);
+  const end = periodEnd(anchor, months);
+  return Array.from({ length: span }, (_, i) => shiftMonth(end, i - span + 1));
+};
+
+/** 고를 수 있는 달: 그 달이 든 기간의 막대 칸(사본 마지막 달까지)이 사본에 다 있는 달 */
 export function monthsFor(copy: CopyReport, months: Months): string[] {
-  const all = copy.months.map((m) => m.month);
-  return all.slice(Math.min(all.length - 1, spanOf(months) - 1));
+  const have = new Set(copy.months.map((m) => m.month));
+  const ok = copy.months.map((m) => m.month).filter((m) => colsOf(m, months).every((c) => c > copy.month || have.has(c)));
+  return ok.length ? ok : [copy.month];
 }
 
 /** 고른 기간에 맞는 달: 그 기간으로 고를 수 없는 달이면 가장 가까운 달로 */
@@ -203,22 +221,27 @@ export function clampMonth(copy: CopyReport, month: string, months: Months): str
 export function reportView(copy: CopyReport, month: string, months: Months): ReportView {
   const at = new Map(copy.months.map((m) => [m.month, m] as const));
   const span = spanOf(months);
-  const cols = Array.from({ length: span }, (_, i) => shiftMonth(month, i - span + 1));
+  const end = periodEnd(month, months);
+  const cols = colsOf(month, months);
   const inWin = new Set(cols.slice(span - months));
-  const win = cols.filter((m) => inWin.has(m)).map((m) => at.get(m)).filter((m): m is CopyReportMonth => !!m);
+  // 이번 기간의 남은 달(사본 마지막 달 뒤)은 아직 오지 않은 달. 합계는 사본 마지막 달까지
+  const gone = cols.filter((m) => inWin.has(m) && m <= copy.month);
+  const win = gone.map((m) => at.get(m)).filter((m): m is CopyReportMonth => !!m);
   const ok = monthsFor(copy, months);
+  const onM = end > copy.month ? copy.month : end;
   const chart = cols.map((m): ChartCol => {
-    const row = at.get(m);
+    const row = m > copy.month ? undefined : at.get(m);
     const ms = row ? [row] : [];
-    return { month: m, label: span === 12 ? String(monthNo(m)) : `${monthNo(m)}월`, on: m === month, inWindow: inWin.has(m), sales: salesOf(ms), purchase: purchaseOf(ms), bank: bankOf(ms) };
+    return { month: m, label: span === 12 ? String(monthNo(m)) : `${monthNo(m)}월`, on: m === onM, inWindow: inWin.has(m), future: m > copy.month, sales: salesOf(ms), purchase: purchaseOf(ms), bank: bankOf(ms), lastYear: row?.ly ? lineOf(row.ly.s) : null };
   });
-  const latest = month === copy.month;
+  const latest = end >= copy.month;
   const w = latest ? copy.windows.find((x) => x.months === months) : undefined;
   const known = copy.balances.filter((b) => b.a !== null);
-  const before = Array.from({ length: months }, (_, i) => at.get(shiftMonth(month, i - 2 * months + 1)));
+  // 앞 기간: 이번 기간이 덜 지났으면 지난 달 수만큼만(PC 엔진과 같다)
+  const before = Array.from({ length: months }, (_, i) => shiftMonth(end, i - 2 * months + 1)).slice(0, Math.max(1, gone.length)).map((m) => at.get(m));
   const prevRows = before.every((m): m is CopyReportMonth => !!m) ? before : null;
   return {
-    month, months, latest, first: month <= ok[0]!,
+    month, months, latest, first: periodEnd(ok[0]!, months) >= end,
     sales: salesOf(win), purchase: purchaseOf(win), bank: bankOf(win),
     bankOut: catsOf(win, 'bout', OUT_CATS), bankIn: catsOf(win, 'bin', IN_CATS),
     chart,
@@ -230,9 +253,11 @@ export function reportView(copy: CopyReport, month: string, months: Months): Rep
       : w?.prev
         ? { sales: lineOf(w.prev.s), purchase: lineOf(w.prev.p), comparable: { sales: !w.prev.s.p, purchase: !w.prev.p.p } }
         : null,
-    days: daysIn(cols.filter((m) => inWin.has(m)), copy.today),
+    days: daysIn(gone, copy.today),
+    gone: Math.max(1, gone.length),
     recv: w?.recv ?? null,
     vat: latest ? (copy.vat ?? null) : null,
+    why: (w?.why ?? []).map((x) => ({ kind: x.k === 'i' ? ('item' as const) : ('partner' as const), name: x.name, delta: x.d })),
   };
 }
 
@@ -262,7 +287,11 @@ export function reportWait(pc: PcStatus, copy: CachedPhoneCopy | null | undefine
   return copy.reportCap ? 'not_made' : 'pc_old';
 }
 
-export const spanText = (month: string, months: Months) => (months === 1 ? `${monthNo(month)}월` : `${monthNo(shiftMonth(month, 1 - months))}월부터 ${monthNo(month)}월`);
+/** 달력 기간 이름(대표 11-28): "11월", "4분기", "하반기", "2026년". month는 기간 안의 아무 달 */
+export const spanText = (month: string, months: Months) => {
+  const end = periodEnd(month, months);
+  return months === 1 ? `${monthNo(end)}월` : months === 3 ? `${monthNo(end) / 3}분기` : months === 6 ? (monthNo(end) <= 6 ? '상반기' : '하반기') : `${end.slice(0, 4)}년`;
+};
 
 /** 거래처 시트의 달마다 줄: 사본 마지막 달에서 거꾸로 여섯 달(새 달이 위) */
 export function partnerMonths(copy: CopyReport, pm: { m: number[] }, n = 6): Array<{ label: string; amount: number }> {
@@ -274,14 +303,11 @@ export function partnerMonths(copy: CopyReport, pm: { m: number[] }, n = 6): Arr
 
 // ── PDF(tex ADR-068 결정 11): PC와 같은 ReportDoc을 사본으로 만든다 ──
 
-const ym = (m: string) => `${m.slice(0, 4)}년 ${monthNo(m)}월`;
 const md = (iso: string) => `${monthNo(iso)}월 ${Number(iso.slice(8, 10))}일`;
 
 /** PC report-pdf.ts periodText와 같은 글: "2026년 11월", "2026년 9월부터 11월", "2025년 12월부터 2026년 11월" */
 export function periodText(month: string, months: Months): string {
-  if (months === 1) return ym(month);
-  const first = shiftMonth(month, 1 - months);
-  return first.slice(0, 4) === month.slice(0, 4) ? `${ym(first)}부터 ${monthNo(month)}월` : `${ym(first)}부터 ${ym(month)}`;
+  return months === 12 ? spanText(month, months) : `${month.slice(0, 4)}년 ${spanText(month, months)}`;
 }
 export const reportFileName = (month: string, months: Months) => `택스오프 리포트 ${periodText(month, months)}.pdf`;
 
@@ -290,19 +316,69 @@ const kstText = (ms: number) => {
   return `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
 };
 
-const prevLabel = (months: Months) => (months === 1 ? '지난달보다' : months === 12 ? '지난해보다' : `앞 ${months}개월보다`);
-export const prevName = (months: Months) => (months === 1 ? '지난달' : months === 12 ? '지난해' : `앞 ${months}개월`);
+const PREV: Record<Months, string> = { 1: '지난달', 3: '앞 분기', 6: '앞 반기', 12: '작년' };
+const prevLabel = (months: Months) => `${PREV[months]}보다`;
+export const prevName = (months: Months) => PREV[months];
 /** PC shell-report.js trendText와 같은 글 */
 export function trendText(cur: Line, prev: Line | undefined, months: Months, comparable?: boolean): string | null {
   if (cur.amount === null || !prev) return null;
-  if (prev.amount === null || !prev.amount || comparable === false || (prev.partial && !cur.partial)) return `비교할 ${months === 12 ? '작년' : months === 1 ? '지난달' : '앞 기간'} 자료가 없어요`;
-  const pct = Math.round(((cur.amount - prev.amount) / prev.amount) * 100);
-  return pct === 0 ? `${prevLabel(months)} 같아요` : `${prevLabel(months)} ${Math.abs(pct)}% ${pct > 0 ? '늘었어요' : '줄었어요'}`;
+  if (prev.amount === null || !prev.amount || comparable === false || (prev.partial && !cur.partial)) return `비교할 ${PREV[months]} 자료가 없어요`;
+  const diff = cur.amount - prev.amount;
+  const pct = Math.round((diff / prev.amount) * 100);
+  if (!diff) return `${prevLabel(months)} 같아요`;
+  const sign = diff > 0 ? '+' : '−';
+  return `${prevLabel(months)} ${sign}${bigWon(Math.abs(diff))} (${sign}${Math.abs(pct)}%)`;
+}
+
+/** PC shortWon: 887억원, 1.2조원, 4,031만원 */
+export const shortWon = (v: number) => {
+  const a = Math.abs(v);
+  const [u, name] = a >= 1e12 ? [1e12, '조'] : a >= 1e8 ? [1e8, '억'] : [1e4, '만'];
+  const n = v / u;
+  return `${(Math.abs(n) >= 100 || name === '만' ? Math.round(n) : Math.round(n * 10) / 10).toLocaleString('ko-KR')}${name}원`;
+};
+
+/** PC headline: "11월 매출은 563만원, 지난달보다 10% 많아요" (compare = 작년과 비교) */
+export function headlineText(v: ReportView, compare: boolean): string | null {
+  const total = v.sales.total.amount;
+  if (total === null) return null;
+  const what = `${spanText(v.month, v.months)} 매출은 ${shortWon(total)}`;
+  let base: { label: string; amount: number } | null = null;
+  if (compare) {
+    const ms = v.chart.filter((c) => c.inWindow && !c.future);
+    if (ms.every((c) => c.lastYear && c.lastYear.amount !== null && !c.lastYear.partial))
+      base = { label: v.months === 12 ? '작년 같은 때보다' : `작년 ${spanText(v.month, v.months)}보다`, amount: ms.reduce((a, c) => a + c.lastYear!.amount!, 0) };
+  } else if (v.prev && v.prev.comparable.sales !== false && v.prev.sales.amount && !(v.prev.sales.partial && !v.sales.total.partial)) {
+    base = { label: prevLabel(v.months), amount: v.prev.sales.amount };
+  }
+  if (!base || !base.amount) return `${what}이에요`;
+  const p = Math.round(((total - base.amount) / base.amount) * 100);
+  return p === 0 ? `${what}, ${base.label} 같아요` : `${what}, ${base.label} ${Math.abs(p)}% ${p > 0 ? '많아요' : '적어요'}`;
+}
+
+/** PC whyCard: 매출이 늘었으면 늘어난 셋, 줄었으면 줄어든 셋 */
+export function whyOf(v: ReportView): { title: string; up: boolean; rows: Array<{ label: string; delta: number }> } | null {
+  const cur = v.sales.total.amount;
+  const prev = v.prev?.sales.amount ?? null;
+  const diff = cur !== null && prev !== null ? cur - prev : 0;
+  const rows = v.why.filter((x) => (diff > 0 ? x.delta > 0 : x.delta < 0)).slice(0, 3);
+  if (!rows.length || !diff) return null;
+  return {
+    title: `${spanText(v.month, v.months)} 매출이 왜 ${diff > 0 ? '늘었을까' : '줄었을까'}`,
+    up: diff > 0,
+    rows: rows.map((x) => ({ label: x.kind === 'item' ? `${x.name ?? '품목 없음'} 품목` : (x.name ?? '이름 없음'), delta: x.delta })),
+  };
 }
 /** 요약 카드 평균: 1개월은 하루 평균, 그 밖은 한 달 평균 */
-export function averageOf(total: Line, months: Months, days: number): { label: string; amount: number | null } {
+export function averageOf(total: Line, months: Months, days: number, gone: number = months): { label: string; amount: number | null } {
   if (total.amount === null) return { label: '평균', amount: null };
-  return months === 1 ? { label: '하루 평균', amount: total.amount / Math.max(1, days) } : { label: '한 달 평균', amount: total.amount / months };
+  return months === 1 ? { label: '하루 평균', amount: total.amount / Math.max(1, days) } : { label: '한 달 평균', amount: total.amount / Math.max(1, gone) };
+}
+
+/** 신고 기한까지 남은 날(" D-58"), 지났으면 빈 글 */
+export function ddayText(today: string, day: string): string {
+  const n = Math.round((Date.parse(day) - Date.parse(today)) / 86_400_000);
+  return n > 0 ? ` D-${n}` : n === 0 ? ' D-DAY' : '';
 }
 
 export function reportDocOf(copy: CopyReport, v: ReportView, nowMs: number): ReportDoc {
@@ -313,7 +389,7 @@ export function reportDocOf(copy: CopyReport, v: ReportView, nowMs: number): Rep
   const purchase = [L('세금계산서', p.inv), L('사업용 카드', p.card), L('현금영수증', p.cr), ...(p.rcpt.amount ? [L('영수증', p.rcpt)] : []), ...(p.pay.amount !== null ? [L('급여', p.pay)] : [])];
   const partners = (r: Rank): ReportDocPartners => ({
     rows: r.rows.map((x): ReportDocRank => ({ name: x.name, count: x.n, amount: x.amount, share: x.share })),
-    rest: r.rest ? { name: `그 밖에 ${r.rest.k}곳`, count: r.rest.n, amount: r.rest.amount, share: r.rest.share } : null,
+    rest: r.rest ? { name: `그 밖에 ${r.rest.k}곳`, n: r.rest.k, count: r.rest.n, amount: r.rest.amount, share: r.rest.share } : null,
     total: r.total,
     count: r.rows.reduce((a, x) => a + x.n, 0) + (r.rest?.n ?? 0),
   });
@@ -337,14 +413,16 @@ export function reportDocOf(copy: CopyReport, v: ReportView, nowMs: number): Rep
     purchaseTrend: trendText(p.total, v.prev?.purchase, v.months, v.prev?.comparable.purchase),
     salesRows: summaryRows(s.total, v.prev?.sales, v.prev?.comparable.sales, v),
     purchaseRows: summaryRows(p.total, v.prev?.purchase, v.prev?.comparable.purchase, v),
-    vat: v.vat ? { title: `부가세 ${v.vat.h}기`, deadline: `${md(v.vat.dl)}까지`, sale: v.vat.s, purchase: v.vat.p } : null,
+    vat: v.vat ? { title: `부가세 ${v.vat.h}기`, deadline: `${md(v.vat.dl)}${ddayText(copy.today, v.vat.dl)}`, sale: v.vat.s, purchase: v.vat.p } : null,
+    headline: headlineText(v, false),
+    why: whyOf(v),
     receivable: v.recv ? { received: v.recv.got, waiting: v.recv.left - v.recv.lateA, late: v.recv.lateA, lateCount: v.recv.lateN } : null,
     bankLinked: bankOn,
   };
 }
 
 function summaryRows(total: Line, prev: Line | undefined, comparable: boolean | undefined, v: ReportView) {
-  const avg = averageOf(total, v.months, v.days);
+  const avg = averageOf(total, v.months, v.days, v.gone);
   return [
     ...(prev ? [comparable === false ? { label: prevName(v.months), amount: null, note: '일부만 받았어요' } : { label: prevName(v.months), amount: prev.amount }] : []),
     avg,

@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
 import type { CopyReport } from '@sax/remote';
 import { useSession } from '../session';
 import { radius, space, usePalette } from '../theme';
-import { Card, Kv, KvRow } from '../ui/card';
+import { Kv, KvRow, Section } from '../ui/card';
 import { bigWon, Button, Empty, Group, Notice, Row, Screen, Seg, T, TextButton } from '../ui/kit';
-import { BarChart, Donut, Legend, MonthStep, RankRows, Spark, Stack, Tip, type BarCol, type RankItem } from '../ui/report';
+import { BarChart, Donut, InfoMark, Legend, midColor, MonthStep, RankRows, Stack, Tip, Trend, type BarCol, type RankItem } from '../ui/report';
 import { Sheet } from '../ui/sheet';
-import { averageOf, clampMonth, partnerMonths, prevName, trendText, reportView, reportWait, shiftMonth, spanText, topOf, WINDOWS, type ChartCol, type Line, type Months, type Rank, type RankRow, type ReportWait } from '../report';
+import { averageOf, clampMonth, ddayText, headlineText, partnerMonths, periodText, prevName, shortWon, trendText, whyOf, reportView, reportWait, shiftMonth, spanText, topOf, WINDOWS, type ChartCol, type Line, type Months, type Rank, type RankRow, type ReportWait } from '../report';
 import { canReportPdf, shareReportPdf } from '../reportPdf';
 import type { HomeRoute } from './HomeScreen';
 
@@ -44,7 +44,7 @@ const WAIT_TEXT: Record<ReportWait, string> = {
   not_made: 'PC가 리포트를 아직 만들지 못했어요',
 };
 
-export function ReportScreen({ go, onMoney, preview }: { go: (to: HomeRoute) => void; onMoney: () => void; preview?: ReportPreview }) {
+export function ReportScreen({ go, onMoney, onAsk, preview }: { go: (to: HomeRoute) => void; onMoney: () => void; onAsk?: (text: string) => void; preview?: ReportPreview }) {
   const s = useSession();
   const copy = s.data.pcCopy?.report ?? null;
   if (!s.data.pair) {
@@ -66,14 +66,13 @@ export function ReportScreen({ go, onMoney, preview }: { go: (to: HomeRoute) => 
       </Screen>
     );
   }
-  return <Report copy={copy} copyAt={s.data.pcCopy?.asOf ?? null} onMoney={onMoney} preview={preview} />;
+  return <Report copy={copy} copyAt={s.data.pcCopy?.asOf ?? null} onMoney={onMoney} onAsk={onAsk} preview={preview} />;
 }
 
-function Report({ copy, copyAt, onMoney, preview }: { copy: CopyReport; copyAt: number | null; onMoney: () => void; preview?: ReportPreview }) {
+function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; copyAt: number | null; onMoney: () => void; onAsk?: (text: string) => void; preview?: ReportPreview }) {
   const p = usePalette();
   const [months, setMonths] = useState<Months>(preview?.months ?? 1);
   const [picked, setPicked] = useState<string | null>(preview?.month ?? null);
-  const [partnerSide, setPartnerSide] = useState<Side>('sale');
   const [itemSide, setItemSide] = useState<Side>('sale');
   const [open, setOpen] = useState<Open>(() => {
     if (!preview) return null;
@@ -85,6 +84,7 @@ function Report({ copy, copyAt, onMoney, preview }: { copy: CopyReport; copyAt: 
     return row ? { kind: 'partner', side: 'sale', row } : null;
   });
   const [pdf, setPdf] = useState<'idle' | 'busy' | 'failed'>('idle');
+  const [vatInfo, setVatInfo] = useState(false);
   // 새 사본이 오면(달이 바뀌었거나 PC가 다시 계산) 고른 달이 사본 밖이면 가장 가까운 달로
   const month = clampMonth(copy, picked ?? copy.month, months);
   const v = useMemo(() => reportView(copy, month, months), [copy, month, months]);
@@ -93,37 +93,38 @@ function Report({ copy, copyAt, onMoney, preview }: { copy: CopyReport; copyAt: 
   }, [month, months]);
 
   const year = copy.today.slice(0, 4);
-  const label = month.slice(0, 4) === year ? `${monthNo(month)}월` : `${month.slice(0, 4)}년 ${monthNo(month)}월`;
+  const label = months === 12 || month.slice(0, 4) !== year ? periodText(month, months) : spanText(month, months);
+  const unit = months === 1 ? '달' : months === 3 ? '분기' : months === 6 ? '반기' : '해';
+  const back = shiftMonth(month, -months);
+  const fwd = shiftMonth(month, months) > copy.month ? copy.month : shiftMonth(month, months);
   const span = spanText(month, months);
   const hasPurchase = [v.purchase.inv, v.purchase.card, v.purchase.cr].some(known) || !!v.purchase.rcpt.amount || v.purchase.pay.amount !== null;
   const chartPurchase = v.chart.some((c) => !!c.purchase.total.amount);
   const rankPurchase = !!v.ranks && v.ranks.pp.rows.length > 0;
   const missing = [!hasPurchase ? '매입' : null, !known(v.sales.card) ? '카드 매출' : null, !v.bank ? '통장' : null].filter((x): x is string => !!x);
-  const count = v.ranks ? v.ranks.ps.rows.reduce((n, x) => n + x.n, 0) + (v.ranks.ps.rest?.n ?? 0) : undefined;
-  const saleParts = knownParts([
-    ['세금계산서', v.sales.inv, count],
-    ['카드 매출', v.sales.card],
-    ['현금영수증', v.sales.cr],
-    ['현금 매출', v.sales.cash],
-  ]);
+  // 매출은 어디서, 매입은 어디로: 거래처별(2026-11-28 대표: 계산서인지 카드인지보다 어디인지가 궁금하다). 계산서가 없는 매출과 매입은 한 조각
+  const saleSlices = slicesOf(v.ranks?.ps, [v.sales.card, v.sales.cr, v.sales.cash], '카드와 현금 손님', [p.dataSale, midColor(p.dataSale, p.dataSaleMuted), p.dataSaleMuted], [p.ink4, p.ink3], (row) => setOpen({ kind: 'partner', side: 'sale', row }));
+  const buySlices = slicesOf(v.ranks?.pp, [v.purchase.card, v.purchase.cr, v.purchase.rcpt, v.purchase.pay], '카드, 영수증, 급여', [p.dataBuy, midColor(p.dataBuy, p.dataBuyMuted), p.dataBuyMuted], [p.ink4, p.ink3], (row) => setOpen({ kind: 'partner', side: 'purchase', row }));
   const vatDue = v.vat && v.vat.s !== null && v.vat.p !== null ? v.vat.s - v.vat.p : null;
+  const headline = headlineText(v, v.chart.some((c) => !!c.lastYear?.amount));
+  const why = whyOf(v);
   const savePdf = async () => {
     setPdf('busy');
     setPdf((await shareReportPdf(copy, v)) === 'shared' ? 'idle' : 'failed');
   };
 
   return (
-    <Screen title="리포트" shell gap={space.s3} testID="report">
+    <Screen title="리포트" shell gap={space.s4} testID="report">
       <MonthStep
         label={label}
-        prev={{ a11y: v.first ? '앞 달 없음' : `${monthNo(shiftMonth(month, -1))}월 보기`, onPress: v.first ? null : () => setPicked(shiftMonth(month, -1)) }}
-        next={{ a11y: v.latest ? '다음 달 없음' : `${monthNo(shiftMonth(month, 1))}월 보기`, onPress: v.latest ? null : () => setPicked(shiftMonth(month, 1)) }}
+        prev={{ a11y: v.first ? `앞 ${unit} 없음` : `${periodText(back, months)} 보기`, onPress: v.first ? null : () => setPicked(back) }}
+        next={{ a11y: v.latest ? `다음 ${unit} 없음` : `${periodText(fwd, months)} 보기`, onPress: v.latest ? null : () => setPicked(fwd) }}
         onPdf={canReportPdf() ? () => void savePdf() : undefined}
         pdfBusy={pdf === 'busy'}
       />
       {copyAt !== null && (
         <T v="meta" c="ink3" style={{ textAlign: 'right' }} testID="report-updated">
-          {`${updatedText(copyAt)} 업데이트`}
+          {`${updatedText(copyAt)} 기준`}
         </T>
       )}
       {pdf === 'failed' && (
@@ -139,65 +140,74 @@ function Report({ copy, copyAt, onMoney, preview }: { copy: CopyReport; copyAt: 
         </Notice>
       )}
 
-      <TotalCard title="매출" testID="report-sales" total={v.sales.total} prev={v.prev?.sales} comparable={v.prev?.comparable.sales} months={months} days={v.days} values={v.chart.map((c) => c.sales.total.amount)} color={p.dataSale} />
-      <TotalCard title="매입" testID="report-purchase" total={v.purchase.total} prev={v.prev?.purchase} comparable={v.prev?.comparable.purchase} months={months} days={v.days} values={v.chart.map((c) => c.purchase.total.amount)} color={p.dataBuy} />
+      <TotalCard title="매출" testID="report-sales" total={v.sales.total} prev={v.prev?.sales} comparable={v.prev?.comparable.sales} months={months} days={v.days} gone={v.gone} trend={<Trend values={v.chart.map((c) => (c.future ? null : c.sales.total.amount))} labels={[v.chart[0]!.label, v.chart.at(-1)!.label]} color={p.dataSale} testID="report-sales-trend" />} />
+      <TotalCard title="매입" testID="report-purchase" total={v.purchase.total} prev={v.prev?.purchase} comparable={v.prev?.comparable.purchase} months={months} days={v.days} gone={v.gone} trend={<Trend values={v.chart.map((c) => (c.future ? null : c.purchase.total.amount))} labels={[v.chart[0]!.label, v.chart.at(-1)!.label]} color={p.dataBuy} testID="report-purchase-trend" />} />
       {v.vat && (
-        <Card title={`부가세 ${v.vat.h}기`} testID="report-vat" side={<T v="sub" c="ink2">{`${monthNo(v.vat.dl)}월 ${Number(v.vat.dl.slice(8, 10))}일까지`}</T>}>
+        <Section
+          title={`부가세 ${v.vat.h}기`}
+          testID="report-vat"
+          side={
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
+              <Pressable accessibilityRole="button" accessibilityLabel={`부가세 ${v.vat.h}기가 뭔지 보기`} accessibilityState={{ expanded: vatInfo }} onPress={() => setVatInfo((x) => !x)} hitSlop={8} testID="report-vat-info">
+                <InfoMark color={p.ink3} />
+              </Pressable>
+              <T v="sub" c="ink2">{`${monthNo(v.vat.dl)}월 ${Number(v.vat.dl.slice(8, 10))}일`}</T>
+              {ddayText(copy.today, v.vat.dl) && (
+                <View style={{ paddingHorizontal: 8, borderRadius: radius.full, backgroundColor: ddayLeft(copy.today, v.vat.dl) <= 14 ? p.attentionSoft : p.sunken }}>
+                  <T v="label" c={ddayLeft(copy.today, v.vat.dl) <= 14 ? 'attention' : 'ink'}>{ddayText(copy.today, v.vat.dl).trim()}</T>
+                </View>
+              )}
+            </View>
+          }
+        >
+          {vatInfo && <T v="sub" c="ink2" testID="report-vat-period">{`${v.vat.h === 1 ? '1월부터 6월' : '7월부터 12월'} 매출과 매입, ${monthNo(v.vat.dl)}월 ${Number(v.vat.dl.slice(8, 10))}일 신고`}</T>}
           <T v="strong">{vatDue !== null ? `${won(vatDue)} 낼 것 같아요` : v.vat.s !== null ? `매출 부가세 ${won(v.vat.s)}` : '확인 못 함'}</T>
           {vatDue !== null && v.vat.s ? <Stack parts={[{ share: Math.max(0, vatDue) / v.vat.s, color: p.dataSale }, { share: 1 - Math.max(0, vatDue) / v.vat.s, color: p.sunken }]} /> : null}
           <Kv>
             <KvRow label="매출 부가세" value={v.vat.s === null ? '확인 못 함' : won(v.vat.s)} warn={v.vat.s === null} />
             <KvRow label="매입 부가세" value={v.vat.p === null ? '확인 못 함' : won(v.vat.p)} warn={v.vat.p === null} />
           </Kv>
-        </Card>
+        </Section>
       )}
-      <Card title={chartPurchase ? '달마다' : '달마다 매출'} testID="report-monthly">
+      <Section title={chartPurchase ? '달마다' : '달마다 매출'} testID="report-monthly">
+        {headline && <T v="strong" testID="report-headline">{headline}</T>}
         {chartPurchase && <Legend a="매출" b="매입" />}
         <BarChart
-          cols={v.chart.map((c) => barOf(c, chartPurchase, v.chart.length <= 6))}
-          tick={(n) => shortWon(n).replace(/원$/, '')}
+          cols={v.chart.map((c) => barOf(c, chartPurchase))}
           label={`${v.chart[0]!.label}부터 ${v.chart.at(-1)!.label}까지 달마다 매출${chartPurchase ? '과 매입' : ''}`}
           onPick={(m) => setPicked(m)}
-          step={{ prev: v.first ? null : () => setPicked(shiftMonth(month, -1)), next: v.latest ? null : () => setPicked(shiftMonth(month, 1)) }}
+          step={{ prev: v.first ? null : () => setPicked(back), next: v.latest ? null : () => setPicked(fwd) }}
           holding={preview?.hold ?? null}
           tip={(m) => {
             const c = v.chart.find((x) => x.month === m)!;
-            return <Tip rows={[{ k: '매출', v: amountText(c.sales.total) }, ...(chartPurchase ? [{ k: '매입', v: amountText(c.purchase.total) }] : [])]} testID="report-tip" />;
+            return <Tip title={c.label} rows={[{ k: '매출', v: amountText(c.sales.total) }, ...(chartPurchase ? [{ k: '매입', v: amountText(c.purchase.total) }] : [])]} testID="report-tip" />;
           }}
         />
-      </Card>
+      </Section>
 
-      <MixCard title="매출은 어디서" testID="report-sales-mix" colors={[p.dataSale, p.dataSaleMuted, p.dataSaleSoft, p.dataSaleSoft]} parts={saleParts} />
-      {hasPurchase && (
-        <MixCard
-          title="매입은 어디로"
-          testID="report-purchase-mix"
-          colors={[p.dataBuy, p.dataBuyMuted, p.dataBuySoft, p.dataBuySoft, p.dataBuySoft]}
-          parts={knownParts([
-            ['세금계산서', v.purchase.inv],
-            ['사업용 카드', v.purchase.card],
-            ['현금영수증', v.purchase.cr],
-            ['영수증', v.purchase.rcpt],
-            ['급여', v.purchase.pay],
-          ])}
-        />
+      {why && (
+        <Section title={why.title} testID="report-why">
+          <Kv>
+            {why.rows.map((x) => (
+              <KvRow key={x.label} label={x.label} value={`${x.delta > 0 ? '+' : '−'}${shortWon(Math.abs(x.delta))}`} />
+            ))}
+          </Kv>
+          {onAsk && <Button kind="secondary" label="대화에서 더 묻기" onPress={() => onAsk(`${span} 매출이 ${prevName(months)}보다 왜 ${why.up ? '늘었는지' : '줄었는지'} 알려줘`)} testID="report-why-ask" />}
+        </Section>
       )}
 
+      <MixCard title="매출은 어디서" testID="report-sales-mix" slices={saleSlices} more={v.ranks && topOf(v.ranks.ps, 3).more ? () => setOpen({ kind: 'all', what: 'partners', side: 'sale' }) : undefined} />
+      {hasPurchase && <MixCard title="매입은 어디로" testID="report-purchase-mix" slices={buySlices} more={v.ranks && topOf(v.ranks.pp, 3).more ? () => setOpen({ kind: 'all', what: 'partners', side: 'purchase' }) : undefined} />}
+
       {v.ranks && (
-        <>
-          <Card title={rankPurchase ? '거래처' : '많이 판 거래처'} testID="report-partners">
-            {rankPurchase && <Seg options={SIDES} value={partnerSide} onChange={setPartnerSide} fill tint testID="report-partners-side" />}
-            <RankCard buy={rankPurchase && partnerSide === 'purchase'} rank={rankPurchase && partnerSide === 'purchase' ? v.ranks.pp : v.ranks.ps} kind="partners" empty="이 기간 거래처가 없어요" onRow={(row) => setOpen({ kind: 'partner', side: partnerSide, row })} onAll={() => setOpen({ kind: 'all', what: 'partners', side: partnerSide })} />
-          </Card>
-          <Card title={rankPurchase ? '품목' : '많이 판 품목'} testID="report-items">
-            {rankPurchase && <Seg options={SIDES} value={itemSide} onChange={setItemSide} fill tint testID="report-items-side" />}
-            <RankCard buy={rankPurchase && itemSide === 'purchase'} rank={rankPurchase && itemSide === 'purchase' ? v.ranks.ip : v.ranks.is} kind="items" empty="이 기간 품목이 없어요" onAll={() => setOpen({ kind: 'all', what: 'items', side: itemSide })} />
-          </Card>
-        </>
+        <Section title={rankPurchase ? '품목' : '많이 판 품목'} testID="report-items">
+          {rankPurchase && <Seg options={SIDES} value={itemSide} onChange={setItemSide} fill tint testID="report-items-side" />}
+          <RankCard buy={rankPurchase && itemSide === 'purchase'} rank={rankPurchase && itemSide === 'purchase' ? v.ranks.ip : v.ranks.is} kind="items" empty="이 기간 품목이 없어요" onAll={() => setOpen({ kind: 'all', what: 'items', side: itemSide })} />
+        </Section>
       )}
 
       {v.recv && (
-        <Card title="받을 돈" testID="report-receivable">
+        <Section title="받을 돈" testID="report-receivable">
           <Stack parts={[{ share: v.recv.got, color: p.dataSale }, { share: v.recv.left - v.recv.lateA, color: p.dataSaleMuted }, { share: v.recv.lateA, color: p.attention }]} />
           <Kv>
             <KvRow label="받은 돈" value={won(v.recv.got)} />
@@ -205,10 +215,10 @@ function Report({ copy, copyAt, onMoney, preview }: { copy: CopyReport; copyAt: 
             {v.recv.lateN > 0 && <KvRow label={`기한 지남 ${v.recv.lateN.toLocaleString('ko-KR')}건`} value={won(v.recv.lateA)} warn />}
           </Kv>
           <TextButton label="받을 돈 보기" onPress={onMoney} testID="report-receivable-money" />
-        </Card>
+        </Section>
       )}
       {v.bank && (
-        <Card title="통장" testID="report-bank">
+        <Section title="통장" testID="report-bank">
           <T v="sub">{`들어온 돈 ${won(v.bank.in)}`}</T>
           <Stack parts={[{ share: 1, color: p.dataSale }]} width={v.bank.in / Math.max(1, v.bank.in, v.bank.out)} />
           <T v="sub">{`나간 돈 ${won(v.bank.out)}`}</T>
@@ -216,7 +226,7 @@ function Report({ copy, copyAt, onMoney, preview }: { copy: CopyReport; copyAt: 
           <Kv>
             <KvRow label="잔액" value={amountText(v.balanceTotal)} total warn={unsure(v.balanceTotal)} />
           </Kv>
-        </Card>
+        </Section>
       )}
 
       {open?.kind === 'partner' && <PartnerSheet copy={copy} span={span} side={open.side} row={open.row} onClose={() => setOpen(null)} onMoney={() => (setOpen(null), onMoney())} />}
@@ -234,75 +244,86 @@ function Report({ copy, copyAt, onMoney, preview }: { copy: CopyReport; copyAt: 
   );
 }
 
-function barOf(c: ChartCol, purchase: boolean, roomy: boolean): BarCol {
-  const sale = c.sales.total.amount;
+function barOf(c: ChartCol, purchase: boolean): BarCol {
+  const sale = c.future ? null : c.sales.total.amount;
   return {
-    ...(sale && (c.on || roomy) ? { value: shortWon(sale) } : {}),
     key: c.month,
     label: c.label,
-    a: c.sales.total.amount,
-    b: purchase ? c.purchase.total.amount : null,
+    a: sale,
+    b: purchase && !c.future ? c.purchase.total.amount : null,
     on: c.on,
-    out: !c.inWindow,
+    busy: c.on ? { a: c.sales.total.partial || c.sales.total.amount === null, b: purchase && (c.purchase.total.partial || c.purchase.total.amount === null) } : undefined,
     a11y: `${monthNo(c.month)}월 매출 ${amountText(c.sales.total)}${purchase ? `, 매입 ${amountText(c.purchase.total)}` : ''}${c.on ? '' : ', 이 달 보기'}`,
   };
 }
 
 const known = (l: Line) => l.amount !== null;
-/** 막대 위와 눈금의 짧은 금액(PC shortWon): 887억원, 1.2조원, 4,031만원 */
-const shortWon = (v: number) => {
-  const a = Math.abs(v);
-  const [u, name] = a >= 1e12 ? [1e12, '조'] : a >= 1e8 ? [1e8, '억'] : [1e4, '만'];
-  const n = v / u;
-  return `${(Math.abs(n) >= 100 || name === '만' ? Math.round(n) : Math.round(n * 10) / 10).toLocaleString('ko-KR')}${name}원`;
-};
 
-/** 요약 카드(PC totalCard): 합계, 비교 글, 앞 기간 합계와 평균. 꺾은선은 제목 줄 */
-function TotalCard({ title, total, prev, comparable, months, days, values, color, testID }: {
-  title: string; total: Line; prev: Line | undefined; comparable: boolean | undefined; months: Months; days: number; values: Array<number | null>; color: string; testID: string;
+/** 요약 카드(PC totalCard): 합계, 비교 글, 앞 기간 합계와 평균 */
+function TotalCard({ title, total, prev, comparable, months, days, gone, trend, testID }: {
+  title: string; total: Line; prev: Line | undefined; comparable: boolean | undefined; months: Months; days: number; gone: number; trend?: ReactNode; testID: string;
 }) {
   const t = trendText(total, prev, months, comparable);
-  const avg = averageOf(total, months, days);
+  const avg = averageOf(total, months, days, gone);
   return (
-    <Card title={title} testID={testID} side={<Spark values={values} color={color} />}>
+    <Section title={title} testID={testID}>
       <View style={{ gap: 2 }}>
         <T v="figure" testID={`${testID}-total`}>{amountText(total)}</T>
         {t && <T v="sub" c="ink2">{t}</T>}
       </View>
+      {trend}
       <Kv>
         {prev && <KvRow label={prevName(months)} value={comparable === false ? '일부만 받았어요' : amountText(prev)} warn={comparable === false || prev.amount === null} />}
         <KvRow label={avg.label} value={avg.amount === null ? '확인 못 함' : won(avg.amount)} warn={avg.amount === null} />
       </Kv>
-    </Card>
+    </Section>
   );
 }
-type Part = [label: string, line: Line, count?: number];
-const knownParts = (parts: Part[]): Part[] => parts.filter(([, l], i) => known(l) && (i === 0 || l.amount !== 0));
 const updatedText = (at: number) => {
   const t = new Date(at);
-  const hh = t.getHours();
-  return `${t.getMonth() + 1}월 ${t.getDate()}일 ${hh < 12 ? '오전' : '오후'} ${hh % 12 || 12}시 ${String(t.getMinutes()).padStart(2, '0')}분`;
+  const hm = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+  return t.toDateString() === new Date().toDateString() ? `오늘 ${hm}` : `${t.getMonth() + 1}월 ${t.getDate()}일 ${hm}`;
 };
+const ddayLeft = (today: string, day: string) => Math.round((Date.parse(day) - Date.parse(today)) / 86_400_000);
 
-function MixCard({ title, parts, colors, testID }: { title: string; parts: Part[]; colors: string[]; testID: string }) {
+type Slice = { label: string; amount: number; color: string; onPress?: () => void };
+
+/** 거래처 위 셋, 그 밖에, 계산서 없는 몫(카드와 현금 등). 거래처 순위가 없으면 계산서 합계 한 조각 */
+function slicesOf(rank: Rank | undefined, other: Line[], otherLabel: string, colors: string[], grey: [string, string], onRow: (row: RankRow) => void): Slice[] {
+  const out: Slice[] = [];
+  if (rank) {
+    const top = topOf(rank, 3);
+    top.rows.forEach((x, i) => out.push({ label: x.name, amount: x.amount, color: colors[i]!, onPress: () => onRow(x) }));
+    if (top.rest) out.push({ label: top.rest.name, amount: top.rest.amount, color: grey[0] });
+  }
+  const rest = other.reduce((a, l) => a + Math.max(0, l.amount ?? 0), 0);
+  if (rest > 0) out.push({ label: otherLabel, amount: rest, color: grey[1] });
+  return out.filter((x) => x.amount > 0);
+}
+
+/** 큰 도넛 아래 조각 목록. 거래처 줄은 누르면 거래처 시트, 위 셋 밖이 있으면 전체 보기 */
+function MixCard({ title, slices, more, testID }: { title: string; slices: Slice[]; more?: () => void; testID: string }) {
   const p = usePalette();
-  const sum = parts.reduce((a, [, l]) => a + Math.max(0, l.amount ?? 0), 0);
-  if (!parts.length) return null;
-  const color = (i: number) => colors[i] ?? colors.at(-1)!;
+  const sum = slices.reduce((a, x) => a + x.amount, 0);
+  if (!slices.length) return null;
   return (
-    <Card title={title} testID={testID} side={<Donut parts={parts.map(([, l], i) => ({ share: Math.max(0, l.amount ?? 0), color: color(i) }))} track={p.sunken} sizePx={44} />}>
-      <View style={{ gap: space.s2 }}>
-        {parts.map(([label, l, n], i) => (
-          <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <View style={{ width: 8, height: 8, borderRadius: radius.xs, backgroundColor: color(i) }} />
+    <Section title={title} testID={testID}>
+      <View style={{ alignItems: 'center', paddingVertical: space.s2 }}>
+        <Donut parts={slices.map((x) => ({ share: x.amount, color: x.color }))} track={p.sunken} sizePx={144} />
+      </View>
+      <View style={{ gap: space.s1 }}>
+        {slices.map((x) => (
+          <Pressable key={x.label} disabled={!x.onPress} onPress={x.onPress} accessibilityRole={x.onPress ? 'button' : undefined} style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2, minHeight: 36 }}>
+            <View style={{ width: 8, height: 8, borderRadius: radius.xs, backgroundColor: x.color }} />
             <T v="sub" c="ink2" lines={1} style={{ flex: 1, minWidth: 0 }}>
-              {`${n === undefined ? label : `${label} ${n.toLocaleString('ko-KR')}건`}${sum ? ` ${Math.round((Math.max(0, l.amount ?? 0) / sum) * 100)}%` : ''}`}
+              {`${x.label} ${Math.round((x.amount / sum) * 100)}%`}
             </T>
-            <T v="subValue">{won(l.amount)}</T>
-          </View>
+            <T v="subValue">{won(x.amount)}</T>
+          </Pressable>
         ))}
       </View>
-    </Card>
+      {more && <TextButton label="거래처 전체 보기" onPress={more} testID={`${testID}-all`} />}
+    </Section>
   );
 }
 
