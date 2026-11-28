@@ -389,7 +389,7 @@ export function reportDocOf(copy: CopyReport, v: ReportView, nowMs: number): Rep
   const purchase = [L('세금계산서', p.inv), L('사업용 카드', p.card), L('현금영수증', p.cr), ...(p.rcpt.amount ? [L('영수증', p.rcpt)] : []), ...(p.pay.amount !== null ? [L('급여', p.pay)] : [])];
   const partners = (r: Rank): ReportDocPartners => ({
     rows: r.rows.map((x): ReportDocRank => ({ name: x.name, count: x.n, amount: x.amount, share: x.share })),
-    rest: r.rest ? { name: `그 밖에 ${r.rest.k}곳`, count: r.rest.n, amount: r.rest.amount, share: r.rest.share } : null,
+    rest: r.rest ? { name: `그 밖에 ${r.rest.k}곳`, n: r.rest.k, count: r.rest.n, amount: r.rest.amount, share: r.rest.share } : null,
     total: r.total,
     count: r.rows.reduce((a, x) => a + x.n, 0) + (r.rest?.n ?? 0),
   });

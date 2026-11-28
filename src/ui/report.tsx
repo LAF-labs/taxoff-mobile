@@ -109,6 +109,12 @@ export function Tip({ title, rows, testID }: { title?: string; rows: TipRow[]; t
   );
 }
 
+/** 두 #RRGGBB 색의 가운데(PC color-mix 50%와 같은 값). 구성 도넛의 두 번째 조각 */
+export function midColor(a: string, b: string): string {
+  const ch = (c: string, i: number) => parseInt(c.slice(1 + i * 2, 3 + i * 2), 16);
+  return `#${[0, 1, 2].map((i) => Math.round((ch(a, i) + ch(b, i)) / 2).toString(16).padStart(2, '0')).join('')}`;
+}
+
 export interface BarCol {
   key: string;
   label: string;

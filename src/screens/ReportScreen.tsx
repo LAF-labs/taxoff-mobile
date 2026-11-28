@@ -5,7 +5,7 @@ import { useSession } from '../session';
 import { radius, space, usePalette } from '../theme';
 import { Card, Kv, KvRow } from '../ui/card';
 import { bigWon, Button, Empty, Group, Notice, Row, Screen, Seg, T, TextButton } from '../ui/kit';
-import { BarChart, InfoMark, Legend, MonthStep, Donut, RankRows, Spark, Stack, Tip, type BarCol, type RankItem } from '../ui/report';
+import { BarChart, Donut, InfoMark, Legend, midColor, MonthStep, RankRows, Spark, Stack, Tip, type BarCol, type RankItem } from '../ui/report';
 import { Sheet } from '../ui/sheet';
 import { averageOf, clampMonth, ddayText, headlineText, partnerMonths, periodText, prevName, shortWon, trendText, whyOf, reportView, reportWait, shiftMonth, spanText, topOf, WINDOWS, type ChartCol, type Line, type Months, type Rank, type RankRow, type ReportWait } from '../report';
 import { canReportPdf, shareReportPdf } from '../reportPdf';
@@ -103,8 +103,8 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
   const rankPurchase = !!v.ranks && v.ranks.pp.rows.length > 0;
   const missing = [!hasPurchase ? '매입' : null, !known(v.sales.card) ? '카드 매출' : null, !v.bank ? '통장' : null].filter((x): x is string => !!x);
   // 매출은 어디서, 매입은 어디로: 거래처별(2026-11-28 대표: 계산서인지 카드인지보다 어디인지가 궁금하다). 계산서가 없는 매출·매입은 한 조각
-  const saleSlices = slicesOf(v.ranks?.ps, [v.sales.card, v.sales.cr, v.sales.cash], '카드·현금 손님', [p.dataSale, p.dataSaleMuted, p.dataSaleSoft], [p.ink4, p.ink3], (row) => setOpen({ kind: 'partner', side: 'sale', row }));
-  const buySlices = slicesOf(v.ranks?.pp, [v.purchase.card, v.purchase.cr, v.purchase.rcpt, v.purchase.pay], '카드·영수증·급여', [p.dataBuy, p.dataBuyMuted, p.dataBuySoft], [p.ink4, p.ink3], (row) => setOpen({ kind: 'partner', side: 'purchase', row }));
+  const saleSlices = slicesOf(v.ranks?.ps, [v.sales.card, v.sales.cr, v.sales.cash], '카드·현금 손님', [p.dataSale, midColor(p.dataSale, p.dataSaleMuted), p.dataSaleMuted], [p.ink4, p.ink3], (row) => setOpen({ kind: 'partner', side: 'sale', row }));
+  const buySlices = slicesOf(v.ranks?.pp, [v.purchase.card, v.purchase.cr, v.purchase.rcpt, v.purchase.pay], '카드·영수증·급여', [p.dataBuy, midColor(p.dataBuy, p.dataBuyMuted), p.dataBuyMuted], [p.ink4, p.ink3], (row) => setOpen({ kind: 'partner', side: 'purchase', row }));
   const vatDue = v.vat && v.vat.s !== null && v.vat.p !== null ? v.vat.s - v.vat.p : null;
   const headline = headlineText(v, v.chart.some((c) => !!c.lastYear?.amount));
   const why = whyOf(v);

@@ -27,7 +27,8 @@ export interface ReportDocRank {
 
 export interface ReportDocPartners {
   rows: ReportDocRank[];
-  rest: ReportDocRank | null;
+  /** n = 묶인 거래처 수 */
+  rest: (ReportDocRank & { n: number }) | null;
   total: number;
   count: number;
 }
@@ -116,11 +117,13 @@ const shortWon = (v: number) => {
 
 /** PC 화면 밝은 색 토큰(sovereign-ax/design-system/tokens.json light) */
 const C = {
-  canvas: '#FCFCFC', card: '#F3F4F5', sunken: '#E9EAEB', ink: '#111112', ink2: '#4B4D4F', ink3: '#686A6E', attention: '#8A5A0B',
+  canvas: '#FCFCFC', card: '#F3F4F5', sunken: '#E9EAEB', ink: '#111112', ink2: '#4B4D4F', ink3: '#686A6E', ink4: '#A1A4A8', attention: '#8A5A0B',
   sale: ['#0064D4', '#8DB8EC', '#B8D3F3'], buy: ['#E5484D', '#F3A3A5', '#F8C8C9'],
 };
 type Tone = 'sale' | 'buy';
 const tone = (t: Tone, i: number) => C[t][Math.min(i, 2)]!;
+/** 구성 도넛(화면과 같은 순서): 위 세 거래처는 진한 색, 가운데(color-mix 50%), 흐린 색. 그 밖에 거래처와 계산서 없는 몫은 회색 */
+const WHERE: Record<Tone, string[]> = { sale: ['#0064D4', '#468EE0', '#8DB8EC', C.ink4, C.ink3], buy: ['#E5484D', '#EC7679', '#F3A3A5', C.ink4, C.ink3] };
 
 const STYLE = `@page{size:A4;margin:12mm 0 12mm}
 @page:first{margin-top:0}
@@ -260,7 +263,7 @@ function chart(d: ReportDoc): string {
   return card(title, `<svg width="100%" viewBox="0 0 ${W} ${base + 24}" role="img" aria-label="달마다 매출과 매입">${grid}${bars}</svg>${table}`, legend);
 }
 
-function ring(parts: DocAmount[], t: Tone): string {
+function ring(parts: DocAmount[], t: Tone, color: (i: number) => string = (i) => tone(t, i)): string {
   const total = parts.reduce<number>((a, v) => a + Math.max(0, v ?? 0), 0);
   const R = 36;
   const L = 2 * Math.PI * R;
@@ -269,7 +272,7 @@ function ring(parts: DocAmount[], t: Tone): string {
     ? parts
         .map((v, i) => {
           const len = (Math.max(0, v ?? 0) / total) * L;
-          const el = `<circle cx="48" cy="48" r="${R}" fill="none" stroke="${tone(t, i)}" stroke-width="14" stroke-dasharray="${len.toFixed(1)} ${L.toFixed(1)}" stroke-dashoffset="${(-at).toFixed(1)}" transform="rotate(-90 48 48)"/>`;
+          const el = `<circle cx="48" cy="48" r="${R}" fill="none" stroke="${color(i)}" stroke-width="14" stroke-dasharray="${len.toFixed(1)} ${L.toFixed(1)}" stroke-dashoffset="${(-at).toFixed(1)}" transform="rotate(-90 48 48)"/>`;
           at += len;
           return el;
         })
@@ -278,12 +281,22 @@ function ring(parts: DocAmount[], t: Tone): string {
   return `<svg width="96" height="96" viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="48" r="${R}" fill="none" stroke="${C.sunken}" stroke-width="14"/>${arcs}</svg>`;
 }
 
-function mixCard(title: string, t: Tone, rows: ReportDocLine[]): string {
-  const shown = rows.filter((l) => l.amount !== 0);
-  const kv = shown
-    .map((l, i) => `<dt>${dot(tone(t, i))}${esc(l.count ? `${l.label} ${num(l.count)}건` : l.label)}</dt><dd${l.amount === null ? (l.note ? ' class="later"' : ' class="u"') : l.partial ? ' class="u"' : ''}>${l.amount === null ? esc(l.note ?? '확인 못 함') : won(l.amount)}</dd>`)
-    .join('');
-  return card(title, `<div class="mix">${ring(shown.map((l) => l.amount), t)}<dl>${kv}</dl></div>`);
+/** 매출은 어디서, 매입은 어디로: 거래처 위 셋, 그 밖에, 계산서가 없는 몫(2026-11-28 대표: 어디인지가 궁금하다) */
+function whereCard(title: string, t: Tone, partners: ReportDocPartners | null, rows: ReportDocLine[], otherLabel: string): string {
+  const top = partners?.rows.slice(0, 3) ?? [];
+  const folded = partners?.rows.slice(3) ?? [];
+  const restN = folded.length + (partners?.rest?.n ?? 0);
+  const restAmount = folded.reduce((a, x) => a + x.amount, 0) + (partners?.rest?.amount ?? 0);
+  const other = rows.filter((l) => l.label !== '세금계산서').reduce((a, l) => a + Math.max(0, l.amount ?? 0), 0);
+  const parts: Array<[string, number, number]> = [
+    ...top.map((x, i): [string, number, number] => [x.name, x.amount, i]),
+    ...(restAmount > 0 ? [[`그 밖에 ${num(restN)}곳`, restAmount, 3] as [string, number, number]] : []),
+    ...(other > 0 ? [[otherLabel, other, 4] as [string, number, number]] : []),
+  ].filter(([, v]) => v > 0);
+  if (!parts.length) return '';
+  const sum = parts.reduce((a, [, v]) => a + v, 0);
+  const kv = parts.map(([label, v, c]) => `<dt>${dot(WHERE[t][c]!)}${esc(`${label} ${pct(v / sum)}`)}</dt><dd>${bigWon(v)}</dd>`).join('');
+  return card(title, `<div class="mix">${ring(parts.map(([, v]) => v), t, (i) => WHERE[t][parts[i]![2]]!)}<dl>${kv}</dl></div>`);
 }
 
 function rankCard(title: string, t: Tone, r: ReportDocPartners | ReportDocRank[] | null, empty: string, label: (x: ReportDocRank) => string): string {
@@ -334,9 +347,6 @@ export function reportDocHtml(d: ReportDoc, opts: { fonts?: ReportDocFonts } = {
     ? vatCard(d.vat)
     : card('통장', `<dl><dt>들어온 돈</dt><dd>${bigWon(d.bank.in)}</dd><dt>나간 돈</dt><dd>${bigWon(d.bank.out)}</dd><dt class="t">남은 돈</dt><dd class="t">${bigWon(d.bank.net)}</dd></dl>`);
   const pairs = [
-    d.partnersSale || d.partnersPurchase
-      ? `<div class="g2">${rankCard('많이 판 거래처', 'sale', d.partnersSale, '이 기간 거래처가 없어요', (x) => x.name)}${rankCard('많이 산 거래처', 'buy', d.partnersPurchase, '이 기간 거래처가 없어요', (x) => x.name)}</div>`
-      : '',
     `<div class="g2">${rankCard('많이 판 품목', 'sale', d.itemsSale, '이 기간 품목이 없어요', (x) => `${x.name} ${num(x.count)}건`)}${d.receivable ? receivableCard(d.receivable) : ''}</div>`,
     `<div class="g2">${bankCard(d)}${d.sources ? sourceCard(d.sources) : ''}</div>`,
   ];
@@ -345,7 +355,7 @@ export function reportDocHtml(d: ReportDoc, opts: { fonts?: ReportDocFonts } = {
 <div class="g3">${totalCard('매출', 'sale', d.salesTotal, d.salesTrend, d.months.map((m) => m.sales), d.salesRows)}${totalCard('매입', 'buy', d.purchaseTotal, d.purchaseTrend, d.months.map((m) => m.purchase), d.purchaseRows)}${third}</div>
 ${chart(d)}
 ${d.why ? card(d.why.title, `<div class="why">${d.why.rows.map((x) => `<div><span class="k">${esc(x.label)}</span><span class="v">${x.delta > 0 ? '+' : '−'}${esc(shortWon(Math.abs(x.delta)))}</span></div>`).join('')}</div>`) : ''}
-<div class="g2">${mixCard('매출은 어디서', 'sale', d.sales)}${mixCard('매입은 어디로', 'buy', d.purchase)}</div>
+<div class="g2">${whereCard('매출은 어디서', 'sale', d.partnersSale, d.sales, '카드·현금 손님')}${whereCard('매입은 어디로', 'buy', d.partnersPurchase, d.purchase, '카드·영수증·급여')}</div>
 ${pairs.join('\n')}
 <div class="foot"><span>택스오프</span><span>${esc(d.period)}</span></div>
 </div></body></html>`;
