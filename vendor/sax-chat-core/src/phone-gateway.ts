@@ -124,6 +124,11 @@ export function validPhoneToolCall(name: unknown, args: unknown): args is Record
   return typeof name === 'string' && TOOL_NAMES.has(name) && isObj(args) && short(args) && PHONE_TOOL_ARGS[name as ChatPhoneToolName](args);
 }
 
+export const PHONE_TOOLSET_DIGESTS: Record<PhoneRespondRequest['toolset'], string> = {
+  chat_phone: '4fa88c7f07ecea4cc891f968bb9f139a4ffbbabc6ababa9aa77b48791630d49a',
+  chat_digest: 'c081065b4f01588d61b71b534686db82b15d82f0c575b25314e6b763ea38b7de',
+};
+
 /** 게이트웨이 /v1/respond 응답({status, output:[{item, tag}], toolsetDigest, usage})을 도구 호출·출력으로 읽는다. */
 export function parseRespond(v: unknown): PhoneRespondResult {
   const bad: PhoneRespondResult = { status: 'error', code: 'chat.bad_response' };
@@ -205,6 +210,7 @@ export class PhoneGateway implements PhoneModel {
     if (!wasMinted(req.text) || req.replay.some((x) => 'output' in x && !wasMinted(x.output))) return { status: 'error', code: 'chat.unavailable' };
     const r = await this.call('POST', '/v1/respond', {
       toolset: req.toolset,
+      toolsetDigest: PHONE_TOOLSET_DIGESTS[req.toolset],
       messages: [{ role: 'user', content: [{ type: 'input_text', text: req.text }] }],
       replay: req.replay,
       runToken: req.runToken,

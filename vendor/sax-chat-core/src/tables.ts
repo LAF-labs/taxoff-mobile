@@ -31,15 +31,18 @@ export const AGENT_ASKS = ['counterparty', 'amount', 'item', 'vat', 'which_card'
  */
 export const CHAT_AGENT_TOOLS = [
   { name: 'sales_summary', parameters: obj({ month_offset: { type: 'integer', minimum: -12, maximum: 0 } }) },
+  { name: 'purchase_summary', parameters: obj({ month_offset: { type: 'integer', minimum: -12, maximum: 0 } }) },
   { name: 'invoice_history', parameters: obj({ counterparty: NULLABLE_STRING }) },
   { name: 'receivables', parameters: obj({ counterparty: NULLABLE_STRING }) },
   { name: 'payables', parameters: obj({ counterparty: NULLABLE_STRING }) },
   { name: 'cash_flow', parameters: obj({ month_offset: { type: 'integer', minimum: -12, maximum: 0 } }) },
+  { name: 'vat_summary', parameters: obj({}) },
   { name: 'invoice_draft', parameters: obj({ counterparty: { type: 'string' }, amount: NULLABLE_STRING, vat: VAT, item: NULLABLE_STRING, ...DRAFT_EXTRA }) },
   { name: 'draft_edit', parameters: obj({ draft: { type: 'string' }, amount: NULLABLE_STRING, vat: VAT, item: NULLABLE_STRING, ...DRAFT_EXTRA }) },
   { name: 'draft_discard', parameters: obj({ draft: { type: 'string' } }) },
   { name: 'invoice_amend', parameters: obj({ invoice: NULLABLE_STRING, amount: NULLABLE_STRING, vat: VAT, item: NULLABLE_STRING, date_month_offset: DRAFT_EXTRA.date_month_offset, date_day: NULLABLE_STRING, counterparty: NULLABLE_STRING }) },
   { name: 'open_screen', parameters: obj({ screen: { type: 'string', enum: OPEN_SCREENS }, say: { type: 'string' } }) },
+  { name: 'cert_draft', parameters: obj({ doc: { type: 'string' }, purpose: NULLABLE_STRING }) },
   { name: 'reply', parameters: obj({ kind: { type: 'string', enum: ['answer', 'ask', 'smalltalk', 'cannot', 'tax_advice'] }, text: { type: 'string' }, ask: { type: ['string', 'null'], enum: [...AGENT_ASKS, null] } }) },
 ] as const;
 export type ChatAgentToolName = (typeof CHAT_AGENT_TOOLS)[number]['name'];
@@ -60,6 +63,18 @@ export type SlotField = (typeof SLOT_FIELDS)[number];
  */
 export const CASH_FIELDS = ['in', 'out', 'net', 'balance', 'next_in', 'next_out'] as const;
 export type CashField = (typeof CASH_FIELDS)[number];
+/**
+ * 매출·매입 결과(sales_summary·purchase_summary)의 그달 합계 `{r<N>.book.total}`: 리포트의 그달 매출이나 매입 합계(세금계산서, 카드, 현금영수증 등을 다 더한 것, ADR-072).
+ * sum·count는 세금계산서 줄만이다.
+ */
+export const BOOK_FIELDS = ['total'] as const;
+/**
+ * 부가세 결과(vat_summary)의 칸 `{r<N>.vat.<칸>}`. deadline·from·to는 날짜, sale·purchase는 그 기간 세금계산서의 매출·매입 세액,
+ * due는 sale - purchase(돌려받을 때는 그 크기)다. 앱이 계산하고 모델은 산수를 하지 않는다.
+ */
+export const VAT_FIELDS = ['deadline', 'from', 'to', 'sale', 'purchase', 'due'] as const;
+export type VatField = (typeof VAT_FIELDS)[number];
+export const VAT_DATE_FIELDS: readonly VatField[] = ['deadline', 'from', 'to'];
 /** 합계를 낼 수 있는 칸(돈) */
 export const SLOT_SUM_FIELDS = ['supply', 'total'] as const satisfies readonly SlotField[];
 /** 슬롯 경로 전부(ref 뒤). 슬롯 문법은 이 목록 하나에서 나온다. */
@@ -68,9 +83,11 @@ export const SLOT_PATHS: readonly string[] = [
   ...SLOT_SUM_FIELDS.map((f) => `sum.${f}`),
   'count',
   ...CASH_FIELDS.map((f) => `cash.${f}`),
+  ...BOOK_FIELDS.map((f) => `book.${f}`),
+  ...VAT_FIELDS.map((f) => `vat.${f}`),
 ];
 /** 금액 인자로 쓸 수 있는 경로(돈인 칸만) */
-export const SLOT_MONEY_PATHS: readonly string[] = SLOT_PATHS.filter((x) => /\.(supply|total)$/.test(x));
+export const SLOT_MONEY_PATHS: readonly string[] = SLOT_PATHS.filter((x) => /^(first|last|sum)\.(supply|total)$/.test(x));
 /** 슬롯 하나 전체에 맞는다. 묶음 1 = 결과 ref(r#), 2 = 경로(first.supply·sum.total·count …). */
 export const slotPattern = new RegExp(`^\\{(r[1-9]\\d{0,5})\\.(${SLOT_PATHS.map((x) => x.replace('.', '\\.')).join('|')})\\}$`);
 /** 문장 안의 슬롯 전부(g). 쓸 때마다 새로 만든다(lastIndex를 나눠 쓰지 않게). */
@@ -88,8 +105,8 @@ export const TOOL_NEEDS = ['amount', 'item', 'counterparty', 'date'] as const;
 export type ToolNeed = (typeof TOOL_NEEDS)[number];
 export type Vat = 'separate' | 'included';
 
-/** 폰에 없는 도구(통장 거래내역이 있어야 답하는 조회. 낼 돈·돈 흐름은 폰 사본에 아직 없다.) 이런 요청은 defer로 답한다. */
-export const PHONE_OMITTED_TOOLS = ['payables', 'cash_flow', 'reply'] as const;
+/** 폰에 없는 도구(매입, 낼 돈, 돈 흐름은 폰 사본에 아직 없다.) 이런 요청은 defer로 답한다. */
+export const PHONE_OMITTED_TOOLS = ['purchase_summary', 'payables', 'cash_flow', 'vat_summary', 'reply', 'cert_draft'] as const;
 /** 폰 앱 화면(말 한마디로 여는 곳). capture: 영수증·종이 증빙 찍기, cash: 현금 매출 적기, bizreg: 사업자등록증으로 거래처 추가, issue: 발급 작성(카드 없이) */
 export const PHONE_SCREENS = ['capture', 'cash', 'bizreg', 'issue'] as const;
 export type PhoneScreen = (typeof PHONE_SCREENS)[number];
