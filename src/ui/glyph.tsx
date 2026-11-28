@@ -6,11 +6,11 @@ import { radius, usePalette } from '../theme';
  * 알림 줄 앞의 종류 아이콘(18pt 선 그림). 대화 카드의 종류 아이콘과 같은 뜻을 쓴다:
  * 발급됨은 동그라미 체크, 멈춤은 동그라미 느낌표, 내 차례와 확인 필요는 세모, 승인 기다림은 문서, 돈은 지폐, 목록은 줄 셋.
  * 더보기 메뉴는 같은 그림을 22로 키워 쓴다(대화 말풍선, 알림 종, 설정 조절 막대, 거래처 건물, 문서함 폴더).
- * 문서함 줄은 종류마다 문서 속을 바꾼다: 세금계산서는 두 줄(doc), 증명서는 체크(cert), 그 밖은 한 줄(paper).
+ * 문서함 줄: 세금계산서는 아래가 톱니인 영수증(receipt), 직접 올린 서류는 한 줄과 도장 동그라미(contract). 증명서는 발급처 로고.
  * 거래처 화면: 찾기 돋보기, 더하기, 등록증 찍기 카메라, 바꿀 수 없는 칸 자물쇠, 복사, 닫기 X.
  * 리포트: 더보기 메뉴의 막대 셋(chart), PDF로 내보내기의 위 화살표 상자(share). 기준판 Phone-Menu, Phone-Report.
  */
-export type GlyphKind = 'done' | 'stop' | 'attention' | 'doc' | 'cert' | 'paper' | 'money' | 'list' | 'chat' | 'bell' | 'settings' | 'building' | 'folder' | 'search' | 'plus' | 'camera' | 'lock' | 'copy' | 'close' | 'chart' | 'share';
+export type GlyphKind = 'done' | 'stop' | 'attention' | 'doc' | 'cert' | 'paper' | 'receipt' | 'contract' | 'money' | 'list' | 'chat' | 'bell' | 'settings' | 'building' | 'folder' | 'search' | 'plus' | 'camera' | 'lock' | 'copy' | 'close' | 'chart' | 'share';
 
 const W = 1.75;
 
@@ -83,6 +83,30 @@ function Base({ kind, color }: { kind: GlyphKind; color: string }): ReactNode {
         <View style={[st.doc, line]}>
           <View style={[st.docLine, fill]} />
         </View>
+      </View>
+    );
+  }
+  if (kind === 'receipt') {
+    return (
+      <View style={st.box} aria-hidden>
+        <View style={[st.slip, line]}>
+          <View style={[st.docLine, fill]} />
+          <View style={[st.docLine, fill]} />
+          <View style={[st.docLine, fill, { width: 3.5 }]} />
+        </View>
+        <View style={st.teeth}>
+          {[0, 1, 2].map((i) => <View key={i} style={[st.tooth, { borderColor: color }]} />)}
+        </View>
+      </View>
+    );
+  }
+  if (kind === 'contract') {
+    return (
+      <View style={st.box} aria-hidden>
+        <View style={[st.doc, line, { justifyContent: 'flex-start', paddingTop: 4 }]}>
+          <View style={[st.docLine, fill]} />
+        </View>
+        <View style={[st.seal, line, { backgroundColor: p.canvas }]} />
       </View>
     );
   }
@@ -237,6 +261,10 @@ const st = StyleSheet.create({
   triDot: { position: 'absolute', left: 9 - W / 2, top: 12.5, width: W, height: W, borderRadius: radius.full },
   doc: { width: 13, height: 17, borderRadius: radius.sm / 3, alignItems: 'center', justifyContent: 'center', gap: 2.5, paddingTop: 2 },
   docLine: { width: 6, height: W, borderRadius: radius.full },
+  slip: { position: 'absolute', top: 0.5, width: 13, height: 14, borderBottomWidth: 0, borderTopLeftRadius: radius.sm / 3, borderTopRightRadius: radius.sm / 3, alignItems: 'center', justifyContent: 'center', gap: 2, paddingTop: 1 },
+  teeth: { position: 'absolute', top: 12.2, flexDirection: 'row' },
+  tooth: { width: 3.1, height: 3.1, marginHorizontal: 0.6, borderRightWidth: W, borderBottomWidth: W, transform: [{ rotate: '45deg' }] },
+  seal: { position: 'absolute', right: 1, bottom: 1, width: 7, height: 7, borderRadius: radius.full },
   docCheck: { width: 6, height: 3.5, marginTop: 0 },
   folder: { justifyContent: 'flex-end', paddingBottom: 1.5 },
   folderTab: { position: 'absolute', left: 1, top: 2, width: 7, height: 4, borderTopLeftRadius: radius.sm / 4, borderTopRightRadius: radius.sm / 4, borderBottomWidth: 0 },

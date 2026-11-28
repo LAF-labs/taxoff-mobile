@@ -280,6 +280,8 @@ export interface CopyCounterparty {
   /** 국세청 사업 상태가 계속 사업이 아닐 때만(02 휴업, 03 폐업). */
   state?: 'paused' | 'closed';
   stateOn?: string;
+  /** v1.21 cptel.v1 폰에만: PC 장부의 전화번호(찾기용) */
+  tel?: string;
   phoneApprovable?: boolean;
   last?: { supply: number; vatMode: 'excl' | 'incl'; item: string; day: string };
 }

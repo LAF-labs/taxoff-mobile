@@ -44,7 +44,7 @@ function Mark({ it }: { it: DocItem }) {
   const p = usePalette();
   const kind = kindOf(it.docType);
   const tile = { width: 34, height: 34, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' } as const;
-  if (kind !== 'cert') return <View style={[tile, { backgroundColor: p.sunken }]}><Glyph kind={kind === 'invoice' ? 'doc' : 'paper'} size={20} color={p.ink} /></View>;
+  if (kind !== 'cert') return <View style={[tile, { backgroundColor: p.sunken }]}><Glyph kind={kind === 'invoice' ? 'receipt' : 'contract'} size={20} color={p.ink} /></View>;
   return (
     <View style={[tile, { backgroundColor: p.overlay }]}>
       <Image source={LOGO[issuerOf(it)]} style={{ width: 22, height: 22 }} accessibilityIgnoresInvertColors />
