@@ -9,6 +9,13 @@ import { radius, space, usePalette, type Ink } from '../theme';
 import { Button, Chevron, Empty, Notice, Screen, T } from '../ui/kit';
 import type { HomeRoute } from './HomeScreen';
 
+type MoneyWait = 'off' | 'loading' | 'not_made';
+const WAIT_TEXT: Record<MoneyWait, string> = {
+  off: 'PC가 켜지면 돈 요약을 받아 와요',
+  loading: 'PC에서 돈 요약을 받는 중이에요',
+  not_made: 'PC가 돈 요약을 아직 만들지 못했어요',
+};
+
 const NB = ' ';
 
 export function MoneyScreen({ go }: { go: (to: HomeRoute) => void }) {
@@ -38,21 +45,15 @@ export function MoneyScreen({ go }: { go: (to: HomeRoute) => void }) {
   }
   const cm = s.data.pcCopy?.money;
   if (!m.snap && cm) return <CopyMoney money={cm} />;
-  if (!m.snap && s.pc === 'online' && !s.data.pcCopy) {
-    return (
-      <Screen title="돈" shell scroll={false} testID="money">
-        <Empty testID="money-waiting" title="PC에서 돈 요약을 받는 중이에요" sub="한 번 받으면 PC가 꺼져 있어도 마지막 값을 보여 드려요." />
-      </Screen>
-    );
-  }
   if (!m.snap) {
+    const wait: MoneyWait = s.pc !== 'online' ? 'off' : s.data.pcCopy ? 'not_made' : 'loading';
     return (
       <Screen title="돈" shell scroll={false} testID="money">
         <Empty
-          testID="money-none"
-          title="PC가 켜지면 돈 요약을 받아 와요"
-          sub="한 번 받으면 PC가 꺼져 있어도 마지막 값을 보여 드려요."
-          action={<Button kind="secondary" label="연결한 PC 보기" onPress={() => go('connection')} />}
+          testID={`money-none-${wait}`}
+          title={WAIT_TEXT[wait]}
+          sub={wait === 'not_made' ? undefined : '한 번 받으면 PC가 꺼져 있어도 마지막 값을 보여 드려요.'}
+          action={wait === 'off' ? <Button kind="secondary" label="연결한 PC 보기" onPress={() => go('connection')} /> : undefined}
         />
       </Screen>
     );

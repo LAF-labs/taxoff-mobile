@@ -138,7 +138,7 @@ describe('폰 월 리포트 사본 읽기(tex ADR-068 결정 8)', () => {
     const past = reportDocOf(COPY, reportView(COPY, '2026-10', 1), now);
     assert.equal(past.partnersSale, null);
     const pastHtml = reportDocHtml(past);
-    assert.ok(!pastHtml.includes('많이 판 거래처') && !pastHtml.includes('많이 판 품목'));
+    assert.ok(!pastHtml.includes('많이 판 거래처') && !pastHtml.includes('많이 판 품목') && !pastHtml.includes('<td>없음</td>'));
     assert.ok(pastHtml.includes('2026년 10월'));
   });
 

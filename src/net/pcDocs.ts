@@ -90,7 +90,7 @@ export async function syncDocs<E extends Env>(o: {
     }
     return keep;
   });
-  const index: DocIndex = { v: 2, pairId: o.pairId, items: kept };
+  const index: DocIndex = { v: 2, pairId: o.pairId, items: kept, ...(have?.syncedAt ? { syncedAt: have.syncedAt } : {}) };
   if (out.removed || !have) await saveIndex(o.fileKey, index);
   const missing = list.filter((it) => !kept.some((k) => k.docId === it.docId));
   const started = Date.now();
@@ -126,6 +126,7 @@ export async function syncDocs<E extends Env>(o: {
     }
   }
   out.state = index.items.length === list.length ? 'ok' : 'partial';
+  if (out.state === 'ok') await saveIndex(o.fileKey, { ...index, syncedAt: new Date().toISOString() });
   o.log?.('docs', { got: out.got, removed: out.removed, bad: out.bad, left: list.length - index.items.length });
   return out;
 }

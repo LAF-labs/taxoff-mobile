@@ -30,6 +30,7 @@ export interface Customer {
   rep?: string;
   emailHint?: string;
   item?: string;
+  tel?: string;
   state?: CopyCounterparty['state'];
   stateOn?: string;
   last?: CopyCounterparty['last'];
@@ -47,7 +48,7 @@ export function maskEmail(v: string): string | undefined {
 }
 const FAILED_KEEP_MS = 7 * 86_400_000;
 
-const digits = (v: string) => v.replace(/\D/g, '');
+const digits = (v: string | undefined) => (v ?? '').replace(/\D/g, '');
 const sameBiz = (a: string, b: string) => digits(a).length === 10 && digits(a) === digits(b);
 
 export const newId = (cmdId: string) => `new-${cmdId}`;
@@ -57,6 +58,7 @@ export function customerOf(c: CopyCounterparty): Customer {
   if (c.rep) out.rep = c.rep;
   if (c.emailHint) out.emailHint = c.emailHint;
   if (c.item) out.item = c.item;
+  if (c.tel) out.tel = c.tel;
   if (c.state) {
     out.state = c.state;
     if (c.stateOn) out.stateOn = c.stateOn;
@@ -130,7 +132,7 @@ export function searchCustomers(list: readonly Customer[], q: string): Customer[
   const t = q.trim().toLowerCase();
   if (!t) return [];
   const d = digits(t);
-  return byName(list.filter((c) => c.name.toLowerCase().includes(t) || (d.length >= 3 && digits(c.bizNo).includes(d))));
+  return byName(list.filter((c) => c.name.toLowerCase().includes(t) || !!c.rep?.toLowerCase().includes(t) || (d.length >= 3 && (digits(c.bizNo).includes(d) || digits(c.tel).includes(d)))));
 }
 
 export const findCustomer = (list: readonly Customer[], bizNo: string): Customer | null => list.find((c) => sameBiz(c.bizNo, bizNo)) ?? null;
