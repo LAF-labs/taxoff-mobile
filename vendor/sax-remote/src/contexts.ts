@@ -17,6 +17,7 @@ export const CTX = {
   sas: 'SAX-SAS-v1',
   pair: 'SAX-pair-v1',
   session: 'SAX-session-v1',
+  move: 'SAX-move-pc-v1',
   acctClaim: 'SAX-acct-claim-v1',
   pclinkCommit: 'SAX-pclink-commit-v1',
   pclink: 'SAX-pclink-v1',
@@ -44,4 +45,4 @@ export const VD_PURPOSES: readonly VdPurpose[] = [CTX.qbundle, CTX.ckpt, CTX.doc
 export type VmPurpose = typeof CTX.env | typeof CTX.qbundle | typeof CTX.rotate | typeof CTX.dpop | typeof CTX.share | typeof CTX.pxEnroll | typeof CTX.uxEnroll;
 export const VM_PURPOSES: readonly VmPurpose[] = [CTX.env, CTX.qbundle, CTX.rotate, CTX.dpop, CTX.share, CTX.pxEnroll, CTX.uxEnroll];
 
-export type NoiseCtx = typeof CTX.pair | typeof CTX.session;
+export type NoiseCtx = typeof CTX.pair | typeof CTX.session | typeof CTX.move;
