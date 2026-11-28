@@ -15,7 +15,7 @@ registerHooks({
 });
 
 const { decodeEnvelope, encodeEnvelope, makeEnvelope, reportDocHtml, ulid } = await import('@sax/remote');
-const { clampMonth, monthsFor, partnerMonths, periodText, reportDocOf, reportFileName, reportView, reportWait, spanText, topOf } = await import('../src/report.ts');
+const { clampMonth, headlineText, monthsFor, partnerMonths, periodText, reportDocOf, reportFileName, reportView, reportWait, spanText, topOf, whyOf } = await import('../src/report.ts');
 const { newerCopy } = await import('../src/net/pcCopy.ts');
 type Copy = import('@sax/remote').CopyReport;
 type Month = Copy['months'][number];
@@ -156,5 +156,17 @@ describe('폰 월 리포트 사본 읽기(tex ADR-068 결정 8)', () => {
     const have = { asOf: 1, counterparties: [], report: COPY, ownerDesktopDeviceId: 'pc1' };
     assert.equal(newerCopy(have, { asOf: 2, counterparties: [], ownerDesktopDeviceId: 'pc1' }).report, COPY);
     assert.equal(newerCopy(have, { asOf: 2, counterparties: [], ownerDesktopDeviceId: 'pc2' }).report, undefined, '다른 PC의 리포트는 잇지 않는다');
+  });
+  it('report.v3 사본: 작년 같은 달 점선, 한 줄 요약, 왜 늘었을까는 매출이 늘어난 쪽만', () => {
+    const last = { ...COPY.months.at(-1)!, ly: { s: L(10_000_000), p: L(null) } };
+    const w1 = { ...COPY.windows[0]!, prev: { s: L(11_030_000), p: L(342_000) }, why: [{ k: 'p' as const, name: '거래처1', d: 500_000 }, { k: 'i' as const, name: '유지보수', d: -300_000 }, { k: 'p' as const, name: '거래처2', d: 200_000 }] };
+    const copy = { ...COPY, months: [...COPY.months.slice(0, -1), last], windows: [w1, ...COPY.windows.slice(1)] };
+    const v = reportView(copy, '2026-11', 1);
+    assert.equal(v.chart.at(-1)!.lastYear?.amount, 10_000_000);
+    assert.equal(v.chart.at(-2)!.lastYear, null, '작년 값이 없는 달은 모름');
+    assert.equal(headlineText(v, true), '11월 매출은 1,204만원, 작년 11월보다 20% 많아요');
+    const why = whyOf(v)!;
+    assert.equal(why.title, '11월 매출이 왜 늘었을까');
+    assert.deepEqual(why.rows.map((r) => r.label), ['거래처1', '거래처2']);
   });
 });

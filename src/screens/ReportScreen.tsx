@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { CopyReport } from '@sax/remote';
 import { useSession } from '../session';
 import { space, usePalette } from '../theme';
 import { Card, Kv, KvRow } from '../ui/card';
 import { bigWon, Button, Empty, Group, Notice, Row, Screen, Seg, T, TextButton } from '../ui/kit';
-import { BarChart, Legend, MonthStep, RankRows, Ring, Spark, Stack, Tip, type BarCol, type RankItem } from '../ui/report';
+import { BarChart, InfoMark, Legend, MonthStep, RankRows, Ring, Spark, Stack, Tip, type BarCol, type RankItem } from '../ui/report';
 import { Sheet } from '../ui/sheet';
-import { averageOf, clampMonth, partnerMonths, prevName, trendText, reportView, reportWait, shiftMonth, spanText, topOf, WINDOWS, type ChartCol, type Line, type Months, type Rank, type RankRow, type ReportWait } from '../report';
+import { averageOf, clampMonth, ddayText, headlineText, partnerMonths, prevName, shortWon, trendText, whyOf, reportView, reportWait, shiftMonth, spanText, topOf, WINDOWS, type ChartCol, type Line, type Months, type Rank, type RankRow, type ReportWait } from '../report';
 import { canReportPdf, shareReportPdf } from '../reportPdf';
 import type { HomeRoute } from './HomeScreen';
 
@@ -44,7 +44,7 @@ const WAIT_TEXT: Record<ReportWait, string> = {
   not_made: 'PC가 리포트를 아직 만들지 못했어요',
 };
 
-export function ReportScreen({ go, onMoney, preview }: { go: (to: HomeRoute) => void; onMoney: () => void; preview?: ReportPreview }) {
+export function ReportScreen({ go, onMoney, onAsk, preview }: { go: (to: HomeRoute) => void; onMoney: () => void; onAsk?: (text: string) => void; preview?: ReportPreview }) {
   const s = useSession();
   const copy = s.data.pcCopy?.report ?? null;
   if (!s.data.pair) {
@@ -66,10 +66,10 @@ export function ReportScreen({ go, onMoney, preview }: { go: (to: HomeRoute) => 
       </Screen>
     );
   }
-  return <Report copy={copy} copyAt={s.data.pcCopy?.asOf ?? null} onMoney={onMoney} preview={preview} />;
+  return <Report copy={copy} copyAt={s.data.pcCopy?.asOf ?? null} onMoney={onMoney} onAsk={onAsk} preview={preview} />;
 }
 
-function Report({ copy, copyAt, onMoney, preview }: { copy: CopyReport; copyAt: number | null; onMoney: () => void; preview?: ReportPreview }) {
+function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; copyAt: number | null; onMoney: () => void; onAsk?: (text: string) => void; preview?: ReportPreview }) {
   const p = usePalette();
   const [months, setMonths] = useState<Months>(preview?.months ?? 1);
   const [picked, setPicked] = useState<string | null>(preview?.month ?? null);
@@ -85,6 +85,8 @@ function Report({ copy, copyAt, onMoney, preview }: { copy: CopyReport; copyAt: 
     return row ? { kind: 'partner', side: 'sale', row } : null;
   });
   const [pdf, setPdf] = useState<'idle' | 'busy' | 'failed'>('idle');
+  const [compare, setCompare] = useState(false);
+  const [vatInfo, setVatInfo] = useState(false);
   // 새 사본이 오면(달이 바뀌었거나 PC가 다시 계산) 고른 달이 사본 밖이면 가장 가까운 달로
   const month = clampMonth(copy, picked ?? copy.month, months);
   const v = useMemo(() => reportView(copy, month, months), [copy, month, months]);
@@ -107,6 +109,10 @@ function Report({ copy, copyAt, onMoney, preview }: { copy: CopyReport; copyAt: 
     ['현금 매출', v.sales.cash],
   ]);
   const vatDue = v.vat && v.vat.s !== null && v.vat.p !== null ? v.vat.s - v.vat.p : null;
+  const lyOk = v.chart.some((c) => !!c.lastYear?.amount);
+  const showLy = compare && lyOk;
+  const headline = headlineText(v, showLy);
+  const why = whyOf(v);
   const savePdf = async () => {
     setPdf('busy');
     setPdf((await shareReportPdf(copy, v)) === 'shared' ? 'idle' : 'failed');
@@ -123,7 +129,7 @@ function Report({ copy, copyAt, onMoney, preview }: { copy: CopyReport; copyAt: 
       />
       {copyAt !== null && (
         <T v="meta" c="ink3" style={{ textAlign: 'right' }} testID="report-updated">
-          {`${updatedText(copyAt)} 업데이트`}
+          {`${updatedText(copyAt)} 기준`}
         </T>
       )}
       {pdf === 'failed' && (
@@ -142,7 +148,24 @@ function Report({ copy, copyAt, onMoney, preview }: { copy: CopyReport; copyAt: 
       <TotalCard title="매출" testID="report-sales" total={v.sales.total} prev={v.prev?.sales} comparable={v.prev?.comparable.sales} months={months} days={v.days} values={v.chart.map((c) => c.sales.total.amount)} color={p.dataSale} />
       <TotalCard title="매입" testID="report-purchase" total={v.purchase.total} prev={v.prev?.purchase} comparable={v.prev?.comparable.purchase} months={months} days={v.days} values={v.chart.map((c) => c.purchase.total.amount)} color={p.dataBuy} />
       {v.vat && (
-        <Card title={`부가세 ${v.vat.h}기`} testID="report-vat" side={<T v="sub" c="ink2">{`${monthNo(v.vat.dl)}월 ${Number(v.vat.dl.slice(8, 10))}일까지`}</T>}>
+        <Card
+          title={`부가세 ${v.vat.h}기`}
+          testID="report-vat"
+          side={
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
+              <Pressable accessibilityRole="button" accessibilityLabel={`부가세 ${v.vat.h}기가 뭔지 보기`} accessibilityState={{ expanded: vatInfo }} onPress={() => setVatInfo((x) => !x)} hitSlop={8} testID="report-vat-info">
+                <InfoMark color={p.ink3} />
+              </Pressable>
+              <T v="sub" c="ink2">{`${monthNo(v.vat.dl)}월 ${Number(v.vat.dl.slice(8, 10))}일`}</T>
+              {ddayText(copy.today, v.vat.dl) && (
+                <View style={{ paddingHorizontal: 8, borderRadius: 999, backgroundColor: ddayLeft(copy.today, v.vat.dl) <= 14 ? p.attentionSoft : p.sunken }}>
+                  <T v="label" c={ddayLeft(copy.today, v.vat.dl) <= 14 ? 'attention' : 'ink'}>{ddayText(copy.today, v.vat.dl).trim()}</T>
+                </View>
+              )}
+            </View>
+          }
+        >
+          {vatInfo && <T v="sub" c="ink2" testID="report-vat-period">{`${v.vat.h === 1 ? '1월부터 6월' : '7월부터 12월'} 매출과 매입, ${monthNo(v.vat.dl)}월 ${Number(v.vat.dl.slice(8, 10))}일 신고`}</T>}
           <T v="strong">{vatDue !== null ? `${won(vatDue)} 낼 것 같아요` : v.vat.s !== null ? `매출 부가세 ${won(v.vat.s)}` : '확인 못 함'}</T>
           {vatDue !== null && v.vat.s ? <Stack parts={[{ share: Math.max(0, vatDue) / v.vat.s, color: p.dataSale }, { share: 1 - Math.max(0, vatDue) / v.vat.s, color: p.sunken }]} /> : null}
           <Kv>
@@ -152,8 +175,24 @@ function Report({ copy, copyAt, onMoney, preview }: { copy: CopyReport; copyAt: 
         </Card>
       )}
       <Card title={chartPurchase ? '달마다' : '달마다 매출'} testID="report-monthly">
-        {chartPurchase && <Legend a="매출" b="매입" />}
+        {headline && <T v="strong" testID="report-headline">{headline}</T>}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          {chartPurchase ? <Legend a="매출" b="매입" /> : <View />}
+          {lyOk && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: showLy }}
+              onPress={() => setCompare((x) => !x)}
+              testID="report-compare"
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, height: 32, paddingHorizontal: 12, borderRadius: 999, backgroundColor: showLy ? p.ink : p.sunken }}
+            >
+              <View style={{ width: 12, height: 0, borderTopWidth: 1.5, borderStyle: 'dashed', borderColor: showLy ? p.onInk : p.ink2 }} />
+              <T v="label" c={showLy ? 'onInk' : 'ink'}>작년과 비교</T>
+            </Pressable>
+          )}
+        </View>
         <BarChart
+          line={showLy ? v.chart.map((c) => c.lastYear?.amount ?? null) : undefined}
           cols={v.chart.map((c) => barOf(c, chartPurchase, v.chart.length <= 6))}
           tick={(n) => shortWon(n).replace(/원$/, '')}
           label={`${v.chart[0]!.label}부터 ${v.chart.at(-1)!.label}까지 달마다 매출${chartPurchase ? '과 매입' : ''}`}
@@ -162,10 +201,22 @@ function Report({ copy, copyAt, onMoney, preview }: { copy: CopyReport; copyAt: 
           holding={preview?.hold ?? null}
           tip={(m) => {
             const c = v.chart.find((x) => x.month === m)!;
-            return <Tip rows={[{ k: '매출', v: amountText(c.sales.total) }, ...(chartPurchase ? [{ k: '매입', v: amountText(c.purchase.total) }] : [])]} testID="report-tip" />;
+            return <Tip rows={[{ k: '매출', v: amountText(c.sales.total) }, ...(chartPurchase ? [{ k: '매입', v: amountText(c.purchase.total) }] : []), ...(showLy && c.lastYear ? [{ k: '작년', v: amountText(c.lastYear) }] : [])]} testID="report-tip" />;
           }}
         />
+        <MonthTable cols={v.chart} purchase={chartPurchase} ly={showLy} />
       </Card>
+
+      {why && (
+        <Card title={why.title} testID="report-why">
+          <Kv>
+            {why.rows.map((x) => (
+              <KvRow key={x.label} label={x.label} value={`${x.delta > 0 ? '+' : '−'}${shortWon(Math.abs(x.delta))}`} />
+            ))}
+          </Kv>
+          {onAsk && <Button kind="secondary" label="대화에서 더 묻기" onPress={() => onAsk(`${span} 매출이 ${prevName(months)}보다 왜 ${why.up ? '늘었는지' : '줄었는지'} 알려줘`)} testID="report-why-ask" />}
+        </Card>
+      )}
 
       <MixCard title="매출은 어디서" testID="report-sales-mix" colors={[p.dataSale, p.dataSaleMuted, p.dataSaleSoft, p.dataSaleSoft]} parts={saleParts} />
       {hasPurchase && (
@@ -244,18 +295,12 @@ function barOf(c: ChartCol, purchase: boolean, roomy: boolean): BarCol {
     b: purchase ? c.purchase.total.amount : null,
     on: c.on,
     out: !c.inWindow,
+    busy: c.on ? { a: c.sales.total.partial || c.sales.total.amount === null, b: purchase && (c.purchase.total.partial || c.purchase.total.amount === null) } : undefined,
     a11y: `${monthNo(c.month)}월 매출 ${amountText(c.sales.total)}${purchase ? `, 매입 ${amountText(c.purchase.total)}` : ''}${c.on ? '' : ', 이 달 보기'}`,
   };
 }
 
 const known = (l: Line) => l.amount !== null;
-/** 막대 위와 눈금의 짧은 금액(PC shortWon): 887억원, 1.2조원, 4,031만원 */
-const shortWon = (v: number) => {
-  const a = Math.abs(v);
-  const [u, name] = a >= 1e12 ? [1e12, '조'] : a >= 1e8 ? [1e8, '억'] : [1e4, '만'];
-  const n = v / u;
-  return `${(Math.abs(n) >= 100 || name === '만' ? Math.round(n) : Math.round(n * 10) / 10).toLocaleString('ko-KR')}${name}원`;
-};
 
 /** 요약 카드(PC totalCard): 합계, 비교 글, 앞 기간 합계와 평균. 꺾은선은 제목 줄 */
 function TotalCard({ title, total, prev, comparable, months, days, values, color, testID }: {
@@ -280,9 +325,40 @@ type Part = [label: string, line: Line, count?: number];
 const knownParts = (parts: Part[]): Part[] => parts.filter(([, l], i) => known(l) && (i === 0 || l.amount !== 0));
 const updatedText = (at: number) => {
   const t = new Date(at);
-  const hh = t.getHours();
-  return `${t.getMonth() + 1}월 ${t.getDate()}일 ${hh < 12 ? '오전' : '오후'} ${hh % 12 || 12}시 ${String(t.getMinutes()).padStart(2, '0')}분`;
+  const hm = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+  return t.toDateString() === new Date().toDateString() ? `오늘 ${hm}` : `${t.getMonth() + 1}월 ${t.getDate()}일 ${hm}`;
 };
+const ddayLeft = (today: string, day: string) => Math.round((Date.parse(day) - Date.parse(today)) / 86_400_000);
+
+/** 달마다 표(PC rp-table): 막대와 같은 칸, 색 칸이 줄 이름 */
+function MonthTable({ cols, purchase, ly }: { cols: ChartCol[]; purchase: boolean; ly: boolean }) {
+  const p = usePalette();
+  const cell = (n: number | null) => (n === null ? '-' : shortWon(n).replace(/만원$/, '').replace(/원$/, ''));
+  const unit = cols.every((c) => (c.sales.total.amount ?? 0) < 1e8 && (c.purchase.total.amount ?? 0) < 1e8) ? '만원' : null;
+  const fmt = (n: number | null) => (n === null ? '-' : unit ? cell(n) : shortWon(n).replace(/원$/, ''));
+  const row = (key: string, sw: ReactNode, label: string, vals: Array<number | null>) => (
+    <View key={key} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderTopWidth: StyleSheet.hairlineWidth, borderColor: p.line }}>
+      <View style={{ width: 56, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        {sw}
+        <T v="meta" c="ink2">{label}</T>
+      </View>
+      {vals.map((n, i) => (
+        <T key={i} v="meta" c={cols[i]!.on ? 'ink' : 'ink2'} lines={1} style={{ flex: 1, textAlign: 'center', fontSize: 11, fontWeight: cols[i]!.on ? '600' : '400' }}>
+          {fmt(n)}
+        </T>
+      ))}
+    </View>
+  );
+  const dot = (color: string) => <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color }} />;
+  return (
+    <View testID="report-table">
+      {unit && <T v="meta" c="ink3" style={{ textAlign: 'right', fontSize: 11 }}>{`단위 ${unit}`}</T>}
+      {row('s', dot(p.dataSale), '매출', cols.map((c) => c.sales.total.amount))}
+      {purchase && row('b', dot(p.dataBuy), '매입', cols.map((c) => c.purchase.total.amount))}
+      {ly && row('l', <View style={{ width: 8, height: 0, borderTopWidth: 1.5, borderStyle: 'dashed', borderColor: p.ink3 }} />, '작년', cols.map((c) => c.lastYear?.amount ?? null))}
+    </View>
+  );
+}
 
 function MixCard({ title, parts, colors, testID }: { title: string; parts: Part[]; colors: string[]; testID: string }) {
   const p = usePalette();

@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, View, type PanResponderGestureState } from 'react-native';
-import Svg, { Circle, Polyline } from 'react-native-svg';
+import Svg, { Circle, Path, Polyline } from 'react-native-svg';
 import { radius, size, space, usePalette, useReducedMotion } from '../theme';
 import { Glyph } from './glyph';
 import { Chevron, T, tap } from './kit';
@@ -120,6 +120,8 @@ export interface BarCol {
   out?: boolean;
   /** 막대 위에 붙는 짧은 금액(887억원) */
   value?: string;
+  /** 아직 다 안 들어온 쪽(막대 끝을 점선으로) */
+  busy?: { a?: boolean; b?: boolean };
   a11y: string;
 }
 
@@ -147,7 +149,9 @@ type Box = { x: number; y: number; w: number };
  * 말풍선은 누른 칸의 막대 바로 위 가운데에 뜨고, 막대 영역 밖으로 나가지 않는다.
  * 좌우로 밀면 앞 달, 다음 달로 넘긴다(step, 2026-11-26 대표: x축에 달이 다 보이지 않으니 밀어서 넘기게).
  */
-export function BarChart({ cols, onPick, tip, label, step, tick, testID = 'report-chart', holding = null }: {
+export function BarChart({ cols, onPick, tip, label, step, tick, line, testID = 'report-chart', holding = null }: {
+  /** 작년과 비교 점선(칸마다 금액, 모르면 null) */
+  line?: Array<number | null>;
   cols: BarCol[]; onPick?: (key: string) => void; tip: (key: string) => ReactNode; label: string; testID?: string;
   /** 눈금 글(500억) */
   tick: (v: number) => string;
@@ -260,8 +264,12 @@ export function BarChart({ cols, onPick, tip, label, step, tick, testID = 'repor
                   {c.value}
                 </T>
               )}
-              <View style={[st.bar, dense && st.barDense, { height: h(c.a), backgroundColor: p.dataSale }, c.out && held !== c.key && st.dim]} />
-              <View style={[st.bar, dense && st.barDense, { height: h(c.b), backgroundColor: p.dataBuy }, c.out && held !== c.key && st.dim]} />
+              <View style={[st.bar, dense && st.barDense, { height: h(c.a), backgroundColor: p.dataSale }, c.out && held !== c.key && st.dim, c.busy?.a && st.barBusy]}>
+                {c.busy?.a && <View style={[st.cap, { borderColor: p.dataSale }]} />}
+              </View>
+              <View style={[st.bar, dense && st.barDense, { height: h(c.b), backgroundColor: p.dataBuy }, c.out && held !== c.key && st.dim, c.busy?.b && st.barBusy]}>
+                {c.busy?.b && <View style={[st.cap, { borderColor: p.dataBuy }]} />}
+              </View>
             </View>
             <T v={c.on ? 'label' : 'meta'} c={c.on || held === c.key ? 'ink' : 'ink3'} style={c.on && st.colOn} lines={1}>
               {c.label}
@@ -269,6 +277,13 @@ export function BarChart({ cols, onPick, tip, label, step, tick, testID = 'repor
           </Pressable>
         ))}
       </Animated.View>
+      {line && width > 0 && (
+        <Svg pointerEvents="none" width={width} height={LABEL_H + BARS_H} style={st.line}>
+          {segments(line).map((seg, k) => (
+            <Polyline key={k} points={seg.map(([i, v]) => `${(((i + 0.5) / cols.length) * width).toFixed(1)},${(LABEL_H + BARS_H - h(v)).toFixed(1)}`).join(' ')} fill="none" stroke={p.ink3} strokeWidth={1.5} strokeDasharray="4 4" />
+          ))}
+        </Svg>
+      )}
       </View>
       {held && (
         // 줄은 막대 영역 폭 전부, 말풍선은 그 안에서 왼쪽 여백으로 옮긴다(오른쪽 끝 칸에서도 줄바꿈 없이 제 폭)
@@ -404,6 +419,30 @@ export function Ring({ parts, track, sizePx = 88 }: { parts: Array<{ share: numb
   );
 }
 
+/** 작년 점선: 모르는 달에서 끊는다 */
+function segments(vals: Array<number | null>): Array<Array<[number, number]>> {
+  const out: Array<Array<[number, number]>> = [];
+  let cur: Array<[number, number]> = [];
+  vals.forEach((v, i) => {
+    if (v === null) {
+      if (cur.length) out.push(cur);
+      cur = [];
+    } else cur.push([i, v]);
+  });
+  if (cur.length) out.push(cur);
+  return out.map((seg) => (seg.length === 1 ? [[seg[0]![0] - 0.2, seg[0]![1]], [seg[0]![0] + 0.2, seg[0]![1]]] : seg));
+}
+
+/** 용어 옆 ⓘ */
+export function InfoMark({ color, size = 16 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <Circle cx={12} cy={12} r={9} fill="none" stroke={color} strokeWidth={1.8} />
+      <Path d="M12 11v5M12 8v.2" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 const st = StyleSheet.create({
   monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   month: { flexDirection: 'row', alignItems: 'center', gap: space.s1 },
@@ -428,6 +467,9 @@ const st = StyleSheet.create({
   chart: { flexDirection: 'row', alignItems: 'flex-end', gap: space.s2 },
   value: { position: 'absolute', left: -12, right: -12, textAlign: 'center', fontSize: 11, lineHeight: 14 },
   dim: { opacity: 0.45 },
+  barBusy: { borderTopLeftRadius: 0, borderTopRightRadius: 0 },
+  cap: { position: 'absolute', left: 0, right: 0, bottom: '100%', height: 10, borderWidth: 1.5, borderBottomWidth: 0, borderStyle: 'dashed', borderTopLeftRadius: 3, borderTopRightRadius: 3 },
+  line: { position: 'absolute', left: 0, top: 0 },
   col: { flex: 1, minWidth: 0, alignItems: 'center', gap: space.s2 },
   colOn: { fontWeight: '600' },
   bars: { height: LABEL_H + BARS_H, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: space.s1 },

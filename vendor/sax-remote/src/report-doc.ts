@@ -65,6 +65,10 @@ export interface ReportDoc {
   purchaseRows?: ReportDocLine[];
   vat?: ReportDocVat | null;
   receivable?: { received: number; waiting: number; late: number; lateCount: number } | null;
+  /** 달마다 카드 제목 아래 한 줄("11월 매출은 563만원, 지난달보다 10% 많아요") */
+  headline?: string | null;
+  /** 왜 늘었을까(줄었을까): 앞 기간보다 많이 바뀐 거래처와 품목 */
+  why?: { title: string; rows: Array<{ label: string; delta: number }> } | null;
   /** 계좌를 하나라도 이었나. false면 통장 카드에 연결 안내만 쓴다 */
   bankLinked?: boolean;
   /** 자료 카드 줄 */
@@ -167,9 +171,20 @@ dt.t,dd.t{color:${C.ink};font-weight:700}
 .src span{display:flex;align-items:center;gap:6px}
 .src .wait{color:${C.attention}}
 .src .none{color:${C.ink3}}
+.hl{display:flex;flex-direction:column;gap:2px}
+.hl b{font-size:12px;line-height:18px}
+.tbl{display:grid;column-gap:4px}
+.trow{display:contents}
+.trow>span{padding:4px 0;border-top:1px solid ${C.sunken};text-align:center;font-size:9px;line-height:14px;color:${C.ink2};white-space:nowrap}
+.trow>span.on{color:${C.ink};font-weight:700}
+.trow>.k{display:flex;align-items:center;gap:4px;text-align:left}
+.why{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.why>div{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:10px;background:${C.canvas}}
+.why .k{color:${C.ink2};overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.why .v{font-weight:700}
 .foot{margin-top:4px;break-inside:avoid;display:flex;justify-content:space-between;color:${C.ink3};padding-top:4px}`;
 
-const card = (title: string, body: string, side = '') => `<section class="card"><div class="hd"><h2>${esc(title)}</h2>${side}</div>${body}</section>`;
+const card = (title: string, body: string, side = '') => `<section class="card"><div class="hd"><h2>${title.startsWith('<') ? title : esc(title)}</h2>${side}</div>${body}</section>`;
 const dot = (color: string) => `<i class="dot" style="background:${color}"></i>`;
 const meter = (share: number, color: string) => `<div class="meter"><i style="width:${Math.max(0, Math.min(100, Math.round(share * 100)))}%;background:${color}"></i></div>`;
 
@@ -235,7 +250,12 @@ function chart(d: ReportDoc): string {
     })
     .join('');
   const legend = `<span class="legend"><span>${dot(tone('sale', 0))}매출</span><span>${dot(tone('buy', 0))}매입</span></span>`;
-  return card('달마다', `<svg width="100%" viewBox="0 0 ${W} ${base + 24}" role="img" aria-label="달마다 매출과 매입">${grid}${bars}</svg>`, legend);
+  const cell = (v: DocAmount) => (v === null ? '-' : esc(shortWon(v).replace(/원$/, '')));
+  const trow = (sw: string, label: string, vals: DocAmount[]) =>
+    `<div class="trow"><span class="k">${sw}${label}</span>${vals.map((v, i) => `<span${i === cur ? ' class="on"' : ''}>${cell(v)}</span>`).join('')}</div>`;
+  const table = `<div class="tbl" style="grid-template-columns:${AX - 6}px repeat(${ms.length},minmax(0,1fr))">${trow(dot(tone('sale', 0)), '매출', ms.map((m) => m.sales))}${trow(dot(tone('buy', 0)), '매입', ms.map((m) => m.purchase))}</div>`;
+  const title = d.headline ? `<span class="hl"><span>달마다</span><b>${esc(d.headline)}</b></span>` : '달마다';
+  return card(title, `<svg width="100%" viewBox="0 0 ${W} ${base + 24}" role="img" aria-label="달마다 매출과 매입">${grid}${bars}</svg>${table}`, legend);
 }
 
 function ring(parts: DocAmount[], t: Tone): string {
@@ -322,6 +342,7 @@ export function reportDocHtml(d: ReportDoc, opts: { fonts?: ReportDocFonts } = {
 <div class="top"><div><h1>${esc(d.bizName)} 리포트</h1><div class="p">${esc(d.period)}</div></div><div class="meta">${meta.map((x) => `<div>${esc(x)}</div>`).join('')}</div></div>
 <div class="g3">${totalCard('매출', 'sale', d.salesTotal, d.salesTrend, d.months.map((m) => m.sales), d.salesRows)}${totalCard('매입', 'buy', d.purchaseTotal, d.purchaseTrend, d.months.map((m) => m.purchase), d.purchaseRows)}${third}</div>
 ${chart(d)}
+${d.why ? card(d.why.title, `<div class="why">${d.why.rows.map((x) => `<div><span class="k">${esc(x.label)}</span><span class="v">${x.delta > 0 ? '+' : '−'}${esc(shortWon(Math.abs(x.delta)))}</span></div>`).join('')}</div>`) : ''}
 <div class="g2">${mixCard('매출은 어디서', 'sale', d.sales)}${mixCard('매입은 어디로', 'buy', d.purchase)}</div>
 ${pairs.join('\n')}
 <div class="foot"><span>택스오프</span><span>${esc(d.period)}</span></div>
