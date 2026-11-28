@@ -88,6 +88,26 @@ export function Card({ kind, tone, title, side, children, testID, style }: { kin
   );
 }
 
+/**
+ * 면 없는 화면 섹션(리포트). 위에 화면 폭 옅은 띠(8)를 두고 제목과 여백으로 나눈다(2026-11-28 대표: 카드로 가두면 어둡고, 면만 빼면 분간이 안 된다).
+ * 화면 안쪽 여백 20(space.s5) 안에서 쓴다.
+ */
+export function Section({ title, side, children, testID }: { title: string; side?: ReactNode; children?: ReactNode; testID?: string }) {
+  const p = usePalette();
+  return (
+    <View style={st.section} testID={testID}>
+      <View style={[st.band, { backgroundColor: p.tint }]} />
+      <View style={st.head}>
+        <T v="strong" style={{ flex: 1 }} role="header">
+          {title}
+        </T>
+        {side}
+      </View>
+      {children}
+    </View>
+  );
+}
+
 /** 라벨과 값 줄 묶음(sx-kv): 줄 사이 6. */
 export function Kv({ children, testID }: { children: ReactNode; testID?: string }) {
   return (
@@ -319,6 +339,8 @@ export const useOnCard = () => useContext(OnCard);
 const st = StyleSheet.create({
   card: { alignSelf: 'stretch', borderRadius: radius.lg, padding: space.s4, gap: space.s3 },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.s2, minHeight: 22 },
+  section: { alignSelf: 'stretch', gap: space.s4, marginTop: space.s4 },
+  band: { height: space.s2, marginHorizontal: -space.s5, marginBottom: space.s4 },
   kv: { gap: 6 },
   kvRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.s4 },
   kvK: { flexShrink: 0 },
