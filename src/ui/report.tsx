@@ -271,9 +271,12 @@ export function BarChart({ cols, onPick, tip, label, step, tick, line, testID = 
                 {c.busy?.b && <View style={[st.cap, { borderColor: p.dataBuy }]} />}
               </View>
             </View>
-            <T v={c.on ? 'label' : 'meta'} c={c.on || held === c.key ? 'ink' : 'ink3'} style={c.on && st.colOn} lines={1}>
-              {c.label}
-            </T>
+            <View style={st.colLabel}>
+              <T v={c.on ? 'label' : 'meta'} c={c.on || held === c.key ? 'ink' : 'ink3'} style={c.on && st.colOn} lines={1}>
+                {c.label}
+              </T>
+              {(c.busy?.a || c.busy?.b) && <ClockMark color={p.ink2} />}
+            </View>
           </Pressable>
         ))}
       </Animated.View>
@@ -433,6 +436,25 @@ function segments(vals: Array<number | null>): Array<Array<[number, number]>> {
   return out.map((seg) => (seg.length === 1 ? [[seg[0]![0] - 0.2, seg[0]![1]], [seg[0]![0] + 0.2, seg[0]![1]]] : seg));
 }
 
+/** 아직 다 안 들어온 달(달 이름 옆) */
+function ClockMark({ color }: { color: string }) {
+  return (
+    <Svg width={12} height={12} viewBox="0 0 24 24" accessibilityLabel="아직 다 안 들어왔어요" accessibilityRole="image">
+      <Circle cx={12} cy={12} r={9} fill="none" stroke={color} strokeWidth={2} />
+      <Path d="M12 7.5v5l3 2" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** 점선 짧은 줄(작년 표시) */
+export function DashMark({ color, width = 12 }: { color: string; width?: number }) {
+  return (
+    <Svg width={width} height={4} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <Path d={`M0 2H${width}`} stroke={color} strokeWidth={1.5} strokeDasharray="3 2" />
+    </Svg>
+  );
+}
+
 /** 용어 옆 ⓘ */
 export function InfoMark({ color, size = 16 }: { color: string; size?: number }) {
   return (
@@ -472,6 +494,7 @@ const st = StyleSheet.create({
   line: { position: 'absolute', left: 0, top: 0 },
   col: { flex: 1, minWidth: 0, alignItems: 'center', gap: space.s2 },
   colOn: { fontWeight: '600' },
+  colLabel: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   bars: { height: LABEL_H + BARS_H, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: space.s1 },
   bar: { width: 12, borderTopLeftRadius: radius.xs + 1, borderTopRightRadius: radius.xs + 1 },
   barDense: { width: 7 },

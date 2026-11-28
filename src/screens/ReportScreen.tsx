@@ -5,7 +5,7 @@ import { useSession } from '../session';
 import { space, usePalette } from '../theme';
 import { Card, Kv, KvRow } from '../ui/card';
 import { bigWon, Button, Empty, Group, Notice, Row, Screen, Seg, T, TextButton } from '../ui/kit';
-import { BarChart, InfoMark, Legend, MonthStep, RankRows, Ring, Spark, Stack, Tip, type BarCol, type RankItem } from '../ui/report';
+import { BarChart, DashMark, InfoMark, Legend, MonthStep, RankRows, Ring, Spark, Stack, Tip, type BarCol, type RankItem } from '../ui/report';
 import { Sheet } from '../ui/sheet';
 import { averageOf, clampMonth, ddayText, headlineText, partnerMonths, prevName, shortWon, trendText, whyOf, reportView, reportWait, shiftMonth, spanText, topOf, WINDOWS, type ChartCol, type Line, type Months, type Rank, type RankRow, type ReportWait } from '../report';
 import { canReportPdf, shareReportPdf } from '../reportPdf';
@@ -186,7 +186,7 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
               testID="report-compare"
               style={{ flexDirection: 'row', alignItems: 'center', gap: 6, height: 32, paddingHorizontal: 12, borderRadius: 999, backgroundColor: showLy ? p.ink : p.sunken }}
             >
-              <View style={{ width: 12, height: 0, borderTopWidth: 1.5, borderStyle: 'dashed', borderColor: showLy ? p.onInk : p.ink2 }} />
+              <DashMark color={showLy ? p.onInk : p.ink2} />
               <T v="label" c={showLy ? 'onInk' : 'ink'}>작년과 비교</T>
             </Pressable>
           )}
@@ -355,7 +355,7 @@ function MonthTable({ cols, purchase, ly }: { cols: ChartCol[]; purchase: boolea
       {unit && <T v="meta" c="ink3" style={{ textAlign: 'right', fontSize: 11 }}>{`단위 ${unit}`}</T>}
       {row('s', dot(p.dataSale), '매출', cols.map((c) => c.sales.total.amount))}
       {purchase && row('b', dot(p.dataBuy), '매입', cols.map((c) => c.purchase.total.amount))}
-      {ly && row('l', <View style={{ width: 8, height: 0, borderTopWidth: 1.5, borderStyle: 'dashed', borderColor: p.ink3 }} />, '작년', cols.map((c) => c.lastYear?.amount ?? null))}
+      {ly && row('l', <DashMark color={p.ink3} width={8} />, '작년', cols.map((c) => c.lastYear?.amount ?? null))}
     </View>
   );
 }
