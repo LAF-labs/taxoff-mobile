@@ -4,7 +4,7 @@ import type { CopyReport } from '@sax/remote';
 import { useSession } from '../session';
 import { space, usePalette } from '../theme';
 import { Card, Kv, KvRow } from '../ui/card';
-import { Button, Empty, Group, Notice, Row, Screen, Seg, T, TextButton, won } from '../ui/kit';
+import { Button, Empty, Group, Notice, Row, Screen, Seg, T, TextButton } from '../ui/kit';
 import { BarChart, Legend, MonthStep, RankRows, Spark, Stack, Tip, type BarCol, type RankItem } from '../ui/report';
 import { Sheet } from '../ui/sheet';
 import { clampMonth, partnerMonths, reportView, reportWait, shiftMonth, spanText, topOf, WINDOWS, type ChartCol, type Line, type Months, type Rank, type RankRow, type ReportWait } from '../report';
@@ -32,6 +32,20 @@ const SIDES: Array<{ key: Side; label: string }> = [
   { key: 'sale', label: '매출' },
   { key: 'purchase', label: '매입' },
 ];
+const UNITS: Array<[number, string]> = [[1e12, '조'], [1e8, '억'], [1e4, '만']];
+/** 큰 금액은 조, 억, 만으로 나눠 쓴다(886억 5,627만 3,113원, 대표 2026-11-28) */
+const won = (n: number | null | undefined) => {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return '';
+  let rest = Math.abs(Math.round(n));
+  const parts: string[] = [];
+  for (const [u, name] of UNITS) {
+    const q = Math.floor(rest / u);
+    if (q) parts.push(`${q.toLocaleString('ko-KR')}${name}`);
+    rest -= q * u;
+  }
+  if (rest || !parts.length) parts.push(rest.toLocaleString('ko-KR'));
+  return `${n < 0 ? '−' : ''}${parts.join(' ')}원`;
+};
 const amountText = (l: Line) => (l.amount === null ? '확인 못 함' : won(l.amount));
 const unsure = (l: Line) => l.amount === null || l.partial;
 const pctText = (share: number) => `${Math.round(share * 100)}%`;
