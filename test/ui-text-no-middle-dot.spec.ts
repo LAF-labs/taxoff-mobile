@@ -9,7 +9,6 @@ const DOT = '·';
 const DIRS = ['src', 'vendor/sax-chat-core/src'];
 
 const ALLOW_LINE: Array<{ file: string; re: RegExp; why: string }> = [
-  { file: 'src/capture/invoice.ts', re: /replace\(\/\[/, why: '영수증 글자에서 구분 문자를 걷어 비교하는 정규식' },
   { file: 'vendor/sax-chat-core/src/reply-check.ts', re: /replace\(\//, why: '모델 답의 가운데점을 쉼표로 바꾸는 정규식' },
 ];
 
