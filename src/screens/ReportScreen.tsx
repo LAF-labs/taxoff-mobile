@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
 import type { CopyReport } from '@sax/remote';
 import { useSession } from '../session';
-import { space, usePalette } from '../theme';
+import { radius, space, usePalette } from '../theme';
 import { Card, Kv, KvRow } from '../ui/card';
 import { bigWon, Button, Empty, Group, Notice, Row, Screen, Seg, T, TextButton } from '../ui/kit';
-import { BarChart, DashMark, InfoMark, Legend, MonthStep, RankRows, Ring, Spark, Stack, Tip, type BarCol, type RankItem } from '../ui/report';
+import { BarChart, InfoMark, Legend, MonthStep, Donut, RankRows, Spark, Stack, Tip, type BarCol, type RankItem } from '../ui/report';
 import { Sheet } from '../ui/sheet';
 import { averageOf, clampMonth, ddayText, headlineText, partnerMonths, periodText, prevName, shortWon, trendText, whyOf, reportView, reportWait, shiftMonth, spanText, topOf, WINDOWS, type ChartCol, type Line, type Months, type Rank, type RankRow, type ReportWait } from '../report';
 import { canReportPdf, shareReportPdf } from '../reportPdf';
@@ -85,7 +85,6 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
     return row ? { kind: 'partner', side: 'sale', row } : null;
   });
   const [pdf, setPdf] = useState<'idle' | 'busy' | 'failed'>('idle');
-  const [compare, setCompare] = useState(false);
   const [vatInfo, setVatInfo] = useState(false);
   // 새 사본이 오면(달이 바뀌었거나 PC가 다시 계산) 고른 달이 사본 밖이면 가장 가까운 달로
   const month = clampMonth(copy, picked ?? copy.month, months);
@@ -112,9 +111,7 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
     ['현금 매출', v.sales.cash],
   ]);
   const vatDue = v.vat && v.vat.s !== null && v.vat.p !== null ? v.vat.s - v.vat.p : null;
-  const lyOk = v.chart.some((c) => !!c.lastYear?.amount);
-  const showLy = compare && lyOk;
-  const headline = headlineText(v, showLy);
+  const headline = headlineText(v, v.chart.some((c) => !!c.lastYear?.amount));
   const why = whyOf(v);
   const savePdf = async () => {
     setPdf('busy');
@@ -161,7 +158,7 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
               </Pressable>
               <T v="sub" c="ink2">{`${monthNo(v.vat.dl)}월 ${Number(v.vat.dl.slice(8, 10))}일`}</T>
               {ddayText(copy.today, v.vat.dl) && (
-                <View style={{ paddingHorizontal: 8, borderRadius: 999, backgroundColor: ddayLeft(copy.today, v.vat.dl) <= 14 ? p.attentionSoft : p.sunken }}>
+                <View style={{ paddingHorizontal: 8, borderRadius: radius.full, backgroundColor: ddayLeft(copy.today, v.vat.dl) <= 14 ? p.attentionSoft : p.sunken }}>
                   <T v="label" c={ddayLeft(copy.today, v.vat.dl) <= 14 ? 'attention' : 'ink'}>{ddayText(copy.today, v.vat.dl).trim()}</T>
                 </View>
               )}
@@ -179,35 +176,18 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
       )}
       <Card title={chartPurchase ? '달마다' : '달마다 매출'} testID="report-monthly">
         {headline && <T v="strong" testID="report-headline">{headline}</T>}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          {chartPurchase ? <Legend a="매출" b="매입" /> : <View />}
-          {lyOk && (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ selected: showLy }}
-              onPress={() => setCompare((x) => !x)}
-              testID="report-compare"
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, height: 32, paddingHorizontal: 12, borderRadius: 999, backgroundColor: showLy ? p.ink : p.sunken }}
-            >
-              <DashMark color={showLy ? p.onInk : p.ink2} />
-              <T v="label" c={showLy ? 'onInk' : 'ink'}>작년과 비교</T>
-            </Pressable>
-          )}
-        </View>
+        {chartPurchase && <Legend a="매출" b="매입" />}
         <BarChart
-          line={showLy ? v.chart.map((c) => c.lastYear?.amount ?? null) : undefined}
-          cols={v.chart.map((c) => barOf(c, chartPurchase, v.chart.length <= 6))}
-          tick={(n) => shortWon(n).replace(/원$/, '')}
+          cols={v.chart.map((c) => barOf(c, chartPurchase))}
           label={`${v.chart[0]!.label}부터 ${v.chart.at(-1)!.label}까지 달마다 매출${chartPurchase ? '과 매입' : ''}`}
           onPick={(m) => setPicked(m)}
           step={{ prev: v.first ? null : () => setPicked(back), next: v.latest ? null : () => setPicked(fwd) }}
           holding={preview?.hold ?? null}
           tip={(m) => {
             const c = v.chart.find((x) => x.month === m)!;
-            return <Tip rows={[{ k: '매출', v: amountText(c.sales.total) }, ...(chartPurchase ? [{ k: '매입', v: amountText(c.purchase.total) }] : []), ...(showLy && c.lastYear ? [{ k: '작년', v: amountText(c.lastYear) }] : [])]} testID="report-tip" />;
+            return <Tip rows={[{ k: '매출', v: amountText(c.sales.total) }, ...(chartPurchase ? [{ k: '매입', v: amountText(c.purchase.total) }] : [])]} testID="report-tip" />;
           }}
         />
-        <MonthTable cols={v.chart} purchase={chartPurchase} ly={showLy} />
       </Card>
 
       {why && (
@@ -288,16 +268,14 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
   );
 }
 
-function barOf(c: ChartCol, purchase: boolean, roomy: boolean): BarCol {
+function barOf(c: ChartCol, purchase: boolean): BarCol {
   const sale = c.future ? null : c.sales.total.amount;
   return {
-    ...(sale && (c.on || roomy) ? { value: shortWon(sale) } : {}),
     key: c.month,
     label: c.label,
     a: sale,
     b: purchase && !c.future ? c.purchase.total.amount : null,
     on: c.on,
-    out: !c.inWindow,
     busy: c.on ? { a: c.sales.total.partial || c.sales.total.amount === null, b: purchase && (c.purchase.total.partial || c.purchase.total.amount === null) } : undefined,
     a11y: `${monthNo(c.month)}월 매출 ${amountText(c.sales.total)}${purchase ? `, 매입 ${amountText(c.purchase.total)}` : ''}${c.on ? '' : ', 이 달 보기'}`,
   };
@@ -333,47 +311,17 @@ const updatedText = (at: number) => {
 };
 const ddayLeft = (today: string, day: string) => Math.round((Date.parse(day) - Date.parse(today)) / 86_400_000);
 
-/** 달마다 표(PC rp-table): 막대와 같은 칸, 색 칸이 줄 이름 */
-function MonthTable({ cols, purchase, ly }: { cols: ChartCol[]; purchase: boolean; ly: boolean }) {
-  const p = usePalette();
-  const cell = (n: number | null) => (n === null ? '-' : shortWon(n).replace(/만원$/, '').replace(/원$/, ''));
-  const unit = cols.every((c) => (c.sales.total.amount ?? 0) < 1e8 && (c.purchase.total.amount ?? 0) < 1e8) ? '만원' : null;
-  const fmt = (n: number | null) => (n === null ? '-' : unit ? cell(n) : shortWon(n).replace(/원$/, ''));
-  const row = (key: string, sw: ReactNode, label: string, vals: Array<number | null>) => (
-    <View key={key} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderTopWidth: StyleSheet.hairlineWidth, borderColor: p.line }}>
-      <View style={{ width: 56, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-        {sw}
-        <T v="meta" c="ink2">{label}</T>
-      </View>
-      {vals.map((n, i) => (
-        <T key={i} v="meta" c={cols[i]!.on ? 'ink' : 'ink2'} lines={1} style={{ flex: 1, textAlign: 'center', fontSize: 11, fontWeight: cols[i]!.on ? '600' : '400' }}>
-          {fmt(n)}
-        </T>
-      ))}
-    </View>
-  );
-  const dot = (color: string) => <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color }} />;
-  return (
-    <View testID="report-table">
-      {unit && <T v="meta" c="ink3" style={{ textAlign: 'right', fontSize: 11 }}>{`단위 ${unit}`}</T>}
-      {row('s', dot(p.dataSale), '매출', cols.map((c) => (c.future ? null : c.sales.total.amount)))}
-      {purchase && row('b', dot(p.dataBuy), '매입', cols.map((c) => (c.future ? null : c.purchase.total.amount)))}
-      {ly && row('l', <DashMark color={p.ink3} width={8} />, '작년', cols.map((c) => c.lastYear?.amount ?? null))}
-    </View>
-  );
-}
-
 function MixCard({ title, parts, colors, testID }: { title: string; parts: Part[]; colors: string[]; testID: string }) {
   const p = usePalette();
   const sum = parts.reduce((a, [, l]) => a + Math.max(0, l.amount ?? 0), 0);
   if (!parts.length) return null;
   const color = (i: number) => colors[i] ?? colors.at(-1)!;
   return (
-    <Card title={title} testID={testID} side={<Ring parts={parts.map(([, l], i) => ({ share: Math.max(0, l.amount ?? 0), color: color(i) }))} track={p.sunken} sizePx={44} />}>
+    <Card title={title} testID={testID} side={<Donut parts={parts.map(([, l], i) => ({ share: Math.max(0, l.amount ?? 0), color: color(i) }))} track={p.sunken} sizePx={44} />}>
       <View style={{ gap: space.s2 }}>
         {parts.map(([label, l, n], i) => (
           <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color(i) }} />
+            <View style={{ width: 8, height: 8, borderRadius: radius.xs, backgroundColor: color(i) }} />
             <T v="sub" c="ink2" lines={1} style={{ flex: 1, minWidth: 0 }}>
               {`${n === undefined ? label : `${label} ${n.toLocaleString('ko-KR')}건`}${sum ? ` ${Math.round((Math.max(0, l.amount ?? 0) / sum) * 100)}%` : ''}`}
             </T>
