@@ -185,7 +185,7 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
           holding={preview?.hold ?? null}
           tip={(m) => {
             const c = v.chart.find((x) => x.month === m)!;
-            return <Tip rows={[{ k: '매출', v: amountText(c.sales.total) }, ...(chartPurchase ? [{ k: '매입', v: amountText(c.purchase.total) }] : [])]} testID="report-tip" />;
+            return <Tip title={c.label} rows={[{ k: '매출', v: amountText(c.sales.total) }, ...(chartPurchase ? [{ k: '매입', v: amountText(c.purchase.total) }] : [])]} testID="report-tip" />;
           }}
         />
       </Card>

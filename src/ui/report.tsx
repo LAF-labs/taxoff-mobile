@@ -90,10 +90,11 @@ export interface TipRow {
 }
 
 /** 막대 말풍선(sx-tip): overlay 면, 작은 글씨로 매출, 매입 합계만(2026-11-26 대표: 총금액만 작게). */
-export function Tip({ rows, testID }: { rows: TipRow[]; testID?: string }) {
+export function Tip({ title, rows, testID }: { title?: string; rows: TipRow[]; testID?: string }) {
   const p = usePalette();
   return (
     <View style={[st.tip, { backgroundColor: p.overlay, shadowColor: p.ink }]} testID={testID} accessibilityRole="summary" pointerEvents="none">
+      {title && <T v="label">{title}</T>}
       {rows.map((r) => (
         <View key={r.k} style={st.tipRow}>
           <T v="meta" c="ink3">
@@ -124,8 +125,8 @@ export interface BarCol {
 const BARS_H = 132;
 /** 막대 위 말풍선 끝 여유 */
 const LABEL_H = 18;
-/** 맨 위 막대 위에 말풍선이 뜰 자리(두 줄 말풍선) */
-const TIP_ROOM = 48;
+/** 맨 위 막대 위에 말풍선이 뜰 자리(달 이름과 두 줄) */
+const TIP_ROOM = 56;
 /** 말풍선 아래 끝과 막대 위 끝 사이 */
 const TIP_GAP = 6;
 /** 이만큼 밀고 떼면 달이 넘어간다 */
