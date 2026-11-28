@@ -90,7 +90,7 @@ export function Card({ kind, tone, title, side, children, testID, style }: { kin
 
 /**
  * 면 없는 화면 섹션(리포트). 위에 화면 폭 옅은 띠(8)를 두고 제목과 여백으로 나눈다(2026-11-28 대표: 카드로 가두면 어둡고, 면만 빼면 분간이 안 된다).
- * 화면 안쪽 여백 20(space.s5) 안에서 쓴다. 띠에서 제목까지도 20(왼쪽 여백과 같게).
+ * 화면 안쪽 여백 20(space.s5) 안에서 쓴다. 띠에서 제목 글자까지 보이는 거리도 20(줄 간격 위 여백 4 + 섹션 간격 16, 왼쪽 여백과 같게).
  */
 export function Section({ title, side, children, testID }: { title: string; side?: ReactNode; children?: ReactNode; testID?: string }) {
   const p = usePalette();
@@ -340,7 +340,7 @@ const st = StyleSheet.create({
   card: { alignSelf: 'stretch', borderRadius: radius.lg, padding: space.s4, gap: space.s3 },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.s2, minHeight: 22 },
   section: { alignSelf: 'stretch', gap: space.s4, marginTop: space.s4 },
-  band: { height: space.s2, marginHorizontal: -space.s5, marginBottom: space.s5 - space.s4 },
+  band: { height: space.s2, marginHorizontal: -space.s5 },
   kv: { gap: 6 },
   kvRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.s4 },
   kvK: { flexShrink: 0 },
