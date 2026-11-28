@@ -142,13 +142,12 @@ function Report({ copy, copyAt, onMoney, preview }: { copy: CopyReport; copyAt: 
       <TotalCard title="매출" testID="report-sales" total={v.sales.total} prev={v.prev?.sales} comparable={v.prev?.comparable.sales} months={months} days={v.days} values={v.chart.map((c) => c.sales.total.amount)} color={p.dataSale} />
       <TotalCard title="매입" testID="report-purchase" total={v.purchase.total} prev={v.prev?.purchase} comparable={v.prev?.comparable.purchase} months={months} days={v.days} values={v.chart.map((c) => c.purchase.total.amount)} color={p.dataBuy} />
       {v.vat && (
-        <Card title={`부가세 ${v.vat.h}기`} testID="report-vat">
+        <Card title={`부가세 ${v.vat.h}기`} testID="report-vat" side={<T v="sub" c="ink2">{`${monthNo(v.vat.dl)}월 ${Number(v.vat.dl.slice(8, 10))}일까지`}</T>}>
           <T v="strong">{vatDue !== null ? `${won(vatDue)} 낼 것 같아요` : v.vat.s !== null ? `매출 부가세 ${won(v.vat.s)}` : '확인 못 함'}</T>
           {vatDue !== null && v.vat.s ? <Stack parts={[{ share: Math.max(0, vatDue) / v.vat.s, color: p.dataSale }, { share: 1 - Math.max(0, vatDue) / v.vat.s, color: p.sunken }]} /> : null}
           <Kv>
-            {v.vat.s !== null && <KvRow label="매출 부가세" value={won(v.vat.s)} />}
-            {v.vat.p !== null && <KvRow label="매입 세금계산서 부가세" value={won(v.vat.p)} />}
-            <KvRow label="신고 기한" value={`${monthNo(v.vat.dl)}월 ${Number(v.vat.dl.slice(8, 10))}일`} />
+            <KvRow label="매출 부가세" value={v.vat.s === null ? '확인 못 함' : won(v.vat.s)} warn={v.vat.s === null} />
+            <KvRow label="매입 부가세" value={v.vat.p === null ? '확인 못 함' : won(v.vat.p)} warn={v.vat.p === null} />
           </Kv>
         </Card>
       )}
@@ -291,25 +290,18 @@ function MixCard({ title, parts, colors, testID }: { title: string; parts: Part[
   if (!parts.length) return null;
   const color = (i: number) => colors[i] ?? colors.at(-1)!;
   return (
-    <Card title={title} testID={testID}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s4 }}>
-        <Ring parts={parts.map(([, l], i) => ({ share: Math.max(0, l.amount ?? 0), color: color(i) }))} track={p.sunken} sizePx={76} />
-        <View style={{ flex: 1, minWidth: 0, gap: space.s2 }}>
-          {parts.map(([label, l, n], i) => (
-            <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color(i) }} />
-              <T v="sub" c="ink2" lines={1} style={{ flex: 1, minWidth: 0 }}>
-                {`${n === undefined ? label : `${label} ${n.toLocaleString('ko-KR')}건`}${sum ? ` ${Math.round((Math.max(0, l.amount ?? 0) / sum) * 100)}%` : ''}`}
-              </T>
-            </View>
-          ))}
-        </View>
-      </View>
-      <Kv>
-        {parts.map(([label, l]) => (
-          <KvRow key={label} label={label} value={won(l.amount)} />
+    <Card title={title} testID={testID} side={<Ring parts={parts.map(([, l], i) => ({ share: Math.max(0, l.amount ?? 0), color: color(i) }))} track={p.sunken} sizePx={44} />}>
+      <View style={{ gap: space.s2 }}>
+        {parts.map(([label, l, n], i) => (
+          <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color(i) }} />
+            <T v="sub" c="ink2" lines={1} style={{ flex: 1, minWidth: 0 }}>
+              {`${n === undefined ? label : `${label} ${n.toLocaleString('ko-KR')}건`}${sum ? ` ${Math.round((Math.max(0, l.amount ?? 0) / sum) * 100)}%` : ''}`}
+            </T>
+            <T v="subValue">{won(l.amount)}</T>
+          </View>
         ))}
-      </Kv>
+      </View>
     </Card>
   );
 }

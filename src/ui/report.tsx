@@ -214,7 +214,7 @@ export function BarChart({ cols, onPick, tip, label, step, tick, testID = 'repor
     <View testID={testID} accessibilityLabel={label} style={st.plot} {...pan.panHandlers}>
       <View style={st.axis} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         {ticks.map((v) => (
-          <T key={v} v="meta" c="ink3" style={[st.tick, { bottom: TICK_BASE + h(v) - 8 }]}>
+          <T key={v} v="meta" c="ink3" lines={1} style={[st.tick, { bottom: TICK_BASE + h(v) - 8 }]}>
             {v ? tick(v) : '0'}
           </T>
         ))}
@@ -420,8 +420,8 @@ const st = StyleSheet.create({
   tip: { gap: 2, paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.sm, shadowOpacity: 0.16, shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
   tipRow: { flexDirection: 'row', justifyContent: 'space-between', gap: space.s3 },
   plot: { flexDirection: 'row', gap: space.s2 },
-  axis: { width: 40, height: LABEL_H + BARS_H + TICK_BASE },
-  tick: { position: 'absolute', right: 0, fontSize: 11, lineHeight: 16 },
+  axis: { width: 56, height: LABEL_H + BARS_H + TICK_BASE },
+  tick: { position: 'absolute', left: 0, right: 0, textAlign: 'right', fontSize: 11, lineHeight: 16 },
   plotBody: { flex: 1, minWidth: 0 },
   grid: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   gridLine: { position: 'absolute', left: 0, right: 0, height: StyleSheet.hairlineWidth },
