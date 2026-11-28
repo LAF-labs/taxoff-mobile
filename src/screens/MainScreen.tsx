@@ -97,7 +97,13 @@ export function MainScreen({
         }}
       />
     ) : tab === 'docs' ? (
-      <DocsScreen preview={docs} />
+      <DocsScreen
+        preview={docs}
+        onAsk={(text) => {
+          setAsk(text);
+          onTab('home');
+        }}
+      />
     ) : tab === 'inbox' ? (
       <InboxScreen
         onQueue={() => go('queue')}

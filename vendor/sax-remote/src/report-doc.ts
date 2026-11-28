@@ -214,7 +214,7 @@ function niceStep(max: number): number {
   const raw = max / 5;
   const mag = 10 ** Math.floor(Math.log10(raw));
   const n = raw / mag;
-  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag;
+  return Math.max(10_000, (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag);
 }
 
 function chart(d: ReportDoc): string {

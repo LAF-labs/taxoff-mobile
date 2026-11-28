@@ -13,12 +13,12 @@ import { BigInput, FormField, SearchField } from '../ui/form';
 import { Glyph } from '../ui/glyph';
 import { Button, Empty, Group, Notice, Row, Screen, T, TextButton, success, won } from '../ui/kit';
 import { masked } from '../ui/mask';
-import { Sheet } from '../ui/sheet';
+import { PickRows, Sheet } from '../ui/sheet';
 import type { HomeRoute } from './HomeScreen';
 
 /**
  * 거래처(2026-11-24 대표 승인 캔버스 "폰 거래처 화면 시안"). PC 장부가 원본이고, 폰에서 넣고 고친 것은 PC로 보낸다(tex ADR-066).
- * 목록(찾기, 최근 발급 셋, 전체) → 자세히 → 수정. 추가는 높이 고정 시트에서 등록번호, 상호 두 단계.
+ * 목록(찾기, 최근 발급순이나 가나다순) → 자세히 → 수정. 추가는 높이 고정 시트에서 등록번호, 상호 두 단계.
  */
 export interface CustomersPreview {
   view?: 'list' | 'detail' | 'edit';
@@ -137,13 +137,34 @@ export function CustomersScreen({ go, onIssue, preview }: { go: (to: HomeRoute) 
   return <ListView list={customers.list} query={preview?.query} onOpen={open} onAdd={setAdd} sheet={sheet} />;
 }
 
+type Sort = 'recent' | 'name';
+const SORTS: ReadonlyArray<{ value: Sort; label: string }> = [
+  { value: 'recent', label: '최근 발급순' },
+  { value: 'name', label: '가나다순' },
+];
+const CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';
+const firstSound = (s: string) => {
+  const c = s.charCodeAt(0) - 0xac00;
+  return c >= 0 && c < 11172 ? CHO[Math.floor(c / 588)]! : (s[0] ?? '').toUpperCase();
+};
+
 function ListView({ list, query: q0 = '', onOpen, onAdd, sheet }: { list: Customer[]; query?: string; onOpen: (c: Customer) => void; onAdd: (a: AddStart) => void; sheet: ReactNode }) {
   const p = usePalette();
   const [query, setQuery] = useState(q0);
-  const recent = useMemo(() => byRecent(list.filter((c) => !!c.last)).slice(0, RECENT), [list]);
-  const all = useMemo(() => byName(list), [list]);
+  const [sort, setSort] = useState<Sort>('recent');
+  const [picking, setPicking] = useState(false);
   const found = useMemo(() => searchCustomers(list, query), [list, query]);
   const t = query.trim();
+  const groups = useMemo(() => {
+    if (sort === 'recent') return [{ label: `${list.length}곳`, items: byRecent(list) }];
+    const out: Array<{ label: string; items: Customer[] }> = [];
+    for (const c of byName(list)) {
+      const g = firstSound(c.name);
+      if (out.at(-1)?.label !== g) out.push({ label: g, items: [] });
+      out.at(-1)!.items.push(c);
+    }
+    return out;
+  }, [list, sort]);
   const row = (c: Customer, key: string, mark?: string) => (
     <Row
       key={key}
@@ -162,7 +183,12 @@ function ListView({ list, query: q0 = '', onOpen, onAdd, sheet }: { list: Custom
   return (
     <View style={{ flex: 1 }}>
     <Screen title="거래처" shell gap={space.s2} testID="customers" cta={!t ? <Button label="거래처 추가" onPress={() => onAdd({})} testID="customers-add" /> : undefined}>
-      <SearchField value={query} onChange={setQuery} placeholder="상호나 등록번호로 찾기" label="거래처 찾기" testID="customers-search" />
+      <View style={{ flexDirection: 'row', gap: space.s2, alignItems: 'center' }}>
+        <View style={{ flex: 1 }}>
+          <SearchField value={query} onChange={setQuery} placeholder="상호, 번호, 대표자로 찾기" label="거래처 찾기" testID="customers-search" />
+        </View>
+        {!t && <TextButton label={SORTS.find((o) => o.value === sort)!.label} onPress={() => setPicking(true)} testID="customers-sort" />}
+      </View>
       {t ? (
         found.length ? (
           <>
@@ -178,19 +204,20 @@ function ListView({ list, query: q0 = '', onOpen, onAdd, sheet }: { list: Custom
           </>
         )
       ) : (
-        <>
-          {recent.length > 0 && (
-            <>
-              <Section label="최근 발급" />
-              <Group testID="customers-recent">{recent.map((c) => row(c, `recent-${c.id}`))}</Group>
-            </>
-          )}
-          <Section label={`전체 ${list.length}곳`} />
-          <Group testID="customers-all">{all.map((c) => row(c, c.id))}</Group>
-        </>
+        groups.map((g) => (
+          <View key={g.label} style={{ gap: space.s2 }}>
+            <Section label={g.label} />
+            <Group testID="customers-all">{g.items.map((c) => row(c, c.id))}</Group>
+          </View>
+        ))
       )}
     </Screen>
     {sheet}
+    {picking && (
+      <Sheet title="정렬" height="fit" onClose={() => setPicking(false)} testID="customers-sort-sheet">
+        <PickRows<Sort> groups={[{ items: SORTS }]} value={sort} onPick={(v) => (setSort(v), setPicking(false))} testID="customers-sort-rows" />
+      </Sheet>
+    )}
     </View>
   );
 }
