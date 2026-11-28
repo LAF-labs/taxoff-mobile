@@ -73,7 +73,6 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
   const p = usePalette();
   const [months, setMonths] = useState<Months>(preview?.months ?? 1);
   const [picked, setPicked] = useState<string | null>(preview?.month ?? null);
-  const [partnerSide, setPartnerSide] = useState<Side>('sale');
   const [itemSide, setItemSide] = useState<Side>('sale');
   const [open, setOpen] = useState<Open>(() => {
     if (!preview) return null;
@@ -103,13 +102,9 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
   const chartPurchase = v.chart.some((c) => !!c.purchase.total.amount);
   const rankPurchase = !!v.ranks && v.ranks.pp.rows.length > 0;
   const missing = [!hasPurchase ? '매입' : null, !known(v.sales.card) ? '카드 매출' : null, !v.bank ? '통장' : null].filter((x): x is string => !!x);
-  const count = v.ranks ? v.ranks.ps.rows.reduce((n, x) => n + x.n, 0) + (v.ranks.ps.rest?.n ?? 0) : undefined;
-  const saleParts = knownParts([
-    ['세금계산서', v.sales.inv, count],
-    ['카드 매출', v.sales.card],
-    ['현금영수증', v.sales.cr],
-    ['현금 매출', v.sales.cash],
-  ]);
+  // 매출은 어디서, 매입은 어디로: 거래처별(2026-11-28 대표: 계산서인지 카드인지보다 어디인지가 궁금하다). 계산서가 없는 매출·매입은 한 조각
+  const saleSlices = slicesOf(v.ranks?.ps, [v.sales.card, v.sales.cr, v.sales.cash], '카드·현금 손님', [p.dataSale, p.dataSaleMuted, p.dataSaleSoft], [p.ink4, p.ink3], (row) => setOpen({ kind: 'partner', side: 'sale', row }));
+  const buySlices = slicesOf(v.ranks?.pp, [v.purchase.card, v.purchase.cr, v.purchase.rcpt, v.purchase.pay], '카드·영수증·급여', [p.dataBuy, p.dataBuyMuted, p.dataBuySoft], [p.ink4, p.ink3], (row) => setOpen({ kind: 'partner', side: 'purchase', row }));
   const vatDue = v.vat && v.vat.s !== null && v.vat.p !== null ? v.vat.s - v.vat.p : null;
   const headline = headlineText(v, v.chart.some((c) => !!c.lastYear?.amount));
   const why = whyOf(v);
@@ -201,33 +196,14 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
         </Card>
       )}
 
-      <MixCard title="매출은 어디서" testID="report-sales-mix" colors={[p.dataSale, p.dataSaleMuted, p.dataSaleSoft, p.dataSaleSoft]} parts={saleParts} />
-      {hasPurchase && (
-        <MixCard
-          title="매입은 어디로"
-          testID="report-purchase-mix"
-          colors={[p.dataBuy, p.dataBuyMuted, p.dataBuySoft, p.dataBuySoft, p.dataBuySoft]}
-          parts={knownParts([
-            ['세금계산서', v.purchase.inv],
-            ['사업용 카드', v.purchase.card],
-            ['현금영수증', v.purchase.cr],
-            ['영수증', v.purchase.rcpt],
-            ['급여', v.purchase.pay],
-          ])}
-        />
-      )}
+      <MixCard title="매출은 어디서" testID="report-sales-mix" slices={saleSlices} more={v.ranks && topOf(v.ranks.ps, 3).more ? () => setOpen({ kind: 'all', what: 'partners', side: 'sale' }) : undefined} />
+      {hasPurchase && <MixCard title="매입은 어디로" testID="report-purchase-mix" slices={buySlices} more={v.ranks && topOf(v.ranks.pp, 3).more ? () => setOpen({ kind: 'all', what: 'partners', side: 'purchase' }) : undefined} />}
 
       {v.ranks && (
-        <>
-          <Card style={roomy} title={rankPurchase ? '거래처' : '많이 판 거래처'} testID="report-partners">
-            {rankPurchase && <Seg options={SIDES} value={partnerSide} onChange={setPartnerSide} fill tint testID="report-partners-side" />}
-            <RankCard buy={rankPurchase && partnerSide === 'purchase'} rank={rankPurchase && partnerSide === 'purchase' ? v.ranks.pp : v.ranks.ps} kind="partners" empty="이 기간 거래처가 없어요" onRow={(row) => setOpen({ kind: 'partner', side: partnerSide, row })} onAll={() => setOpen({ kind: 'all', what: 'partners', side: partnerSide })} />
-          </Card>
-          <Card style={roomy} title={rankPurchase ? '품목' : '많이 판 품목'} testID="report-items">
-            {rankPurchase && <Seg options={SIDES} value={itemSide} onChange={setItemSide} fill tint testID="report-items-side" />}
-            <RankCard buy={rankPurchase && itemSide === 'purchase'} rank={rankPurchase && itemSide === 'purchase' ? v.ranks.ip : v.ranks.is} kind="items" empty="이 기간 품목이 없어요" onAll={() => setOpen({ kind: 'all', what: 'items', side: itemSide })} />
-          </Card>
-        </>
+        <Card style={roomy} title={rankPurchase ? '품목' : '많이 판 품목'} testID="report-items">
+          {rankPurchase && <Seg options={SIDES} value={itemSide} onChange={setItemSide} fill tint testID="report-items-side" />}
+          <RankCard buy={rankPurchase && itemSide === 'purchase'} rank={rankPurchase && itemSide === 'purchase' ? v.ranks.ip : v.ranks.is} kind="items" empty="이 기간 품목이 없어요" onAll={() => setOpen({ kind: 'all', what: 'items', side: itemSide })} />
+        </Card>
       )}
 
       {v.recv && (
@@ -304,8 +280,6 @@ function TotalCard({ title, total, prev, comparable, months, days, gone, values,
     </Card>
   );
 }
-type Part = [label: string, line: Line, count?: number];
-const knownParts = (parts: Part[]): Part[] => parts.filter(([, l], i) => known(l) && (i === 0 || l.amount !== 0));
 const updatedText = (at: number) => {
   const t = new Date(at);
   const hm = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
@@ -313,27 +287,43 @@ const updatedText = (at: number) => {
 };
 const ddayLeft = (today: string, day: string) => Math.round((Date.parse(day) - Date.parse(today)) / 86_400_000);
 
-function MixCard({ title, parts, colors, testID }: { title: string; parts: Part[]; colors: string[]; testID: string }) {
+type Slice = { label: string; amount: number; color: string; onPress?: () => void };
+
+/** 거래처 위 셋, 그 밖에, 계산서 없는 몫(카드·현금 등). 거래처 순위가 없으면 계산서 합계 한 조각 */
+function slicesOf(rank: Rank | undefined, other: Line[], otherLabel: string, colors: string[], grey: [string, string], onRow: (row: RankRow) => void): Slice[] {
+  const out: Slice[] = [];
+  if (rank) {
+    const top = topOf(rank, 3);
+    top.rows.forEach((x, i) => out.push({ label: x.name, amount: x.amount, color: colors[i]!, onPress: () => onRow(x) }));
+    if (top.rest) out.push({ label: top.rest.name, amount: top.rest.amount, color: grey[0] });
+  }
+  const rest = other.reduce((a, l) => a + Math.max(0, l.amount ?? 0), 0);
+  if (rest > 0) out.push({ label: otherLabel, amount: rest, color: grey[1] });
+  return out.filter((x) => x.amount > 0);
+}
+
+/** 큰 도넛 아래 조각 목록. 거래처 줄은 누르면 거래처 시트, 위 셋 밖이 있으면 전체 보기 */
+function MixCard({ title, slices, more, testID }: { title: string; slices: Slice[]; more?: () => void; testID: string }) {
   const p = usePalette();
-  const sum = parts.reduce((a, [, l]) => a + Math.max(0, l.amount ?? 0), 0);
-  if (!parts.length) return null;
-  const color = (i: number) => colors[i] ?? colors.at(-1)!;
+  const sum = slices.reduce((a, x) => a + x.amount, 0);
+  if (!slices.length) return null;
   return (
     <Card style={roomy} title={title} testID={testID}>
       <View style={{ alignItems: 'center', paddingVertical: space.s2 }}>
-        <Donut parts={parts.map(([, l], i) => ({ share: Math.max(0, l.amount ?? 0), color: color(i) }))} track={p.sunken} sizePx={144} />
+        <Donut parts={slices.map((x) => ({ share: x.amount, color: x.color }))} track={p.sunken} sizePx={144} />
       </View>
-      <View style={{ gap: space.s3 }}>
-        {parts.map(([label, l, n], i) => (
-          <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <View style={{ width: 8, height: 8, borderRadius: radius.xs, backgroundColor: color(i) }} />
+      <View style={{ gap: space.s1 }}>
+        {slices.map((x) => (
+          <Pressable key={x.label} disabled={!x.onPress} onPress={x.onPress} accessibilityRole={x.onPress ? 'button' : undefined} style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2, minHeight: 36 }}>
+            <View style={{ width: 8, height: 8, borderRadius: radius.xs, backgroundColor: x.color }} />
             <T v="sub" c="ink2" lines={1} style={{ flex: 1, minWidth: 0 }}>
-              {`${n === undefined ? label : `${label} ${n.toLocaleString('ko-KR')}건`}${sum ? ` ${Math.round((Math.max(0, l.amount ?? 0) / sum) * 100)}%` : ''}`}
+              {`${x.label} ${Math.round((x.amount / sum) * 100)}%`}
             </T>
-            <T v="subValue">{won(l.amount)}</T>
-          </View>
+            <T v="subValue">{won(x.amount)}</T>
+          </Pressable>
         ))}
       </View>
+      {more && <TextButton label="거래처 전체 보기" onPress={more} testID={`${testID}-all`} />}
     </Card>
   );
 }
