@@ -70,7 +70,7 @@ export function CardIcon({ kind, tone = 'quiet' }: { kind: CardKind; tone?: Card
 }
 
 /** 카드: tint 채움 면 하나. 어떤 상태에서도 테두리, 띠, 그림자를 더하지 않는다. 대화 폭을 다 쓴다. */
-export function Card({ kind, tone, title, children, testID, style }: { kind?: CardKind; tone?: CardTone; title: string; children?: ReactNode; testID?: string; style?: StyleProp<ViewStyle> }) {
+export function Card({ kind, tone, title, side, children, testID, style }: { kind?: CardKind; tone?: CardTone; title: string; side?: ReactNode; children?: ReactNode; testID?: string; style?: StyleProp<ViewStyle> }) {
   const p = usePalette();
   return (
     <OnCard.Provider value={true}>
@@ -80,6 +80,7 @@ export function Card({ kind, tone, title, children, testID, style }: { kind?: Ca
           <T v="strong" style={{ flex: 1 }} role="header">
             {title}
           </T>
+          {side}
         </View>
         {children}
       </View>

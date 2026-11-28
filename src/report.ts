@@ -105,7 +105,9 @@ export interface ReportView {
   balances: Array<{ label: string; amount: number | null; day: string | null }>;
   balanceTotal: Line;
   /** 바로 앞 같은 길이 기간의 합계. 사본에 그 달들이 없으면 null */
-  prev: { sales: Line; purchase: Line } | null;
+  prev: { sales: Line; purchase: Line; comparable: { sales: boolean; purchase: boolean } } | null;
+  /** 고른 기간의 날 수(오늘까지). 1개월 하루 평균 */
+  days: number;
   /** 마지막 달만(사본에 있다) */
   recv: { got: number; left: number; lateN: number; lateA: number } | null;
   vat: NonNullable<CopyReport['vat']> | null;
@@ -170,6 +172,21 @@ function rankOf(r: CopyRank, pm: CopyReport['pm'], unnamed: string): Rank {
   return { rows, rest: r.rest ? { name: '', n: r.rest.n, amount: r.rest.a, share: r.rest.pct / 100, k: r.rest.k } : null, total: r.total };
 }
 
+/** 자료 종류마다 받은 달 수(PC report.ts coverage와 같다). 앞 기간이 지금보다 적게 받았으면 늘고 줄었다고 말하지 않는다 */
+function coverage(ms: CopyReportMonth[]): { sales: number[]; purchase: number[] } {
+  const n = (f: (m: CopyReportMonth) => CopyLine) => ms.filter((m) => f(m).a !== null).length;
+  return { sales: [n((m) => m.sales.inv), n((m) => m.sales.cr), n((m) => m.sales.card)], purchase: [n((m) => m.purchase.inv), n((m) => m.purchase.card), n((m) => m.purchase.cr)] };
+}
+const covers = (prev: number[], cur: number[]) => cur.every((c, i) => prev[i]! >= c);
+/** 기간의 날 수. 이번 달은 오늘까지 */
+function daysIn(months: string[], today: string): number {
+  return months.reduce((s, m) => {
+    const [y, mo] = m.split('-').map(Number) as [number, number];
+    const end = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+    return s + (m === today.slice(0, 7) ? Number(today.slice(8, 10)) : end);
+  }, 0);
+}
+
 /** 고를 수 있는 달: 사본 12달 안에서 고른 기간의 막대 칸을 다 채울 수 있는 달 */
 export function monthsFor(copy: CopyReport, months: Months): string[] {
   const all = copy.months.map((m) => m.month);
@@ -208,7 +225,12 @@ export function reportView(copy: CopyReport, month: string, months: Months): Rep
     ranks: w ? { ps: rankOf(w.ps, copy.pm, '이름 없음'), pp: rankOf(w.pp, copy.pm, '이름 없음'), is: rankOf(w.is, undefined, '품목 없음'), ip: rankOf(w.ip, undefined, '품목 없음') } : null,
     balances: copy.balances.map((b) => ({ label: `${b.bank} ${b.last4}`, amount: b.a, day: b.d ?? null })),
     balanceTotal: { amount: known.length ? known.reduce((s, b) => s + b.a!, 0) : null, partial: known.length < copy.balances.length },
-    prev: prevRows ? { sales: salesOf(prevRows).total, purchase: purchaseOf(prevRows).total } : w?.prev ? { sales: lineOf(w.prev.s), purchase: lineOf(w.prev.p) } : null,
+    prev: prevRows
+      ? { sales: salesOf(prevRows).total, purchase: purchaseOf(prevRows).total, comparable: { sales: covers(coverage(prevRows).sales, coverage(win).sales), purchase: covers(coverage(prevRows).purchase, coverage(win).purchase) } }
+      : w?.prev
+        ? { sales: lineOf(w.prev.s), purchase: lineOf(w.prev.p), comparable: { sales: !w.prev.s.p, purchase: !w.prev.p.p } }
+        : null,
+    days: daysIn(cols.filter((m) => inWin.has(m)), copy.today),
     recv: w?.recv ?? null,
     vat: latest ? (copy.vat ?? null) : null,
   };
@@ -268,6 +290,21 @@ const kstText = (ms: number) => {
   return `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
 };
 
+const prevLabel = (months: Months) => (months === 1 ? '지난달보다' : months === 12 ? '지난해보다' : `앞 ${months}개월보다`);
+export const prevName = (months: Months) => (months === 1 ? '지난달' : months === 12 ? '지난해' : `앞 ${months}개월`);
+/** PC shell-report.js trendText와 같은 글 */
+export function trendText(cur: Line, prev: Line | undefined, months: Months, comparable?: boolean): string | null {
+  if (cur.amount === null || !prev) return null;
+  if (prev.amount === null || !prev.amount || comparable === false || (prev.partial && !cur.partial)) return `비교할 ${months === 12 ? '작년' : months === 1 ? '지난달' : '앞 기간'} 자료가 없어요`;
+  const pct = Math.round(((cur.amount - prev.amount) / prev.amount) * 100);
+  return pct === 0 ? `${prevLabel(months)} 같아요` : `${prevLabel(months)} ${Math.abs(pct)}% ${pct > 0 ? '늘었어요' : '줄었어요'}`;
+}
+/** 요약 카드 평균: 1개월은 하루 평균, 그 밖은 한 달 평균 */
+export function averageOf(total: Line, months: Months, days: number): { label: string; amount: number | null } {
+  if (total.amount === null) return { label: '평균', amount: null };
+  return months === 1 ? { label: '하루 평균', amount: total.amount / Math.max(1, days) } : { label: '한 달 평균', amount: total.amount / months };
+}
+
 export function reportDocOf(copy: CopyReport, v: ReportView, nowMs: number): ReportDoc {
   const L = (label: string, l: Line) => ({ label, amount: l.amount, partial: l.partial });
   const s = v.sales;
@@ -296,5 +333,20 @@ export function reportDocOf(copy: CopyReport, v: ReportView, nowMs: number): Rep
     bankIn: v.bankIn.map(({ label, amount }) => ({ label, amount })),
     balances: v.balances.map(({ label, amount }) => ({ label, amount })),
     balanceDay: days.length ? md(days.at(-1)!) : null,
+    salesTrend: trendText(s.total, v.prev?.sales, v.months, v.prev?.comparable.sales),
+    purchaseTrend: trendText(p.total, v.prev?.purchase, v.months, v.prev?.comparable.purchase),
+    salesRows: summaryRows(s.total, v.prev?.sales, v.prev?.comparable.sales, v),
+    purchaseRows: summaryRows(p.total, v.prev?.purchase, v.prev?.comparable.purchase, v),
+    vat: v.vat ? { title: `부가세 ${v.vat.h}기`, deadline: `${md(v.vat.dl)}까지`, sale: v.vat.s, purchase: v.vat.p } : null,
+    receivable: v.recv ? { received: v.recv.got, waiting: v.recv.left - v.recv.lateA, late: v.recv.lateA, lateCount: v.recv.lateN } : null,
+    bankLinked: bankOn,
   };
+}
+
+function summaryRows(total: Line, prev: Line | undefined, comparable: boolean | undefined, v: ReportView) {
+  const avg = averageOf(total, v.months, v.days);
+  return [
+    ...(prev ? [comparable === false ? { label: prevName(v.months), amount: null, note: '일부만 받았어요' } : { label: prevName(v.months), amount: prev.amount }] : []),
+    avg,
+  ];
 }

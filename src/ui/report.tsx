@@ -1,5 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, View, type PanResponderGestureState } from 'react-native';
+import Svg, { Circle, Polyline } from 'react-native-svg';
 import { radius, size, space, usePalette, useReducedMotion } from '../theme';
 import { Glyph } from './glyph';
 import { Chevron, T, tap } from './kit';
@@ -68,8 +69,8 @@ export function Legend({ a, b }: { a: string; b: string }) {
   return (
     <View style={st.legend} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       {[
-        [a, p.ink2],
-        [b, p.ink4],
+        [a, p.dataSale],
+        [b, p.dataBuy],
       ].map(([label, color]) => (
         <View key={label} style={st.legendItem}>
           <View style={[st.legendDot, { backgroundColor: color }]} />
@@ -117,10 +118,23 @@ export interface BarCol {
   on?: boolean;
   /** 고른 기간 밖(흐린 막대) */
   out?: boolean;
+  /** 막대 위에 붙는 짧은 금액(887억원) */
+  value?: string;
   a11y: string;
 }
 
-const BARS_H = 120;
+const BARS_H = 132;
+/** 막대 위 금액 글 자리 */
+const LABEL_H = 18;
+/** 막대 바닥에서 칸 아래 끝까지(달 글자 줄과 간격): col gap 8 + 달 글자 18 */
+const TICK_BASE = 26;
+/** 눈금 간격: 1, 2, 2.5, 5, 10 x 10^n 가운데 네 칸 안에 드는 가장 작은 것 */
+function niceStep(max: number): number {
+  const raw = max / 4;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const n = raw / mag;
+  return Math.max(10_000, (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag);
+}
 /** 말풍선 아래 끝과 막대 위 끝 사이 */
 const TIP_GAP = 6;
 /** 이만큼 밀고 떼면 달이 넘어간다 */
@@ -133,8 +147,10 @@ type Box = { x: number; y: number; w: number };
  * 말풍선은 누른 칸의 막대 바로 위 가운데에 뜨고, 막대 영역 밖으로 나가지 않는다.
  * 좌우로 밀면 앞 달, 다음 달로 넘긴다(step, 2026-11-26 대표: x축에 달이 다 보이지 않으니 밀어서 넘기게).
  */
-export function BarChart({ cols, onPick, tip, label, step, testID = 'report-chart', holding = null }: {
+export function BarChart({ cols, onPick, tip, label, step, tick, testID = 'report-chart', holding = null }: {
   cols: BarCol[]; onPick?: (key: string) => void; tip: (key: string) => ReactNode; label: string; testID?: string;
+  /** 눈금 글(500억) */
+  tick: (v: number) => string;
   /** 오른쪽으로 밀면 prev, 왼쪽으로 밀면 next. null이면 그쪽은 끝 */
   step?: { prev: (() => void) | null; next: (() => void) | null };
   /** 갤러리: 처음부터 누르고 있는 칸 */
@@ -148,7 +164,10 @@ export function BarChart({ cols, onPick, tip, label, step, testID = 'report-char
   // 누른 칸의 말풍선 크기(금액 길이가 달라 칸마다 잰다)
   const [tipSize, setTipSize] = useState<{ key: string; w: number; h: number } | null>(null);
   const dense = cols.length > 6;
-  const max = Math.max(1, ...cols.flatMap((c) => [c.a ?? 0, c.b ?? 0]));
+  const most = Math.max(1, ...cols.flatMap((c) => [c.a ?? 0, c.b ?? 0]));
+  const stepV = niceStep(most);
+  const max = stepV * Math.ceil(most / stepV);
+  const ticks = Array.from({ length: Math.round(max / stepV) + 1 }, (_, i) => i * stepV);
   const h = (v: number | null) => Math.max(v ? 2 : 0, Math.round(((v && v > 0 ? v : 0) / max) * BARS_H));
 
   const x = useRef(new Animated.Value(0)).current;
@@ -187,12 +206,25 @@ export function BarChart({ cols, onPick, tip, label, step, testID = 'report-char
       ? {
           // 오른쪽 끝에 닿으면 오른쪽에 붙인다(왼쪽 여백으로 밀면 남은 폭에서 줄이 바뀐다)
           left: box.x + box.w / 2 + tipSize.w / 2 >= width ? null : Math.max(0, box.x + box.w / 2 - tipSize.w / 2),
-          top: box.y + BARS_H - Math.max(h(col.a), h(col.b)) - TIP_GAP - tipSize.h,
+          top: box.y + LABEL_H + BARS_H - Math.max(h(col.a), h(col.b)) - TIP_GAP - tipSize.h,
         }
       : null;
 
   return (
-    <View testID={testID} accessibilityLabel={label} {...pan.panHandlers}>
+    <View testID={testID} accessibilityLabel={label} style={st.plot} {...pan.panHandlers}>
+      <View style={st.axis} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        {ticks.map((v) => (
+          <T key={v} v="meta" c="ink3" lines={1} style={[st.tick, { bottom: TICK_BASE + h(v) - 8 }]}>
+            {v ? tick(v) : '0'}
+          </T>
+        ))}
+      </View>
+      <View style={st.plotBody}>
+      <View style={st.grid} pointerEvents="none">
+        {ticks.map((v) => (
+          <View key={v} style={[st.gridLine, { bottom: TICK_BASE + h(v), backgroundColor: p.line }]} />
+        ))}
+      </View>
       <Animated.View
         style={[st.chart, dense && { gap: space.s1 }, { transform: [{ translateX: x }] }]}
         onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
@@ -222,9 +254,14 @@ export function BarChart({ cols, onPick, tip, label, step, testID = 'report-char
             }}
             style={st.col}
           >
-            <View style={[st.bars, dense && { gap: 2 }, c.out && held !== c.key && { opacity: 0.35 }]}>
-              <View style={[st.bar, dense && st.barDense, { height: h(c.a), backgroundColor: p.ink2 }]} />
-              <View style={[st.bar, dense && st.barDense, { height: h(c.b), backgroundColor: p.ink4 }]} />
+            <View style={[st.bars, dense && { gap: 2 }]}>
+              {c.value !== undefined && (
+                <T v="meta" c={c.on ? 'ink' : 'ink2'} lines={1} style={[st.value, c.on && st.colOn, { bottom: Math.max(h(c.a), h(c.b)) + 4 }]}>
+                  {c.value}
+                </T>
+              )}
+              <View style={[st.bar, dense && st.barDense, { height: h(c.a), backgroundColor: p.dataSale }, c.out && held !== c.key && st.dim]} />
+              <View style={[st.bar, dense && st.barDense, { height: h(c.b), backgroundColor: p.dataBuy }, c.out && held !== c.key && st.dim]} />
             </View>
             <T v={c.on ? 'label' : 'meta'} c={c.on || held === c.key ? 'ink' : 'ink3'} style={c.on && st.colOn} lines={1}>
               {c.label}
@@ -232,6 +269,7 @@ export function BarChart({ cols, onPick, tip, label, step, testID = 'report-char
           </Pressable>
         ))}
       </Animated.View>
+      </View>
       {held && (
         // 줄은 막대 영역 폭 전부, 말풍선은 그 안에서 왼쪽 여백으로 옮긴다(오른쪽 끝 칸에서도 줄바꿈 없이 제 폭)
         <View style={[st.tipAt, tipAt ? { top: tipAt.top } : st.tipMeasure]} pointerEvents="none">
@@ -266,7 +304,7 @@ export interface RankItem {
 }
 
 /** 순위 목록(rp-rank): 이름, 금액, 비율(또는 이름, 건수, 금액), 그 아래 2 높이 비율 막대. 줄 사이 12. */
-export function RankRows({ rows, testID }: { rows: RankItem[]; testID?: string }) {
+export function RankRows({ rows, testID, buy }: { rows: RankItem[]; testID?: string; buy?: boolean }) {
   const p = usePalette();
   return (
     <View style={st.rank} testID={testID}>
@@ -292,7 +330,7 @@ export function RankRows({ rows, testID }: { rows: RankItem[]; testID?: string }
               )}
             </View>
             <View style={[st.track, { backgroundColor: p.sunken }]}>
-              <View style={[st.fill, { width: `${Math.round(Math.min(1, Math.max(0, r.share)) * 100)}%`, backgroundColor: p.ink2 }]} />
+              <View style={[st.fill, { width: `${Math.round(Math.min(1, Math.max(0, r.share)) * 100)}%`, backgroundColor: buy ? p.dataBuy : p.dataSale }]} />
             </View>
           </>
         );
@@ -317,6 +355,55 @@ export function RankRows({ rows, testID }: { rows: RankItem[]; testID?: string }
   );
 }
 
+/** 한 줄 쌓은 막대(rp-stack): 몫마다 색 하나. 몫 합이 1보다 작으면 남은 자리는 비운다 */
+export function Stack({ parts, width = 1 }: { parts: Array<{ share: number; color: string }>; width?: number }) {
+  return (
+    <View style={[st.stack, { width: `${Math.round(Math.min(1, Math.max(0, width)) * 100)}%` }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      {parts.filter((x) => x.share > 0).map((x, i) => (
+        <View key={i} style={{ flex: x.share, backgroundColor: x.color }} />
+      ))}
+    </View>
+  );
+}
+
+/** 요약 카드 제목 줄의 꺾은선(PC rp-spark): 달마다 금액, 끝 점 */
+export function Spark({ values, color }: { values: Array<number | null>; color: string }) {
+  const vs = values.map((v) => v ?? 0);
+  const max = Math.max(1, ...vs);
+  const pts = vs.map((v, i) => [3 + (i * 66) / Math.max(1, vs.length - 1), 24 - (v / max) * 20] as const);
+  const [lx, ly] = pts.at(-1) ?? [0, 0];
+  return (
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <Svg width={72} height={28} viewBox="0 0 72 28">
+        <Polyline points={pts.map(([px, py]) => `${px.toFixed(1)},${py.toFixed(1)}`).join(' ')} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        <Circle cx={lx} cy={ly} r={3} fill={color} />
+      </Svg>
+    </View>
+  );
+}
+
+/** 구성 원형(PC rp-ring): 몫마다 한 조각, 바탕은 sunken */
+export function Donut({ parts, track, sizePx = 88 }: { parts: Array<{ share: number; color: string }>; track: string; sizePx?: number }) {
+  const R = 34;
+  const L = 2 * Math.PI * R;
+  const total = parts.reduce((a, x) => a + Math.max(0, x.share), 0);
+  let at = 0;
+  return (
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <Svg width={sizePx} height={sizePx} viewBox="0 0 88 88">
+        <Circle cx={44} cy={44} r={R} fill="none" stroke={track} strokeWidth={14} />
+        {total > 0 &&
+          parts.map((x, i) => {
+            const len = (Math.max(0, x.share) / total) * L;
+            const el = <Circle key={i} cx={44} cy={44} r={R} fill="none" stroke={x.color} strokeWidth={14} strokeDasharray={`${len.toFixed(1)} ${L.toFixed(1)}`} strokeDashoffset={-at} rotation={-90} origin="44, 44" />;
+            at += len;
+            return el;
+          })}
+      </Svg>
+    </View>
+  );
+}
+
 const st = StyleSheet.create({
   monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   month: { flexDirection: 'row', alignItems: 'center', gap: space.s1 },
@@ -332,10 +419,18 @@ const st = StyleSheet.create({
   tipEnd: { alignSelf: 'flex-end' },
   tip: { gap: 2, paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.sm, shadowOpacity: 0.16, shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
   tipRow: { flexDirection: 'row', justifyContent: 'space-between', gap: space.s3 },
+  plot: { flexDirection: 'row', gap: space.s2 },
+  axis: { width: 56, height: LABEL_H + BARS_H + TICK_BASE },
+  tick: { position: 'absolute', left: 0, right: 0, textAlign: 'right' },
+  plotBody: { flex: 1, minWidth: 0 },
+  grid: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  gridLine: { position: 'absolute', left: 0, right: 0, height: StyleSheet.hairlineWidth },
   chart: { flexDirection: 'row', alignItems: 'flex-end', gap: space.s2 },
+  value: { position: 'absolute', left: -12, right: -12, textAlign: 'center' },
+  dim: { opacity: 0.45 },
   col: { flex: 1, minWidth: 0, alignItems: 'center', gap: space.s2 },
   colOn: { fontWeight: '600' },
-  bars: { height: BARS_H, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: space.s1 },
+  bars: { height: LABEL_H + BARS_H, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: space.s1 },
   bar: { width: 12, borderTopLeftRadius: radius.xs + 1, borderTopRightRadius: radius.xs + 1 },
   barDense: { width: 7 },
   rank: { gap: space.s3 },
@@ -345,6 +440,7 @@ const st = StyleSheet.create({
   rankCount: { width: 36, textAlign: 'right' },
   rankAmount: { textAlign: 'right' },
   rankPct: { width: 44, textAlign: 'right' },
-  track: { height: 2, borderRadius: radius.full, overflow: 'hidden' },
-  fill: { height: 2 },
+  track: { height: 6, borderRadius: radius.full, overflow: 'hidden' },
+  fill: { height: 6, borderRadius: radius.full },
+  stack: { flexDirection: 'row', gap: 3, height: 12, borderRadius: radius.full, overflow: 'hidden' },
 });
