@@ -5,9 +5,9 @@ import { useSession } from '../session';
 import { space, usePalette } from '../theme';
 import { Card, Kv, KvRow } from '../ui/card';
 import { bigWon, Button, Empty, Group, Notice, Row, Screen, Seg, T, TextButton } from '../ui/kit';
-import { BarChart, Legend, MonthStep, RankRows, Spark, Stack, Tip, type BarCol, type RankItem } from '../ui/report';
+import { BarChart, Legend, MonthStep, RankRows, Ring, Spark, Stack, Tip, type BarCol, type RankItem } from '../ui/report';
 import { Sheet } from '../ui/sheet';
-import { clampMonth, partnerMonths, reportView, reportWait, shiftMonth, spanText, topOf, WINDOWS, type ChartCol, type Line, type Months, type Rank, type RankRow, type ReportWait } from '../report';
+import { averageOf, clampMonth, partnerMonths, prevName, trendText, reportView, reportWait, shiftMonth, spanText, topOf, WINDOWS, type ChartCol, type Line, type Months, type Rank, type RankRow, type ReportWait } from '../report';
 import { canReportPdf, shareReportPdf } from '../reportPdf';
 import type { HomeRoute } from './HomeScreen';
 
@@ -139,18 +139,8 @@ function Report({ copy, copyAt, onMoney, preview }: { copy: CopyReport; copyAt: 
         </Notice>
       )}
 
-      <View style={{ flexDirection: 'row', gap: space.s3 }}>
-        <Card title="매출" testID="report-sales" style={{ flex: 1 }}>
-          <T v="strong" testID="report-sales-total">{amountText(v.sales.total)}</T>
-          <Spark values={v.chart.map((c) => c.sales.total.amount)} color={p.dataSale} muted={p.dataSaleMuted} />
-          {trend(v.sales.total, v.prev?.sales, months) && <T v="sub">{trend(v.sales.total, v.prev?.sales, months)}</T>}
-        </Card>
-        <Card title="매입" testID="report-purchase" style={{ flex: 1 }}>
-          <T v="strong" testID="report-purchase-total">{amountText(v.purchase.total)}</T>
-          <Spark values={v.chart.map((c) => c.purchase.total.amount)} color={p.dataBuy} muted={p.dataBuyMuted} />
-          {trend(v.purchase.total, v.prev?.purchase, months) && <T v="sub">{trend(v.purchase.total, v.prev?.purchase, months)}</T>}
-        </Card>
-      </View>
+      <TotalCard title="매출" testID="report-sales" total={v.sales.total} prev={v.prev?.sales} comparable={v.prev?.comparable.sales} months={months} days={v.days} values={v.chart.map((c) => c.sales.total.amount)} color={p.dataSale} />
+      <TotalCard title="매입" testID="report-purchase" total={v.purchase.total} prev={v.prev?.purchase} comparable={v.prev?.comparable.purchase} months={months} days={v.days} values={v.chart.map((c) => c.purchase.total.amount)} color={p.dataBuy} />
       {v.vat && (
         <Card title={`부가세 ${v.vat.h}기`} testID="report-vat">
           <T v="strong">{vatDue !== null ? `${won(vatDue)} 낼 것 같아요` : v.vat.s !== null ? `매출 부가세 ${won(v.vat.s)}` : '확인 못 함'}</T>
@@ -165,7 +155,8 @@ function Report({ copy, copyAt, onMoney, preview }: { copy: CopyReport; copyAt: 
       <Card title={chartPurchase ? '달마다' : '달마다 매출'} testID="report-monthly">
         {chartPurchase && <Legend a="매출" b="매입" />}
         <BarChart
-          cols={v.chart.map((c) => barOf(c, chartPurchase))}
+          cols={v.chart.map((c) => barOf(c, chartPurchase, v.chart.length <= 6))}
+          tick={(n) => shortWon(n).replace(/원$/, '')}
           label={`${v.chart[0]!.label}부터 ${v.chart.at(-1)!.label}까지 달마다 매출${chartPurchase ? '과 매입' : ''}`}
           onPick={(m) => setPicked(m)}
           step={{ prev: v.first ? null : () => setPicked(shiftMonth(month, -1)), next: v.latest ? null : () => setPicked(shiftMonth(month, 1)) }}
@@ -244,8 +235,10 @@ function Report({ copy, copyAt, onMoney, preview }: { copy: CopyReport; copyAt: 
   );
 }
 
-function barOf(c: ChartCol, purchase: boolean): BarCol {
+function barOf(c: ChartCol, purchase: boolean, roomy: boolean): BarCol {
+  const sale = c.sales.total.amount;
   return {
+    ...(sale && (c.on || roomy) ? { value: shortWon(sale) } : {}),
     key: c.month,
     label: c.label,
     a: c.sales.total.amount,
@@ -257,15 +250,35 @@ function barOf(c: ChartCol, purchase: boolean): BarCol {
 }
 
 const known = (l: Line) => l.amount !== null;
+/** 막대 위와 눈금의 짧은 금액(PC shortWon): 887억원, 1.2조원, 4,031만원 */
+const shortWon = (v: number) => {
+  const a = Math.abs(v);
+  const [u, name] = a >= 1e12 ? [1e12, '조'] : a >= 1e8 ? [1e8, '억'] : [1e4, '만'];
+  const n = v / u;
+  return `${(Math.abs(n) >= 100 || name === '만' ? Math.round(n) : Math.round(n * 10) / 10).toLocaleString('ko-KR')}${name}원`;
+};
+
+/** 요약 카드(PC totalCard): 합계, 비교 글, 앞 기간 합계와 평균. 꺾은선은 제목 줄 */
+function TotalCard({ title, total, prev, comparable, months, days, values, color, testID }: {
+  title: string; total: Line; prev: Line | undefined; comparable: boolean | undefined; months: Months; days: number; values: Array<number | null>; color: string; testID: string;
+}) {
+  const t = trendText(total, prev, months, comparable);
+  const avg = averageOf(total, months, days);
+  return (
+    <Card title={title} testID={testID} side={<Spark values={values} color={color} />}>
+      <View style={{ gap: 2 }}>
+        <T v="figure" testID={`${testID}-total`}>{amountText(total)}</T>
+        {t && <T v="sub" c="ink2">{t}</T>}
+      </View>
+      <Kv>
+        {prev && <KvRow label={prevName(months)} value={comparable === false ? '일부만 받았어요' : amountText(prev)} warn={comparable === false || prev.amount === null} />}
+        <KvRow label={avg.label} value={avg.amount === null ? '확인 못 함' : won(avg.amount)} warn={avg.amount === null} />
+      </Kv>
+    </Card>
+  );
+}
 type Part = [label: string, line: Line, count?: number];
 const knownParts = (parts: Part[]): Part[] => parts.filter(([, l], i) => known(l) && (i === 0 || l.amount !== 0));
-const prevLabel = (months: Months) => (months === 1 ? '지난달보다' : months === 12 ? '지난해보다' : `앞 ${months}개월보다`);
-const trend = (cur: Line, prev: Line | undefined, months: Months): string | null => {
-  if (cur.amount === null || !prev) return null;
-  if (prev.amount === null || !prev.amount || (prev.partial && !cur.partial)) return `비교할 ${months === 12 ? '작년' : months === 1 ? '지난달' : '앞 기간'} 자료가 없어요`;
-  const pct = Math.round(((cur.amount - prev.amount) / prev.amount) * 100);
-  return pct === 0 ? `${prevLabel(months)} 같아요` : `${prevLabel(months)} ${Math.abs(pct)}% ${pct > 0 ? '늘었어요' : '줄었어요'}`;
-};
 const updatedText = (at: number) => {
   const t = new Date(at);
   const hh = t.getHours();
@@ -273,14 +286,28 @@ const updatedText = (at: number) => {
 };
 
 function MixCard({ title, parts, colors, testID }: { title: string; parts: Part[]; colors: string[]; testID: string }) {
+  const p = usePalette();
   const sum = parts.reduce((a, [, l]) => a + Math.max(0, l.amount ?? 0), 0);
   if (!parts.length) return null;
+  const color = (i: number) => colors[i] ?? colors.at(-1)!;
   return (
     <Card title={title} testID={testID}>
-      <Stack parts={parts.map(([, l], i) => ({ share: Math.max(0, l.amount ?? 0), color: colors[i] ?? colors.at(-1)! }))} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s4 }}>
+        <Ring parts={parts.map(([, l], i) => ({ share: Math.max(0, l.amount ?? 0), color: color(i) }))} track={p.sunken} sizePx={76} />
+        <View style={{ flex: 1, minWidth: 0, gap: space.s2 }}>
+          {parts.map(([label, l, n], i) => (
+            <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color(i) }} />
+              <T v="sub" c="ink2" lines={1} style={{ flex: 1, minWidth: 0 }}>
+                {`${n === undefined ? label : `${label} ${n.toLocaleString('ko-KR')}건`}${sum ? ` ${Math.round((Math.max(0, l.amount ?? 0) / sum) * 100)}%` : ''}`}
+              </T>
+            </View>
+          ))}
+        </View>
+      </View>
       <Kv>
-        {parts.map(([label, l, n]) => (
-          <KvRow key={label} label={`${n === undefined ? label : `${label} ${n.toLocaleString('ko-KR')}건`}${sum ? ` ${Math.round((Math.max(0, l.amount ?? 0) / sum) * 100)}%` : ''}`} value={won(l.amount)} />
+        {parts.map(([label, l]) => (
+          <KvRow key={label} label={label} value={won(l.amount)} />
         ))}
       </Kv>
     </Card>

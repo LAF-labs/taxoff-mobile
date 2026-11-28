@@ -72,11 +72,11 @@ const dark: typeof light = {
   onCamera: '#FFFFFF',
   cameraVeil: '#00000099',
   dataSale: '#4B93FF',
-  dataSaleMuted: '#2B5590',
-  dataSaleSoft: '#17263D',
+  dataSaleMuted: '#3D6FBF',
+  dataSaleSoft: '#24426E',
   dataBuy: '#FF6B6F',
-  dataBuyMuted: '#8E3336',
-  dataBuySoft: '#3A1C1E',
+  dataBuyMuted: '#B44A4E',
+  dataBuySoft: '#5C2C2F',
 };
 export type Palette = typeof light;
 export type Ink = 'ink' | 'ink2' | 'ink3' | 'ink4' | 'onInk' | 'accent' | 'attention' | 'onCamera';
