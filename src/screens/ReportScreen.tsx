@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import type { CopyReport } from '@sax/remote';
 import { useSession } from '../session';
-import { space, usePalette } from '../theme';
+import { radius, space, usePalette } from '../theme';
 import { Card, Kv, KvRow } from '../ui/card';
 import { bigWon, Button, Empty, Group, Notice, Row, Screen, Seg, T, TextButton } from '../ui/kit';
-import { BarChart, Legend, MonthStep, RankRows, Ring, Spark, Stack, Tip, type BarCol, type RankItem } from '../ui/report';
+import { BarChart, Donut, Legend, MonthStep, RankRows, Spark, Stack, Tip, type BarCol, type RankItem } from '../ui/report';
 import { Sheet } from '../ui/sheet';
 import { averageOf, clampMonth, partnerMonths, prevName, trendText, reportView, reportWait, shiftMonth, spanText, topOf, WINDOWS, type ChartCol, type Line, type Months, type Rank, type RankRow, type ReportWait } from '../report';
 import { canReportPdf, shareReportPdf } from '../reportPdf';
@@ -290,11 +290,11 @@ function MixCard({ title, parts, colors, testID }: { title: string; parts: Part[
   if (!parts.length) return null;
   const color = (i: number) => colors[i] ?? colors.at(-1)!;
   return (
-    <Card title={title} testID={testID} side={<Ring parts={parts.map(([, l], i) => ({ share: Math.max(0, l.amount ?? 0), color: color(i) }))} track={p.sunken} sizePx={44} />}>
+    <Card title={title} testID={testID} side={<Donut parts={parts.map(([, l], i) => ({ share: Math.max(0, l.amount ?? 0), color: color(i) }))} track={p.sunken} sizePx={44} />}>
       <View style={{ gap: space.s2 }}>
         {parts.map(([label, l, n], i) => (
           <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color(i) }} />
+            <View style={{ width: 8, height: 8, borderRadius: radius.xs, backgroundColor: color(i) }} />
             <T v="sub" c="ink2" lines={1} style={{ flex: 1, minWidth: 0 }}>
               {`${n === undefined ? label : `${label} ${n.toLocaleString('ko-KR')}건`}${sum ? ` ${Math.round((Math.max(0, l.amount ?? 0) / sum) * 100)}%` : ''}`}
             </T>

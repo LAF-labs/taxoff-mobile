@@ -383,7 +383,7 @@ export function Spark({ values, color }: { values: Array<number | null>; color: 
 }
 
 /** 구성 원형(PC rp-ring): 몫마다 한 조각, 바탕은 sunken */
-export function Ring({ parts, track, sizePx = 88 }: { parts: Array<{ share: number; color: string }>; track: string; sizePx?: number }) {
+export function Donut({ parts, track, sizePx = 88 }: { parts: Array<{ share: number; color: string }>; track: string; sizePx?: number }) {
   const R = 34;
   const L = 2 * Math.PI * R;
   const total = parts.reduce((a, x) => a + Math.max(0, x.share), 0);
@@ -421,12 +421,12 @@ const st = StyleSheet.create({
   tipRow: { flexDirection: 'row', justifyContent: 'space-between', gap: space.s3 },
   plot: { flexDirection: 'row', gap: space.s2 },
   axis: { width: 56, height: LABEL_H + BARS_H + TICK_BASE },
-  tick: { position: 'absolute', left: 0, right: 0, textAlign: 'right', fontSize: 11, lineHeight: 16 },
+  tick: { position: 'absolute', left: 0, right: 0, textAlign: 'right' },
   plotBody: { flex: 1, minWidth: 0 },
   grid: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   gridLine: { position: 'absolute', left: 0, right: 0, height: StyleSheet.hairlineWidth },
   chart: { flexDirection: 'row', alignItems: 'flex-end', gap: space.s2 },
-  value: { position: 'absolute', left: -12, right: -12, textAlign: 'center', fontSize: 11, lineHeight: 14 },
+  value: { position: 'absolute', left: -12, right: -12, textAlign: 'center' },
   dim: { opacity: 0.45 },
   col: { flex: 1, minWidth: 0, alignItems: 'center', gap: space.s2 },
   colOn: { fontWeight: '600' },
