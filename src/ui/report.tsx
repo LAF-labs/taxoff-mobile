@@ -68,8 +68,8 @@ export function Legend({ a, b }: { a: string; b: string }) {
   return (
     <View style={st.legend} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       {[
-        [a, p.ink2],
-        [b, p.ink4],
+        [a, p.dataSale],
+        [b, p.dataBuy],
       ].map(([label, color]) => (
         <View key={label} style={st.legendItem}>
           <View style={[st.legendDot, { backgroundColor: color }]} />
@@ -223,8 +223,8 @@ export function BarChart({ cols, onPick, tip, label, step, testID = 'report-char
             style={st.col}
           >
             <View style={[st.bars, dense && { gap: 2 }, c.out && held !== c.key && { opacity: 0.35 }]}>
-              <View style={[st.bar, dense && st.barDense, { height: h(c.a), backgroundColor: p.ink2 }]} />
-              <View style={[st.bar, dense && st.barDense, { height: h(c.b), backgroundColor: p.ink4 }]} />
+              <View style={[st.bar, dense && st.barDense, { height: h(c.a), backgroundColor: c.on ? p.dataSale : p.dataSaleMuted }]} />
+              <View style={[st.bar, dense && st.barDense, { height: h(c.b), backgroundColor: c.on ? p.dataBuy : p.dataBuyMuted }]} />
             </View>
             <T v={c.on ? 'label' : 'meta'} c={c.on || held === c.key ? 'ink' : 'ink3'} style={c.on && st.colOn} lines={1}>
               {c.label}
@@ -266,7 +266,7 @@ export interface RankItem {
 }
 
 /** 순위 목록(rp-rank): 이름, 금액, 비율(또는 이름, 건수, 금액), 그 아래 2 높이 비율 막대. 줄 사이 12. */
-export function RankRows({ rows, testID }: { rows: RankItem[]; testID?: string }) {
+export function RankRows({ rows, testID, buy }: { rows: RankItem[]; testID?: string; buy?: boolean }) {
   const p = usePalette();
   return (
     <View style={st.rank} testID={testID}>
@@ -292,7 +292,7 @@ export function RankRows({ rows, testID }: { rows: RankItem[]; testID?: string }
               )}
             </View>
             <View style={[st.track, { backgroundColor: p.sunken }]}>
-              <View style={[st.fill, { width: `${Math.round(Math.min(1, Math.max(0, r.share)) * 100)}%`, backgroundColor: p.ink2 }]} />
+              <View style={[st.fill, { width: `${Math.round(Math.min(1, Math.max(0, r.share)) * 100)}%`, backgroundColor: buy ? p.dataBuy : p.dataSale }]} />
             </View>
           </>
         );
@@ -313,6 +313,29 @@ export function RankRows({ rows, testID }: { rows: RankItem[]; testID?: string }
           </View>
         );
       })}
+    </View>
+  );
+}
+
+/** 한 줄 쌓은 막대(rp-stack): 몫마다 색 하나. 몫 합이 1보다 작으면 남은 자리는 비운다 */
+export function Stack({ parts, width = 1 }: { parts: Array<{ share: number; color: string }>; width?: number }) {
+  return (
+    <View style={[st.stack, { width: `${Math.round(Math.min(1, Math.max(0, width)) * 100)}%` }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      {parts.filter((x) => x.share > 0).map((x, i) => (
+        <View key={i} style={{ flex: x.share, backgroundColor: x.color }} />
+      ))}
+    </View>
+  );
+}
+
+/** 작은 달마다 막대(요약 카드의 흐름). 마지막 달만 진하게 */
+export function Spark({ values, color, muted }: { values: Array<number | null>; color: string; muted: string }) {
+  const max = Math.max(1, ...values.map((v) => v ?? 0));
+  return (
+    <View style={st.spark} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      {values.map((v, i) => (
+        <View key={i} style={[st.sparkBar, { height: Math.max(2, Math.round(((v ?? 0) / max) * 32)), backgroundColor: i === values.length - 1 ? color : muted }]} />
+      ))}
     </View>
   );
 }
@@ -345,6 +368,9 @@ const st = StyleSheet.create({
   rankCount: { width: 36, textAlign: 'right' },
   rankAmount: { textAlign: 'right' },
   rankPct: { width: 44, textAlign: 'right' },
-  track: { height: 2, borderRadius: radius.full, overflow: 'hidden' },
-  fill: { height: 2 },
+  track: { height: 6, borderRadius: radius.full, overflow: 'hidden' },
+  fill: { height: 6, borderRadius: radius.full },
+  stack: { flexDirection: 'row', gap: 3, height: 12, borderRadius: radius.full, overflow: 'hidden' },
+  spark: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 32 },
+  sparkBar: { flex: 1, borderTopLeftRadius: radius.xs - 1, borderTopRightRadius: radius.xs - 1 },
 });

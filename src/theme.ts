@@ -33,6 +33,13 @@ const light = {
   camera: '#000000',
   onCamera: '#FFFFFF',
   cameraVeil: '#00000099',
+  /** 리포트 차트의 매출(파랑)과 매입(빨강). 차트 안에서만 쓴다(tex tokens.json data-*, 대표 승인 2026-11-28) */
+  dataSale: '#0064D4',
+  dataSaleMuted: '#8DB8EC',
+  dataSaleSoft: '#E3EEFB',
+  dataBuy: '#E5484D',
+  dataBuyMuted: '#F3A3A5',
+  dataBuySoft: '#FDECEC',
 };
 const dark: typeof light = {
   canvas: '#181819',
@@ -64,6 +71,12 @@ const dark: typeof light = {
   camera: '#000000',
   onCamera: '#FFFFFF',
   cameraVeil: '#00000099',
+  dataSale: '#4B93FF',
+  dataSaleMuted: '#2B5590',
+  dataSaleSoft: '#17263D',
+  dataBuy: '#FF6B6F',
+  dataBuyMuted: '#8E3336',
+  dataBuySoft: '#3A1C1E',
 };
 export type Palette = typeof light;
 export type Ink = 'ink' | 'ink2' | 'ink3' | 'ink4' | 'onInk' | 'accent' | 'attention' | 'onCamera';
