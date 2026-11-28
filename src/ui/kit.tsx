@@ -516,6 +516,20 @@ export { josa } from './josa';
 /** 금액 글. 수정세금계산서의 음수는 빼기 기호(−)로 쓴다. */
 /** 금액 글. 숫자가 아니면 빈 글이라 그 줄이 빠진다(src/ui/text.ts shown). */
 export const won = (n: number | null | undefined) => (typeof n === 'number' && Number.isFinite(n) ? `${n < 0 ? '−' : ''}${Math.abs(n).toLocaleString('ko-KR')}원` : '');
+const WON_UNITS: Array<[number, string]> = [[1e12, '조'], [1e8, '억'], [1e4, '만']];
+/** 큰 금액은 조, 억, 만으로 나눠 쓴다(886억 5,627만 3,113원). */
+export const bigWon = (n: number | null | undefined) => {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return '';
+  let rest = Math.abs(Math.round(n));
+  const parts: string[] = [];
+  for (const [u, name] of WON_UNITS) {
+    const q = Math.floor(rest / u);
+    if (q) parts.push(`${q.toLocaleString('ko-KR')}${name}`);
+    rest -= q * u;
+  }
+  if (rest || !parts.length) parts.push(rest.toLocaleString('ko-KR'));
+  return `${n < 0 ? '−' : ''}${parts.join(' ')}원`;
+};
 export const st = StyleSheet.create({
   header: { height: size.header, flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.s2 },
   headerSide: { width: 72, justifyContent: 'center' },
