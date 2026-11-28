@@ -48,6 +48,7 @@ export function MainScreen({
   const customers = useCustomers();
   const [drawer, setDrawer] = useState(drawerOpen);
   const [issueOpen, setIssueOpen] = useState(!!issuePreview);
+  const [ask, setAsk] = useState<string | null>(null);
   const unread = unreadCount(s.data.inbox, s.data.inboxSeenAt);
   const goMain = (to: MainRoute) => {
     if (to === 'settings' || to === 'inbox') return onTab(to);
@@ -75,7 +76,7 @@ export function MainScreen({
 
   const scene =
     tab === 'home' ? (
-      <HomeScreen go={goMain} chat={chat} draft={draft} phone={phone} menu={menu} focusAfter={focusAfter} onIssue={() => setIssueOpen(true)} />
+      <HomeScreen go={goMain} chat={chat} draft={ask ?? draft} phone={phone} menu={menu} focusAfter={focusAfter} onIssue={() => setIssueOpen(true)} />
     ) : tab === 'money' ? (
       <MoneyScreen go={goMain} />
     ) : tab === 'report' ? (
@@ -92,7 +93,13 @@ export function MainScreen({
         }}
       />
     ) : tab === 'docs' ? (
-      <DocsScreen preview={docs} />
+      <DocsScreen
+        preview={docs}
+        onAsk={(text) => {
+          setAsk(text);
+          onTab('home');
+        }}
+      />
     ) : tab === 'inbox' ? (
       <InboxScreen
         onQueue={() => go('queue')}
