@@ -134,11 +134,11 @@ describe('폰 월 리포트 사본 읽기(tex ADR-068 결정 8)', () => {
     assert.deepEqual(doc.partnersSale?.rest, { name: '그 밖에 3곳', count: 4, amount: 900, share: 0.03 });
     assert.equal(doc.partnersSale?.count, 8 + 4);
     const html = reportDocHtml(doc);
-    for (const want of ['가나상사 리포트', '2026년 11월', '매출 거래처', '거래처1', '매출 품목', '우리은행 1234', '확인 못 함']) assert.ok(html.includes(want), want);
+    for (const want of ['가나상사 리포트', '2026년 11월', '많이 판 거래처', '거래처1', '많이 판 품목', '계좌 잔액', '확인 못 함']) assert.ok(html.includes(want), want);
     const past = reportDocOf(COPY, reportView(COPY, '2026-10', 1), now);
     assert.equal(past.partnersSale, null);
     const pastHtml = reportDocHtml(past);
-    assert.ok(!pastHtml.includes('매출 거래처') && !pastHtml.includes('매출 품목') && !pastHtml.includes('<td>없음</td>'));
+    assert.ok(!pastHtml.includes('많이 판 거래처') && !pastHtml.includes('많이 판 품목') && !pastHtml.includes('<td>없음</td>'));
     assert.ok(pastHtml.includes('2026년 10월'));
   });
 
