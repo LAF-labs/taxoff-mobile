@@ -40,7 +40,7 @@ describe('발급 명령 입력', () => {
     assert.equal(kstDay(Date.parse('2026-11-17T15:00:00Z')), '2026-11-18');
   });
   it('hello에 copy.v1과 issue.v1을 알린다', () => {
-    assert.deepEqual([...PHONE_CAPS].sort(), [CAP.copy, CAP.issue, CAP.sync, CAP.issued, CAP.book, CAP.amend, CAP.report, CAP.docs, CAP.reportV2].sort());
+    assert.deepEqual([...PHONE_CAPS].sort(), [CAP.copy, CAP.issue, CAP.sync, CAP.issued, CAP.book, CAP.amend, CAP.report, CAP.docs, CAP.reportV2, CAP.reportV3].sort());
   });
 });
 
