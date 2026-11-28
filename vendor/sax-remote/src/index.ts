@@ -20,6 +20,7 @@ export * from './devhosts.ts';
 export * from './pairing.ts';
 export * from './pclink.ts';
 export * from './pcmove.ts';
+export * from './paper-read.ts';
 export * from './escrow.ts';
 export * from './qbundle.ts';
 export * from './qr.ts';
