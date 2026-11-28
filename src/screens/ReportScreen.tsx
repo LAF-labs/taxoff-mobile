@@ -7,7 +7,7 @@ import { Card, Kv, KvRow } from '../ui/card';
 import { bigWon, Button, Empty, Group, Notice, Row, Screen, Seg, T, TextButton } from '../ui/kit';
 import { BarChart, DashMark, InfoMark, Legend, MonthStep, RankRows, Ring, Spark, Stack, Tip, type BarCol, type RankItem } from '../ui/report';
 import { Sheet } from '../ui/sheet';
-import { averageOf, clampMonth, ddayText, headlineText, partnerMonths, prevName, shortWon, trendText, whyOf, reportView, reportWait, shiftMonth, spanText, topOf, WINDOWS, type ChartCol, type Line, type Months, type Rank, type RankRow, type ReportWait } from '../report';
+import { averageOf, clampMonth, ddayText, headlineText, partnerMonths, periodText, prevName, shortWon, trendText, whyOf, reportView, reportWait, shiftMonth, spanText, topOf, WINDOWS, type ChartCol, type Line, type Months, type Rank, type RankRow, type ReportWait } from '../report';
 import { canReportPdf, shareReportPdf } from '../reportPdf';
 import type { HomeRoute } from './HomeScreen';
 
@@ -95,7 +95,10 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
   }, [month, months]);
 
   const year = copy.today.slice(0, 4);
-  const label = month.slice(0, 4) === year ? `${monthNo(month)}월` : `${month.slice(0, 4)}년 ${monthNo(month)}월`;
+  const label = months === 12 || month.slice(0, 4) !== year ? periodText(month, months) : spanText(month, months);
+  const unit = months === 1 ? '달' : months === 3 ? '분기' : months === 6 ? '반기' : '해';
+  const back = shiftMonth(month, -months);
+  const fwd = shiftMonth(month, months) > copy.month ? copy.month : shiftMonth(month, months);
   const span = spanText(month, months);
   const hasPurchase = [v.purchase.inv, v.purchase.card, v.purchase.cr].some(known) || !!v.purchase.rcpt.amount || v.purchase.pay.amount !== null;
   const chartPurchase = v.chart.some((c) => !!c.purchase.total.amount);
@@ -122,8 +125,8 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
     <Screen title="리포트" shell gap={space.s3} testID="report">
       <MonthStep
         label={label}
-        prev={{ a11y: v.first ? '앞 달 없음' : `${monthNo(shiftMonth(month, -1))}월 보기`, onPress: v.first ? null : () => setPicked(shiftMonth(month, -1)) }}
-        next={{ a11y: v.latest ? '다음 달 없음' : `${monthNo(shiftMonth(month, 1))}월 보기`, onPress: v.latest ? null : () => setPicked(shiftMonth(month, 1)) }}
+        prev={{ a11y: v.first ? `앞 ${unit} 없음` : `${periodText(back, months)} 보기`, onPress: v.first ? null : () => setPicked(back) }}
+        next={{ a11y: v.latest ? `다음 ${unit} 없음` : `${periodText(fwd, months)} 보기`, onPress: v.latest ? null : () => setPicked(fwd) }}
         onPdf={canReportPdf() ? () => void savePdf() : undefined}
         pdfBusy={pdf === 'busy'}
       />
@@ -145,8 +148,8 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
         </Notice>
       )}
 
-      <TotalCard title="매출" testID="report-sales" total={v.sales.total} prev={v.prev?.sales} comparable={v.prev?.comparable.sales} months={months} days={v.days} values={v.chart.map((c) => c.sales.total.amount)} color={p.dataSale} />
-      <TotalCard title="매입" testID="report-purchase" total={v.purchase.total} prev={v.prev?.purchase} comparable={v.prev?.comparable.purchase} months={months} days={v.days} values={v.chart.map((c) => c.purchase.total.amount)} color={p.dataBuy} />
+      <TotalCard title="매출" testID="report-sales" total={v.sales.total} prev={v.prev?.sales} comparable={v.prev?.comparable.sales} months={months} days={v.days} gone={v.gone} values={v.chart.map((c) => c.sales.total.amount)} color={p.dataSale} />
+      <TotalCard title="매입" testID="report-purchase" total={v.purchase.total} prev={v.prev?.purchase} comparable={v.prev?.comparable.purchase} months={months} days={v.days} gone={v.gone} values={v.chart.map((c) => c.purchase.total.amount)} color={p.dataBuy} />
       {v.vat && (
         <Card
           title={`부가세 ${v.vat.h}기`}
@@ -197,7 +200,7 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
           tick={(n) => shortWon(n).replace(/원$/, '')}
           label={`${v.chart[0]!.label}부터 ${v.chart.at(-1)!.label}까지 달마다 매출${chartPurchase ? '과 매입' : ''}`}
           onPick={(m) => setPicked(m)}
-          step={{ prev: v.first ? null : () => setPicked(shiftMonth(month, -1)), next: v.latest ? null : () => setPicked(shiftMonth(month, 1)) }}
+          step={{ prev: v.first ? null : () => setPicked(back), next: v.latest ? null : () => setPicked(fwd) }}
           holding={preview?.hold ?? null}
           tip={(m) => {
             const c = v.chart.find((x) => x.month === m)!;
@@ -286,13 +289,13 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
 }
 
 function barOf(c: ChartCol, purchase: boolean, roomy: boolean): BarCol {
-  const sale = c.sales.total.amount;
+  const sale = c.future ? null : c.sales.total.amount;
   return {
     ...(sale && (c.on || roomy) ? { value: shortWon(sale) } : {}),
     key: c.month,
     label: c.label,
-    a: c.sales.total.amount,
-    b: purchase ? c.purchase.total.amount : null,
+    a: sale,
+    b: purchase && !c.future ? c.purchase.total.amount : null,
     on: c.on,
     out: !c.inWindow,
     busy: c.on ? { a: c.sales.total.partial || c.sales.total.amount === null, b: purchase && (c.purchase.total.partial || c.purchase.total.amount === null) } : undefined,
@@ -303,11 +306,11 @@ function barOf(c: ChartCol, purchase: boolean, roomy: boolean): BarCol {
 const known = (l: Line) => l.amount !== null;
 
 /** 요약 카드(PC totalCard): 합계, 비교 글, 앞 기간 합계와 평균. 꺾은선은 제목 줄 */
-function TotalCard({ title, total, prev, comparable, months, days, values, color, testID }: {
-  title: string; total: Line; prev: Line | undefined; comparable: boolean | undefined; months: Months; days: number; values: Array<number | null>; color: string; testID: string;
+function TotalCard({ title, total, prev, comparable, months, days, gone, values, color, testID }: {
+  title: string; total: Line; prev: Line | undefined; comparable: boolean | undefined; months: Months; days: number; gone: number; values: Array<number | null>; color: string; testID: string;
 }) {
   const t = trendText(total, prev, months, comparable);
-  const avg = averageOf(total, months, days);
+  const avg = averageOf(total, months, days, gone);
   return (
     <Card title={title} testID={testID} side={<Spark values={values} color={color} />}>
       <View style={{ gap: 2 }}>
@@ -353,8 +356,8 @@ function MonthTable({ cols, purchase, ly }: { cols: ChartCol[]; purchase: boolea
   return (
     <View testID="report-table">
       {unit && <T v="meta" c="ink3" style={{ textAlign: 'right', fontSize: 11 }}>{`단위 ${unit}`}</T>}
-      {row('s', dot(p.dataSale), '매출', cols.map((c) => c.sales.total.amount))}
-      {purchase && row('b', dot(p.dataBuy), '매입', cols.map((c) => c.purchase.total.amount))}
+      {row('s', dot(p.dataSale), '매출', cols.map((c) => (c.future ? null : c.sales.total.amount)))}
+      {purchase && row('b', dot(p.dataBuy), '매입', cols.map((c) => (c.future ? null : c.purchase.total.amount)))}
       {ly && row('l', <DashMark color={p.ink3} width={8} />, '작년', cols.map((c) => c.lastYear?.amount ?? null))}
     </View>
   );

@@ -61,33 +61,38 @@ describe('폰 월 리포트 사본 읽기(tex ADR-068 결정 8)', () => {
     assert.deepEqual(one.sales.inv, { amount: 12_000_000, partial: false });
     assert.deepEqual(one.sales.cash, { amount: 5_000, partial: false });
     assert.deepEqual(one.sales.total, { amount: 12_000_000 + 10_000 + 20_000 + 5_000, partial: false });
+    // 3개월은 달력 분기(대표 11-28): 11월이 든 4분기는 10월부터 12월, 합계는 사본 마지막 달(11월)까지
     const three = reportView(COPY, '2026-11', 3);
-    // 10월 현금영수증을 받지 못함: 아는 두 달만 더하고 일부로 표시, 합계도 일부
-    assert.deepEqual(three.sales.cr, { amount: 20_000, partial: true });
+    // 10월 현금영수증을 받지 못함: 아는 달만 더하고 일부로 표시, 합계도 일부
+    assert.deepEqual(three.sales.cr, { amount: 10_000, partial: true });
     assert.equal(three.sales.total.partial, true);
     assert.deepEqual(three.purchase.pay, { amount: 1_200_000, partial: false });
+    assert.equal(three.gone, 2, '4분기의 지난 달은 10월과 11월');
     assert.equal(three.purchase.total.partial, false, '급여가 없는 달은 합계를 일부로 만들지 않는다');
-    assert.deepEqual(three.bank, { in: 2_700_000, out: 2_100_000, net: 600_000 });
-    assert.deepEqual(three.bankOut, [{ key: 'payable', label: '매입 결제', amount: 1_200_000 }, { key: 'payroll', label: '급여', amount: 900_000 }]);
+    assert.deepEqual(three.bank, { in: 1_800_000, out: 1_400_000, net: 400_000 });
+    assert.deepEqual(three.bankOut, [{ key: 'payable', label: '매입 결제', amount: 800_000 }, { key: 'payroll', label: '급여', amount: 600_000 }]);
     assert.deepEqual(three.bankIn.map((x) => x.label), ['받을 돈', '이자']);
-    // 6월부터 8월은 계좌가 없다: 기간 안에 계좌가 하나도 없으면 통장은 null(0으로 보이지 않는다)
-    assert.equal(reportView(COPY, '2026-08', 3).bank, null);
+    // 3분기(7월부터 9월)에는 9월에만 계좌가 있다. 2분기는 계좌가 하나도 없어 통장은 null(0으로 보이지 않는다)
+    assert.equal(reportView(COPY, '2026-05', 3).bank, null);
   });
 
   it('막대는 6칸(1년이면 12칸), 고른 기간 밖은 흐리게, 고른 달 표시', () => {
     const v = reportView(COPY, '2026-11', 3);
-    assert.deepEqual(v.chart.map((c) => [c.label, c.inWindow, c.on]), [['6월', false, false], ['7월', false, false], ['8월', false, false], ['9월', true, false], ['10월', true, false], ['11월', true, true]]);
+    assert.deepEqual(v.chart.map((c) => [c.label, c.inWindow, c.on, c.future]), [['7월', false, false, false], ['8월', false, false, false], ['9월', false, false, false], ['10월', true, false, false], ['11월', true, true, false], ['12월', true, false, true]]);
     const y = reportView(COPY, '2026-11', 12);
-    assert.deepEqual(y.chart.map((c) => c.label), ['12', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']);
+    assert.deepEqual(y.chart.map((c) => c.label), ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']);
     assert.ok(y.chart.every((c) => c.inWindow));
-    assert.equal(y.chart[1]!.sales.total.amount, 2_000_000 + 30_000);
+    assert.equal(y.chart[0]!.sales.total.amount, 2_000_000 + 30_000);
   });
 
   it('앞 달로는 막대 칸을 채울 수 있는 데까지만, 1년은 마지막 달 하나. 순위는 마지막 달에만 있다', () => {
     assert.deepEqual(monthsFor(COPY, 1), MONTHS.slice(5));
-    assert.deepEqual(monthsFor(COPY, 12), ['2026-11']);
+    // 1년은 올해(1월부터), 분기는 막대 6칸이 사본에 다 있는 2분기부터
+    assert.deepEqual(monthsFor(COPY, 12), MONTHS.slice(1));
+    assert.equal(monthsFor(COPY, 3)[0], '2026-04');
     assert.equal(clampMonth(COPY, '2026-03', 1), '2026-05');
-    assert.equal(clampMonth(COPY, '2026-09', 12), '2026-11');
+    assert.equal(clampMonth(COPY, '2025-12', 12), '2026-01');
+    assert.equal(reportView(COPY, '2026-05', 3).first, true);
     assert.equal(reportView(COPY, '2026-05', 1).first, true);
     const past = reportView(COPY, '2026-10', 1);
     assert.equal(past.latest, false);
@@ -118,12 +123,14 @@ describe('폰 월 리포트 사본 읽기(tex ADR-068 결정 8)', () => {
       { label: '6월', amount: 100 },
     ]);
     assert.equal(spanText('2026-11', 1), '11월');
-    assert.equal(spanText('2026-02', 3), '12월부터 2월');
+    assert.equal(spanText('2026-02', 3), '1분기');
+    assert.equal(spanText('2026-11', 6), '하반기');
+    assert.equal(spanText('2026-11', 12), '2026년');
   });
 
   it('PDF는 PC와 같은 이름과 묶음. 앞 달은 순위 묶음을 빼고 "없음"으로 그리지 않는다', () => {
-    assert.equal(periodText('2026-11', 3), '2026년 9월부터 11월');
-    assert.equal(periodText('2026-02', 6), '2025년 9월부터 2026년 2월');
+    assert.equal(periodText('2026-11', 3), '2026년 4분기');
+    assert.equal(periodText('2026-02', 6), '2026년 상반기');
     assert.equal(reportFileName('2026-11', 1), '택스오프 리포트 2026년 11월.pdf');
     const now = Date.parse('2026-11-25T20:52:00+09:00');
     const doc = reportDocOf(COPY, reportView(COPY, '2026-11', 1), now);

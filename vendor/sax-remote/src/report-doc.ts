@@ -231,7 +231,9 @@ function chart(d: ReportDoc): string {
   const bw = ms.length > 8 ? 12 : 20;
   const y = (v: number) => base - (v / topV) * H;
   const h = (v: DocAmount) => (v ? Math.max(2, (v / topV) * H) : 0);
-  const cur = ms.length - 1;
+  // 이번 기간의 남은 달(값 없음) 앞, 마지막으로 값이 있는 달을 굵게
+  const known = ms.map((m) => m.sales !== null || m.purchase !== null);
+  const cur = known.lastIndexOf(true) >= 0 ? known.lastIndexOf(true) : ms.length - 1;
   const ticks = Array.from({ length: Math.round(topV / step) + 1 }, (_, i) => i * step);
   const grid = ticks
     .map((v) => `<line x1="${AX}" x2="${W}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="${C.sunken}" stroke-width="1"/><text x="${AX - 8}" y="${(y(v) + 3.5).toFixed(1)}" text-anchor="end" font-size="9" fill="${C.ink3}">${v ? esc(shortWon(v).replace(/원$/, '')) : '0'}</text>`)
