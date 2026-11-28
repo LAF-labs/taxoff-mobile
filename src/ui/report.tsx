@@ -123,10 +123,8 @@ export interface BarCol {
 }
 
 const BARS_H = 132;
-/** 막대 위 말풍선 끝 여유 */
-const LABEL_H = 18;
-/** 맨 위 막대 위에 말풍선이 뜰 자리(달 이름과 두 줄) */
-const TIP_ROOM = 56;
+/** 맨 위 막대 위 여유(덜 들어온 달의 점선 끝 10이 들어갈 자리) */
+const LABEL_H = 12;
 /** 말풍선 아래 끝과 막대 위 끝 사이 */
 const TIP_GAP = 6;
 /** 이만큼 밀고 떼면 달이 넘어간다 */
@@ -194,7 +192,7 @@ export function BarChart({ cols, onPick, tip, label, step, testID = 'report-char
       ? {
           // 오른쪽 끝에 닿으면 오른쪽에 붙인다(왼쪽 여백으로 밀면 남은 폭에서 줄이 바뀐다)
           left: box.x + box.w / 2 + tipSize.w / 2 >= width ? null : Math.max(0, box.x + box.w / 2 - tipSize.w / 2),
-          top: TIP_ROOM + box.y + LABEL_H + BARS_H - Math.max(h(col.a), h(col.b)) - TIP_GAP - tipSize.h,
+          top: box.y + LABEL_H + BARS_H - Math.max(h(col.a), h(col.b)) - TIP_GAP - tipSize.h,
         }
       : null;
 
@@ -410,7 +408,7 @@ const st = StyleSheet.create({
   tipEnd: { alignSelf: 'flex-end' },
   tip: { gap: 2, paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.sm, shadowOpacity: 0.16, shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
   tipRow: { flexDirection: 'row', justifyContent: 'space-between', gap: space.s3 },
-  plot: { flexDirection: 'row', paddingTop: TIP_ROOM },
+  plot: { flexDirection: 'row' },
   plotBody: { flex: 1, minWidth: 0 },
   chart: { flexDirection: 'row', alignItems: 'flex-end', gap: space.s2 },
   cap: { position: 'absolute', left: 0, right: 0, bottom: '100%', height: 10, borderWidth: 1.5, borderBottomWidth: 0, borderStyle: 'dashed', borderTopLeftRadius: radius.xs, borderTopRightRadius: radius.xs },

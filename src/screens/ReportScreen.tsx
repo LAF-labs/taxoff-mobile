@@ -119,7 +119,7 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
   };
 
   return (
-    <Screen title="리포트" shell gap={space.s3} testID="report">
+    <Screen title="리포트" shell gap={space.s4} testID="report">
       <MonthStep
         label={label}
         prev={{ a11y: v.first ? `앞 ${unit} 없음` : `${periodText(back, months)} 보기`, onPress: v.first ? null : () => setPicked(back) }}
@@ -148,7 +148,7 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
       <TotalCard title="매출" testID="report-sales" total={v.sales.total} prev={v.prev?.sales} comparable={v.prev?.comparable.sales} months={months} days={v.days} gone={v.gone} values={v.chart.map((c) => c.sales.total.amount)} color={p.dataSale} />
       <TotalCard title="매입" testID="report-purchase" total={v.purchase.total} prev={v.prev?.purchase} comparable={v.prev?.comparable.purchase} months={months} days={v.days} gone={v.gone} values={v.chart.map((c) => c.purchase.total.amount)} color={p.dataBuy} />
       {v.vat && (
-        <Card
+        <Card style={roomy}
           title={`부가세 ${v.vat.h}기`}
           testID="report-vat"
           side={
@@ -174,7 +174,7 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
           </Kv>
         </Card>
       )}
-      <Card title={chartPurchase ? '달마다' : '달마다 매출'} testID="report-monthly">
+      <Card style={roomy} title={chartPurchase ? '달마다' : '달마다 매출'} testID="report-monthly">
         {headline && <T v="strong" testID="report-headline">{headline}</T>}
         {chartPurchase && <Legend a="매출" b="매입" />}
         <BarChart
@@ -191,7 +191,7 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
       </Card>
 
       {why && (
-        <Card title={why.title} testID="report-why">
+        <Card style={roomy} title={why.title} testID="report-why">
           <Kv>
             {why.rows.map((x) => (
               <KvRow key={x.label} label={x.label} value={`${x.delta > 0 ? '+' : '−'}${shortWon(Math.abs(x.delta))}`} />
@@ -219,11 +219,11 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
 
       {v.ranks && (
         <>
-          <Card title={rankPurchase ? '거래처' : '많이 판 거래처'} testID="report-partners">
+          <Card style={roomy} title={rankPurchase ? '거래처' : '많이 판 거래처'} testID="report-partners">
             {rankPurchase && <Seg options={SIDES} value={partnerSide} onChange={setPartnerSide} fill tint testID="report-partners-side" />}
             <RankCard buy={rankPurchase && partnerSide === 'purchase'} rank={rankPurchase && partnerSide === 'purchase' ? v.ranks.pp : v.ranks.ps} kind="partners" empty="이 기간 거래처가 없어요" onRow={(row) => setOpen({ kind: 'partner', side: partnerSide, row })} onAll={() => setOpen({ kind: 'all', what: 'partners', side: partnerSide })} />
           </Card>
-          <Card title={rankPurchase ? '품목' : '많이 판 품목'} testID="report-items">
+          <Card style={roomy} title={rankPurchase ? '품목' : '많이 판 품목'} testID="report-items">
             {rankPurchase && <Seg options={SIDES} value={itemSide} onChange={setItemSide} fill tint testID="report-items-side" />}
             <RankCard buy={rankPurchase && itemSide === 'purchase'} rank={rankPurchase && itemSide === 'purchase' ? v.ranks.ip : v.ranks.is} kind="items" empty="이 기간 품목이 없어요" onAll={() => setOpen({ kind: 'all', what: 'items', side: itemSide })} />
           </Card>
@@ -231,7 +231,7 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
       )}
 
       {v.recv && (
-        <Card title="받을 돈" testID="report-receivable">
+        <Card style={roomy} title="받을 돈" testID="report-receivable">
           <Stack parts={[{ share: v.recv.got, color: p.dataSale }, { share: v.recv.left - v.recv.lateA, color: p.dataSaleMuted }, { share: v.recv.lateA, color: p.attention }]} />
           <Kv>
             <KvRow label="받은 돈" value={won(v.recv.got)} />
@@ -242,7 +242,7 @@ function Report({ copy, copyAt, onMoney, onAsk, preview }: { copy: CopyReport; c
         </Card>
       )}
       {v.bank && (
-        <Card title="통장" testID="report-bank">
+        <Card style={roomy} title="통장" testID="report-bank">
           <T v="sub">{`들어온 돈 ${won(v.bank.in)}`}</T>
           <Stack parts={[{ share: 1, color: p.dataSale }]} width={v.bank.in / Math.max(1, v.bank.in, v.bank.out)} />
           <T v="sub">{`나간 돈 ${won(v.bank.out)}`}</T>
@@ -282,6 +282,8 @@ function barOf(c: ChartCol, purchase: boolean): BarCol {
 }
 
 const known = (l: Line) => l.amount !== null;
+/** 리포트 카드는 대화 카드보다 넉넉하게(2026-11-28 대표: 여백) */
+const roomy = { padding: space.s5, gap: space.s4 };
 
 /** 요약 카드(PC totalCard): 합계, 비교 글, 앞 기간 합계와 평균. 꺾은선은 제목 줄 */
 function TotalCard({ title, total, prev, comparable, months, days, gone, values, color, testID }: {
@@ -290,7 +292,7 @@ function TotalCard({ title, total, prev, comparable, months, days, gone, values,
   const t = trendText(total, prev, months, comparable);
   const avg = averageOf(total, months, days, gone);
   return (
-    <Card title={title} testID={testID} side={<Spark values={values} color={color} />}>
+    <Card style={roomy} title={title} testID={testID} side={<Spark values={values} color={color} />}>
       <View style={{ gap: 2 }}>
         <T v="figure" testID={`${testID}-total`}>{amountText(total)}</T>
         {t && <T v="sub" c="ink2">{t}</T>}
@@ -317,8 +319,11 @@ function MixCard({ title, parts, colors, testID }: { title: string; parts: Part[
   if (!parts.length) return null;
   const color = (i: number) => colors[i] ?? colors.at(-1)!;
   return (
-    <Card title={title} testID={testID} side={<Donut parts={parts.map(([, l], i) => ({ share: Math.max(0, l.amount ?? 0), color: color(i) }))} track={p.sunken} sizePx={44} />}>
-      <View style={{ gap: space.s2 }}>
+    <Card style={roomy} title={title} testID={testID}>
+      <View style={{ alignItems: 'center', paddingVertical: space.s2 }}>
+        <Donut parts={parts.map(([, l], i) => ({ share: Math.max(0, l.amount ?? 0), color: color(i) }))} track={p.sunken} sizePx={144} />
+      </View>
+      <View style={{ gap: space.s3 }}>
         {parts.map(([label, l, n], i) => (
           <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <View style={{ width: 8, height: 8, borderRadius: radius.xs, backgroundColor: color(i) }} />
